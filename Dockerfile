@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y \
     vim \
     git \
     python3-pip \
+    python3-vcstool \
     ros-humble-ros-gz \
     ros-humble-ros-gz-sim \
     && rm -rf /var/lib/apt/lists/*

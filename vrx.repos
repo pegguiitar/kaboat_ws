@@ -1,0 +1,14 @@
+# VRX 시뮬레이터 소스 참조 (vcstool).
+# 저장소에 vrx를 통째로 커밋하는 대신, 아래 커밋을 clone 하도록 한다.
+#
+# 최초 세팅 / 갱신:
+#   vcs import src < vrx.repos      # src/vrx 로 clone
+#   vcs pull src                    # 이후 갱신 시
+#
+# version 은 재현성을 위해 커밋 해시로 고정 (VRX 2.4.1 릴리스, humble).
+# 새 버전으로 올리려면 아래 version 값만 바꾸면 된다.
+repositories:
+  vrx:
+    type: git
+    url: https://github.com/osrf/vrx.git
+    version: dc30ed8d17aa1083fd872edad9c77c69896d2b07
