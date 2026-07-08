@@ -1,10 +1,12 @@
 services:
   kaboat_sim_env:
-    # 기본은 Docker Hub 이미지를 pull 해서 사용.
-    image: peg0525/kaboat_2026_sim:latest
+    # 기본은 GitHub Container Registry 이미지를 pull 해서 사용.
+    # (Docker Hub 계정 없이도 이 저장소에 push 권한이 있는 사람은 누구나
+    #  이미지를 갱신할 수 있도록 ghcr.io 로 이전했다.)
+    image: ghcr.io/pegguiitar/kaboat_ws:latest
     # Dockerfile 을 고쳤을 때 로컬에서 즉시 검증할 수 있는 탈출구.
     #   docker compose up -d --build   # 이 저장소의 Dockerfile 로 직접 빌드
-    # (평소 `docker compose up -d` 는 그대로 Hub 이미지를 pull 한다.)
+    # (평소 `docker compose up -d` 는 그대로 ghcr.io 이미지를 pull 한다.)
     build:
       context: .
       dockerfile: Dockerfile

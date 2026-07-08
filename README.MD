@@ -56,9 +56,10 @@ VRX 와 ros_gz 는 저장소에 직접 커밋하지 않고 `vrx.repos` 에 명�
 ```bash
 docker compose up -d
 ```
-* 이 명령어를 실행하면 도커허브(`peg0525/kaboat_2026_sim`)에서 공용 개발 환경 이미지를 자동으로 Pull 받아와 컨테이너를 백그라운드에 띄웁니다.
+* 이 명령어를 실행하면 GitHub Container Registry(`ghcr.io/pegguiitar/kaboat_ws`)에서 공용 개발 환경 이미지를 자동으로 Pull 받아와 컨테이너를 백그라운드에 띄웁니다.
 * 호스트 PC의 `src/` 폴더가 컨테이너 내부 워크스페이스와 실시간 연동(Volume Mount)됩니다.
-* **Dockerfile 을 직접 고쳤다면** `docker compose up -d --build` 로 실행하면 Hub 이미지 대신 이 저장소의 `Dockerfile` 로 로컬에서 빌드합니다. (검증 후에는 아래 §4 규칙에 따라 Hub 이미지도 갱신해 주세요.)
+* **Dockerfile 을 직접 고쳤다면** `docker compose up -d --build` 로 실행하면 레지스트리 이미지 대신 이 저장소의 `Dockerfile` 로 로컬에서 빌드합니다. (검증 후에는 아래 §4 규칙에 따라 ghcr.io 이미지도 갱신해 주세요.)
+* `ghcr.io/pegguiitar/kaboat_ws` 이미지가 **Private** 로 설정되어 있다면, Pull 전에 한 번 로그인해야 합니다: `docker login ghcr.io -u <github-id>` (비밀번호 칸에 GitHub Personal Access Token 입력, `read:packages` 권한 필요).
 
 ### 4) VS Code를 통한 컨테이너 접속 및 빌드
 1. **VS Code**를 실행한 뒤 `kaboat_ws` 폴더를 열어줍니다.
@@ -115,16 +116,31 @@ kaboat_ws/              # 통합 워크스페이스 루트
 4. **주의:** 도커 내부에서 생성되는 `build/`, `install/`, `log/` 폴더와 `src/vrx/`, `src/ros_gz/` 는 `.gitignore`에 의해 자동으로 제외되므로 커밋 시 포함되지 않도록 주의하십시오.
 
 ### 🐳 Dockerfile / 개발 이미지 관리 규칙 (필독)
-`docker compose up -d` 는 Docker Hub 의 `peg0525/kaboat_2026_sim` 이미지를 그대로 Pull 합니다.
-**저장소의 `Dockerfile` 을 고쳐서 push 하는 것만으로는 이 Hub 이미지가 갱신되지 않습니다.**
+`docker compose up -d` 는 GitHub Container Registry 의 `ghcr.io/pegguiitar/kaboat_ws`
+이미지를 그대로 Pull 합니다.
+**저장소의 `Dockerfile` 을 고쳐서 push 하는 것만으로는 이 레지스트리 이미지가 갱신되지 않습니다.**
 따라서 Dockerfile 을 수정했다면 **반드시 아래를 함께 수행**해 저장소와 이미지가 어긋나지 않게 하세요.
 
+**최초 1회 — ghcr.io 로그인 (Docker Hub 계정 불필요, GitHub 계정으로 인증)**
 ```bash
-# Dockerfile 수정 → 로컬 빌드로 검증 → Hub 이미지 갱신
-docker compose up -d --build                       # 로컬 Dockerfile 로 빌드/검증
-docker build -t peg0525/kaboat_2026_sim:latest .   # 이미지 태깅
-docker push peg0525/kaboat_2026_sim:latest         # Hub 갱신 (권한 필요)
+# GitHub → Settings → Developer settings → Personal access tokens 에서
+# write:packages 권한을 가진 토큰(classic) 발급 후:
+docker login ghcr.io -u <github-id>
+# 비밀번호 입력창에 방금 발급한 토큰을 붙여넣기 (GitHub 비밀번호 아님)
+```
+
+**Dockerfile 수정할 때마다**
+```bash
+docker compose up -d --build                              # 로컬 Dockerfile 로 빌드/검증
+docker tag  peg0525/kaboat_2026_sim:latest \
+            ghcr.io/pegguiitar/kaboat_ws:latest             # 이미지 태깅
+docker push ghcr.io/pegguiitar/kaboat_ws:latest             # 레지스트리 갱신
 ```
 
 > 이렇게 하지 않으면 "Dockerfile 은 최신인데 팀원이 받는 이미지는 옛날 버전" 인 상태가
 > 에러 없이 조용히 발생하여 원인 파악이 어려워집니다.
+>
+> ghcr.io 패키지가 기본적으로 **Private** 로 생성되므로, 팀원들이 pull 할 수 있으려면
+> GitHub 저장소 → Packages → `kaboat_ws` → Package settings 에서 이 저장소에
+> "Manage Actions access" 또는 저장소 연결(Link repository)로 접근 권한을 열어주거나,
+> 패키지를 Public 으로 전환하세요.
