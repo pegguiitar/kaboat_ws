@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   kaboat_sim_env:
     image: peg0525/kaboat_2026_sim:latest
