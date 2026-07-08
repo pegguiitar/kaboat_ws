@@ -5,6 +5,7 @@ log/
 
 # 외부 소스 (vcstool 로 관리, ../vrx.repos 참조 — 저장소에 커밋하지 않음)
 vrx/
+ros_gz/
 
 # OS 및 개발 툴 메타데이터
 .vscode/

@@ -15,8 +15,14 @@ services:
       - DISPLAY=${DISPLAY}
       - QT_X11_NO_MITSHM=1
     volumes:
-      # 호스트의 src(kaboat_sim, vrx 포함)를 컨테이너 내부 워크스페이스의 src로 마운트
+      # 호스트의 src(kaboat_sim, vrx, ros_gz 포함)를 컨테이너 내부 워크스페이스의 src로 마운트
       - ./src:/workspace/kaboat_ws/src
+      # vrx.repos / scripts/ 는 src/ 밖(저장소 루트)에 있어서 별도로 마운트해야
+      # 컨테이너 안에서 ./scripts/setup_workspace.sh, vcs import 가 보인다.
+      # (build/install/log 는 여전히 컨테이너 전용 — 호스트에 root 소유 파일이
+      # 남지 않도록 일부러 통째로 마운트하지 않았다.)
+      - ./vrx.repos:/workspace/kaboat_ws/vrx.repos:ro
+      - ./scripts:/workspace/kaboat_ws/scripts:ro
       # GUI 화면 출력을 위한 X11 소켓 공유
       - /tmp/.X11-unix:/tmp/.X11-unix:ro
     stdin_open: true

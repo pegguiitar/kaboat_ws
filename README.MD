@@ -31,14 +31,26 @@ git clone https://github.com/pegguiitar/kaboat_ws.git
 cd kaboat_ws
 ```
 
-### 2-1) VRX 소스 가져오기 (★ 최초 1회)
-VRX 시뮬레이터는 저장소에 직접 커밋하지 않고 `vrx.repos` 에 명시된 커밋을 내려받습니다.
-아래 명령으로 `src/vrx` 를 생성합니다. (`vcstool` 이 없으면 `sudo apt install python3-vcstool`)
+### 2-1) 외부 소스 가져오기 (★ 최초 1회)
+VRX 와 ros_gz 는 저장소에 직접 커밋하지 않고 `vrx.repos` 에 명시된 커밋을 내려받습니다.
+(왜 ros_gz 까지 소스로 받는지는 아래 "Gazebo Garden 필수" 참고.)
 
 ```bash
-vcs import src < vrx.repos
+./scripts/setup_workspace.sh
 ```
 *(컨테이너 접속 후 컨테이너 내부 터미널에서 실행해도 됩니다. 도커 이미지에는 vcstool 이 이미 포함되어 있습니다.)*
+
+이 스크립트는 `vcs import` 로 소스를 받은 뒤, vrx 저장소에 들어있는 **알려진 깨진 심링크**
+(`ball_shooter` 텍스처)를 자동으로 제거합니다 — 손으로 지우는 걸 깜빡하면
+`colcon build --symlink-install` 이 실패하니 꼭 스크립트로 실행하세요.
+
+> ⚠️ **Gazebo Garden 필수**: VRX 는 Gazebo Garden(`gz-sim7`)을 요구하는데,
+> ROS 2 Humble 공식 apt 패키지(`ros-humble-ros-gz-sim` 등)는 Gazebo
+> Fortress 로 고정 빌드되어 있어 VRX 플러그인(부력·파도 등)이 로드되지
+> 않습니다. 그래서 이 Dockerfile은 Gazebo Garden 런타임(`gz-garden`)을 설치하고,
+> `ros_gz` 는 apt 대신 위 스크립트로 받은 소스를 `GZ_VERSION=garden`
+> (Dockerfile에 이미 설정됨)으로 빌드합니다. 별도 조치 불필요 — 그냥
+> `colcon build` 하면 됩니다.
 
 ### 3) 도커 컨테이너 가동
 ```bash
@@ -58,7 +70,7 @@ docker compose up -d
 # 워크스페이스 의존성 설치 및 빌드
 rosdep update
 rosdep install --from-paths src --ignore-src -r -y
-colcon build --symlink-install
+colcon build --symlink-install   # GZ_VERSION=garden 은 Dockerfile에서 이미 설정됨
 
 # 빌드 환경 변수 반영
 source install/setup.bash
@@ -77,13 +89,16 @@ ros2 launch kaboat_sim [실행할_런치파일_이름].launch.py
 ## 📂 3. 프로젝트 구조
 ```text
 kaboat_ws/              # 통합 워크스페이스 루트
-├── Dockerfile          # 로컬 빌드용 도커 명세서
+├── Dockerfile          # 로컬 빌드용 도커 명세서 (Gazebo Garden 설치 포함)
 ├── docker-compose.yml  # 컨테이너 실행 및 볼륨 마운트 설정 파일
 ├── .gitignore          # build, install, log 등 빌드 결과물 제외 설정
-├── vrx.repos           # VRX 소스 참조 (vcstool). `vcs import src < vrx.repos`
+├── vrx.repos           # 외부 소스 참조 (vcstool): vrx, ros_gz
+├── scripts/
+│   └── setup_workspace.sh  # vcs import + 알려진 심링크 문제 자동 수정
 └── src/                # 소스코드 폴더
     ├── kaboat_sim/     # 우리 팀 커스텀 VRX 시뮬레이션 패키지 (Git 관리 대상)
-    └── vrx/            # 공식 OSRF VRX (vcstool 로 내려받음, Git 미추적)
+    ├── vrx/            # 공식 OSRF VRX (vcstool 로 내려받음, Git 미추적)
+    └── ros_gz/         # ROS-Gazebo 브릿지, Garden 용으로 소스 빌드 (Git 미추적)
 ```
 
 ---
@@ -97,7 +112,7 @@ kaboat_ws/              # 통합 워크스페이스 루트
 1. 소스코드 수정이나 브랜치 변경(`git checkout`)은 **호스트 PC 터미널**에서 평소처럼 수행합니다.
 2. 볼륨 마운트 덕분에 도커 컨테이너 내부에도 실시간으로 코드가 변경됩니다.
 3. 코드 수정 후에는 **VS Code 컨테이너 터미널**로 돌아와 `colcon build --symlink-install`만 다시 실행하고 시뮬레이션을 돌려 테스트하면 됩니다.
-4. **주의:** 도커 내부에서 생성되는 `build/`, `install/`, `log/` 폴더와 `src/vrx/` 는 `.gitignore`에 의해 자동으로 제외되므로 커밋 시 포함되지 않도록 주의하십시오.
+4. **주의:** 도커 내부에서 생성되는 `build/`, `install/`, `log/` 폴더와 `src/vrx/`, `src/ros_gz/` 는 `.gitignore`에 의해 자동으로 제외되므로 커밋 시 포함되지 않도록 주의하십시오.
 
 ### 🐳 Dockerfile / 개발 이미지 관리 규칙 (필독)
 `docker compose up -d` 는 Docker Hub 의 `peg0525/kaboat_2026_sim` 이미지를 그대로 Pull 합니다.

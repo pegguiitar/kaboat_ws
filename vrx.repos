@@ -1,14 +1,25 @@
-# VRX 시뮬레이터 소스 참조 (vcstool).
-# 저장소에 vrx를 통째로 커밋하는 대신, 아래 커밋을 clone 하도록 한다.
+# 외부(Gazebo 생태계) 소스 참조 (vcstool).
+# 저장소에 통째로 커밋하는 대신, 아래 커밋을 clone 하도록 한다.
 #
 # 최초 세팅 / 갱신:
-#   vcs import src < vrx.repos      # src/vrx 로 clone
+#   vcs import src < vrx.repos      # src/vrx, src/ros_gz 로 clone
 #   vcs pull src                    # 이후 갱신 시
 #
-# version 은 재현성을 위해 커밋 해시로 고정 (VRX 2.4.1 릴리스, humble).
+# version 은 재현성을 위해 커밋 해시로 고정.
 # 새 버전으로 올리려면 아래 version 값만 바꾸면 된다.
 repositories:
   vrx:
+    # VRX 2.4.1 릴리스 (humble). https://github.com/osrf/vrx
     type: git
     url: https://github.com/osrf/vrx.git
     version: dc30ed8d17aa1083fd872edad9c77c69896d2b07
+  ros_gz:
+    # ros_gz humble 브랜치 (0.244.25). apt 배포판(ros-humble-ros-gz-sim 등)은
+    # Gazebo Fortress 로 고정 빌드되어 VRX 가 요구하는 Gazebo Garden과 ABI가
+    # 맞지 않는다 (플러그인 로드 실패, "IgnitionPluginHook missing"). 그래서
+    # ros_gz 는 apt 대신 여기서 소스로 받아 GZ_VERSION=garden 으로 빌드한다
+    # (Dockerfile 에서 ENV GZ_VERSION=garden 설정, gz-garden 런타임도 함께 설치).
+    # https://github.com/gazebosim/ros_gz
+    type: git
+    url: https://github.com/gazebosim/ros_gz.git
+    version: 9d7f8c721c233a9ac8b43950129d51e67905523e
