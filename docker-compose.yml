@@ -2,6 +2,7 @@ services:
   kaboat_sim_env:
     image: peg0525/kaboat_2026_sim:latest
     container_name: kaboat_sim_container
+    working_dir: /workspace/kaboat_ws
     privileged: true
     network_mode: host
     environment:
