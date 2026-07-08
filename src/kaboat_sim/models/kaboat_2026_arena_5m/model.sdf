@@ -1,0 +1,102 @@
+<?xml version="1.0" ?>
+<sdf version="1.6">
+  <model name="kaboat_2026_arena_5m">
+    <static>true</static> 
+
+    <!-- Start Gate Red Left -->
+    <include>
+      <name>start_gate_red_left</name>
+      <pose>14 18 0 0 0 0</pose>
+      <uri>https://fuel.gazebosim.org/1.0/openrobotics/models/mb_marker_buoy_red</uri>
+      <plugin name="vrx::PolyhedraBuoyancyDrag" filename="libPolyhedraBuoyancyDrag.so">
+        <fluid_density>1000</fluid_density>
+        <fluid_level>0.0</fluid_level>
+        <linear_drag>25.0</linear_drag>
+        <angular_drag>2.0</angular_drag>
+        <buoyancy name="collision_outer">
+          <link_name>link</link_name>
+          <pose>0 0 -0.3 0 0 0</pose>
+          <geometry>
+            <cylinder>
+              <radius>0.325</radius>
+              <length>0.1</length>
+            </cylinder>
+          </geometry>
+        </buoyancy>
+        <wavefield>
+          <topic>/vrx/wavefield/parameters</topic>
+        </wavefield>
+      </plugin>
+    </include>
+
+    <!-- Start Gate Red Right -->
+    <include>
+      <name>start_gate_red_right</name>
+      <pose>14 -18 0 0 0 0</pose>
+      <uri>https://fuel.gazebosim.org/1.0/openrobotics/models/mb_marker_buoy_red</uri>
+      <plugin name="vrx::PolyhedraBuoyancyDrag" filename="libPolyhedraBuoyancyDrag.so">
+        <fluid_density>1000</fluid_density>
+        <fluid_level>0.0</fluid_level>
+        <linear_drag>25.0</linear_drag>
+        <angular_drag>2.0</angular_drag>
+        <buoyancy name="collision_outer">
+          <link_name>link</link_name>
+          <pose>0 0 -0.3 0 0 0</pose>
+          <geometry>
+            <cylinder>
+              <radius>0.325</radius>
+              <length>0.1</length>
+            </cylinder>
+          </geometry>
+        </buoyancy>
+        <wavefield>
+          <topic>/vrx/wavefield/parameters</topic>
+        </wavefield>
+      </plugin>
+    </include>
+
+    <!-- 1. First Section: Wider Zigzag Grid (x = 22 to 46, Spacing in y = 6m/12m) -->
+    <!-- Column x=22 -->
+    <include><name>basic_buoy_white_1</name><pose>22 -12 0 0 0 0</pose><uri>model://basic_buoy_white</uri></include>
+    <include><name>basic_buoy_white_2</name><pose>22 0 0 0 0 0</pose><uri>model://basic_buoy_white</uri></include>
+    <include><name>basic_buoy_white_3</name><pose>22 12 0 0 0 0</pose><uri>model://basic_buoy_white</uri></include>
+
+    <!-- Column x=30 -->
+    <include><name>basic_buoy_white_4</name><pose>30 -18 0 0 0 0</pose><uri>model://basic_buoy_white</uri></include>
+    <include><name>basic_buoy_white_5</name><pose>30 -6 0 0 0 0</pose><uri>model://basic_buoy_white</uri></include>
+    <include><name>basic_buoy_white_6</name><pose>30 6 0 0 0 0</pose><uri>model://basic_buoy_white</uri></include>
+    <include><name>basic_buoy_white_7</name><pose>30 18 0 0 0 0</pose><uri>model://basic_buoy_white</uri></include>
+
+    <!-- Column x=38 -->
+    <include><name>basic_buoy_white_8</name><pose>38 -12 0 0 0 0</pose><uri>model://basic_buoy_white</uri></include>
+    <include><name>basic_buoy_white_9</name><pose>38 0 0 0 0 0</pose><uri>model://basic_buoy_white</uri></include>
+    <include><name>basic_buoy_white_10</name><pose>38 12 0 0 0 0</pose><uri>model://basic_buoy_white</uri></include>
+
+    <!-- Column x=46 -->
+    <include><name>basic_buoy_white_11</name><pose>46 -18 0 0 0 0</pose><uri>model://basic_buoy_white</uri></include>
+    <include><name>basic_buoy_white_12</name><pose>46 -6 0 0 0 0</pose><uri>model://basic_buoy_white</uri></include>
+    <include><name>basic_buoy_white_13</name><pose>46 6 0 0 0 0</pose><uri>model://basic_buoy_white</uri></include>
+    <include><name>basic_buoy_white_14</name><pose>46 18 0 0 0 0</pose><uri>model://basic_buoy_white</uri></include>
+
+    <!-- 2. Second Section: Slalom Gates & Single Buoys (x = 54 to 86) -->
+    <!-- Column x=54 (Wide Gate) -->
+    <include><name>basic_buoy_white_15</name><pose>54 -12 0 0 0 0</pose><uri>model://basic_buoy_white</uri></include>
+    <include><name>basic_buoy_white_16</name><pose>54 12 0 0 0 0</pose><uri>model://basic_buoy_white</uri></include>
+
+    <!-- Column x=62 (Medium Gate) -->
+    <include><name>basic_buoy_white_17</name><pose>62 -8 0 0 0 0</pose><uri>model://basic_buoy_white</uri></include>
+    <include><name>basic_buoy_white_18</name><pose>62 8 0 0 0 0</pose><uri>model://basic_buoy_white</uri></include>
+
+    <!-- Column x=70 (Narrow Gate) -->
+    <include><name>basic_buoy_white_19</name><pose>70 -5 0 0 0 0</pose><uri>model://basic_buoy_white</uri></include>
+    <include><name>basic_buoy_white_20</name><pose>70 5 0 0 0 0</pose><uri>model://basic_buoy_white</uri></include>
+
+    <!-- Column x=78 (Center Single Obstacle / Slalom Buoy) -->
+    <include><name>basic_buoy_white_21</name><pose>78 0 0 0 0 0</pose><uri>model://basic_buoy_white</uri></include>
+
+    <!-- Column x=86 (Exit Gate) -->
+    <include><name>basic_buoy_white_22</name><pose>86 -10 0 0 0 0</pose><uri>model://basic_buoy_white</uri></include>
+    <include><name>basic_buoy_white_23</name><pose>86 10 0 0 0 0</pose><uri>model://basic_buoy_white</uri></include>
+
+  </model>
+</sdf>

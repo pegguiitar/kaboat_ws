@@ -1,0 +1,9 @@
+# ROS 2 빌드 결과물 (용량이 크고 로컬 환경에 종속되므로 깃 제외)
+build/
+install/
+log/
+
+# OS 및 개발 툴 메타데이터
+.vscode/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,183 @@
+<?xml version="1.0"?>
+<robot name="kaboat_msga" xmlns:xacro="http://ros.org/wiki/xacro">
+
+  <xacro:property name="pkg_name" value="kaboat_sim"/>
+  <xacro:property name="model_dir" value="file://$(find ${pkg_name})/models/roboboat02"/>
+  <xacro:include filename="$(find wamv_description)/urdf/thrusters/engine.xacro" />
+
+  <link name="base_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="17.206"/>
+      <inertia ixx="1.05" ixy="0.0" ixz="0.0" iyy="1.67" iyz="0.0" izz="2.31"/>
+    </inertial>
+
+    <visual name="base_visual">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="${model_dir}/meshes/roboboat02.dae"/></geometry>
+    </visual>
+    
+    <visual name="cpubox_visual">
+      <origin xyz="0 0 0.25" rpy="0 0 0"/>
+      <geometry><box size="0.2 0.3 0.2"/></geometry>
+      <material name="dark_grey"><color rgba="0.2 0.2 0.2 1.0"/></material>
+    </visual>
+
+    <collision name="hull_left_collision">
+      <origin xyz="0.0 -0.385 0.067" rpy="0 0 0"/>
+      <geometry><box size="1.01 0.145 0.226"/></geometry>
+    </collision>
+    <collision name="hull_right_collision">
+      <origin xyz="0.0 0.385 0.067" rpy="0 0 0"/>
+      <geometry><box size="1.01 0.145 0.226"/></geometry>
+    </collision>
+    <collision name="cpu_box_collision">
+      <origin xyz="0 0 0.25" rpy="0 0 0"/>
+      <geometry><box size="0.2 0.3 0.2"/></geometry>
+    </collision>
+  </link>
+
+  <xacro:thruster prefix="left" position="-0.45 0.385 -0.15" orientation="0 0 0" />
+
+  <xacro:thruster prefix="right" position="-0.45 -0.385 -0.15" orientation="0 0 0" />
+  
+  
+  <link name="left_prop_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.5"/>
+      <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+      <geometry><cylinder radius="0.05" length="0.06"/></geometry>
+    </visual>
+  </link>
+  <joint name="left_engine_propeller_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="left_prop_link"/>
+    <origin xyz="-0.45 0.385 -0.15" rpy="0 0 0"/>
+    <axis xyz="1 0 0"/>
+  </joint>
+
+  <link name="right_prop_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.5"/>
+      <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+      <geometry><cylinder radius="0.05" length="0.06"/></geometry>
+    </visual>
+  </link>
+  <joint name="right_engine_propeller_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="right_prop_link"/>
+    <origin xyz="-0.45 -0.385 -0.15" rpy="0 0 0"/>
+    <axis xyz="1 0 0"/>
+  </joint>
+
+  <link name="lidar_link">
+    <visual><geometry><cylinder radius="0.03" length="0.05"/></geometry></visual>
+  </link>
+  <joint name="lidar_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="lidar_link"/>
+    <origin xyz="0.4 0 0.3" rpy="0 0 0"/>
+  </joint>
+
+  <gazebo reference="lidar_link">
+    <sensor name="lidar_2d" type="gpu_lidar">
+      <always_on>true</always_on>
+      <update_rate>10</update_rate>
+      <topic>/lidar/scan</topic>
+      <lidar>
+        <scan>
+          <horizontal>
+            <samples>720</samples>
+            <resolution>1</resolution>
+            <min_angle>-3.14</min_angle>
+            <max_angle>3.14</max_angle>
+          </horizontal>
+        </scan>
+        <range><min>0.1</min><max>50.0</max><resolution>0.01</resolution></range>
+      </lidar>
+    </sensor>
+  </gazebo>
+
+  <link name="camera_link">
+    <visual><geometry><box size="0.02 0.08 0.02"/></geometry></visual>
+  </link>
+  <joint name="camera_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="camera_link"/>
+    <origin xyz="0.45 0 0.35" rpy="0 0 0"/>
+  </joint>
+
+  <gazebo reference="camera_link">
+    <sensor name="depth_camera" type="rgbd_camera">
+      <always_on>true</always_on>
+      <update_rate>30</update_rate>
+      <topic>/camera</topic>
+      <camera>
+        <horizontal_fov>1.047</horizontal_fov>
+        <image><width>640</width><height>480</height></image>
+        <clip><near>0.1</near><far>100</far></clip>
+      </camera>
+    </sensor>
+  </gazebo>
+
+  <gazebo>
+    <plugin filename="libSurface.so" name="vrx::Surface">
+      <link_name>base_link</link_name>
+      <hull_length>1.01</hull_length>
+      <hull_radius>0.08</hull_radius>
+      <fluid_level>0.0</fluid_level>
+      <points>
+        <point>0.5 0.385 0.0</point>
+        <point>-0.5 0.385 0.0</point>
+      </points>
+      <wavefield><topic>/vrx/wavefield/parameters</topic></wavefield>
+    </plugin>
+
+    <plugin filename="libSurface.so" name="vrx::Surface">
+      <link_name>base_link</link_name>
+      <hull_length>1.01</hull_length>
+      <hull_radius>0.08</hull_radius>
+      <fluid_level>0.0</fluid_level>
+      <points>
+        <point>0.5 -0.385 0.0</point>
+        <point>-0.5 -0.385 0.0</point>
+      </points>
+      <wavefield><topic>/vrx/wavefield/parameters</topic></wavefield>
+    </plugin>
+
+    <plugin filename="libSimpleHydrodynamics.so" name="vrx::SimpleHydrodynamics">
+      <link_name>base_link</link_name>
+      <xU>5.0</xU> <xUU>10.0</xUU> 
+      <yV>10.0</yV> <yVV>15.0</yVV> 
+      <zW>20.0</zW>
+      <kP>5.0</kP> <kPP>10.0</kPP>
+      <mQ>5.0</mQ> <mQQ>10.0</mQQ>
+      <nR>10.0</nR> <nRR>15.0</nRR>
+    </plugin>
+
+    <plugin filename="libgz-sim-joint-state-publisher-system.so" name="gz::sim::systems::JointStatePublisher">
+      </plugin>
+    <plugin filename="gz-sim-thruster-system" name="gz::sim::systems::Thruster">
+      <joint_name>left_engine_propeller_joint</joint_name>
+      <thrust_coefficient>10.0</thrust_coefficient>
+      <fluid_density>1000</fluid_density>
+      <propeller_diameter>0.1</propeller_diameter>
+      <velocity_control>false</velocity_control>
+    </plugin>
+    <plugin filename="gz-sim-thruster-system" name="gz::sim::systems::Thruster">
+      <joint_name>right_engine_propeller_joint</joint_name>
+      <thrust_coefficient>10.0</thrust_coefficient>
+      <fluid_density>1000</fluid_density>
+      <propeller_diameter>0.1</propeller_diameter>
+      <velocity_control>false</velocity_control>
+    </plugin>
+  </gazebo>
+</robot>

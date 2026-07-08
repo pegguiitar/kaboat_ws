@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  kaboat_sim_env:
+    image: peg0525/kaboat_2026_sim:latest
+    container_name: kaboat_sim_container
+    privileged: true
+    network_mode: host
+    environment:
+      - DISPLAY=${DISPLAY}
+      - QT_X11_NO_MITSHM=1
+    volumes:
+      # 호스트의 src(kaboat_sim, vrx 포함)를 컨테이너 내부 워크스페이스의 src로 마운트
+      - ./src:/workspace/kaboat_ws/src
+      # GUI 화면 출력을 위한 X11 소켓 공유
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro
+    stdin_open: true
+    tty: true
