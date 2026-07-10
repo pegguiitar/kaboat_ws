@@ -1,0 +1,383 @@
+<?xml version="1.0"?>
+<!-- =====================================================================
+  kaboat_hull.xacro  —  크기 조정 가능한 WAM-V 기반 선체
+
+  VRX 원본(vrx/ 아래, git 미추적)의 선체/추진/동역학 정의를 kaboat_sim 안으로
+  가져와 하나의 파라미터(target_length)로 전체 크기를 조정할 수 있게 만든
+  self-contained 버전. VRX 를 다시 import 해도 이 파일은 살아남는다.
+
+  ── 크기 조정 방법 ────────────────────────────────────────────────
+    아래 target_length(선체 세로 길이, m)만 바꾸면 나머지 치수/질량/관성/
+    부력/드래그가 전부 비례 계산된다. base_length(4.9)는 VRX 원본 WAM-V
+    (16 ft ≈ 4.9 m)의 길이이므로 건드리지 말 것.
+
+  ── 스케일링 규칙 (s = target_length / base_length) ──────────────────
+    · 길이 / 위치 / mesh          : × s
+    · 질량                        : × s^3   (밀도 보존 — 부력과 정합)
+    · 관성 모멘트                 : × s^5
+    · 병진 드래그 (x, y, z)       : × s^2   (∝ 침수 면적)
+    · 회전 드래그 (k, m, n)       : × s^4   (∝ 면적 × 모멘트암^2)
+    · 최대 추력                   : × s^2
+
+  ⚠ 질량은 "WAM-V 와 같은 밀도" 가정값이다. 실제 배 무게가 다르면
+    base_link / engine / battery 의 mass·inertia 를 실측값으로 덮어쓸 것.
+  ⚠ 드래그 계수는 단순화 모델의 근사 스케일이다. 실선 거동과 맞추려면
+    실험적으로 튜닝할 것.
+======================================================================= -->
+<robot xmlns:xacro="http://ros.org/wiki/xacro" name="kaboat_hull">
+
+  <!-- ===== 크기 파라미터 ===== -->
+  <xacro:property name="target_length" value="1.1"/>   <!-- 원하는 세로 길이 [m] -->
+  <xacro:property name="base_length"   value="4.9"/>   <!-- VRX WAM-V 원본 길이 [m] (고정) -->
+  <xacro:property name="s"             value="${target_length / base_length}"/>
+
+  <!-- ===== 흘수선(draft) 조정 파라미터 =====
+       질량(mass)에만 곱해지는 계수. 1.0 = WAM-V 와 같은 밀도(질량 ∝ s^3),
+       현재 안정성이 확인된 유일한 값. (전체 질량 ≈ 2.9 kg × mass_factor)
+
+       ⚠⚠ 1.0 미만으로 낮추지 말 것 — 물리 엔진이 죽는다 (검증 완료) ⚠⚠
+       흘수선을 올리려고(배를 덜 잠기게) mass_factor 를 낮추면, 관성모멘트를
+       그대로 둬도(즉 회전 관성과 무관하게) "ODE INTERNAL ERROR ...
+       aabbBound" 로 시뮬레이터가 죽는다:
+         - 0.5  : 스폰 직후 즉시 크래시
+         - 0.75 : 관성을 s^5 로 고정해도 스폰 직후 즉시 크래시
+                  (관성을 mass_factor 만큼 같이 줄였을 땐 15~20초 뒤 지연 크래시)
+       즉 원인은 회전(관성모멘트)이 아니라 수직 방향(heave) 부력-질량
+       진동으로 보인다: 질량이 작아지면 같은 부력 불균형에도 가속도(F=ma)가
+       커져 평형점 근처에서 더 크게 튕기는데, SimpleHydrodynamics 의 수직
+       드래그(zW 등, 아래에서 s^2 로만 스케일)가 그 진동을 못 죽여서 발산한다.
+       짧은 관찰(9초)로는 안정으로 오판하기 쉬우니, 흘수선 개선을 다시
+       시도한다면 (a) zW/kP 등 감쇠 계수를 mass_factor 축소와 무관하게 별도로
+       키우거나 (b) world 의 물리 스텝 크기를 줄이는 방향을 먼저 검토하고,
+       60초 이상 헤드리스로 크래시 여부를 확인할 것. -->
+  <xacro:property name="mass_factor" value="1.0"/>
+
+  <xacro:property name="namespace" value="wamv" scope="global"/>
+
+  <!-- ===================================================================
+       선체 base_link (충돌형상은 원본을 s 배로 축소)
+  ==================================================================== -->
+  <xacro:macro name="main_collisions" params="prefix reflect:=1">
+    <!-- Main float -->
+    <collision name="${prefix}_float">
+      <origin xyz="${-0.4*s} ${1.03*reflect*s} ${0.2*s}" rpy="${0*reflect} 1.57 0" />
+      <geometry><cylinder length="${4*s}" radius="${0.2*s}" /></geometry>
+    </collision>
+    <collision name="${prefix}_mid_float">
+      <origin xyz="${1.85*s} ${1.03*reflect*s} ${0.3*s}" rpy="${0*reflect} 1.38 0" />
+      <geometry><cylinder length="${0.5*s}" radius="${0.17*s}" /></geometry>
+    </collision>
+    <collision name="${prefix}_front_float">
+      <origin xyz="${2.3*s} ${1.03*reflect*s} ${0.4*s}" rpy="${0*reflect} 1.3 0" />
+      <geometry><cylinder length="${0.45*s}" radius="${0.12*s}" /></geometry>
+    </collision>
+    <!-- Front beam -->
+    <collision name="front_${prefix}_beam_lower">
+      <origin xyz="${0.9*s} ${0.85*reflect*s} ${1*s}" rpy="${0.78*reflect} 0 0" />
+      <geometry><cylinder length="${0.5*s}" radius="${0.04*s}" /></geometry>
+    </collision>
+    <collision name="front_${prefix}_beam_upper">
+      <origin xyz="${0.9*s} ${0.6*reflect*s} ${1.18*s}" rpy="${1.35*reflect} 0 0" />
+      <geometry><cylinder length="${0.2*s}" radius="${0.04*s}" /></geometry>
+    </collision>
+    <!-- Mid beam -->
+    <collision name="mid_${prefix}_beam_lower">
+      <origin xyz="${-0.65*s} ${0.99*reflect*s} ${0.7*s}" rpy="${0.1*reflect} 0.25 0" />
+      <geometry><cylinder length="${0.45*s}" radius="${0.03*s}" /></geometry>
+    </collision>
+    <collision name="mid_${prefix}_beam_medium">
+      <origin xyz="${-0.57*s} ${0.87*reflect*s} ${1.05*s}" rpy="${0.75*reflect} 0.25 0" />
+      <geometry><cylinder length="${0.32*s}" radius="${0.03*s}" /></geometry>
+    </collision>
+    <collision name="mid_${prefix}_beam_upper">
+      <origin xyz="${-0.55*s} ${0.65*reflect*s} ${1.17*s}" rpy="${1.35*reflect} 0.25 0" />
+      <geometry><cylinder length="${0.3*s}" radius="${0.03*s}" /></geometry>
+    </collision>
+    <!-- Rear beam -->
+    <collision name="rear_${prefix}_beam_lower">
+      <origin xyz="${-0.74*s} ${1.03*reflect*s} ${0.7*s}" rpy="${0*reflect} -0.15 0" />
+      <geometry><cylinder length="${0.45*s}" radius="${0.03*s}" /></geometry>
+    </collision>
+    <collision name="rear_${prefix}_beam_medium">
+      <origin xyz="${-0.79*s} ${0.91*reflect*s} ${1.05*s}" rpy="${0.75*reflect} -0.15 0" />
+      <geometry><cylinder length="${0.32*s}" radius="${0.03*s}" /></geometry>
+    </collision>
+    <collision name="rear_${prefix}_beam_upper">
+      <origin xyz="${-0.81*s} ${0.67*reflect*s} ${1.18*s}" rpy="${1.45*reflect} -0.15 0" />
+      <geometry><cylinder length="${0.3*s}" radius="${0.03*s}" /></geometry>
+    </collision>
+    <!-- Joint -->
+    <collision name="${prefix}_joint">
+      <origin xyz="${0.58*s} ${1.03*reflect*s} ${0.6*s}" rpy="${0*reflect} -0.6 0" />
+      <geometry><box size="${0.65*s} ${0.2*s} ${0.1*s}" /></geometry>
+    </collision>
+  </xacro:macro>
+
+  <link name="${namespace}/base_link">
+    <visual>
+      <geometry>
+        <mesh filename="package://wamv_description/models/WAM-V-Base/mesh/WAM-V-Base.dae"
+              scale="${s} ${s} ${s}"/>
+      </geometry>
+    </visual>
+
+    <xacro:main_collisions prefix="left"  reflect="1" />
+    <xacro:main_collisions prefix="right" reflect="-1" />
+
+    <!-- Top base -->
+    <collision name="top_base">
+      <origin xyz="0 0 ${1.25*s}" rpy="0 0 0" />
+      <geometry><box size="${1.85*s} ${1*s} ${0.1*s}" /></geometry>
+    </collision>
+
+    <inertial>
+      <!-- mass ∝ s^3 × mass_factor. inertia 는 mass_factor 를 곱하지 않고
+           s^5 스케일만 적용 — 관성이 질량과 함께 너무 작아지면 파도/접촉력
+           대비 회전이 과민해져 물리 엔진이 한 스텝만에 발산, ODE 충돌계산이
+           깨지며 크래시한다(AABB overflow). 관성을 "원래 밀도 기준" 값으로
+           유지해 회전 관성을 확보하고, 가벼움은 질량에서만 반영한다. -->
+      <mass value="${180.0 * s**3 * mass_factor}"/>
+      <inertia ixx="${120.0 * s**5}" ixy="0.0" ixz="0.0"
+               iyy="${393.0 * s**5}" iyz="0.0" izz="${446.0 * s**5}"/>
+    </inertial>
+  </link>
+
+  <gazebo>
+    <enable_wind>true</enable_wind>
+  </gazebo>
+
+  <gazebo reference="${namespace}/base_link">
+    <visual>
+      <material>
+        <diffuse>1.0 1.0 1.0</diffuse>
+        <specular>1.0 1.0 1.0</specular>
+        <pbr>
+          <metal>
+            <albedo_map>model://wamv_description/models/WAM-V-Base/mesh/WAM-V_Albedo.png</albedo_map>
+            <normal_map>model://wamv_description/models/WAM-V-Base/mesh/WAM-V_Normal.png</normal_map>
+            <roughness_map>model://wamv_description/models/WAM-V-Base/mesh/WAM-V_Roughness.png</roughness_map>
+            <metalness_map>model://wamv_description/models/WAM-V-Base/mesh/WAM-V_Metalness.png</metalness_map>
+          </metal>
+        </pbr>
+      </material>
+    </visual>
+
+    <sensor type="contact" name="contact_sensor">
+      <contact>
+        <collision>${namespace}/base_link_fixed_joint_lump__top_base_collision_24</collision>
+        <collision>${namespace}/base_link_fixed_joint_lump__left_float_collision</collision>
+        <collision>${namespace}/base_link_fixed_joint_lump__left_mid_float_collision_1</collision>
+        <collision>${namespace}/base_link_fixed_joint_lump__left_front_float_collision_2</collision>
+        <collision>${namespace}/base_link_fixed_joint_lump__right_float_collision_12</collision>
+        <collision>${namespace}/base_link_fixed_joint_lump__right_mid_float_collision_13</collision>
+        <collision>${namespace}/base_link_fixed_joint_lump__right_front_float_collision_14</collision>
+        <topic>/vrx/contacts</topic>
+      </contact>
+      <always_on>1</always_on>
+      <update_rate>5</update_rate>
+    </sensor>
+  </gazebo>
+
+  <!-- ===================================================================
+       배터리 (질량 ∝ s^3, 위치/치수 ∝ s)
+  ==================================================================== -->
+  <xacro:macro name="battery" params="prefix position">
+    <link name="${namespace}/${prefix}_battery_link">
+      <visual>
+        <origin xyz="0 ${-1.03*s} ${-0.45*s}" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://vrx_gazebo/models/battery/mesh/battery.dae"
+                scale="${s} ${s} ${s}"/>
+        </geometry>
+      </visual>
+      <collision name="${prefix}_battery_collision">
+        <origin xyz="0 0 ${0.15*s}" rpy="0 0 0"/>
+        <geometry><box size="${0.6*s} ${0.4*s} ${0.31*s}"/></geometry>
+      </collision>
+      <inertial>
+        <origin xyz="0 0 ${0.15*s}" rpy="0 0 0"/>
+        <mass value="${23.5 * s**3 * mass_factor}"/>
+        <inertia ixx="${0.5015291666666667 * s**5}"
+                 iyy="${0.8931958333333333 * s**5}"
+                 izz="${1.0183333333333333 * s**5}"
+                 ixy="0" ixz="0" iyz="0"/>
+      </inertial>
+    </link>
+    <joint name="${namespace}/${prefix}_chasis_battery_joint" type="fixed">
+      <origin xyz="${position}" rpy="0 0 0"/>
+      <parent link="${namespace}/base_link"/>
+      <child link="${namespace}/${prefix}_battery_link"/>
+    </joint>
+  </xacro:macro>
+
+  <xacro:battery prefix="left"  position="0 ${1*s} ${0.45*s}"/>
+  <xacro:battery prefix="right" position="0 ${-1*s} ${0.45*s}"/>
+
+  <!-- ===================================================================
+       엔진 + 프로펠러 (치수/위치 ∝ s, 질량 ∝ s^3, 관성 ∝ s^5)
+  ==================================================================== -->
+  <xacro:macro name="engine" params="prefix position">
+    <link name="${namespace}/${prefix}_engine_link">
+      <visual>
+        <geometry>
+          <mesh filename="package://wamv_description/models/engine/mesh/engine.dae"
+                scale="${s} ${s} ${s}"/>
+        </geometry>
+      </visual>
+      <collision name="${prefix}_engine_vertical_axis_collision">
+        <origin xyz="${-0.16*s} 0 ${-0.24*s}" rpy="0 0 0" />
+        <geometry><box size="${0.2*s} ${0.15*s} ${0.83*s}" /></geometry>
+      </collision>
+      <collision name="${prefix}_engine_rear_end_collision">
+        <origin xyz="${-0.34*s} 0 ${0.12*s}" rpy="0 0 0" />
+        <geometry><box size="${0.12*s} ${0.15*s} ${0.12*s}" /></geometry>
+      </collision>
+      <inertial>
+        <mass value="${15 * s**3 * mass_factor}"/>
+        <inertia ixx="${0.889245 * s**5}" ixy="0.0" ixz="0.0"
+                 iyy="${0.911125 * s**5}" iyz="0.0" izz="${0.078125 * s**5}"/>
+      </inertial>
+    </link>
+
+    <link name="${namespace}/${prefix}_propeller_link">
+      <visual>
+        <geometry>
+          <mesh filename="package://wamv_description/models/propeller/mesh/propeller.dae"
+                scale="${s} ${s} ${s}"/>
+        </geometry>
+      </visual>
+      <collision name="${prefix}_propeller_collision">
+        <origin xyz="${-0.08*s} 0 0" rpy="0 1.57 0" />
+        <geometry><cylinder length="${0.18*s}" radius="${0.24*s}" /></geometry>
+      </collision>
+      <inertial>
+        <mass value="${0.5 * s**3 * mass_factor}"/>
+        <inertia ixx="${0.008545 * s**5}" ixy="0.0" ixz="0.0"
+                 iyy="${0.008545 * s**5}" iyz="0.0" izz="${0.0144 * s**5}"/>
+      </inertial>
+    </link>
+
+    <joint name="${namespace}/${prefix}_chassis_engine_joint" type="revolute">
+      <axis xyz="0 0 1"/>
+      <limit lower="${-pi}" upper="${pi}" effort="10" velocity="10"/>
+      <origin xyz="${position}" rpy="0 0 0"/>
+      <parent link="${namespace}/base_link"/>
+      <child link="${namespace}/${prefix}_engine_link"/>
+    </joint>
+
+    <joint name="${namespace}/${prefix}_engine_propeller_joint" type="continuous">
+      <axis rpy="0 0 0" xyz="1 0 0"/>
+      <parent link="${namespace}/${prefix}_engine_link"/>
+      <child link="${namespace}/${prefix}_propeller_link"/>
+      <origin rpy="0 0 0" xyz="${-0.278156*s} 0 ${-0.509371*s}"/>
+      <limit effort="100" velocity="100" />
+      <dynamics friction="0.05" damping="0.05" />
+    </joint>
+  </xacro:macro>
+
+  <xacro:engine prefix="left"  position="${-2.373776*s} ${1.027135*s} ${0.318237*s}" />
+  <xacro:engine prefix="right" position="${-2.373776*s} ${-1.027135*s} ${0.318237*s}" />
+
+  <!-- ===================================================================
+       추력 플러그인 (프로펠러 직경 ∝ s, 최대 추력 ∝ s^2)
+  ==================================================================== -->
+  <xacro:macro name="thruster_plugin" params="name">
+    <gazebo>
+      <plugin filename="gz-sim-thruster-system" name="gz::sim::systems::Thruster">
+        <joint_name>${namespace}/${name}_engine_propeller_joint</joint_name>
+        <thrust_coefficient>0.004422</thrust_coefficient>
+        <fluid_density>1000</fluid_density>
+        <propeller_diameter>${0.2 * s}</propeller_diameter>
+        <velocity_control>true</velocity_control>
+        <!-- 원본 max = ((x_u + x_uu*Vmax)*Vmax)/2 = 2353.53; 스케일 × s^2 -->
+        <max_thrust_cmd>${(((51.3 + 72.4*7.71667) * 7.71667) / 2) * s**2}</max_thrust_cmd>
+        <namespace>${namespace}</namespace>
+        <topic>thrusters/${name}/thrust</topic>
+        <name>${name}</name>
+      </plugin>
+      <plugin filename="gz-sim-joint-position-controller-system"
+              name="gz::sim::systems::JointPositionController">
+        <joint_name>${namespace}/${name}_chassis_engine_joint</joint_name>
+        <use_velocity_commands>true</use_velocity_commands>
+        <topic>${namespace}/thrusters/${name}/pos</topic>
+        <name>${name}</name>
+      </plugin>
+    </gazebo>
+  </xacro:macro>
+
+  <xacro:thruster_plugin name="left" />
+  <xacro:thruster_plugin name="right" />
+
+  <!-- ===================================================================
+       부력(Surface) + 유체동역학(SimpleHydrodynamics)
+  ==================================================================== -->
+  <gazebo>
+    <!-- Left hull -->
+    <plugin filename="libSurface.so" name="vrx::Surface">
+      <link_name>${namespace}/base_link</link_name>
+      <hull_length>${4.9 * s}</hull_length>
+      <hull_radius>${0.213 * s}</hull_radius>
+      <fluid_level>0</fluid_level>
+      <points>
+        <point>${0.6*s} ${1.03*s} 0</point>
+        <point>${-1.4*s} ${1.03*s} 0</point>
+      </points>
+      <wavefield><topic>/vrx/wavefield/parameters</topic></wavefield>
+    </plugin>
+    <!-- Right hull -->
+    <plugin filename="libSurface.so" name="vrx::Surface">
+      <link_name>${namespace}/base_link</link_name>
+      <hull_length>${4.9 * s}</hull_length>
+      <hull_radius>${0.213 * s}</hull_radius>
+      <fluid_level>0</fluid_level>
+      <points>
+        <point>${0.6*s} ${-1.03*s} 0</point>
+        <point>${-1.4*s} ${-1.03*s} 0</point>
+      </points>
+      <wavefield><topic>/vrx/wavefield/parameters</topic></wavefield>
+    </plugin>
+
+    <plugin filename="libSimpleHydrodynamics.so" name="vrx::SimpleHydrodynamics">
+      <link_name>${namespace}/base_link</link_name>
+      <!-- Added mass (원본 0 유지) -->
+      <xDotU>0.0</xDotU>
+      <yDotV>0.0</yDotV>
+      <nDotR>0.0</nDotR>
+      <!-- 병진 드래그 ∝ s^2 -->
+      <xU>${100.0 * s**2}</xU>
+      <xUU>${150.0 * s**2}</xUU>
+      <yV>${100.0 * s**2}</yV>
+      <yVV>${100.0 * s**2}</yVV>
+      <zW>${500.0 * s**2}</zW>
+      <!-- 회전 드래그 ∝ s^4 -->
+      <kP>${300.0 * s**4}</kP>
+      <kPP>${600.0 * s**4}</kPP>
+      <mQ>${900.0 * s**4}</mQ>
+      <mQQ>${900.0 * s**4}</mQQ>
+      <nR>${800.0 * s**4}</nR>
+      <nRR>${800.0 * s**4}</nRR>
+    </plugin>
+  </gazebo>
+
+  <!-- ===================================================================
+       TF / 상태 퍼블리셔 (스케일과 무관)
+  ==================================================================== -->
+  <gazebo>
+    <plugin filename="libgz-sim-pose-publisher-system.so"
+            name="gz::sim::systems::PosePublisher">
+      <publish_link_pose>false</publish_link_pose>
+      <publish_sensor_pose>true</publish_sensor_pose>
+      <publish_collision_pose>false</publish_collision_pose>
+      <publish_visual_pose>false</publish_visual_pose>
+      <publish_nested_model_pose>false</publish_nested_model_pose>
+      <publish_model_pose>false</publish_model_pose>
+      <use_pose_vector_msg>true</use_pose_vector_msg>
+      <static_publisher>false</static_publisher>
+      <static_update_frequency>1</static_update_frequency>
+    </plugin>
+    <plugin filename="gz-sim-joint-state-publisher-system"
+            name="gz::sim::systems::JointStatePublisher">
+    </plugin>
+  </gazebo>
+
+</robot>

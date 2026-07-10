@@ -3,8 +3,12 @@
 <sdf version="1.9">
   <world name="kaboat_world">
 
-    <physics name="4ms" type="dart">
-      <max_step_size>0.004</max_step_size>
+    <!-- 물리 스텝: 배를 4.9m→1.1m(약 1/4.5)로 축소하면서 4ms(원본) 스텝으로는
+         작고 가벼운 선체의 빠른 부력·회전 응답을 안정적으로 적분하지 못해
+         "ODE INTERNAL ERROR ... aabbBound" 로 발산·크래시했다. 스텝을 1ms 로
+         줄여 안정화. (배를 다시 키우면 4ms 로 되돌려 성능을 회복해도 된다.) -->
+    <physics name="1ms" type="dart">
+      <max_step_size>0.001</max_step_size>
       <real_time_factor>1.0</real_time_factor>
     </physics>
 
