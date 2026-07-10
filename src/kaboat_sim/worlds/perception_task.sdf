@@ -241,7 +241,15 @@
 
     <include>
       <uri>model://kaboat_2026_arena_5m</uri>
-      <pose>0 0 0 0 0 0</pose> 
+      <pose>0 0 0 0 0 0</pose>
+    </include>
+
+    <!-- "그림 1 종합임무(1경기장)" 도면 배치. 기존 kaboat_2026_arena_5m 과
+         겹치지 않도록 y 방향으로 60m 띄운 위치에 배치 (모델 자체 좌표계는
+         도면 좌하단 코너가 원점). -->
+    <include>
+      <uri>model://kaboat_2026_comprehensive_mission</uri>
+      <pose>0 60 0 0 0 0</pose>
     </include>
 
 

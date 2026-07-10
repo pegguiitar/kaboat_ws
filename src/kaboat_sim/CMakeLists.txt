@@ -30,6 +30,7 @@ install(DIRECTORY launch worlds urdf config models
 install(PROGRAMS
   launch/twist2thrust.py
   launch/rviz_interactive_marker.py
+  launch/straight_drive_test.py
   DESTINATION lib/${PROJECT_NAME}
   )
 
