@@ -125,6 +125,14 @@ ros2 launch kaboat_sim simulation.launch.py
    `ros2 launch kaboat_sim simulation.launch.py`만 다시 실행하면 됩니다
    (xacro 는 런치 시점에 매번 새로 전개되므로).
 
+> ℹ️ **배 크기는 Docker 이미지가 아니라 소스코드(git)에 들어있습니다.**
+> `target_length` 같은 값은 `src/` 안 파일이고, `src/`는 `docker-compose.yml`이
+> 호스트에서 볼륨마운트하는 것이지 이미지에 구워 넣는 게 아닙니다. 즉 배 크기를
+> 바꾼 뒤 **git push만 하면** 팀원에게 전파되고, ghcr.io 이미지를 다시 빌드/push할
+> 필요가 없습니다. (이미지에는 OS·ROS2·Gazebo Garden 툴체인만 들어있고, `kaboat_sim`
+> 소스·world 설정은 항상 git 저장소에서 옵니다 — 이미지를 갱신해야 하는 건 오직
+> `Dockerfile` 자체를 고쳤을 때뿐입니다, §6 참고.)
+
 ---
 
 ## 🌊 4. 파도(흘수선 움직임) 설정
