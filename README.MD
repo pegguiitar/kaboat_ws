@@ -31,26 +31,12 @@ git clone https://github.com/pegguiitar/kaboat_ws.git
 cd kaboat_ws
 ```
 
-### 2-1) 외부 소스 가져오기 (★ 최초 1회)
-VRX 와 ros_gz 는 저장소에 직접 커밋하지 않고 `vrx.repos` 에 명시된 커밋을 내려받습니다.
-(왜 ros_gz 까지 소스로 받는지는 아래 "Gazebo Garden 필수" 참고.)
-
-```bash
-./scripts/setup_workspace.sh
-```
-*(컨테이너 접속 후 컨테이너 내부 터미널에서 실행해도 됩니다. 도커 이미지에는 vcstool 이 이미 포함되어 있습니다.)*
-
-이 스크립트는 `vcs import` 로 소스를 받은 뒤, vrx 저장소에 들어있는 **알려진 깨진 심링크**
-(`ball_shooter` 텍스처)를 자동으로 제거합니다 — 손으로 지우는 걸 깜빡하면
-`colcon build --symlink-install` 이 실패하니 꼭 스크립트로 실행하세요.
-
 > ⚠️ **Gazebo Garden 필수**: VRX 는 Gazebo Garden(`gz-sim7`)을 요구하는데,
 > ROS 2 Humble 공식 apt 패키지(`ros-humble-ros-gz-sim` 등)는 Gazebo
 > Fortress 로 고정 빌드되어 있어 VRX 플러그인(부력·파도 등)이 로드되지
 > 않습니다. 그래서 이 Dockerfile은 Gazebo Garden 런타임(`gz-garden`)을 설치하고,
-> `ros_gz` 는 apt 대신 위 스크립트로 받은 소스를 `GZ_VERSION=garden`
-> (Dockerfile에 이미 설정됨)으로 빌드합니다. 별도 조치 불필요 — 그냥
-> `colcon build` 하면 됩니다.
+> `ros_gz` 는 apt 대신 소스로 받아 `GZ_VERSION=garden`(Dockerfile에 이미 설정됨)
+> 으로 빌드합니다. 아래 순서대로만 하면 별도 조치 불필요합니다.
 
 ### 3) 도커 컨테이너 가동
 ```bash
@@ -58,22 +44,30 @@ docker compose up -d
 ```
 * 이 명령어를 실행하면 GitHub Container Registry(`ghcr.io/pegguiitar/kaboat_ws`)에서 공용 개발 환경 이미지를 자동으로 Pull 받아와 컨테이너를 백그라운드에 띄웁니다.
 * 호스트 PC의 `src/` 폴더가 컨테이너 내부 워크스페이스와 실시간 연동(Volume Mount)됩니다.
-* **Dockerfile 을 직접 고쳤다면** `docker compose up -d --build` 로 실행하면 레지스트리 이미지 대신 이 저장소의 `Dockerfile` 로 로컬에서 빌드합니다. (검증 후에는 아래 §4 규칙에 따라 ghcr.io 이미지도 갱신해 주세요.)
+* **Dockerfile 을 직접 고쳤다면** `docker compose up -d --build` 로 실행하면 레지스트리 이미지 대신 이 저장소의 `Dockerfile` 로 로컬에서 빌드합니다. (검증 후에는 아래 §6 규칙에 따라 ghcr.io 이미지도 갱신해 주세요.)
 * `ghcr.io/pegguiitar/kaboat_ws` 이미지가 **Private** 로 설정되어 있다면, Pull 전에 한 번 로그인해야 합니다: `docker login ghcr.io -u <github-id>` (비밀번호 칸에 GitHub Personal Access Token 입력, `read:packages` 권한 필요).
 
 ### 4) VS Code를 통한 컨테이너 접속 및 빌드
 1. **VS Code**를 실행한 뒤 `kaboat_ws` 폴더를 열어줍니다.
 2. 왼쪽 아래 초록색 원격 아이콘(`><`)을 클릭합니다.
 3. **"Attach to Running Container..."**를 선택한 후, **`kaboat_sim_container`**를 클릭하여 컨테이너 내부로 진입합니다.
-4. VS Code 내부 터미널(`Ctrl + ~`)을 열고 아래 명령어를 순서대로 입력하여 최초 빌드를 수행합니다.
+   (VS Code 없이 터미널만 쓸 거면 호스트에서 `docker exec -it kaboat_sim_container bash` 로 대신 접속해도 됩니다.)
+4. **컨테이너 내부 터미널**(`Ctrl + ~`)에서 아래를 **순서대로** 입력합니다.
 
 ```bash
-# 워크스페이스 의존성 설치 및 빌드
+# 4-1) 외부 소스 가져오기 (★ 최초 1회) — vrx, ros_gz 를 vrx.repos 기준으로 받고
+#      vrx 저장소의 알려진 깨진 심링크(ball_shooter 텍스처)를 자동 제거합니다.
+#      반드시 컨테이너 안에서 실행하세요 — vcstool 은 호스트가 아니라
+#      이 Docker 이미지 안에만 설치되어 있습니다 (호스트엔 ROS2/vcstool 설치 불필요).
+cd /workspace/kaboat_ws
+./scripts/setup_workspace.sh
+
+# 4-2) 워크스페이스 의존성 설치 및 빌드
 rosdep update
 rosdep install --from-paths src --ignore-src -r -y
 colcon build --symlink-install   # GZ_VERSION=garden 은 Dockerfile에서 이미 설정됨
 
-# 빌드 환경 변수 반영
+# 4-3) 빌드 환경 변수 반영
 source install/setup.bash
 ```
 
