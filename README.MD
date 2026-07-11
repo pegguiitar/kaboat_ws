@@ -84,6 +84,25 @@ ros2 launch kaboat_sim simulation.launch.py
 
 호스트 PC 화면에 Gazebo 가상 해상 환경과 WAM-V 선박이 정상적으로 팝업되고, 배가 물 위에 안정적으로 떠 있으면 모든 세팅이 완료된 것입니다.
 
+### 6) 배 직진 주행 테스트
+시뮬레이션이 **재생(▶) 중인 상태**에서, 컨테이너 안에 새 터미널을 하나 더 열어서
+(`docker exec -it kaboat_sim_container bash`) 실행합니다.
+
+```bash
+source /opt/ros/humble/setup.bash
+source /workspace/kaboat_ws/install/setup.bash
+ros2 run kaboat_sim straight_drive_test.py
+```
+* 좌/우 추력 토픽에 동일한 값을 발행해서 요(yaw) 토크를 상쇄시켜 직진하는 최소 테스트 노드입니다.
+* 기본값은 `thrust=12.0N`(현재 축소된 선체 기준 최대추력 118.6N의 약 10%), `duration=10.0s` 입니다.
+  더 세게/오래 밀어보고 싶으면 파라미터로 조절하세요:
+  ```bash
+  ros2 run kaboat_sim straight_drive_test.py --ros-args -p thrust:=30.0 -p duration:=15.0
+  ```
+* ⚠️ `thrust` 를 `max_thrust`(기본 118.6, 배 크기 바꾸면 같이 갱신 필요 — §3 참고)의 80% 넘게
+  주면 경고 로그가 뜹니다. 배가 축소된 뒤로 질량이 매우 작아서(~2kg), 최대치에 가까운 추력을
+  주면 급가속으로 물리 발산 크래시(§7 "ODE INTERNAL ERROR" 참고)가 재현될 수 있습니다.
+
 ---
 
 ## 🚤 3. 선체 크기 조정
@@ -246,6 +265,11 @@ ps -ef | grep -E "gz sim|ros2 launch|parameter_bridge|robot_state_publisher|rviz
 # 확인 (아무것도 안 나와야 정상)
 ps -ef | grep -E "gz sim|ros2 launch|parameter_bridge" | grep -v grep
 ```
+
+**주의**: 위 `kill -9` 직후 바로 `ros2 launch`를 다시 실행하면, 이전 `gz sim` 프로세스의
+렌더링 스레드가 완전히 정리되기 전에 새 프로세스가 떠서 검은 화면 후
+`vrx::WaveVisual` 소멸자에서 `Segmentation fault`가 나며 죽는 경우가 있습니다.
+kill 후 **1~2초 정도 텀을 두고** 재실행하세요.
 
 ### "물리 엔진이 `ODE INTERNAL ERROR ... aabbBound` 로 죽어요"
 배 크기(`target_length`)를 줄인 뒤 world의 물리 스텝(`max_step_size`)을 같이 안 줄였을
