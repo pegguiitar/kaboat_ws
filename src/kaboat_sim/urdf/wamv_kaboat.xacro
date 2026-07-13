@@ -101,7 +101,7 @@
     </sensor>
   </gazebo>
 
-  <!-- IMU (실물: EBIMU-9DOFv5-R3, UART). sim 에서는 Gazebo imu 센서가
+  <!-- IMU — 실물 EBIMU-9DOFv5-R3 (UART). sim 에서는 Gazebo imu 센서가
        sensor_msgs/Imu 로 바로 발행하므로 UART 파싱 불필요. 실물 전환 시
        이 노드만 UART 드라이버로 교체하고 토픽 인터페이스(/imu/data)는 유지. -->
   <link name="imu_link">
@@ -125,7 +125,7 @@
     </sensor>
   </gazebo>
 
-  <!-- GPS (실물: 기종 미정, NMEA/serial 예상). sim 에서는 Gazebo navsat 센서가
+  <!-- GPS — 실물 기종 미정 (NMEA/serial 예상). sim 에서는 Gazebo navsat 센서가
        sensor_msgs/NavSatFix 로 발행. world 의 spherical_coordinates 원점 기준. -->
   <link name="gps_link">
     <visual>

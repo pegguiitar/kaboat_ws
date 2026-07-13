@@ -51,7 +51,7 @@ def generate_launch_description():
         name='robot_state_publisher',
         output='screen',
         parameters=[{
-            'robot_description': Command(['xacro ', xacro_file_path]),
+            'robot_description': ParameterValue(Command(['xacro ', xacro_file_path]), value_type=str),
             'use_sim_time': True,
         }]
     )
@@ -101,6 +101,7 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory, get_package_prefix
 from launch.substitutions import Command, LaunchConfiguration, PythonExpression
+from launch_ros.parameter_descriptions import ParameterValue
 
 def generate_launch_description():
     # 1. 패키지 경로 탐색
@@ -169,7 +170,7 @@ def generate_launch_description():
         name='robot_state_publisher',
         output='screen',
         parameters=[{
-            'robot_description': Command(['xacro ', xacro_file_path]),
+            'robot_description': ParameterValue(Command(['xacro ', xacro_file_path]), value_type=str),
             'use_sim_time': True,
         }]
     )
