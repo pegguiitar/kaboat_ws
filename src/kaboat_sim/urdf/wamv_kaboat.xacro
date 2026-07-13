@@ -101,4 +101,51 @@
     </sensor>
   </gazebo>
 
+  <!-- IMU (실물: EBIMU-9DOFv5-R3, UART). sim 에서는 Gazebo imu 센서가
+       sensor_msgs/Imu 로 바로 발행하므로 UART 파싱 불필요. 실물 전환 시
+       이 노드만 UART 드라이버로 교체하고 토픽 인터페이스(/imu/data)는 유지. -->
+  <link name="imu_link">
+    <visual>
+      <geometry><box size="${0.02*s} ${0.02*s} ${0.01*s}"/></geometry>
+      <material name="imu_green"><color rgba="0.0 0.6 0.2 1.0"/></material>
+    </visual>
+  </link>
+  <joint name="imu_joint" type="fixed">
+    <parent link="wamv/base_link"/>
+    <child link="imu_link"/>
+    <origin xyz="0.0 0.0 ${0.2*s}" rpy="0 0 0"/>
+  </joint>
+
+  <gazebo reference="imu_link">
+    <sensor name="imu_sensor" type="imu">
+      <always_on>true</always_on>
+      <update_rate>100</update_rate>
+      <topic>/imu/data</topic>
+      <gz_frame_id>imu_link</gz_frame_id>
+    </sensor>
+  </gazebo>
+
+  <!-- GPS (실물: 기종 미정, NMEA/serial 예상). sim 에서는 Gazebo navsat 센서가
+       sensor_msgs/NavSatFix 로 발행. world 의 spherical_coordinates 원점 기준. -->
+  <link name="gps_link">
+    <visual>
+      <geometry><cylinder radius="${0.02*s}" length="${0.02*s}"/></geometry>
+      <material name="gps_grey"><color rgba="0.4 0.4 0.4 1.0"/></material>
+    </visual>
+  </link>
+  <joint name="gps_joint" type="fixed">
+    <parent link="sensor_pole_link"/>
+    <child link="gps_link"/>
+    <origin xyz="0.0 0.0 ${0.26*s}" rpy="0 0 0"/>
+  </joint>
+
+  <gazebo reference="gps_link">
+    <sensor name="navsat_sensor" type="navsat">
+      <always_on>true</always_on>
+      <update_rate>10</update_rate>
+      <topic>/navsat</topic>
+      <gz_frame_id>gps_link</gz_frame_id>
+    </sensor>
+  </gazebo>
+
 </robot>

@@ -1,23 +1,76 @@
-- ros_topic_name: "/lidar/scan"
-  gz_topic_name: "/lidar/scan"
-  ros_type_name: "sensor_msgs/msg/LaserScan"
-  gz_type_name: "ignition.msgs.LaserScan"
-  direction: GZ_TO_ROS
+# ros_gz_bridge parameter_bridge 설정 (Gazebo Garden, gz.msgs.*)
+#
+# 이 파일이 sensor_drivers 계층의 "표준 인터페이스 계약"이다.
+# gz_topic_name = 시뮬레이터가 실제로 내보내는 이름
+# ros_topic_name = 자율주행 노드들이 구독하는 표준 이름 (node_structure v5 기준)
+# 실물 전환 시 각 센서의 실제 드라이버가 아래 ros_topic_name 으로 동일하게 발행하면 됨.
 
-- ros_topic_name: "/camera/image"
-  gz_topic_name: "/camera/image"
-  ros_type_name: "sensor_msgs/msg/Image"
-  gz_type_name: "ignition.msgs.Image"
-  direction: GZ_TO_ROS
-
-- ros_topic_name: "/camera/depth_image"
-  gz_topic_name: "/camera/depth_image"
-  ros_type_name: "sensor_msgs/msg/Image"
-  gz_type_name: "ignition.msgs.Image"
-  direction: GZ_TO_ROS
-
+# ── 시간 ──────────────────────────────────────────────
 - ros_topic_name: "/clock"
   gz_topic_name: "/clock"
   ros_type_name: "rosgraph_msgs/msg/Clock"
-  gz_type_name: "ignition.msgs.Clock"
+  gz_type_name: "gz.msgs.Clock"
   direction: GZ_TO_ROS
+
+# ── 2D LiDAR (실물: TG 50) → /scan ───────────────────
+- ros_topic_name: "/scan"
+  gz_topic_name: "/lidar/scan"
+  ros_type_name: "sensor_msgs/msg/LaserScan"
+  gz_type_name: "gz.msgs.LaserScan"
+  direction: GZ_TO_ROS
+
+# ── Depth Cam (실물: Intel D455) ─────────────────────
+# RGB 컬러 → /camera/image_raw (buoy_detector HSV, dock_mark YOLO 입력)
+- ros_topic_name: "/camera/image_raw"
+  gz_topic_name: "/camera/depth/image"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  direction: GZ_TO_ROS
+
+# PointCloud → /depth/points (occupancy_grid 융합, buoy 거리 매칭)
+- ros_topic_name: "/depth/points"
+  gz_topic_name: "/camera/depth/points"
+  ros_type_name: "sensor_msgs/msg/PointCloud2"
+  gz_type_name: "gz.msgs.PointCloudPacked"
+  direction: GZ_TO_ROS
+
+# Depth 이미지 (선택) → /camera/depth_image
+- ros_topic_name: "/camera/depth_image"
+  gz_topic_name: "/camera/depth/depth_image"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  direction: GZ_TO_ROS
+
+# 카메라 메타데이터 (투영/YOLO) → /camera/camera_info
+- ros_topic_name: "/camera/camera_info"
+  gz_topic_name: "/camera/depth/camera_info"
+  ros_type_name: "sensor_msgs/msg/CameraInfo"
+  gz_type_name: "gz.msgs.CameraInfo"
+  direction: GZ_TO_ROS
+
+# ── IMU (실물: EBIMU-9DOFv5-R3, UART) → /imu/data ────
+- ros_topic_name: "/imu/data"
+  gz_topic_name: "/imu/data"
+  ros_type_name: "sensor_msgs/msg/Imu"
+  gz_type_name: "gz.msgs.IMU"
+  direction: GZ_TO_ROS
+
+# ── GPS (실물: 미정) → /gps/fix ──────────────────────
+- ros_topic_name: "/gps/fix"
+  gz_topic_name: "/navsat"
+  ros_type_name: "sensor_msgs/msg/NavSatFix"
+  gz_type_name: "gz.msgs.NavSat"
+  direction: GZ_TO_ROS
+
+# ── 추력 명령 (ROS → GZ) ─────────────────────────────
+- ros_topic_name: "/wamv/thrusters/left/thrust"
+  gz_topic_name: "/wamv/thrusters/left/thrust"
+  ros_type_name: "std_msgs/msg/Float64"
+  gz_type_name: "gz.msgs.Double"
+  direction: ROS_TO_GZ
+
+- ros_topic_name: "/wamv/thrusters/right/thrust"
+  gz_topic_name: "/wamv/thrusters/right/thrust"
+  ros_type_name: "std_msgs/msg/Float64"
+  gz_type_name: "gz.msgs.Double"
+  direction: ROS_TO_GZ

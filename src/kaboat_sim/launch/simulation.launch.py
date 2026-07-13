@@ -190,25 +190,15 @@ def generate_launch_description():
     )
 
     # 7. ROS-Gazebo Bridge 설정
+    # 인라인 @ 문법은 gz 토픽명 == ros 토픽명 이라 표준 인터페이스로 이름을
+    # 정규화할 수 없다. config 파일은 ros_topic_name != gz_topic_name 을 지원하므로
+    # sensor_drivers 표준 인터페이스(/scan, /camera/image_raw, /depth/points,
+    # /imu/data, /gps/fix)로 리매핑하는 계약을 config/bridge_config.yaml 에 둔다.
+    bridge_config_path = os.path.join(kaboat_sim_share, 'config', 'bridge_config.yaml')
     ros_gz_bridge = Node(
         package='ros_gz_bridge',
         executable='parameter_bridge',
-        arguments=[
-            # [기존 설정] LiDAR 및 스러스터 제어
-            '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock',
-            '/lidar/scan@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan',
-            '/wamv/thrusters/left/thrust@std_msgs/msg/Float64]gz.msgs.Double',
-            '/wamv/thrusters/right/thrust@std_msgs/msg/Float64]gz.msgs.Double',
-            # 📷 [추가] 뎁스 카메라 설정 (Gazebo -> ROS2 방향이므로 '[' 사용)
-            # 1. 일반 2D 컬러 이미지
-            '/camera/depth/image@sensor_msgs/msg/Image[gz.msgs.Image',
-            # 2. 깊이(Depth) 이미지
-            '/camera/depth/depth_image@sensor_msgs/msg/Image[gz.msgs.Image',
-            # 3. 3D 포인트 클라우드 (RViz에서 입체적으로 볼 때 아주 유용함)
-            '/camera/depth/points@sensor_msgs/msg/PointCloud2[gz.msgs.PointCloudPacked',
-            # 4. 카메라 메타데이터 (FOV 등)
-            '/camera/depth/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo'
-        ],
+        parameters=[{'config_file': bridge_config_path}],
         output='screen'
     )
 

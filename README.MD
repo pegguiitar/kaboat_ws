@@ -179,12 +179,31 @@ kaboat_ws/              # 통합 워크스페이스 루트
 │   └── setup_workspace.sh  # vcs import + 알려진 심링크 문제 자동 수정
 └── src/                # 소스코드 폴더
     ├── kaboat_sim/     # 우리 팀 커스텀 VRX 시뮬레이션 패키지 (Git 관리 대상)
-    │   ├── urdf/kaboat_hull.xacro    # 배 크기(target_length) 조정 지점
-    │   ├── urdf/wamv_kaboat.xacro    # 센서(라이다·카메라) 장착부, 위 hull 을 include
+    │   ├── urdf/kaboat_hull.xacro     # 배 크기(target_length) 조정 지점
+    │   ├── urdf/wamv_kaboat.xacro     # 센서(라이다·카메라·IMU·GPS) 장착부, 위 hull 을 include
+    │   ├── config/bridge_config.yaml  # ros_gz 브리지 계약: gz 토픽 → 표준 ROS 토픽 이름 정규화
     │   └── worlds/perception_task.sdf # world: 물리 스텝, 파도(gain), 아레나·부표 배치
     ├── vrx/            # 공식 OSRF VRX (vcstool 로 내려받음, Git 미추적)
     └── ros_gz/         # ROS-Gazebo 브릿지, Garden 용으로 소스 빌드 (Git 미추적)
 ```
+
+### 🛰️ 센서 토픽 인터페이스 (node_structure v5)
+`sensor_drivers` 계층의 **sim/실물 공통 계약**입니다. sim 은 Gazebo 센서 → `config/bridge_config.yaml`
+로 아래 **표준 토픽 이름**에 맞춰 발행하며, 실물 전환 시 각 센서 드라이버(EBIMU UART · TG 50 · D455 등)가
+같은 토픽으로 발행하면 상위 인지/판단 노드는 코드 변경 없이 그대로 동작합니다.
+(sim 에서는 Gazebo 가 이미 `sensor_msgs` 로 뿌려주므로 UART 파싱이 불필요하며, 그 부분은 실물 드라이버에서만 구현합니다.)
+
+| 센서 | 실물 기종 | sim 소스 | 표준 토픽 | 타입 |
+|---|---|---|---|---|
+| 2D LiDAR | TG 50 | gz `gpu_lidar` | `/scan` | `LaserScan` |
+| Depth Cam (RGB) | Intel D455 | gz `rgbd_camera` | `/camera/image_raw` | `Image` |
+| Depth Cam (포인트) | Intel D455 | gz `rgbd_camera` | `/depth/points` | `PointCloud2` |
+| IMU | EBIMU-9DOFv5-R3 | gz `imu` | `/imu/data` | `Imu` |
+| GPS | 미정 | gz `navsat` | `/gps/fix` | `NavSatFix` |
+
+> 이름 정규화(`ros_topic_name` ≠ `gz_topic_name`)는 인라인 `@` 문법으로는 불가능하므로,
+> 브리지를 `config/bridge_config.yaml` **config 파일 방식**으로 구동합니다. IMU/GPS 는 world 의
+> `imu-system`·`NavSat` 플러그인 + `spherical_coordinates` 원점을 그대로 사용합니다.
 
 ---
 
@@ -192,6 +211,7 @@ kaboat_ws/              # 통합 워크스페이스 루트
 
 * **main:** 안정성이 검증된 배포용 최종 코드 브랜치입니다.
 * **feature / bugfix:** 모든 알고리즘 추가, 센서 세팅 변경, 버그 수정은 개별 브랜치에서 작업 후 Pull Request를 거쳐 병합합니다.
+* **현재 작업 브랜치 — `feature/autonomy-skeleton-v5`:** `node_structure` v5 자율주행 노드 골격을 순차로 세우는 브랜치입니다. 1차로 `sensor_drivers` 계층(라이다·뎁스캠·IMU·GPS)을 위 §5 표준 토픽 인터페이스로 정비했습니다. (이후 인지·behavior·mission_manager 노드를 같은 브랜치에서 골격부터 확장)
 
 ### 💡 깃 협업 시 실제 개발 흐름
 1. 소스코드 수정이나 브랜치 변경(`git checkout`)은 **호스트 PC 터미널**에서 평소처럼 수행합니다.
