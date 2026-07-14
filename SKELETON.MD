@@ -34,20 +34,28 @@
 ## 2. 노드 구조
 
 ```
-① 상시 가동 (인식) ────────────────────────────────────────
+① 인식 레이어 (v5: 프로세스는 전부 상시, YOLO 추론만 게이팅) ──
   sensor_drivers(=gz bridge)  →  /scan, /camera/color/image_raw,
                                   /camera/depth/points, /imu/data, /gps/fix
        │
-       ├─▶ obstacle_detector  → /obstacles          (LiDAR 클러스터링)
-       └─▶ yolo_detector      → /detections/marks    (HSV 색 인식, YOLO 자리)
+       ├─▶ occupancy_grid      → /occupancy_grid          (장애물 격자 — v5 단일 장애물 표현)
+       ├─▶ buoy_detector       → /detections/buoys        (HSV 상시 · 학습 불필요)
+       └─▶ dock_mark_detector  → /detections/dock_marks   (YOLO 자리 · dock state 만 추론)
        localization(=gz odom / 실물은 robot_localization) → /odom, /tf
+       (obstacle_detector 는 launch 제외 — 참고용 파일만 보존, 아래 4장)
+
+  ── 공유 버스 ──
+  /occupancy_grid · /detections/buoys · /odom
+  = behavior_base 가 일괄 구독하는 표준 토픽 묶음 (모든 behavior 공유).
+  회피는 /occupancy_grid 를 소비 (apply_repulsion). /detections/dock_marks
+  만 예외 — docking_ctrl 단독 구독.
 
 ② behavior (현재 미션 1개만 주도권) ────────────────────────
-  gate_follower   → /cmd/gate      (항로추종)
+  gate_follower   → /cmd/gate      (항로추종 — buoys)
   station_keeper  → /cmd/station   (위치유지)
-  docking_ctrl    → /cmd/dock      (도킹)
-  search_circler  → /cmd/search    (탐색)
-  obstacle_planner→ /cmd/avoid     (장애물 회피)
+  docking_ctrl    → /cmd/dock      (도킹 — dock_marks)
+  search_circler  → /cmd/search    (탐색 — buoys)
+  obstacle_planner→ /cmd/avoid     (장애물 회피 — grid 기반 DRI/VFH 자리)
   (5개 전부 상주 — 비활성 상태에도 노드는 떠있고 compute_cmd() 만 안 돌림)
 
 제어 ──────────────────────────────────────────────────────
@@ -57,11 +65,21 @@
 관리 ──────────────────────────────────────────────────────
   mission_manager: /odom 과 목표좌표 거리 < 1m → 다음 미션 전환
                    gate → station → dock → search → avoid → done
+                   /detector/enable (Bool, latched) — dock state 에서만 true
+                   → dock_mark_detector 의 YOLO 추론 게이팅
 ```
 
-이 구조는 세션 초반에 정리한 [노드 구조 다이어그램](https://claude.ai/code/artifact/2d88674d-c2d7-4c01-ba92-018b8bf7dc22)
-그대로 구현했습니다 (그 다이어그램의 4가지 보완사항 — 거리 기반 전환,
-cmd_mux 워치독, 공통 회피 라이브러리, robot_localization 재사용 — 전부 반영).
+이 구조는 **node_structure v5 다이어그램**(`node_structure.svg`) 기준입니다.
+v5 의 핵심 분리 — 부표·게이트 색 = **buoy_detector**(HSV, 상시, 학습 불필요) /
+도킹 표식 = **dock_mark_detector**(YOLO, 도킹 state 에서만 추론 ON) — 를
+인터페이스 수준으로 반영했습니다. `/detections/*` 인터페이스는 고정이므로
+내부 백엔드(HSV→YOLO)를 갈아끼워도 behavior 는 변경 불필요합니다.
+
+> **"공유 버스"에 대해**: v5 다이어그램의 공유 버스는 별도 노드가 아니라
+> **모든 behavior 가 함께 구독하는 표준 토픽의 묶음**을 뜻합니다. ROS 2 에선
+> 토픽(DDS) 자체가 버스라서, rqt_graph 에는 버스 상자 대신 토픽별 화살표로
+> 보이는 게 정상입니다. 코드에서는 `behavior_base.py` 가 이 묶음을 일괄
+> 구독하는 지점이 곧 버스입니다.
 
 ---
 
@@ -102,14 +120,26 @@ EBIMU(100Hz), GPS(수평 ~1.5m/수직 ~3m 노이즈) 전부
 공용 메시지. `Obstacle`/`ObstacleArray`(위치+반지름), `Mark`/`MarkArray`
 (색/모양/신뢰도/방위/거리). 더 필요한 필드가 생기면 여기에 추가.
 
-### `kaboat_perception` — 골격 + 일부 알고리즘
-- **`obstacle_detector.py`**: 인접 빔 거리차 기반 클러스터링으로 `/scan` →
-  `/obstacles`. **실제 부표 좌표와 교차검증 완료** (오차 없음, LiDAR가
-  부표 표면을 맞히는 것까지 기하학적으로 정합). TODO(팀): DBSCAN 등
-  제대로 된 클러스터링, `/camera/depth/points` 융합, 시간 필터링.
-- **`yolo_detector.py`**: **아직 YOLO 아님** — HSV 색 블롭 검출
-  placeholder. `shape`은 항상 `"unknown"`, `distance`는 항상 `-1.0`.
-  TODO(팀): YOLO 추론으로 교체, depth 이미지로 거리 채우기.
+### `kaboat_perception` — 골격 + 일부 알고리즘 (v5 정렬)
+- **`obstacle_detector.py`** (참고용 · **autonomy.launch.py 에서 제외**):
+  인접 빔 거리차 기반 클러스터링으로 `/scan` → `/obstacles`. **실제 부표
+  좌표와 교차검증 완료** (오차 없음). v5 는 장애물 표현을 occupancy_grid
+  단독으로 두므로 상시 스택에서는 빠졌지만, 검증된 LiDAR 클러스터링이라
+  occupancy_grid 의 log-odds 를 채울 때 레이캐스팅/셀 투영 **참고 구현**으로
+  파일을 남겨둔다. 단독 실행: `ros2 run kaboat_perception obstacle_detector`.
+- **`occupancy_grid.py`**: **인터페이스만** — 구독(/scan·depth·imu·odom)·
+  발행(/occupancy_grid)·rolling window 규약은 잡혀 있고 내용은 빈
+  격자(-1). TODO(팀): log-odds 누적, depth z-band 필터, IMU 기울기 게이팅.
+- **`buoy_detector.py`** (v5, 상시·학습 불필요): HSV 색 블롭 →
+  `/detections/buoys`. `buoy_detector_pipeline.svg` 의 5단계 중
+  **① HSV 마스크만 실동작**, ②블롭 기하 → ③수면 컨텍스트 →
+  ④LiDAR 교차확인(거리 채움·오검출 제거 핵심) → ⑤N-of-M 시간 추적은
+  메서드 훅(pass-through)으로 자리만 있음. TODO(팀): ②~⑤ 채우기.
+- **`dock_mark_detector.py`** (v5, 도킹 state 만 추론): `/detector/enable`
+  (mission_manager 발행, latched) 이 true 인 동안만 이미지 처리 →
+  `/detections/dock_marks`. **아직 YOLO 아님** — buoy_detector 의
+  `hsv_blobs()` 를 재사용한 placeholder, `shape`은 `"unknown"`.
+  TODO(팀): YOLOv8 모양 3클래스 + bbox 내부 HSV 색 확정 + depth 거리.
 
 ### `kaboat_behaviors` — 골격, 판단 로직은 대부분 placeholder
 - **`behavior_base.py`**: 모든 behavior의 공통 base. `/mission/state`로
@@ -119,16 +149,20 @@ EBIMU(100Hz), GPS(수평 ~1.5m/수직 ~3m 노이즈) 전부
   관성이 작아 P만 쓰면 요 발진 → 전복하는 걸 직접 겪었습니다 (아래
   "실측으로 잡은 안전값" 참고). 함부로 올리지 마세요.
 - **`obstacle_avoidance_utils.py`**: 공통 회피-보정 함수. 5개 behavior가
-  전부 이 모듈의 `apply_repulsion()`을 import해서 씁니다 — 각자 따로
-  구현하면 미묘하게 다른 회피 동작이 생기는 걸 막기 위함. TODO(팀):
-  VFH(valley 탐색)로 교체.
+  전부 이 모듈의 `apply_repulsion(cmd, occupancy_grid, odom)`을 import해서
+  씁니다 — 각자 따로 구현하면 미묘하게 다른 회피 동작이 생기는 걸 막기
+  위함. **v5 정렬로 입력을 `/obstacles`(이산 리스트) → `/occupancy_grid`
+  (점유 셀) 로 교체**했습니다. 지금은 격자가 빈 상태(-1)라 무동작이고,
+  occupancy_grid 가 채워지면 코드 변경 없이 회피가 살아납니다.
+  TODO(팀): VFH(valley 탐색)로 교체.
 - **`gate_follower.py`**: red+green 마크가 같이 보이면 중점 방위로 조향,
   아니면 goal로 이동. TODO(팀): 게이트 쌍 매칭(제일 가까운 것끼리),
   통과 판정.
 - **`station_keeper.py`**: goal 접근 + 5m/5초 체류 판정 로그. TODO(팀):
   바람/파도 드리프트 보상.
-- **`docking_ctrl.py`**: 파라미터로 지정한 색(`target_color`) 마크가
-  보이면 저속 접근. TODO(팀): 표식 종류(십자/삼각) 매칭, 실제 접안 정렬.
+- **`docking_ctrl.py`**: `/detections/dock_marks` 를 **단독 구독** (공유
+  버스의 buoys 와 별도 — v5). 지정 색(`target_color`) 마크가 보이면 저속
+  접근. TODO(팀): YOLO 교체 후 `target_shape` 매칭 활성, 실제 접안 정렬.
 - **`search_circler.py`**: 구역 도착 후 마크 색 따라 좌/우 선회. TODO(팀):
   규정에 맞는 정확한 선회 방향/횟수.
 - **`obstacle_planner.py`**: goal 추종 + 회피 게인 강화. **여기가
@@ -148,7 +182,8 @@ EBIMU(100Hz), GPS(수평 ~1.5m/수직 ~3m 노이즈) 전부
   `transition_radius`(기본 1.0m) 이내면 다음 미션으로 전환. behavior가
   완료 신호를 발행할 필요가 없는 구조 — 위치만으로 판정합니다.
   순서는 `gate → station → dock → search → avoid → done` 고정
-  (`MISSION_ORDER` 상수).
+  (`MISSION_ORDER` 상수). state 전이 때마다 `/detector/enable`(latched)도
+  같이 발행 — `dock` 진입 시 true, 이탈 시 false (YOLO 추론 게이팅, v5).
 
 ### `kaboat_bringup` — 완성
 - **`launch/autonomy.launch.py`**: 상시 인식 2개 + behavior 5개 +
@@ -228,5 +263,6 @@ ros2 topic hz /imu/data             # 센서 발행 주파수 확인
   범위(30m 이내, 22.8m) 안인데도 `obstacle_detector`가 검출 못했습니다.
   2D LiDAR 장착 높이나 마커 형상 문제로 추정 — `gate_follower`가
   LiDAR 융합을 쓰게 되면 먼저 원인을 파야 합니다.
-- **`yolo_detector`의 HSV 임계값은 시뮬레이션 부표 원색 기준**입니다.
-  실제 카메라/조명에서는 재캘리브레이션이 필요합니다.
+- **`buoy_detector`(및 dock_mark placeholder)의 HSV 임계값은 시뮬레이션
+  부표 원색 기준**입니다. 실제 카메라/조명에서는 재캘리브레이션이
+  필요합니다 (셔터·AWB 고정 후 현장 캘리브).

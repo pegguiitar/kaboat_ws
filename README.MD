@@ -237,6 +237,7 @@ README 를, 자율주행 스택 구조·센서 토픽 인터페이스·실행법
 * **main:** 안정성이 검증된 배포용 최종 코드 브랜치입니다.
 * **feature / bugfix:** 모든 알고리즘 추가, 센서 세팅 변경, 버그 수정은 개별 브랜치에서 작업 후 Pull Request를 거쳐 병합합니다.
 * **자율주행 스택 작업:** 센서 표준 토픽(§5)을 기준으로 perception, behavior, mission, control 패키지를 분리해 개발합니다. 각 기능 추가는 개별 브랜치에서 작업 후 Pull Request를 통해 병합합니다.
+* **`feature/autonomy-skeleton-v5` 진행 상황:** 센서 계층(§5) 위에 자율주행 스택 골격을 올린 뒤 인식 레이어를 `node_structure` v5 로 정렬했습니다 — 검출기를 `buoy_detector`(HSV·상시)와 `dock_mark_detector`(YOLO·도킹 state 게이팅)로 분리, 장애물 표현을 `occupancy_grid` 단독으로 통일(회피가 격자 소비, `obstacle_detector` 는 참고용으로 launch 제외). 노드별 상세·TODO 는 **[SKELETON.MD](SKELETON.MD)** 참고.
 
 ### 💡 깃 협업 시 실제 개발 흐름
 1. 소스코드 수정이나 브랜치 변경(`git checkout`)은 **호스트 PC 터미널**에서 평소처럼 수행합니다.

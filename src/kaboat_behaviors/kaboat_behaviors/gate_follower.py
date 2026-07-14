@@ -19,8 +19,8 @@ class GateFollower(BehaviorBase):
     CMD_TOPIC = '/cmd/gate'
 
     def compute_cmd(self):
-        reds = [m for m in self.marks if m.color == 'red']
-        greens = [m for m in self.marks if m.color == 'green']
+        reds = [m for m in self.buoys if m.color == 'red']
+        greens = [m for m in self.buoys if m.color == 'green']
 
         if reds and greens:
             # 가장 확신도 높은 쌍의 중점 방위로 조향
@@ -33,7 +33,7 @@ class GateFollower(BehaviorBase):
         else:
             cmd = self.seek_goal()
 
-        return apply_repulsion(cmd, self.obstacles, self.odom, self.obstacles_frame)
+        return apply_repulsion(cmd, self.occupancy_grid, self.odom)
 
 
 def main(args=None):

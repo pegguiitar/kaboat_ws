@@ -9,6 +9,8 @@
 
 발행   /mission/state (String, latched)  — cmd_mux 와 모든 behavior 가 구독
        /mission/goal  (PoseStamped, latched) — 현재 미션의 목표좌표
+       /detector/enable (Bool, latched)  — dock_mark_detector YOLO 추론 게이팅
+                                            (state == 'dock' 일 때만 true)
 
 미션별 목표좌표는 파라미터(waypoints.<state>)로 주입한다
 — kaboat_bringup/config/mission_params.yaml 참고.
@@ -19,7 +21,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, DurabilityPolicy
 
-from std_msgs.msg import String
+from std_msgs.msg import String, Bool
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Odometry
 
@@ -57,6 +59,8 @@ class MissionManager(Node):
         latched = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.pub_state = self.create_publisher(String, '/mission/state', latched)
         self.pub_goal = self.create_publisher(PoseStamped, '/mission/goal', latched)
+        # v5: YOLO 추론 게이팅 — dock_mark_detector 는 이 신호가 true 인 동안만 추론
+        self.pub_detector_enable = self.create_publisher(Bool, '/detector/enable', latched)
 
         self.create_subscription(Odometry, '/odom', self.on_odom, 10)
         self.create_timer(0.2, self.tick)  # 5Hz 판정
@@ -94,6 +98,10 @@ class MissionManager(Node):
         msg = String()
         msg.data = state
         self.pub_state.publish(msg)
+        # 도킹 구간에서만 YOLO 추론 ON (v5 게이팅 규약)
+        enable = Bool()
+        enable.data = (state == 'dock')
+        self.pub_detector_enable.publish(enable)
 
     # ── 1m 전환 판정 ──────────────────────────────────
     def on_odom(self, msg: Odometry):

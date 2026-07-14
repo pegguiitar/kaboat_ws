@@ -30,12 +30,20 @@ def generate_launch_description():
 
     use_sim_time = {'use_sim_time': True}
 
-    # ── ① 상시 인식 레이어 ──────────────────────────────
+    # ── ① 인식 레이어 (v5) ──────────────────────────────
+    # 프로세스는 전부 상시 상주. dock_mark_detector 만 mission_manager 의
+    # /detector/enable 로 **추론**이 게이팅된다 (dock state 에서만 ON).
+    # 장애물 표현은 v5 대로 occupancy_grid 단독 — behavior 회피가 이 격자를 먹는다.
+    # (obstacle_detector 는 launch 에서 제외. 검증된 LiDAR 클러스터링 참고
+    #  구현으로 파일만 남겨둠 — occupancy_grid 채울 때 레이캐스팅 참고용.
+    #  개별 확인은 `ros2 run kaboat_perception obstacle_detector`.)
     perception = [
-        Node(package='kaboat_perception', executable='obstacle_detector',
-             name='obstacle_detector', output='screen', parameters=[use_sim_time]),
-        Node(package='kaboat_perception', executable='yolo_detector',
-             name='yolo_detector', output='screen', parameters=[use_sim_time]),
+        Node(package='kaboat_perception', executable='occupancy_grid',
+             name='occupancy_grid', output='screen', parameters=[use_sim_time]),
+        Node(package='kaboat_perception', executable='buoy_detector',
+             name='buoy_detector', output='screen', parameters=[use_sim_time]),
+        Node(package='kaboat_perception', executable='dock_mark_detector',
+             name='dock_mark_detector', output='screen', parameters=[use_sim_time]),
     ]
 
     # ── ② behavior 레이어 (5개 전부 상주, cmd_mux 가 1개만 통과) ──

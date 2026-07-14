@@ -2,7 +2,11 @@
 
 모든 behavior 노드가 상속한다. 하는 일:
   - /mission/state 구독 → 자기 state 일 때만 active
-  - /mission/goal, /odom, /obstacles, /detections/marks 구독 (공유 데이터 버스)
+  - 공유 데이터 버스 구독: /mission/goal, /odom, /detections/buoys,
+    /occupancy_grid
+    (v5 의 "공유 버스" = 모든 behavior 가 함께 구독하는 이 표준 토픽 묶음.
+     장애물 표현은 v5 대로 /occupancy_grid 단독 — 회피는 이 격자를 소비한다.
+     도킹 전용 /detections/dock_marks 는 docking_ctrl 만 따로 구독한다)
   - active 인 동안 10Hz 로 compute_cmd() 를 호출해 /cmd/<이름> 에 Twist 발행
   - 속도 상한 (twist2thrust 의 scale=60 기준, 추력이 안전 범위를 넘지 않게)
 
@@ -16,9 +20,9 @@ from rclpy.qos import QoSProfile, DurabilityPolicy
 
 from std_msgs.msg import String
 from geometry_msgs.msg import Twist, PoseStamped
-from nav_msgs.msg import Odometry
+from nav_msgs.msg import Odometry, OccupancyGrid
 
-from kaboat_msgs.msg import ObstacleArray, MarkArray
+from kaboat_msgs.msg import MarkArray
 
 # twist2thrust scale=60 기준 속도 한계 (linear 0.2 → 12N, 직진 테스트 검증값).
 # ⚠️ 회전은 특히 보수적으로 — 축소 선체(1.1m)는 관성이 s⁵ 로 줄어 원본보다
@@ -59,9 +63,8 @@ class BehaviorBase(Node):
         self.state = ''
         self.goal = None          # PoseStamped | None
         self.odom = None          # Odometry | None
-        self.obstacles = []       # list[kaboat_msgs.Obstacle]
-        self.obstacles_frame = ''
-        self.marks = []           # list[kaboat_msgs.Mark]
+        self.buoys = []           # list[kaboat_msgs.Mark] — buoy_detector(HSV 상시)
+        self.occupancy_grid = None  # OccupancyGrid | None — 회피(apply_repulsion) 소비처
 
         # mission_manager 가 latched(transient_local) 로 발행 — 늦게 떠도 수신
         latched = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
@@ -69,8 +72,8 @@ class BehaviorBase(Node):
         self.create_subscription(PoseStamped, '/mission/goal', self._on_goal, latched)
 
         self.create_subscription(Odometry, '/odom', self._on_odom, 10)
-        self.create_subscription(ObstacleArray, '/obstacles', self._on_obstacles, 10)
-        self.create_subscription(MarkArray, '/detections/marks', self._on_marks, 10)
+        self.create_subscription(MarkArray, '/detections/buoys', self._on_buoys, 10)
+        self.create_subscription(OccupancyGrid, '/occupancy_grid', self._on_grid, 1)
 
         self.cmd_pub = self.create_publisher(Twist, self.CMD_TOPIC, 10)
         self.create_timer(0.1, self._tick)  # 10Hz
@@ -91,12 +94,11 @@ class BehaviorBase(Node):
     def _on_odom(self, msg: Odometry):
         self.odom = msg
 
-    def _on_obstacles(self, msg: ObstacleArray):
-        self.obstacles = list(msg.obstacles)
-        self.obstacles_frame = msg.header.frame_id
+    def _on_buoys(self, msg: MarkArray):
+        self.buoys = list(msg.marks)
 
-    def _on_marks(self, msg: MarkArray):
-        self.marks = list(msg.marks)
+    def _on_grid(self, msg: OccupancyGrid):
+        self.occupancy_grid = msg
 
     # ── 주기 실행 ─────────────────────────────────────
     @property

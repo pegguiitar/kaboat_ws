@@ -14,12 +14,14 @@ setup(
     zip_safe=True,
     maintainer='kaboat',
     maintainer_email='taekwon3611@gmail.com',
-    description='상시 가동 인식 레이어 (obstacle_detector, yolo_detector)',
+    description='인식 레이어 (occupancy_grid·buoy_detector 상시 / dock_mark_detector 는 도킹 state 게이팅)',
     license='Apache-2.0',
     entry_points={
         'console_scripts': [
             'obstacle_detector = kaboat_perception.obstacle_detector:main',
-            'yolo_detector = kaboat_perception.yolo_detector:main',
+            'occupancy_grid = kaboat_perception.occupancy_grid:main',
+            'buoy_detector = kaboat_perception.buoy_detector:main',
+            'dock_mark_detector = kaboat_perception.dock_mark_detector:main',
         ],
     },
 )

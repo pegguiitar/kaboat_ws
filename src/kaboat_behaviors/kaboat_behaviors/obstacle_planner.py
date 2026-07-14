@@ -24,7 +24,7 @@ class ObstaclePlanner(BehaviorBase):
         saved_gain, saved_range = oa.GAIN, oa.AVOID_RANGE
         oa.GAIN, oa.AVOID_RANGE = 0.9, 8.0
         try:
-            cmd = oa.apply_repulsion(cmd, self.obstacles, self.odom, self.obstacles_frame)
+            cmd = oa.apply_repulsion(cmd, self.occupancy_grid, self.odom)
         finally:
             oa.GAIN, oa.AVOID_RANGE = saved_gain, saved_range
         return cmd

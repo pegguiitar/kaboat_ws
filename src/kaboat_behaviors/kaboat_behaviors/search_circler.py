@@ -24,13 +24,13 @@ class SearchCircler(BehaviorBase):
         # 아직 구역 밖이면 접근부터
         if self.distance_to_goal() > ARRIVE_RADIUS:
             cmd = self.seek_goal()
-            return apply_repulsion(cmd, self.obstacles, self.odom, self.obstacles_frame)
+            return apply_repulsion(cmd, self.occupancy_grid, self.odom)
 
         # 구역 안 — 색 따라 선회 (skeleton 규칙: green 좌선회, red 우선회)
         from geometry_msgs.msg import Twist
         cmd = Twist()
-        greens = [m for m in self.marks if m.color == 'green']
-        reds = [m for m in self.marks if m.color == 'red']
+        greens = [m for m in self.buoys if m.color == 'green']
+        reds = [m for m in self.buoys if m.color == 'red']
         if greens and not reds:
             cmd.angular.z = +self.max_angular
             cmd.linear.x = self.max_linear * 0.5
@@ -39,7 +39,7 @@ class SearchCircler(BehaviorBase):
             cmd.linear.x = self.max_linear * 0.5
         else:
             cmd.angular.z = +self.max_angular * 0.5  # 표식 미발견 — 탐색 선회
-        return apply_repulsion(cmd, self.obstacles, self.odom, self.obstacles_frame)
+        return apply_repulsion(cmd, self.occupancy_grid, self.odom)
 
 
 def main(args=None):
