@@ -59,12 +59,14 @@
     <include><name>obs_r4_1</name><uri>model://basic_buoy_orange</uri><pose>16 12 0 0 0 0</pose></include>
     <include><name>obs_r4_2</name><uri>model://basic_buoy_orange</uri><pose>19 12 0 0 0 0</pose></include>
 
-    <!-- ---- 하단 게이트: 초록 삼각형(안쪽) 5개, 빨간 삼각형(바깥쪽) 5개, 5m 간격 ---- -->
-    <include><name>gate_green_1</name><uri>model://buoy_cone_green</uri><pose>5  3   0 0 0 0</pose></include>
-    <include><name>gate_green_2</name><uri>model://buoy_cone_green</uri><pose>10 3   0 0 0 0</pose></include>
-    <include><name>gate_green_3</name><uri>model://buoy_cone_green</uri><pose>15 3   0 0 0 0</pose></include>
-    <include><name>gate_green_4</name><uri>model://buoy_cone_green</uri><pose>20 3   0 0 0 0</pose></include>
-    <include><name>gate_green_5</name><uri>model://buoy_cone_green</uri><pose>25 3   0 0 0 0</pose></include>
+    <!-- ---- 하단 채널(항로추종): 초록 삼각형 5개 / 빨간 삼각형 5개.
+         x방향(같은 행 내 인접 부표 간) 5m, y방향(빨강-초록 행 간) 5m 간격.
+         배는 이 채널을 왼쪽(x=5)에서 오른쪽(x=25 밖)으로 직진 통과한다. ---- -->
+    <include><name>gate_green_1</name><uri>model://buoy_cone_green</uri><pose>5  5.5 0 0 0 0</pose></include>
+    <include><name>gate_green_2</name><uri>model://buoy_cone_green</uri><pose>10 5.5 0 0 0 0</pose></include>
+    <include><name>gate_green_3</name><uri>model://buoy_cone_green</uri><pose>15 5.5 0 0 0 0</pose></include>
+    <include><name>gate_green_4</name><uri>model://buoy_cone_green</uri><pose>20 5.5 0 0 0 0</pose></include>
+    <include><name>gate_green_5</name><uri>model://buoy_cone_green</uri><pose>25 5.5 0 0 0 0</pose></include>
     <include><name>gate_red_1</name><uri>model://buoy_cone_red</uri><pose>5  0.5 0 0 0 0</pose></include>
     <include><name>gate_red_2</name><uri>model://buoy_cone_red</uri><pose>10 0.5 0 0 0 0</pose></include>
     <include><name>gate_red_3</name><uri>model://buoy_cone_red</uri><pose>15 0.5 0 0 0 0</pose></include>

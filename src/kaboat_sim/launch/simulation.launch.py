@@ -177,11 +177,13 @@ def generate_launch_description():
 
     
 
-    # 6. 로봇 스폰 — kaboat_2026_comprehensive_mission 경기장(하단 게이트) 바로 앞.
-    #    경기장은 world (0, 60) 오프셋에 배치되어 있고, 하단 게이트(빨강/초록 부표
-    #    5쌍)는 경기장 로컬 x=5~25, y=0.5~3 → world y=60.5~63.
-    #    게이트 중앙(x=15)에서 5.5m 남쪽(y=55.0)에, 경기장을 바라보도록(+y, yaw=90°)
-    #    스폰해서 첫 미션(항로추종)을 바로 시작할 수 있게 한다.
+    # 6. 로봇 스폰 — kaboat_2026_comprehensive_mission 경기장 하단 채널 왼쪽 끝.
+    #    경기장은 world (0, 60) 오프셋에 배치되어 있고, 하단 채널은 빨강(y=0.5)/
+    #    초록(y=5.5) 부표 5쌍(x/y 각 5m 간격)이 x=5~25 구간에 늘어선 구조 —
+    #    항로추종은 이 두 열 사이(중심선 y=3.0)를 왼쪽→오른쪽(+x)으로 직진
+    #    통과하는 미션이다 (경기장 도면 기준 왼쪽 아래에서 시작, 팀 확인).
+    #    채널 왼쪽 끝(x=5 마커) 3m 앞(x=2)에서, 채널을 정면으로(+x, yaw=0°)
+    #    바라보고 스폰한다.
     spawn_robot = Node(
         package='ros_gz_sim',
         executable='create',
@@ -189,7 +191,7 @@ def generate_launch_description():
             '-world', 'kaboat_world',
             '-topic', 'robot_description',
             '-name', 'wamv_kaboat',
-            '-x', '15.0', '-y', '55.0', '-z', '0.2', '-Y', '1.5708',
+            '-x', '2.0', '-y', '63.0', '-z', '0.2', '-Y', '0.0',
         ],
         output='screen'
     )
