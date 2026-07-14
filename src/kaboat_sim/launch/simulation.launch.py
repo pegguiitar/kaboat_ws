@@ -193,8 +193,9 @@ def generate_launch_description():
     # 7. ROS-Gazebo Bridge 설정
     # 인라인 @ 문법은 gz 토픽명 == ros 토픽명 이라 표준 인터페이스로 이름을
     # 정규화할 수 없다. config 파일은 ros_topic_name != gz_topic_name 을 지원하므로
-    # sensor_drivers 표준 인터페이스(/scan, /camera/image_raw, /depth/points,
-    # /imu/data, /gps/fix)로 리매핑하는 계약을 config/bridge_config.yaml 에 둔다.
+    # sensor_drivers 표준 인터페이스(/scan, /camera/color/image_raw,
+    # /camera/depth/points, /imu/data, /gps/fix, /odom)로 리매핑하는 계약을
+    # config/bridge_config.yaml 에 둔다.
     bridge_config_path = os.path.join(kaboat_sim_share, 'config', 'bridge_config.yaml')
     ros_gz_bridge = Node(
         package='ros_gz_bridge',

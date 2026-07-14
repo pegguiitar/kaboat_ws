@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>kaboat_behaviors</name>
+  <version>0.1.0</version>
+  <description>미션별 behavior 노드 5개 (② 레이어) + 공통 회피-보정 라이브러리. 현재 state의 1개만 cmd_mux 를 통과한다.</description>
+  <maintainer email="taekwon3611@gmail.com">kaboat</maintainer>
+  <license>Apache-2.0</license>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>kaboat_msgs</exec_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

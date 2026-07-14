@@ -55,16 +55,24 @@
       <update_rate>10</update_rate>
       <topic>/lidar/scan</topic>
       <gz_frame_id>lidar_link</gz_frame_id>
+      <!-- 실물 TG-50: 최대 50m, 스캔 10Hz, 샘플 20kHz → 10Hz 에서 2000점/회전
+           (각해상도 0.18°), 최소거리 0.05m, 거리정확도 ±2cm 수준 -->
       <lidar>
         <scan>
           <horizontal>
-            <samples>720</samples>
+            <samples>2000</samples>
             <resolution>1</resolution>
-            <min_angle>-3.14</min_angle>
-            <max_angle>3.14</max_angle>
+            <min_angle>-3.14159</min_angle>
+            <max_angle>3.14159</max_angle>
           </horizontal>
         </scan>
-        <range><min>0.1</min><max>50.0</max><resolution>0.01</resolution></range>
+        <range><min>0.05</min><max>50.0</max><resolution>0.01</resolution></range>
+        <!-- 라이다 noise 는 type 을 자식 요소로 쓴다 (camera/imu 의 속성 형식과 다름) -->
+        <noise>
+          <type>gaussian</type>
+          <mean>0.0</mean>
+          <stddev>0.02</stddev>
+        </noise>
       </lidar>
     </sensor>
   </gazebo>
@@ -87,11 +95,17 @@
       <update_rate>30</update_rate>
       <topic>/camera/depth</topic>
       <gz_frame_id>camera_link</gz_frame_id>
+      <!-- 실물 Intel D455: depth FOV 87°(H)×58°(V), RGB FOV 90°(H)×65°(V),
+           최대 해상도 1280×720. rgbd_camera 는 hfov 하나로 depth/RGB 공용이라
+           depth 기준 87°(=1.5184rad)로 맞춤 (RGB 90° 와 3° 차 — 무시 가능).
+           vfov 는 gz 가 종횡비(16:9)로 자동 계산 → 약 58° (실물 depth 58° 와 일치).
+           clip far=100 은 RGB 지평선 렌더용 — 실물 depth 유효거리(≈0.6~6m,
+           최대 ~20m) 밖의 뎁스는 인식 코드에서 무시할 것. -->
       <camera>
-        <horizontal_fov>1.047</horizontal_fov>
+        <horizontal_fov>1.5184</horizontal_fov>
         <image>
-          <width>640</width>
-          <height>480</height>
+          <width>1280</width>
+          <height>720</height>
         </image>
         <clip>
           <near>0.1</near>
@@ -122,6 +136,22 @@
       <update_rate>100</update_rate>
       <topic>/imu/data</topic>
       <gz_frame_id>imu_link</gz_frame_id>
+      <!-- 노이즈: 이상적(무노이즈) 값이 아니라 실제 MEMS IMU 처럼 흔들리게.
+           아래는 일반적인 MEMS AHRS 전형값 — EBIMU-9DOFv5-R3 데이터시트로
+           재튜닝 필요(팀). 참고: gz 는 sensor_msgs/Imu 의 covariance 배열까지
+           자동으로 채우진 않으므로, EKF 쪽에서 공분산을 별도 지정해야 한다. -->
+      <imu>
+        <angular_velocity>
+          <x><noise type="gaussian"><mean>0.0</mean><stddev>0.0002</stddev><bias_mean>7.5e-06</bias_mean><bias_stddev>8.0e-07</bias_stddev></noise></x>
+          <y><noise type="gaussian"><mean>0.0</mean><stddev>0.0002</stddev><bias_mean>7.5e-06</bias_mean><bias_stddev>8.0e-07</bias_stddev></noise></y>
+          <z><noise type="gaussian"><mean>0.0</mean><stddev>0.0002</stddev><bias_mean>7.5e-06</bias_mean><bias_stddev>8.0e-07</bias_stddev></noise></z>
+        </angular_velocity>
+        <linear_acceleration>
+          <x><noise type="gaussian"><mean>0.0</mean><stddev>0.017</stddev><bias_mean>0.1</bias_mean><bias_stddev>0.001</bias_stddev></noise></x>
+          <y><noise type="gaussian"><mean>0.0</mean><stddev>0.017</stddev><bias_mean>0.1</bias_mean><bias_stddev>0.001</bias_stddev></noise></y>
+          <z><noise type="gaussian"><mean>0.0</mean><stddev>0.017</stddev><bias_mean>0.1</bias_mean><bias_stddev>0.001</bias_stddev></noise></z>
+        </linear_acceleration>
+      </imu>
     </sensor>
   </gazebo>
 
@@ -145,7 +175,39 @@
       <update_rate>10</update_rate>
       <topic>/navsat</topic>
       <gz_frame_id>gps_link</gz_frame_id>
+      <!-- 노이즈: 일반 소비자급 GPS 전형값(수평 ~1.5m, 수직 ~3m).
+           실물 기종 확정 후 데이터시트로 재튜닝(팀).
+           ⚠️ gz navsat 센서는 vertical(고도, m)은 그대로 미터로 적용하지만
+           horizontal(위도/경도)은 미터→도 변환을 안 해주고 stddev 값을
+           위경도 도(degree) 단위에 그대로 곱한다 (실측으로 확인 — stddev=1.5
+           를 "1.5m" 로 넣었더니 실제로는 위도가 수백 km 급으로 흔들렸음).
+           그래서 아래 값은 VRX 월드 원점(위도 -33.72°) 기준 1.5m 를
+           도 단위로 환산한 근사값이다 (1.5 / 111320m ≈ 1.35e-5).
+           위도가 크게 바뀌는 다른 월드로 옮기면 재계산 필요. -->
+      <navsat>
+        <position_sensing>
+          <horizontal><noise type="gaussian"><mean>0.0</mean><stddev>1.35e-5</stddev></noise></horizontal>
+          <vertical><noise type="gaussian"><mean>0.0</mean><stddev>3.0</stddev></noise></vertical>
+        </position_sensing>
+      </navsat>
     </sensor>
+  </gazebo>
+
+  <!-- Odometry (sim 전용 ground truth) — mission_manager 의 1m 전환 판정과
+       behavior 들의 위치 제어가 구독하는 /odom 의 sim 쪽 공급원.
+       스폰 시점 pose 를 원점으로 하는 odom 좌표계로 발행한다 (스폰이 0,0 이므로
+       world 좌표와 사실상 동일). 실물 전환 시 이 플러그인 대신
+       robot_localization EKF (kaboat_bringup/config/ekf.yaml) 가 같은 /odom
+       토픽으로 발행하면 상위 노드는 변경 없음. -->
+  <gazebo>
+    <plugin filename="gz-sim-odometry-publisher-system"
+            name="gz::sim::systems::OdometryPublisher">
+      <odom_frame>odom</odom_frame>
+      <robot_base_frame>wamv/base_link</robot_base_frame>
+      <odom_topic>/model/wamv_kaboat/odometry</odom_topic>
+      <tf_topic>/model/wamv_kaboat/tf</tf_topic>
+      <odom_publish_frequency>50</odom_publish_frequency>
+    </plugin>
   </gazebo>
 
 </robot>

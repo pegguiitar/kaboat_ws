@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
@@ -14,8 +15,11 @@ class TwistToThrust(Node):
         self.pub_r = self.create_publisher(Float64, '/wamv/thrusters/right/thrust', 10)
 
     def cb(self, msg):
-        # 💡 수정 2: 모터 출력 스케일 조절 (원래 1000.0 이었으나 배 사양에 맞게 조절 가능)
-        scale = 250.0  
+        # 모터 출력 스케일 — 선체 크기에 맞출 것.
+        # 원본 4.9m WAM-V 시절 250.0 이었으나, target_length=1.1 축소 후에는
+        # 최대추력이 118.6N 뿐이고 질량이 ~2kg 라 250 이면 전복된다 (실측).
+        # scale=60 → cmd_vel 0.2 = 12N (직진 주행 테스트로 검증된 안전값).
+        scale = 60.0
         
         # 차동 구동(Differential Drive) 공식: 직진 + 회전
         left_thrust = Float64()

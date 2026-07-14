@@ -3,6 +3,10 @@
 OSRF VRX 오픈소스를 기반으로 구축된 WAM-V 선박의 통합 자율주행 알고리즘 시뮬레이션 테스트 환경입니다.  
 로컬 PC에 ROS 2를 직접 설치하지 않고, **Docker 컨테이너**를 활용하여 격리된 우분투 환경에서 안전하고 동일하게 시뮬레이션을 구동합니다.
 
+> 이 문서는 **컨테이너 설치와 시뮬레이터 환경 구축**을 다룹니다.
+> 자율주행 스택(perception/behavior/control/mission)의 **코드 구조와 설계**는
+> **[SKELETON.MD](SKELETON.MD)** 를 참고하세요.
+
 ---
 
 ## 📋 1. 개발 환경 요구사항
@@ -84,7 +88,35 @@ ros2 launch kaboat_sim simulation.launch.py
 
 호스트 PC 화면에 Gazebo 가상 해상 환경과 WAM-V 선박이 정상적으로 팝업되고, 배가 물 위에 안정적으로 떠 있으면 모든 세팅이 완료된 것입니다.
 
-### 6) 배 직진 주행 테스트
+> 자율주행 스택(`kaboat_bringup autonomy.launch.py` 등) 실행법은
+> **[SKELETON.MD](SKELETON.MD)** 에 있습니다. 아래 6)/7)은 자율주행 코드 없이
+> 시뮬레이터/보트 자체를 검증하는 수동 도구입니다.
+
+### 6) WASD 원격 조종
+시뮬레이터와 `twist2thrust`가 켜진 상태에서 `/cmd_vel`에 직접 조종 명령을 발행합니다.
+`autonomy.launch.py`를 함께 켜면 `cmd_mux`도 `/cmd_vel`을 발행하므로, 수동 조종할 때는
+자율주행 스택을 끄고 사용하세요.
+
+터미널 2에서 `/cmd_vel` → 좌우 추력 변환 노드를 먼저 실행합니다.
+
+```bash
+source /opt/ros/humble/setup.bash
+source /workspace/kaboat_ws/install/setup.bash
+ros2 run kaboat_sim twist2thrust.py
+```
+
+터미널 3에서 키보드 조종 노드를 실행합니다.
+
+```bash
+source /opt/ros/humble/setup.bash
+source /workspace/kaboat_ws/install/setup.bash
+ros2 run kaboat_sim keyboard_teleop.py
+```
+
+키 입력은 `w` 전진, `s` 후진, `a` 좌회전, `d` 우회전, `space`/`x` 정지, `q` 종료입니다.
+키 입력이 잠시 끊기면 자동으로 정지 명령을 발행합니다.
+
+### 7) 배 직진 주행 테스트
 시뮬레이션이 **재생(▶) 중인 상태**에서, 컨테이너 안에 새 터미널을 하나 더 열어서
 (`docker exec -it kaboat_sim_container bash`) 실행합니다.
 
@@ -183,27 +215,20 @@ kaboat_ws/              # 통합 워크스페이스 루트
     │   ├── urdf/wamv_kaboat.xacro     # 센서(라이다·카메라·IMU·GPS) 장착부, 위 hull 을 include
     │   ├── config/bridge_config.yaml  # ros_gz 브리지 계약: gz 토픽 → 표준 ROS 토픽 이름 정규화
     │   └── worlds/perception_task.sdf # world: 물리 스텝, 파도(gain), 아레나·부표 배치
+    ├── kaboat_msgs/        # ┐
+    ├── kaboat_perception/  # │
+    ├── kaboat_behaviors/   # │ 자율주행 스택 — 구조/설명은 SKELETON.MD 참고
+    ├── kaboat_mission/     # │
+    ├── kaboat_control/     # │
+    ├── kaboat_bringup/     # ┘
     ├── vrx/            # 공식 OSRF VRX (vcstool 로 내려받음, Git 미추적)
     └── ros_gz/         # ROS-Gazebo 브릿지, Garden 용으로 소스 빌드 (Git 미추적)
 ```
 
-### 🛰️ 센서 토픽 인터페이스 (node_structure v5)
-`sensor_drivers` 계층의 **sim/실물 공통 계약**입니다. sim 은 Gazebo 센서 → `config/bridge_config.yaml`
-로 아래 **표준 토픽 이름**에 맞춰 발행하며, 실물 전환 시 각 센서 드라이버(EBIMU UART · TG 50 · D455 등)가
-같은 토픽으로 발행하면 상위 인지/판단 노드는 코드 변경 없이 그대로 동작합니다.
-(sim 에서는 Gazebo 가 이미 `sensor_msgs` 로 뿌려주므로 UART 파싱이 불필요하며, 그 부분은 실물 드라이버에서만 구현합니다.)
-
-| 센서 | 실물 기종 | sim 소스 | 표준 토픽 | 타입 |
-|---|---|---|---|---|
-| 2D LiDAR | TG 50 | gz `gpu_lidar` | `/scan` | `LaserScan` |
-| Depth Cam (RGB) | Intel D455 | gz `rgbd_camera` | `/camera/image_raw` | `Image` |
-| Depth Cam (포인트) | Intel D455 | gz `rgbd_camera` | `/depth/points` | `PointCloud2` |
-| IMU | EBIMU-9DOFv5-R3 | gz `imu` | `/imu/data` | `Imu` |
-| GPS | 미정 | gz `navsat` | `/gps/fix` | `NavSatFix` |
-
-> 이름 정규화(`ros_topic_name` ≠ `gz_topic_name`)는 인라인 `@` 문법으로는 불가능하므로,
-> 브리지를 `config/bridge_config.yaml` **config 파일 방식**으로 구동합니다. IMU/GPS 는 world 의
-> `imu-system`·`NavSat` 플러그인 + `spherical_coordinates` 원점을 그대로 사용합니다.
+`src/kaboat_sim/README.md` 처럼 패키지 내부에 따로 있던 예전 단독 시뮬레이터 가이드는
+현재 통합 워크스페이스 구조와 맞지 않아 제거했습니다. 시뮬레이터 실행 절차는 이 루트
+README 를, 자율주행 스택 구조·센서 토픽 인터페이스·실행법은 **[SKELETON.MD](SKELETON.MD)**
+를 기준으로 관리합니다.
 
 ---
 
@@ -211,7 +236,7 @@ kaboat_ws/              # 통합 워크스페이스 루트
 
 * **main:** 안정성이 검증된 배포용 최종 코드 브랜치입니다.
 * **feature / bugfix:** 모든 알고리즘 추가, 센서 세팅 변경, 버그 수정은 개별 브랜치에서 작업 후 Pull Request를 거쳐 병합합니다.
-* **현재 작업 브랜치 — `feature/autonomy-skeleton-v5`:** `node_structure` v5 자율주행 노드 골격을 순차로 세우는 브랜치입니다. 1차로 `sensor_drivers` 계층(라이다·뎁스캠·IMU·GPS)을 위 §5 표준 토픽 인터페이스로 정비했습니다. (이후 인지·behavior·mission_manager 노드를 같은 브랜치에서 골격부터 확장)
+* **자율주행 스택 작업:** 센서 표준 토픽(§5)을 기준으로 perception, behavior, mission, control 패키지를 분리해 개발합니다. 각 기능 추가는 개별 브랜치에서 작업 후 Pull Request를 통해 병합합니다.
 
 ### 💡 깃 협업 시 실제 개발 흐름
 1. 소스코드 수정이나 브랜치 변경(`git checkout`)은 **호스트 PC 터미널**에서 평소처럼 수행합니다.

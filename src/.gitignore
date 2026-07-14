@@ -11,3 +11,7 @@ ros_gz/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Python 컴파일 캐시
+__pycache__/
+*.pyc

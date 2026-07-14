@@ -1,0 +1,20 @@
+# mission_manager 파라미터 — 미션별 목표좌표(odom 기준 [m])와 전환 반경.
+#
+# odom 원점 = 배 스폰 위치 (sim 은 world 원점에 스폰하므로 world 좌표와 동일).
+# 종합임무 경기장(kaboat_2026_comprehensive_mission)은 world (0, 60) 오프셋에
+# 배치되어 있으므로, 경기장 도면 좌표 (x_도면, y_도면) → odom (x_도면, y_도면+60).
+#
+# 아래 기본값은 빠른 스모크 테스트용 근거리 사각 경로다.
+# 실제 경기장 검증 시에는 주석의 arena 좌표로 교체할 것.
+
+mission_manager:
+  ros__parameters:
+    transition_radius: 1.0   # [m] 목표점 이내 진입 시 다음 미션 전환 (팀 합의)
+    auto_start: true
+
+    waypoints:
+      gate:    [8.0, 0.0]     # arena 예시 → [15.0, 61.5] (하단 게이트 통로 중앙)
+      station: [8.0, 8.0]     # arena 예시 → [15.0, 73.0] (좌측 구역 중심부)
+      dock:    [0.0, 8.0]     # arena 예시 → [65.0, 66.0] (도킹 구조물 앞)
+      search:  [-8.0, 8.0]    # arena 예시 → [57.0, 76.0] (우측 탐색 구역)
+      avoid:   [-8.0, 0.0]    # arena 예시 → [17.5, 77.0] (오렌지 장애물 밭)

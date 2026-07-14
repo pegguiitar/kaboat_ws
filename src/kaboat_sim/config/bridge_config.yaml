@@ -20,22 +20,24 @@
   direction: GZ_TO_ROS
 
 # ── Depth Cam (실물: Intel D455) ─────────────────────
-# RGB 컬러 → /camera/image_raw (buoy_detector HSV, dock_mark YOLO 입력)
-- ros_topic_name: "/camera/image_raw"
+# ros 이름은 실물 realsense2_camera 드라이버의 기본 발행 이름과 동일하게 맞춤
+# → 실물 전환 시 리매핑 불필요.
+# RGB 컬러 → /camera/color/image_raw (buoy_detector HSV, dock_mark YOLO 입력)
+- ros_topic_name: "/camera/color/image_raw"
   gz_topic_name: "/camera/depth/image"
   ros_type_name: "sensor_msgs/msg/Image"
   gz_type_name: "gz.msgs.Image"
   direction: GZ_TO_ROS
 
-# PointCloud → /depth/points (occupancy_grid 융합, buoy 거리 매칭)
-- ros_topic_name: "/depth/points"
+# PointCloud → /camera/depth/points (occupancy_grid 융합, buoy 거리 매칭)
+- ros_topic_name: "/camera/depth/points"
   gz_topic_name: "/camera/depth/points"
   ros_type_name: "sensor_msgs/msg/PointCloud2"
   gz_type_name: "gz.msgs.PointCloudPacked"
   direction: GZ_TO_ROS
 
-# Depth 이미지 (선택) → /camera/depth_image
-- ros_topic_name: "/camera/depth_image"
+# Depth 이미지 → /camera/depth/image_raw
+- ros_topic_name: "/camera/depth/image_raw"
   gz_topic_name: "/camera/depth/depth_image"
   ros_type_name: "sensor_msgs/msg/Image"
   gz_type_name: "gz.msgs.Image"
@@ -60,6 +62,21 @@
   gz_topic_name: "/navsat"
   ros_type_name: "sensor_msgs/msg/NavSatFix"
   gz_type_name: "gz.msgs.NavSat"
+  direction: GZ_TO_ROS
+
+# ── Odometry (sim ground truth) → /odom ──────────────
+# 실물 전환 시 robot_localization EKF 가 동일한 /odom 으로 발행 (이 항목 제거)
+- ros_topic_name: "/odom"
+  gz_topic_name: "/model/wamv_kaboat/odometry"
+  ros_type_name: "nav_msgs/msg/Odometry"
+  gz_type_name: "gz.msgs.Odometry"
+  direction: GZ_TO_ROS
+
+# odom → base_link TF (obstacle_detector 의 장애물 좌표 변환용)
+- ros_topic_name: "/tf"
+  gz_topic_name: "/model/wamv_kaboat/tf"
+  ros_type_name: "tf2_msgs/msg/TFMessage"
+  gz_type_name: "gz.msgs.Pose_V"
   direction: GZ_TO_ROS
 
 # ── 추력 명령 (ROS → GZ) ─────────────────────────────
