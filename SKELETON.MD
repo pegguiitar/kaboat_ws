@@ -142,8 +142,11 @@ GPS(수평 ~1.5m/수직 ~3m) 전부 `kaboat_sim/urdf/wamv_kaboat.xacro` 주석�
 - **`docking_ctrl.py`**: `/detections/dock_marks` **단독 구독**(v5). 지정 색
   (`target_color`) 마크 보이면 저속 접근. TODO(팀): YOLO 후 `target_shape` 매칭, 접안 정렬.
 - **`search_circler.py`**: 구역 도착 후 마크 색 따라 좌/우 선회. TODO(팀): 규정에 맞는 선회 방향/횟수.
-- **`obstacle_planner.py`**: goal 추종 + 회피 게인 강화. **VFH + B-spline 로컬
+- **`obstacle_planner.py`**: goal 추종 + 회피 게인 강화. **DRI + B-spline 로컬
   플래너가 들어갈 자리** — 지금은 `obstacle_avoidance_utils` 단순 반발 조향으로 대체.
+  설계·인터페이스·작업분할은 [AVOIDANCE_PLAN.MD](AVOIDANCE_PLAN.MD) 에 확정
+  (DRI 비등방 가우시안 격자 → 제어점 6개 B-spline 생성/검사/수리 분리 → PD
+  경로추종). 착수 전 이 문서 먼저 참고.
 
 ### `kaboat_control` — 완성
 - **`cmd_mux.py`**: `/mission/state`에 맞는 `/cmd/*` 만 `/cmd_vel`로 통과.
@@ -233,6 +236,12 @@ ros2 topic hz /imu/data                  # 센서 발행 주파수 확인
 
 > 스택 알고리즘·설정을 의미 있게 바꾸면 **최신 항목을 맨 위에** 추가:
 > `### YYYY-MM-DD HH:MM — 요약` + 무엇을/왜 몇 문장. 파일 세부는 커밋 메시지로.
+
+### 2026-07-15 21:52 — 장애물 회피 로컬 플래너 작업계획 확정 (AVOIDANCE_PLAN.MD)
+`obstacle_planner` 를 단순 반발 조향 → DRI + B-spline 로컬 플래너로 교체하는
+설계를 [AVOIDANCE_PLAN.MD](AVOIDANCE_PLAN.MD) 에 동결. 아직 구현 전(계획 문서만).
+DRI 비등방 가우시안 수식, 제어점 6개 규칙, 생성/검사/수리 분리, 재생성 트리거
+3종, ESCAPE(안전 경로 불가 시 후진), 모듈 인터페이스·작업 5분할 포함.
 
 ### 2026-07-15 16:55 — occupancy_grid 를 rolling grid 로 리팩터
 저장을 월드좌표 `dict`+`prune` → global 셀은 그대로 두고 배 중심 20×20m 창으로
