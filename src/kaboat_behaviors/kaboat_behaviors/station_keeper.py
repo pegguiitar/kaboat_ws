@@ -41,7 +41,7 @@ class StationKeeper(BehaviorBase):
             self._inside_since = None
 
         cmd = self.seek_goal(slow_radius=5.0)
-        return apply_repulsion(cmd, self.obstacles, self.odom, self.obstacles_frame)
+        return apply_repulsion(cmd, self.occupancy_grid, self.odom)
 
 
 def main(args=None):
