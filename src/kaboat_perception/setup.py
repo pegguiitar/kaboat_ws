@@ -18,7 +18,6 @@ setup(
     license='Apache-2.0',
     entry_points={
         'console_scripts': [
-            'obstacle_detector = kaboat_perception.obstacle_detector:main',
             'occupancy_grid = kaboat_perception.occupancy_grid:main',
             'buoy_detector = kaboat_perception.buoy_detector:main',
             'dock_mark_detector = kaboat_perception.dock_mark_detector:main',

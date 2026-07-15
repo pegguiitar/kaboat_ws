@@ -3,7 +3,7 @@
 <package format="3">
   <name>kaboat_perception</name>
   <version>0.1.0</version>
-  <description>상시 가동 인식 레이어 — obstacle_detector (LiDAR 클러스터링), yolo_detector (표식/부표 색·모양 인식)</description>
+  <description>상시 가동 인식 레이어 — occupancy_grid (LiDAR+뎁스캠 장애물 격자), yolo_detector (표식/부표 색·모양 인식)</description>
   <maintainer email="taekwon3611@gmail.com">kaboat</maintainer>
   <license>Apache-2.0</license>
 
@@ -11,10 +11,10 @@
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>kaboat_msgs</exec_depend>
-  <exec_depend>tf2_ros</exec_depend>
   <exec_depend>python3-numpy</exec_depend>
   <exec_depend>cv_bridge</exec_depend>
   <exec_depend>python3-opencv</exec_depend>
+  <exec_depend>sensor_msgs_py</exec_depend>
 
   <export>
     <build_type>ament_python</build_type>

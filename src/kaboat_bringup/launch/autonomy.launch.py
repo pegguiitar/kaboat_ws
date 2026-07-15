@@ -8,7 +8,7 @@
     ros2 launch kaboat_bringup autonomy.launch.py
 
 구성:
-  ① 상시 인식     obstacle_detector, yolo_detector
+  ① 상시 인식     occupancy_grid, buoy_detector, dock_mark_detector
   ② behavior ×5   gate_follower, station_keeper, docking_ctrl,
                    search_circler, obstacle_planner
   제어            cmd_mux(워치독), twist2thrust(kaboat_sim 재사용)
@@ -34,9 +34,8 @@ def generate_launch_description():
     # 프로세스는 전부 상시 상주. dock_mark_detector 만 mission_manager 의
     # /detector/enable 로 **추론**이 게이팅된다 (dock state 에서만 ON).
     # 장애물 표현은 v5 대로 occupancy_grid 단독 — behavior 회피가 이 격자를 먹는다.
-    # (obstacle_detector 는 launch 에서 제외. 검증된 LiDAR 클러스터링 참고
-    #  구현으로 파일만 남겨둠 — occupancy_grid 채울 때 레이캐스팅 참고용.
-    #  개별 확인은 `ros2 run kaboat_perception obstacle_detector`.)
+    # (구 obstacle_detector 노드는 삭제됨 — LiDAR 레이캐스팅/뎁스캠 융합이
+    #  occupancy_grid 에 구현되면서 그 역할을 대체했다.)
     perception = [
         Node(package='kaboat_perception', executable='occupancy_grid',
              name='occupancy_grid', output='screen', parameters=[use_sim_time]),

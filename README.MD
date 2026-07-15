@@ -198,6 +198,32 @@ value { type: DOUBLE double_value: 0.3 }   <!-- 0.0 = 잔잔함, 클수록 파�
 > 위아래로 움직이는지 확인하려면 `gain`을 0보다 크게 바꿔서 대조해 보세요 — 그러면 배가
 > 뚜렷하게 상하로 흔들리는 걸 확인할 수 있습니다.
 
+### 🌊 파도 조건에서 occupancy_grid 기울기 게이팅(TILT_MAX) 검증
+
+`occupancy_grid`([occupancy_grid.py](src/kaboat_perception/kaboat_perception/occupancy_grid.py))는 IMU 롤/피치가
+`TILT_MAX`(15도)를 넘으면 그 순간의 `/scan`을 통째로 버립니다 — 배가 기울면 2D LiDAR가 수면/하늘을 훑어
+유령 장애물이 생기기 때문입니다. 파도를 켜서(`gain`을 0보다 크게, 예: `0.5`) 이 게이팅이 실제로 동작하는지
+확인할 수 있습니다.
+
+```bash
+# 1) kaboat_sim 재빌드 (world 파일의 gain 변경 반영)
+colcon build --symlink-install --packages-select kaboat_sim
+
+# 2) 시뮬레이터 재실행 — Gazebo 뜨면 재생(▶) 버튼 누르기
+source /opt/ros/humble/setup.bash
+source /workspace/kaboat_ws/install/setup.bash
+ros2 launch kaboat_sim simulation.launch.py
+
+# 3) occupancy_grid 실행 (새 터미널)
+ros2 run kaboat_perception occupancy_grid
+
+# 4) RViz 로 확인 (Map: /occupancy_grid, LaserScan: /scan, Odometry: /odom)
+ros2 launch kaboat_bringup rviz.launch.py
+```
+
+`gain=0.5`면 배가 롤/피치로 흔들리고, `TILT_MAX`를 넘는 순간마다 해당 스캔이 스킵됩니다 — 잔잔한 물
+(`gain=0.0`)일 때보다 격자에 노이즈(유령 장애물)가 덜 생기는지 대조해서 확인하세요.
+
 ---
 
 ## 📂 5. 프로젝트 구조
