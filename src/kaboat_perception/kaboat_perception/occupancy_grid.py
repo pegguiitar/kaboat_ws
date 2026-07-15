@@ -13,31 +13,35 @@ behavior 의 회피가 공유하는 지도를 만든다. v5 설계상 장애물 
 단계의 과도기 인터페이스였고, 이 노드가 LiDAR+뎁스캠으로 채워지면서
 대체돼 삭제됐다).
 
-핵심 동작 (요약):
-  1) 스캔/포인트가 들어올 때마다 거리·방향 상관없이 현재 odom 기준 월드
-     좌표를 계산해 self.log_odds(dict) 에 log-odds 로 계속 누적 저장한다.
-  2) 배가 이동해도 dict 안의 값은 손대지 않는다 — 전부 월드 절대좌표에
-     고정된 채 그대로 남는다 (그래서 shift 로 재배치할 필요가 없다).
-  3) publish 시점(1Hz)마다, 그 순간 배 위치를 중심으로 한 size×size[m]
-     범위 안의 값만 dict 에서 조회해 /occupancy_grid 로 발행한다.
-  4) 같은 시점에 그 범위를 훌쩍 벗어난 옛 항목은 prune 으로 삭제해 dict
-     가 무한정 커지지 않게 한다.
-  즉 "장애물 정보는 세상 전체 기준으로 무제한 기억하되, 실제로 내보내는
-  지도는 배 근처 size×size[m]만 잘라서 보여준다".
+핵심 동작 (요약) — "global 격자 위를 미끄러지는 고정 배열(rolling grid)":
+  1) 세상 전체를 global 정수 격자(floor(월드좌표/resolution))로 본다.
+     저장소는 배의 global 셀 주위 cells×cells 블록만 담는 고정 numpy
+     배열이고, anchor(배열 (0,0)셀의 global 인덱스)가 어느 블록을 보고
+     있는지를 가리킨다.
+  2) 배가 움직이면 anchor 를 배의 절대 위치에서 매번 새로 계산해
+     (이동량 누적이 아님 — 반올림 오차 무누적), 이전 anchor 와의 차이만큼
+     배열을 정수 셀 단위로 밀고(np.roll) 새로 노출된 가장자리만 unknown
+     으로 초기화한다. 격자는 항상 월드 축 정렬 — heading 회전은 절대
+     하지 않으므로 보간/누적 오차가 없다.
+  3) 관측(스캔/포인트)은 sensor→world 변환 후 자기 global 셀에 박히고,
+     배열 인덱스는 (global 셀 − anchor). window(ROI) 밖 셀은 쓰기 시점에
+     그냥 버린다 — 별도 prune 이 필요 없다.
+  4) publish(1Hz)는 배열을 통째로 확률(0~100)로 변환해 내보낸다. origin
+     은 anchor×resolution (격자에 스냅된 값) — 발행 셀과 저장 셀이 1:1 로
+     정확히 겹쳐 aliasing(±1셀 튐)이 없다.
 
 구현 — /scan 레이캐스팅(Bresenham)으로 log-odds 갱신:
   각 빔의 경로 셀은 L_FREE 로 감쇠, 유효 히트 끝점 셀은 L_OCC 로 누적.
+  히트가 window 밖인 빔도 경계까지의 경로는 free 로 갱신한다(직선이
+  window 를 한 번 벗어나면 다시 안 들어오므로 벗어나는 순간 break).
   lidar와 base_link 는 동일 위치/자세로 가정(TF 미사용, behavior 쪽과 동일
   단순화) — 실물 전환 시 lidar 장착 오프셋 보정 필요.
-  좌표는 월드 절대 격자(floor(x/resolution))에 dict 로 희소 저장하므로
-  rolling window 재중심 시 배열 shift 가 필요 없다 — 대신 publish 마다
-  현재 창에서 크게 벗어난 키를 정리(prune)해 메모리를 유계로 유지한다.
   IMU 롤/피치가 TILT_MAX 를 넘으면 그 스캔은 통째로 버린다(배가 기울면
   2D LiDAR 가 수면/하늘을 훑어 유령 장애물이 생기기 때문).
 
   뎁스캠(/camera/depth/points)은 LiDAR 를 대체하는 게 아니라 사각지대
   보완용 — LiDAR 수평 한 평면이 놓치는 물체를 z-band(수면 위 cam_z_min~
-  cam_z_max) + 거리(CAM_RANGE_MIN~MAX) 필터로 걸러 같은 log_odds dict 에
+  cam_z_max) + 거리(CAM_RANGE_MIN~MAX) 필터로 걸러 같은 격자에
   L_OCC_CAM 만큼 더한다. 자유공간 레이캐스팅은 안 함(점유 증거만 추가).
   두 센서가 같은 셀을 같이 보면 log-odds 가 더 누적돼 더 확신 있는(짙은)
   셀이 되는 식으로 자연히 "융합"된다 — 별도 융합 로직 없이 같은 누적
@@ -48,7 +52,8 @@ behavior 의 회피가 공유하는 지도를 만든다. v5 설계상 장애물 
   오인된다 (wamv_kaboat.xacro 의 depth_camera 센서 주석 참고).
 
 TODO(팀):
-  1) decay(노후 셀 확률의 점진적 감쇠) — 현재는 prune(완전 삭제)만 있음
+  1) decay(노후 셀 확률의 점진적 감쇠) — 현재는 window 밖으로 나갈 때만
+     소멸하고, window 안 셀은 새 관측 없인 안 낡음
   2) inverse sensor model 을 거리/각도 함수로 — 지금 L_OCC/L_FREE 는 거리·빔
      중심으로부터의 각도와 무관한 고정 상수(원래는 가까울수록/빔 중심에
      가까울수록 더 신뢰해야 함). 정확도보단 단순함을 택한 skeleton 근사.
@@ -56,6 +61,7 @@ TODO(팀):
 """
 import math
 
+import numpy as np
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import LaserScan, PointCloud2, Imu
@@ -135,7 +141,11 @@ class OccupancyGridNode(Node):
 
         self.odom = None
         self.tilted = False
-        self.log_odds = {}  # (world_ix, world_iy) -> log-odds 값 (희소 저장)
+        # rolling grid — [iy, ix] 순서 (OccupancyGrid row-major 와 동일).
+        # anchor = 배열 (0,0) 셀의 global 격자 인덱스 (ax, ay).
+        self.anchor = None
+        self.grid = np.zeros((self.cells, self.cells), dtype=np.float32)  # log-odds
+        self.observed = np.zeros((self.cells, self.cells), dtype=bool)    # 관측 여부
 
         self.create_subscription(LaserScan, '/scan', self._on_scan, 10)
         self.create_subscription(Odometry, '/odom', self._on_odom, 10)
@@ -157,15 +167,61 @@ class OccupancyGridNode(Node):
 
     def _cell(self, x: float, y: float):
         return (math.floor(x / self.resolution), math.floor(y / self.resolution))
-        # 연속좌표 -> 이산좌표 로 바꿔주는 함수
+        # 연속좌표 -> 이산좌표(global 격자 인덱스) 로 바꿔주는 함수
+
+    def _recenter(self):
+        """배의 절대 위치로 anchor 를 다시 잡고 배열을 정수 셀만큼 민다.
+
+        anchor 는 이동량 누적이 아니라 매번 floor(절대위치/res) 에서 새로
+        계산하므로 반올림 오차가 누적되지 않는다(항상 ≤1셀 양자화뿐).
+        shift 는 정수 roll(복사)이라 값 손실/보간 오차가 없다.
+        """
+        bx_i, by_i = self._cell(self.odom.pose.pose.position.x,
+                                self.odom.pose.pose.position.y)
+        ax = bx_i - self.cells // 2
+        ay = by_i - self.cells // 2
+        if self.anchor is None:
+            self.anchor = (ax, ay)
+            return
+        dx = ax - self.anchor[0]
+        dy = ay - self.anchor[1]
+        if dx == 0 and dy == 0:
+            return
+        if abs(dx) >= self.cells or abs(dy) >= self.cells:
+            # 한 번에 window 를 통째로 벗어남 (텔레포트/리셋) — 전체 초기화
+            self.grid.fill(0.0)
+            self.observed.fill(False)
+        else:
+            self.grid = np.roll(self.grid, (-dy, -dx), axis=(0, 1))
+            self.observed = np.roll(self.observed, (-dy, -dx), axis=(0, 1))
+            # roll 은 반대편으로 감아 돌므로, 새로 노출된 가장자리를 unknown 으로
+            if dx > 0:
+                self.grid[:, -dx:] = 0.0
+                self.observed[:, -dx:] = False
+            elif dx < 0:
+                self.grid[:, :-dx] = 0.0
+                self.observed[:, :-dx] = False
+            if dy > 0:
+                self.grid[-dy:, :] = 0.0
+                self.observed[-dy:, :] = False
+            elif dy < 0:
+                self.grid[:-dy, :] = 0.0
+                self.observed[:-dy, :] = False
+        self.anchor = (ax, ay)
+
     def _on_scan(self, msg: LaserScan):
         if self.odom is None or self.tilted:
             return  # 기울면 이번 스캔은 통째로 버림 — 유령 장애물 방지
+        self._recenter()
 
         bx = self.odom.pose.pose.position.x
         by = self.odom.pose.pose.position.y
         yaw = _yaw(self.odom.pose.pose.orientation)
-        rx, ry = self._cell(bx, by)
+        ax, ay = self.anchor
+        c = self.cells
+        # 배의 배열 인덱스 — recenter 직후라 항상 중앙 근처
+        rx = math.floor(bx / self.resolution) - ax
+        ry = math.floor(by / self.resolution) - ay
 
         angle = msg.angle_min
         for r in msg.ranges:
@@ -177,14 +233,18 @@ class OccupancyGridNode(Node):
             world_angle = yaw + beam_angle
             ex = bx + r * math.cos(world_angle)
             ey = by + r * math.sin(world_angle)
-            ex_i, ey_i = self._cell(ex, ey)
+            ex_i = math.floor(ex / self.resolution) - ax
+            ey_i = math.floor(ey / self.resolution) - ay
 
             path = _bresenham(rx, ry, ex_i, ey_i)
-            for cx, cy in path[:-1]:               # 경로(자유공간) — 끝점 제외
-                l = self.log_odds.get((cx, cy), 0.0) + L_FREE
-                self.log_odds[(cx, cy)] = max(L_MIN, min(L_MAX, l))
-            l = self.log_odds.get((ex_i, ey_i), 0.0) + L_OCC  # 끝점(히트)
-            self.log_odds[(ex_i, ey_i)] = max(L_MIN, min(L_MAX, l))
+            last = len(path) - 1
+            for k, (cx, cy) in enumerate(path):
+                if not (0 <= cx < c and 0 <= cy < c):
+                    break  # window 밖 — 직선이라 다시 안 들어옴. 경계까지는 free 갱신됨
+                delta = L_OCC if k == last else L_FREE  # 끝점(히트)만 점유 증거
+                l = self.grid[cy, cx] + delta
+                self.grid[cy, cx] = max(L_MIN, min(L_MAX, l))
+                self.observed[cy, cx] = True
     # log odds 갱신을 위해 log likelihood ratio를 one-step마다 더해서 갱신
 
     def _on_points(self, msg: PointCloud2):
@@ -211,6 +271,7 @@ class OccupancyGridNode(Node):
         if lx.shape[0] == 0:
             return
 
+        self._recenter()
         bx = self.odom.pose.pose.position.x
         by = self.odom.pose.pose.position.y
         yaw = _yaw(self.odom.pose.pose.orientation)
@@ -218,18 +279,14 @@ class OccupancyGridNode(Node):
         wx = bx + lx * cos_y - ly * sin_y
         wy = by + lx * sin_y + ly * cos_y
 
-        for x, y in zip(wx, wy):
-            key = self._cell(x, y)
-            l = self.log_odds.get(key, 0.0) + L_OCC_CAM
-            self.log_odds[key] = max(L_MIN, min(L_MAX, l))
-
-    def _prune(self, cx: int, cy: int):
-        """현재 rolling window 밖으로 나간 셀은 버려 메모리를 유계로 유지."""
-        margin = self.cells // 2 + 5
-        stale = [k for k in self.log_odds
-                 if abs(k[0] - cx) > margin or abs(k[1] - cy) > margin]
-        for k in stale:
-            del self.log_odds[k]
+        gx = np.floor(wx / self.resolution).astype(np.int64) - self.anchor[0]
+        gy = np.floor(wy / self.resolution).astype(np.int64) - self.anchor[1]
+        m = (gx >= 0) & (gx < self.cells) & (gy >= 0) & (gy < self.cells)
+        if not m.any():
+            return
+        np.add.at(self.grid, (gy[m], gx[m]), L_OCC_CAM)  # 중복 셀도 누적
+        np.clip(self.grid, L_MIN, L_MAX, out=self.grid)
+        self.observed[gy[m], gx[m]] = True
 
     def _publish(self):
         grid = OccupancyGrid()
@@ -245,26 +302,15 @@ class OccupancyGridNode(Node):
             self.pub.publish(grid)
             return
 
-        # rolling window — 배(odom) 를 중심에 두고 origin 을 좌하단으로
-        bx = self.odom.pose.pose.position.x
-        by = self.odom.pose.pose.position.y
-        ox = bx - self.size / 2.0
-        oy = by - self.size / 2.0
-        grid.info.origin.position.x = ox
-        grid.info.origin.position.y = oy
+        self._recenter()
+        # origin 은 anchor 를 그대로 미터로 — 격자에 스냅돼 있어 발행 셀과
+        # 저장 셀이 1:1 로 겹친다 (배 위치는 중앙 셀 안, 오차 ≤1셀)
+        grid.info.origin.position.x = self.anchor[0] * self.resolution
+        grid.info.origin.position.y = self.anchor[1] * self.resolution
 
-        self._prune(*self._cell(bx, by))
-
-        data = [-1] * (self.cells * self.cells)
-        for j in range(self.cells):
-            wy = oy + (j + 0.5) * self.resolution
-            for i in range(self.cells):
-                wx = ox + (i + 0.5) * self.resolution
-                l = self.log_odds.get(self._cell(wx, wy))
-                if l is not None:
-                    p = 1.0 - 1.0 / (1.0 + math.exp(l))
-                    data[j * self.cells + i] = int(round(p * 100))
-        grid.data = data
+        p = 1.0 / (1.0 + np.exp(-self.grid))
+        data = np.where(self.observed, np.rint(p * 100.0), -1.0)
+        grid.data = data.astype(np.int8).ravel().tolist()
         self.pub.publish(grid)
 
 
