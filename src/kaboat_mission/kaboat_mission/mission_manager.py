@@ -14,6 +14,15 @@
 
 미션별 목표좌표는 파라미터(waypoints.<state>)로 주입한다
 — kaboat_bringup/config/mission_params.yaml 참고.
+
+단일 미션 테스트:
+  전체를 순서대로 안 돌리고 특정 미션 하나만 켜서 그 behavior 를 반복
+  개발/디버깅하고 싶을 때는 start_state 파라미터를 쓴다.
+    ros2 run kaboat_mission mission_manager --ros-args \
+        -p start_state:=dock -p single_mission:=true
+  start_state 로 바로 그 미션에서 시작하고, single_mission:=true 면 그
+  미션 목표 도달 후 다음으로 안 넘어가고 바로 'done'(정지)으로 간다 —
+  cmd_mux 가 멈추니 배가 목표 근처에서 안전하게 정지한 채로 결과를 볼 수 있다.
 """
 import math
 
@@ -44,6 +53,8 @@ class MissionManager(Node):
 
         self.declare_parameter('transition_radius', 1.0)   # 전환 판정 반경 [m]
         self.declare_parameter('auto_start', True)          # 켜지면 바로 첫 미션 시작
+        self.declare_parameter('start_state', '')            # 단일 미션 테스트용 시작 지점
+        self.declare_parameter('single_mission', False)      # true 면 start_state 하나만 하고 done
         for name in MISSION_ORDER:
             self.declare_parameter(f'waypoints.{name}', DEFAULT_WAYPOINTS[name])
 
@@ -54,7 +65,19 @@ class MissionManager(Node):
         }
 
         self.odom = None
-        self.idx = -1   # MISSION_ORDER 인덱스 (-1 = 시작 전)
+
+        start_state = self.get_parameter('start_state').value
+        self.single_mission = bool(self.get_parameter('single_mission').value)
+        if start_state:
+            if start_state not in MISSION_ORDER:
+                self.get_logger().error(
+                    f"start_state='{start_state}' 는 알 수 없는 미션입니다 "
+                    f"(가능한 값: {MISSION_ORDER}). 처음부터 시작합니다.")
+                self.idx = -1
+            else:
+                self.idx = MISSION_ORDER.index(start_state) - 1  # advance() 가 +1 해서 착지
+        else:
+            self.idx = -1   # MISSION_ORDER 인덱스 (-1 = 시작 전, 정상 순서대로)
 
         latched = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.pub_state = self.create_publisher(String, '/mission/state', latched)
@@ -116,7 +139,13 @@ class MissionManager(Node):
         if math.hypot(dx, dy) < self.radius:
             self.get_logger().info(
                 f"목표 {self.radius}m 이내 진입 — '{MISSION_ORDER[self.idx]}' 완료")
-            self.advance()
+            if self.single_mission:
+                self.get_logger().info(
+                    'single_mission=true — 다음 미션으로 안 넘어가고 done 으로 정지')
+                self.set_state('done')
+                self.idx = len(MISSION_ORDER)  # tick() 이 더 이상 판정 안 하도록
+            else:
+                self.advance()
 
 
 def main(args=None):

@@ -108,18 +108,22 @@ class BehaviorBase(Node):
     def _tick(self):
         if not self.active:
             return
-        cmd = self.compute_cmd()
+        cmd = self.compute_cmd() # cmd는 속도 명령 표준화 명령어
         if cmd is None:
             return
         cmd.linear.x = max(-self.max_linear, min(self.max_linear, cmd.linear.x))
         cmd.angular.z = max(-self.max_angular, min(self.max_angular, cmd.angular.z))
         self.cmd_pub.publish(cmd)
-
+        # 배는 전진/후진 속도(x 방향)과 좌우 회전 속도(z축 기준)만 필요하기 때문
     def compute_cmd(self):
         """활성 상태에서 10Hz 로 호출. Twist 를 반환 (None 이면 미발행)."""
         raise NotImplementedError
 
     # ── 위치 제어 공통 헬퍼 ────────────────────────────
+
+    # self.goal은 콜백을 통해 /mission/goal 토픽에서 들어옴
+
+    # 목표좌표와 현재좌표 직선거리 반환
     def distance_to_goal(self) -> float:
         if self.odom is None or self.goal is None:
             return float('inf')

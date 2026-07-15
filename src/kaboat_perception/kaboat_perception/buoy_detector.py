@@ -1,8 +1,8 @@
 """buoy_detector — 부표·게이트 색 검출 (상시 가동, ① 레이어, 학습 불필요)
 
-입력   /camera/color/image_raw (sensor_msgs/Image)   — RGB 원본
-       /scan (sensor_msgs/LaserScan)                  — ④ LiDAR 교차확인용
-       /camera/depth/points (sensor_msgs/PointCloud2) — ④ 거리 보강용 (선택)
+입력   /camera/color/image_raw (sensor_msgs/Image)   — RGB 원본, 블롭 검출용
+       /camera/depth/image_raw (sensor_msgs/Image)    — 거리 채움 (RGB와 픽셀 정렬됨)
+       /scan (sensor_msgs/LaserScan)                  — ④ 오검출 제거용 (LiDAR 교차확인)
        /odom (nav_msgs/Odometry)                      — ⑤ 시간 추적용
 출력   /detections/buoys (kaboat_msgs/MarkArray)
 
@@ -12,21 +12,27 @@ node_structure v5 의 buoy_detector. HSV 는 1단계 앞단 마스크일 뿐이�
 쓰는 이 노드는 학습 없이 항상 켜져 있고, 도킹 표식만 dock_mark_detector
 (YOLO, 도킹 state 에서만 추론)가 따로 맡는다.
 
-skeleton 구현 — 현재는 ① HSV 마스크 + 최소 면적만 실동작.
-②~⑤ 는 인터페이스(메서드 훅)만 잡아둔 통과(pass-through) 상태다:
+거리(distance)는 **뎁스캠**으로 채운다 — RGB 블롭의 픽셀 좌표(cx,cy)가
+뎁스 이미지와 그대로 정렬돼 있어서 좌표 변환 없이 바로 읽을 수 있고,
+LiDAR(2D 평면이라 부표 높이를 빗나갈 수 있음)보다 정밀하다. LiDAR는
+대신 ④(오검출 제거, 수면 반사처럼 뎁스로도 헷갈릴 수 있는 걸 아예 다른
+센서 모달리티로 재확인)에 남겨둔다 — "거리 채움"과 "오검출 제거"는
+원래 다른 문제라 분리했다.
+
+skeleton 구현 — 현재는 ① HSV 마스크 + 최소 면적, 뎁스 거리 채움만 실동작.
+②③⑤는 인터페이스(메서드 훅)만 잡아둔 통과(pass-through), ④는 여전히 TODO:
   ② _filter_geometry()      블롭 기하 (circularity/solidity/종횡비)
   ③ _filter_waterline()     수면 컨텍스트 (수평선 위 하늘 마스킹)
-  ④ _crosscheck_lidar()     LiDAR/depth 교차확인 + 거리 채움  ← 오검출 제거 핵심
+  ④ _crosscheck_lidar()     LiDAR 교차확인 — 오검출(수면 반사 등) 제거 전용
   ⑤ _track_temporal()       N-of-M 프레임 지속성 + odom 추적
 
-TODO(팀): ②~⑤ 순서대로 채우기. ④가 가장 효과 큼 (수면 반사·물가 물체 제거
-          + distance 필드가 여기서 채워져 behavior 들이 거리 기반 판단 가능).
+TODO(팀): ②③⑤ 순서대로 채우기. ④는 거리 채움과 무관해졌으니 우선순위 낮음.
 """
 import math
 
 import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import Image, LaserScan, PointCloud2
+from sensor_msgs.msg import Image, LaserScan
 from nav_msgs.msg import Odometry
 
 from kaboat_msgs.msg import Mark, MarkArray
@@ -51,7 +57,11 @@ MIN_BLOB_AREA = 200      # 픽셀 — 이보다 작은 블롭은 노이즈로 �
 
 
 def hsv_blobs(frame, hsv_ranges=HSV_RANGES, min_area=MIN_BLOB_AREA):
-    """① HSV 마스크 → (color, contour, area, cx) 후보 목록.
+    """① HSV 마스크 → (color, contour, area, cx, cy) 후보 목록.
+
+    cx,cy 는 블롭 중심의 픽셀 좌표 — cx 는 방위각(bearing) 계산에,
+    cy 는 뎁스 이미지에서 같은 픽셀의 거리를 읽어올 때 같이 쓰인다
+    (RGB·뎁스 픽셀이 정렬돼 있으므로 좌표 변환 없이 바로 인덱싱 가능).
 
     dock_mark_detector 의 placeholder 도 이 함수를 재사용한다
     (YOLO 교체 전까지 두 검출기가 같은 앞단을 공유).
@@ -70,8 +80,26 @@ def hsv_blobs(frame, hsv_ranges=HSV_RANGES, min_area=MIN_BLOB_AREA):
             if area < min_area:
                 continue
             m = cv2.moments(cnt)
-            candidates.append((color, cnt, area, m['m10'] / m['m00']))
+            candidates.append((color, cnt, area, m['m10'] / m['m00'], m['m01'] / m['m00']))
     return candidates
+
+
+def distance_at(depth_frame, cx: float, cy: float) -> float:
+    """뎁스 프레임에서 (cx,cy) 픽셀의 거리 조회. 없거나 무효면 -1.0.
+
+    dock_mark_detector 도 재사용 — RGB·뎁스 픽셀 정렬을 전제로 하므로
+    depth_frame 이 blob 을 찾은 그 RGB 프레임과 같은 카메라·같은 해상도여야 한다.
+    """
+    if depth_frame is None:
+        return -1.0
+    h, w = depth_frame.shape[:2]
+    px, py = int(cx), int(cy)
+    if not (0 <= px < w and 0 <= py < h):
+        return -1.0
+    d = float(depth_frame[py, px])
+    if not math.isfinite(d) or d <= 0.0:
+        return -1.0   # NaN/inf/0 — 뎁스캠 유효범위 밖이거나 무반사
+    return d
 
 
 class BuoyDetector(Node):
@@ -92,22 +120,28 @@ class BuoyDetector(Node):
             return
 
         self.bridge = CvBridge()
+        self.depth = None         # 거리 채움용 최신 뎁스 프레임 (numpy, meters)
         self.scan = None          # ④ 교차확인용 최신 LiDAR
         self.odom = None          # ⑤ 추적용 최신 odom
         self.create_subscription(Image, '/camera/color/image_raw', self.on_image, 10)
+        self.create_subscription(Image, '/camera/depth/image_raw', self._on_depth, 10)
         self.create_subscription(LaserScan, '/scan', self._on_scan, 10)
         self.create_subscription(Odometry, '/odom', self._on_odom, 10)
-        # TODO(팀): ④에서 depth 보강이 필요해지면 /camera/depth/points 구독 추가
-        #           (PointCloud2 파싱 비용이 있으니 /scan 매칭으로 부족할 때만).
 
         self.get_logger().info(
-            'buoy_detector 시작 (HSV+①만 실동작, ②~⑤ TODO) — → /detections/buoys')
+            'buoy_detector 시작 (HSV+뎁스거리 실동작, ②③④⑤ TODO) — → /detections/buoys')
+
+    def _on_depth(self, msg: Image):
+        # passthrough — gz rgbd_camera 는 32FC1(미터 단위 float) 로 발행.
+        # 실물(D455)도 aligned_depth 스트림을 같은 인코딩으로 맞추면 코드 변경 불필요.
+        self.depth = self.bridge.imgmsg_to_cv2(msg, desired_encoding='passthrough')
 
     def _on_scan(self, msg: LaserScan):
         self.scan = msg
 
     def _on_odom(self, msg: Odometry):
         self.odom = msg
+
 
     # ── 파이프라인 ②~⑤ 훅 (지금은 전부 통과) ──────────────────
 
@@ -128,12 +162,16 @@ class BuoyDetector(Node):
         return candidates
 
     def _crosscheck_lidar(self, marks):
-        """④ LiDAR/depth 교차확인 — 가장 강력한 오검출 제거 + 거리 채움.
+        """④ LiDAR 교차확인 — 오검출 제거 전용 (거리는 이미 뎁스캠으로 채워짐).
 
-        TODO(팀): mark.bearing 방향의 /scan range 를 조회해
-                  (1) 실제 물체가 있는지 확인 (없으면 수면 반사 → 탈락)
-                  (2) mark.distance 를 그 range 로 채움 (지금은 -1.0 고정)
-                  (3) 거리 대비 블롭 픽셀 크기가 부표 실물 크기와 맞는지 검증.
+        뎁스캠과 다른 센서 모달리티(레이저 ToF)로 재확인해야 하는 이유:
+        수면 반사·눈부심은 카메라(RGB/뎁스 둘 다 광학 센서)엔 그럴듯한
+        물체처럼 보일 수 있지만, LiDAR 는 실제 반사체가 없으면 그 방향에
+        반환값이 없다 — 광학 오검출을 잡는 마지막 관문.
+
+        TODO(팀): mark.bearing 방향의 /scan range 를 조회해 실제 물체가
+                  있는지 확인 (없으면 탈락). 거리 대비 블롭 픽셀 크기가
+                  부표 실물 크기와 맞는지 검증도 여기서 같이 하면 좋음.
         """
         return marks
 
@@ -158,7 +196,7 @@ class BuoyDetector(Node):
 
         out = MarkArray()
         out.header = msg.header
-        for color, _cnt, area, cx in candidates:
+        for color, _cnt, area, cx, cy in candidates:
             # 픽셀 오프셋 → 방위각 (이미지 좌측 = +bearing, REP-103 좌회전 양수)
             bearing = -(cx - width / 2.0) / (width / 2.0) * (self.hfov / 2.0)
             mark = Mark()
@@ -166,7 +204,7 @@ class BuoyDetector(Node):
             mark.shape = 'buoy'
             mark.confidence = min(area / 5000.0, 1.0)  # 면적 기반 임시 값
             mark.bearing = float(bearing)
-            mark.distance = -1.0     # ④에서 채워질 예정
+            mark.distance = distance_at(self.depth, cx, cy)  # 뎁스 이미지에서 직접 조회
             out.marks.append(mark)
 
         # ④ LiDAR 교차확인 → ⑤ 시간 추적
