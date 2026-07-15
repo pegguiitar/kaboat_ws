@@ -130,8 +130,9 @@ GPS(수평 ~1.5m/수직 ~3m) 전부 `kaboat_sim/urdf/wamv_kaboat.xacro` 주석�
 ### `kaboat_behaviors` — 골격, 판단 로직은 대부분 placeholder
 - **`behavior_base.py`**: 모든 behavior 공통 base. `/mission/state`로 active
   판단, PD 제어(`YAW_KP=0.3`, `YAW_KD=0.15`)로 목표점 추종하는 `seek_goal()`
-  제공. 속도 상한 `max_linear=0.20`, `max_angular=0.05`. ⚠️ 이 값들은 실측
-  안전값 — 함부로 올리지 마세요(이유는 §6).
+  제공. 명령 상한 `max_linear=0.20`, `max_angular=0.05`. ⚠️ 이 값들은 실측
+  안전값 — 함부로 올리지 마세요(이유는 §6). **m/s 가 아니라 추력 명령**이라는
+  점도 주의(0.20 → 실제 약 1.5 m/s, §6).
 - **`obstacle_avoidance_utils.py`**: 공통 회피-보정 함수. 5개 behavior 가 전부
   `apply_repulsion(cmd, occupancy_grid, odom)` 을 import(각자 구현 시 회피가
   제각각 되는 걸 방지). `/occupancy_grid`(점유 셀) 입력, 격자가 채워지므로 반발
@@ -142,11 +143,14 @@ GPS(수평 ~1.5m/수직 ~3m) 전부 `kaboat_sim/urdf/wamv_kaboat.xacro` 주석�
 - **`docking_ctrl.py`**: `/detections/dock_marks` **단독 구독**(v5). 지정 색
   (`target_color`) 마크 보이면 저속 접근. TODO(팀): YOLO 후 `target_shape` 매칭, 접안 정렬.
 - **`search_circler.py`**: 구역 도착 후 마크 색 따라 좌/우 선회. TODO(팀): 규정에 맞는 선회 방향/횟수.
-- **`obstacle_planner.py`**: goal 추종 + 회피 게인 강화. **DRI + B-spline 로컬
-  플래너가 들어갈 자리** — 지금은 `obstacle_avoidance_utils` 단순 반발 조향으로 대체.
-  설계·인터페이스·작업분할은 [AVOIDANCE_PLAN.MD](AVOIDANCE_PLAN.MD) 에 확정
-  (DRI 비등방 가우시안 격자 → 제어점 6개 B-spline 생성/검사/수리 분리 → PD
-  경로추종). 착수 전 이 문서 먼저 참고.
+- **`dri.py`** — 완성. `/occupancy_grid` → 위험도(DRI) 격자. 점유 셀마다 등방
+  가우시안 splat(가깝거나 정면일수록 크고 진하게), 셀 결합은 **max**. ROS 무의존
+  순수 numpy(N3), `test/test_dri.py` 17개. 장애물 밭 552셀 9.4ms.
+- **`obstacle_planner.py`**: goal 추종 + 회피 게인 강화. **B-spline 로컬 플래너가
+  들어갈 자리** — 지금은 `obstacle_avoidance_utils` 단순 반발 조향으로 대체.
+  설계는 [AVOIDANCE_PLAN.MD](AVOIDANCE_PLAN.MD) 참고 (DRI 격자 → 제어점 6개
+  B-spline 생성/검사/수리 분리 → PD 경로추종). ⚠️ `build_dri` 는 매 tick(10Hz)
+  호출 — DRI 는 배 pose 의 함수라 격자 주기(1Hz)에 묶으면 안 됨(§7-4).
 
 ### `kaboat_control` — 완성
 - **`cmd_mux.py`**: `/mission/state`에 맞는 `/cmd/*` 만 `/cmd_vel`로 통과.
@@ -216,6 +220,10 @@ ros2 topic hz /imu/data                  # 센서 발행 주파수 확인
    `angular.z = 0.8 * heading_error`만 써서 발진. **PD(`YAW_KD=0.15`)로 해결**,
    `max_angular`도 0.15 → 0.05로 낮춤.
 
+⚠️ **`max_linear`/`max_angular` 는 속도가 아니라 추력 명령입니다** — m/s 로 읽으면
+7배 틀립니다. sim 실측: `max_linear=0.20` → 약 **1.5 m/s**, `max_angular=0.05` →
+약 **30°/s**.
+
 배 크기/무게를 바꾸면 이 값들(`scale`, `max_linear`, `max_angular`, `YAW_KP`,
 `YAW_KD`)을 반드시 헤드리스로 재검증하세요 — 짧게 보면 안정적으로 오판하기
 쉬우니 최소 몇 분 이상 5개 미션 완주로 판단(README §3 물리 스텝 경고와 같은 이유).
@@ -237,9 +245,13 @@ ros2 topic hz /imu/data                  # 센서 발행 주파수 확인
 > 스택 알고리즘·설정을 의미 있게 바꾸면 **최신 항목을 맨 위에** 추가:
 > `### YYYY-MM-DD HH:MM — 요약` + 무엇을/왜 몇 문장. 파일 세부는 커밋 메시지로.
 
+### 2026-07-16 02:30 — DRI 격자 구현 (`dri.py`)
+AVOIDANCE_PLAN 작업 1 완료. sim 검증 중 초안 설계 4건(등방 전환, max 결합,
+노이즈 필터, 갱신 주기)을 수정 — 근거는 계획서 §7.
+
 ### 2026-07-15 21:52 — 장애물 회피 로컬 플래너 작업계획 확정 (AVOIDANCE_PLAN.MD)
 `obstacle_planner` 를 단순 반발 조향 → DRI + B-spline 로컬 플래너로 교체하는
-설계를 [AVOIDANCE_PLAN.MD](AVOIDANCE_PLAN.MD) 에 동결. 아직 구현 전(계획 문서만).
+설계를 [AVOIDANCE_PLAN.MD](AVOIDANCE_PLAN.MD) 에 정리. 아직 구현 전(계획 문서만).
 DRI 비등방 가우시안 수식, 제어점 6개 규칙, 생성/검사/수리 분리, 재생성 트리거
 3종, ESCAPE(안전 경로 불가 시 후진), 모듈 인터페이스·작업 5분할 포함.
 
