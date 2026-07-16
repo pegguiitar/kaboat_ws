@@ -35,7 +35,7 @@ class PlannerParams:
     k_bear: float = 1.5
     boundary_margin: float = 1.0   # r_end = 격자 내접 최대 반지름 − 이 값 [m]
     min_horizon: float = 3.0       # waypoint 가 코앞이어도 r_end 하한 [m]
-    cp_min_gap: float = 0.5        # r_first ≥ ‖p1‖ + 이 값 (radii 단조 보호) [m]
+    cp_min_gap: float = 0.5        # r_end 퇴화 방지: r_end ≥ ‖p1‖ + 2·이 값 [m]
     search_fov: float = math.radians(180.0)  # 후보 부채꼴 = wp 전진 반평면
     n_candidates: int = 31
     # 후보 비용 가중 (sim 확정 §7-6): w_wp 0.3 은 "틈 관통 DRI ~0.5" 가
@@ -60,8 +60,8 @@ class Plan:
     cps: np.ndarray          # (6, 2) 제어점 world 좌표 [p0..p5]
     samples: np.ndarray      # (M, 2) spline 샘플 — 호길이 순, 간격 = spacing
     origin: tuple            # 계획 시점 배 위치 (= p0) — arc 중심이자 트리거 (a) 기준
-    r1: float | None         # 기준 장애물 실거리 (클램프 전). 장애물 없으면 None
-    radii: list              # p2~p5 arc 반지름 [r_first, r2, r3, r_end] — 수리 불변
+    r1: float | None         # 기준 장애물 실거리 — 재생성 트리거 (a) 전용. 없으면 None
+    radii: list              # p2~p5 arc 반지름 — ‖p1‖↔r_end 균등 사다리, 수리 불변
     bearings: list           # p2~p5 의 origin 기준 방위각 — 수리는 이 값만 이동
     created_t: float         # 생성 시각 [s] — 재생성 트리거 (c) 기준
     wp_bearing: float        # waypoint 방위 — 후보 부채꼴 중심 (수리 한계 판정용)
@@ -146,15 +146,19 @@ def generate(dri, boat_xy, boat_yaw: float, boat_vel_xy, waypoint_xy,
     r_end = max(r_end, p1_len + 2.0 * p.cp_min_gap)   # 퇴화 방지
 
     r1 = _pick_ref_obstacle(dri.occ_xy, boat, boat_yaw, p)
-    r_first = None if r1 is None else max(r1, p1_len + p.cp_min_gap)
 
-    if r_first is None or r_first >= r_end - p.cp_min_gap:
-        # R7 폴백 — 장애물 없음 or 기준 장애물이 horizon 밖(arc 세울 자리 없음)
-        r1 = None
-        radii = [p1_len + k * (r_end - p1_len) / 4.0 for k in (1, 2, 3, 4)]
-        bearings = [wp_bearing] * 4
+    # CP 사다리는 r1 과 무관 — 항상 ‖p1‖ ↔ r_end 균등 4분할.
+    # 초안은 첫 arc 를 r1(기준 장애물 거리)에 앉혔는데, 장애물이 지평선
+    # 근처면 radii 가 r_end 쪽에 뭉쳐(실측 [7.9,8.2,8.6,8.9]) 경로가 장애물
+    # 밭 "입구에서 끝나는" 퇴화가 났다. berth 는 arc 가 장애물 링 위에
+    # 앉아서가 아니라 arc 후보의 DRI 비용이 정한다 — 사다리 간격(≈0.9m)
+    # < 거품 유효 반경이라 어느 arc 든 이웃 장애물을 느낀다. ⚠️ 격자를
+    # 키우면 이 부등식이 깨질 수 있음(arc 4개 고정) — 그때 재검토.
+    # r1 은 Plan.r1 로 저장만 하고 재생성 트리거 (a) 전용으로 쓴다.
+    radii = [p1_len + k * (r_end - p1_len) / 4.0 for k in (1, 2, 3, 4)]
+    if r1 is None:
+        bearings = [wp_bearing] * 4   # R7 — 전방 부채꼴에 장애물 없음, 직선
     else:
-        radii = [r_first + k * (r_end - r_first) / 3.0 for k in (0, 1, 2, 3)]
         bearings = []
         prev_b = boat_yaw             # 첫 arc 의 연속성 기준 = p1 방향 = heading
         for r in radii:

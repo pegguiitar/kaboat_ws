@@ -153,17 +153,33 @@ def test_ref_obstacle_bearing_weighted_distance():
     assert plan.r1 == pytest.approx(3.0, abs=2 * RES)
 
 
-# ---------- (viii) r_first 클램프 — 장애물이 p1 보다 가까움 ----------
+# ---------- (viii) CP 사다리는 r1 과 무관 ----------
 
-def test_r_first_clamped_when_obstacle_inside_p1():
-    """측면 70° 1.2m — 후방 하드컷(100°) 안이라 뽑히지만 p1(1.48m)보다 가깝다."""
+def _ladder(plan):
+    """‖p1‖ ↔ radii[-1] 균등 4분할 기대값."""
+    lo, hi = p1_len(plan), plan.radii[-1]
+    return [lo + k * (hi - lo) / 4.0 for k in (1, 2, 3, 4)]
+
+
+def test_ladder_independent_of_near_obstacle():
+    """장애물이 p1 보다 가까워도(측면 70° 1.2m) 사다리는 흔들리지 않고,
+    r1 은 실거리 그대로 보존된다 (재생성 트리거 전용)."""
     near = (1.2 * math.cos(math.radians(70)), 1.2 * math.sin(math.radians(70)))
     plan = gen(dri_of([near]))
-    p = PlannerParams()
-    assert plan.r1 == pytest.approx(1.2, abs=2 * RES)          # 실거리는 보존
-    assert plan.radii[0] >= p1_len(plan) + p.cp_min_gap - 1e-9  # arc 는 클램프
+    assert plan.r1 == pytest.approx(1.2, abs=2 * RES)
+    assert plan.radii == pytest.approx(_ladder(plan))
     seq = [p1_len(plan)] + list(plan.radii)
     assert all(a < b for a, b in zip(seq, seq[1:])), seq
+
+
+def test_ladder_spread_when_obstacle_at_horizon():
+    """지평선(8m) 장애물이 기준으로 뽑혀도 arc 가 r_end 쪽에 뭉치지 않는다 —
+    구 규칙(radii[0]=r1)은 [7.9, 8.2, 8.6, 8.9] 로 퇴화해 경로가 장애물 밭
+    입구에서 끝났다 (sim 실측)."""
+    plan = gen(dri_of([(8.0, 0.2)]))
+    assert plan.r1 == pytest.approx(8.1, abs=2 * RES)   # 기준 장애물은 그놈
+    assert plan.radii == pytest.approx(_ladder(plan))   # 사다리는 균등
+    assert plan.radii[0] < 4.0                          # 뭉침 아님
 
 
 # ---------- (ix) r_end 격자 유도 — 배가 창 중심을 벗어남 ----------

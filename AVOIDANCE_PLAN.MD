@@ -20,7 +20,7 @@
 
 ```
 /occupancy_grid ─▶ ① DRI 생성 ─▶ ② 경로 생성 ─┬▶ ③ 추종+검사 ─▶ /cmd/avoid
-     (1Hz 캐시)      (매 tick)        ▲          │       │
+     (최신 캐시)     (매 tick)        ▲          │       │
                                       │ 재생성    │ 수리   │ 위반
                                       └──────────┴───────┘
                                       (전진 반평면에 답 없음 → ⑤ ESCAPE)
@@ -29,10 +29,11 @@
 - **① DRI** (`dri.py` ✅): 점유 셀 → 위험도 격자. 등방 가우시안, **max 결합**
   (최근접 장애물이 안전을 결정 — 유계 [0, maxA]), unknown = free. 배 pose 의
   함수라 **매 tick 재계산** (격자는 1Hz 캐시).
-- **② 생성** (`bspline_planner.generate` ✅): 제어점 6개(p0 배, p1 관성점,
-  p2~p5 arc 위 비용 argmin) → clamped cubic B-spline. 후보는 **waypoint 전진
-  반평면**(±90°)에만 — 뒤로 가는 우회는 ESCAPE 소관. 최선 후보조차
-  hard_max 초과면 None.
+- **② 생성** (`bspline_planner.generate` ✅): 제어점 6개 — p0 배, p1 관성점,
+  p2~p5 는 **‖p1‖↔r_end 균등 사다리 arc** 위 비용 argmin (arc 는 장애물과
+  무관 — r1 은 재생성 트리거 전용) → clamped cubic B-spline. 후보는
+  **waypoint 전진 반평면**(±90°)에만 — 뒤로 가는 우회는 ESCAPE 소관.
+  최선 후보조차 hard_max 초과면 None.
 - **③ 검사/수리** (`check`/`repair` ✅): 생성과 분리 — 추종 중 재생성 없이
   매 tick 최신 DRI 로 전방 샘플 검사. 위반 시 CP 방위 이동 수리(4CP×±Δθ
   8후보 전수, 전방 max DRI 엄격 감소만 수락).
@@ -97,7 +98,7 @@ repair(plan, dri, violation_idx, p) -> bool   # CP 방위 이동, 실패 시 Fal
 | `planner.k_bear` | 1.5 | ✅ | r1 방위 가중 — 0.5 는 지나친 측면 부표가 r1 독점 |
 | `planner.boundary_margin` | 1.0 m | 🔴 | r_end = 격자변 최소거리 − 이 값. 0.5 로 줄이면 r_end +0.5 (완충 절반) |
 | `planner.min_horizon` | 3.0 m | 📝 | waypoint 코앞이어도 r_end 하한 |
-| `planner.cp_min_gap` | 0.5 m | 📝 | r_end 퇴화 방지 여유 (사다리 분리안 채택 시 역할 축소) |
+| `planner.cp_min_gap` | 0.5 m | 📝 | r_end 퇴화 방지: r_end ≥ ‖p1‖+2·이 값 |
 | `planner.search_fov` | 180° | ✅ | 후보 부채꼴 = waypoint 전진 반평면 (뒤는 ESCAPE 소관) |
 | `planner.n_candidates` | 31 | 📝 | arc 당 후보 수 (= 6° 양자화 — w_prev 와 결합) |
 | `planner.w_dri / w_wp / w_prev` | 1.0 / 1.0 / 0.5 | ✅ | 후보 비용. w_wp 0.3 은 관통이 우회에 짐, w_prev 0.5 는 6° 양자화 S 잔물결 억제 |
@@ -113,15 +114,17 @@ repair(plan, dri, violation_idx, p) -> bool   # CP 방위 이동, 실패 시 Fal
 
 **미결 (착수 전 사용자와 확정):**
 
-1. **CP 사다리를 r1 에서 분리** — radii 를 항상 `‖p1‖ ↔ r_end` 균등 4분할로,
-   r1 은 재생성 트리거 전용. 근거: 장애물이 지평선 근처면 radii 가
-   [7.9,8.2,8.6,8.9] 로 뭉쳐 경로가 밭 입구에서 끝남(실측). 안전 우려("arc 가
-   장애물 링에 안 앉으면 통과 경로?")는 검토됨 — 거품의 방사 두께(간격
-   0.93m < 유효 반경) + check/repair 가 담보. **격자 확대 시 arc 4개 고정이
-   깨질 수 있음**(간격 > 거품 반경) — 채택 시 리스크로 명시.
-2. **a_head 0.3 vs 0.7** — 재검증 절차: 배가 밭을 정면으로 본 상태에서
+1. **a_head 0.3 vs 0.7** — 재검증 절차: 배가 밭을 정면으로 본 상태에서
    관통 유지 + 정면/측면 경사 확인 (오염 없이, 한 번에 한 변수).
-3. **boundary_margin 1.0 vs 0.5**.
+2. **boundary_margin 1.0 vs 0.5**.
+
+**리스크 (채택된 설계의 전제 조건):**
+- CP 사다리(균등 4분할)는 "사다리 간격 < DRI 거품 유효 반경"일 때만 모든
+  장애물이 어떤 arc 에든 느껴진다 — 지금 간격 ≈0.9m 로 성립. **격자를
+  키우면(r_end↑) 깨질 수 있음** → arc 개수(고정 4) 재검토.
+- generate(greedy)+repair(국소)는 위험 능선 너머 다른 basin 으로 못 넘어간다
+  (게이트+측방 장면 교착 실측, 8f449fb) — 에스컬레이션(수리 실패→재생성→
+  ESCAPE)은 노드(작업 3) 소관. sim 에서 잦으면 세그먼트 비용 검토.
 
 **다음 = 작업 3 `obstacle_planner.py`** — 착수 시 정할 것들 (답 미리 안 정함):
 - 상태기계: tick 당 generate 횟수 제한, "초입 위반 → ESCAPE" 판정 기준,
@@ -156,4 +159,9 @@ repair(plan, dri, violation_idx, p) -> bool   # CP 방위 이동, 실패 시 Fal
 - 250f155 생성기 sim 튜닝: sigma 0.6·w_wp 1.0·a_head 0.3·w_prev 0.5·
   k_bear 1.5·occ_threshold 50
 - 873db0c p1 을 v̂ → heading+surge 로 (v_eps 삭제)
-- (이번) 문서를 계약서 → 현황 스냅샷 형식으로 전면 재작성
+- 12f94d4 문서를 계약서 → 현황 스냅샷 형식으로 전면 재작성
+- f0201a5~5709971 occupancy_grid 발행 10Hz + 스캔 dedup (별도 작업 — occ_threshold
+  의미에 영향 가능, a_head 재검증 때 같이 볼 것)
+- (이 커밋) **CP 사다리를 r1 에서 분리** — radii 항상 ‖p1‖↔r_end 균등 4분할,
+  r1 은 재생성 트리거 (a) 전용. 지평선 장애물 때 arc 뭉침([7.9,8.2,8.6,8.9] →
+  경로가 밭 입구에서 끝남) 실측이 동기. r_first 클램프·horizon-out 특례 삭제
