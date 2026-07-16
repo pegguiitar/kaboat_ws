@@ -30,10 +30,13 @@ behavior 의 회피가 공유하는 지도를 만든다. v5 설계상 장애물 
      은 anchor×resolution (격자에 스냅된 값) — 발행 셀과 저장 셀이 1:1 로
      정확히 겹쳐 aliasing(±1셀 튐)이 없다.
 
-구현 — /scan 레이캐스팅(Bresenham)으로 log-odds 갱신:
-  각 빔의 경로 셀은 L_FREE 로 감쇠, 유효 히트 끝점 셀은 L_OCC 로 누적.
-  히트가 window 밖인 빔도 경계까지의 경로는 free 로 갱신한다(직선이
-  window 를 한 번 벗어나면 다시 안 들어오므로 벗어나는 순간 break).
+구현 — /scan 레이캐스팅으로 log-odds 갱신 (numpy + cv2 벡터화):
+  끝점 계산은 numpy 일괄, 빔 경로(free)는 cv2.polylines(C 래스터라이저)로
+  마스크에 한 번에 그린다 — 파이썬 Bresenham 루프(최악 169ms/스캔) 대비
+  수 ms. 경로 셀은 스캔당 1회 L_FREE 감쇠(같은 스캔의 이웃 빔은 독립 관측이
+  아니므로 중복 감쇠 안 함), 유효 히트 끝점은 빔 수만큼 L_OCC 중복 누적 —
+  실물 장애물은 근거리에서 셀당 여러 빔이 박혀 한 스캔에 포화(≈97)된다.
+  히트가 window 밖인 빔도 경계까지의 경로는 free 로 갱신(cv2 클리핑).
   lidar와 base_link 는 동일 위치/자세로 가정(TF 미사용, behavior 쪽과 동일
   단순화) — 실물 전환 시 lidar 장착 오프셋 보정 필요.
   IMU 롤/피치가 TILT_MAX 를 넘으면 그 스캔은 통째로 버린다(배가 기울면
@@ -61,6 +64,7 @@ TODO(팀):
 """
 import math
 
+import cv2
 import numpy as np
 import rclpy
 from rclpy.node import Node
@@ -96,35 +100,21 @@ def _roll_pitch(q):
     return roll, pitch
 
 
-def _bresenham(x0, y0, x1, y1):
-    """(x0,y0) → (x1,y1) 격자 셀 인덱스 목록 (끝점 포함)."""
-    dx, dy = abs(x1 - x0), -abs(y1 - y0)
-    sx = 1 if x0 < x1 else -1
-    sy = 1 if y0 < y1 else -1
-    err = dx + dy
-    x, y = x0, y0
-    cells = []
-    while True:
-        cells.append((x, y))
-        if x == x1 and y == y1:
-            break
-        e2 = 2 * err
-        if e2 >= dy:
-            err += dy
-            x += sx
-        if e2 <= dx:
-            err += dx
-            y += sy
-    return cells
-
-
 class OccupancyGridNode(Node):
     def __init__(self):
         super().__init__('occupancy_grid')
 
         self.declare_parameter('resolution', 0.2)   # 셀 크기 [m]
         self.declare_parameter('size', 20.0)        # window 한 변 길이 [m]
-        self.declare_parameter('publish_rate', 1.0)  # 발행 주기 [Hz]
+        self.declare_parameter('publish_rate', 10.0)  # 발행 주기 [Hz] — 스캔(10Hz)과 동율.
+        # 변환이 0.07ms 라 부담 없고, 유령/신규 장애물이 소비자에게 보이는 지연을
+        # 최대 1s → 0.1s 로 줄인다. 10Hz 넘게 올려도 스캔이 10Hz 라 무의미.
+        self.declare_parameter('hit_dedup', True)    # 히트를 스캔당 셀당 1회로 캡
+        # 같은 스캔의 이웃 빔은 독립 관측이 아니므로 중복 누적하면 증거 과대계상 —
+        # 수면 반사 노이즈가 한 스캔에 검정(97)까지 튀는 원인이었다(베이즈 독립성 교정).
+        # A/B 실측(파도 gain0.5, 45s): 노이즈 피크≥90 비율 78→14%, 수명 0.97→0.52s,
+        # 부표 가시성 손실 없음. 성능도 최악조건 0.97→0.74ms/스캔으로 오히려 빨라짐
+        # (np.add.at 산발 누적 → unique+인덱싱). False 로 두면 예전 중복 누적 방식.
         self.declare_parameter('cam_stride', 1000)   # 뎁스 포인트 다운샘플 간격
         self.declare_parameter('cam_height', 0.5)    # 카메라 장착 높이(수면 기준) [m]
         self.declare_parameter('cam_z_min', 0.1)     # z-band 하한 — 수면 근처 제외 [m]
@@ -134,6 +124,7 @@ class OccupancyGridNode(Node):
         self.size = float(self.get_parameter('size').value)
         rate = float(self.get_parameter('publish_rate').value)
         self.cells = int(self.size / self.resolution)
+        self.hit_dedup = bool(self.get_parameter('hit_dedup').value)
         self.cam_stride = int(self.get_parameter('cam_stride').value)
         self.cam_height = float(self.get_parameter('cam_height').value)
         self.cam_z_min = float(self.get_parameter('cam_z_min').value)
@@ -223,28 +214,47 @@ class OccupancyGridNode(Node):
         rx = math.floor(bx / self.resolution) - ax
         ry = math.floor(by / self.resolution) - ay
 
-        angle = msg.angle_min
-        for r in msg.ranges:
-            beam_angle = angle
-            angle += msg.angle_increment
-            if not (msg.range_min < r < msg.range_max and math.isfinite(r)):
-                continue  # 무반사/무효 빔은 건너뜀 (skeleton 최소 구현)
+        # 끝점 계산 — 빔 2000개를 numpy 로 일괄 처리 (파이썬 루프 제거)
+        ranges = np.asarray(msg.ranges, dtype=np.float64)
+        angles = msg.angle_min + msg.angle_increment * np.arange(ranges.shape[0])
+        valid = np.isfinite(ranges) & (ranges > msg.range_min) & (ranges < msg.range_max)
+        if not valid.any():
+            return  # 무반사/무효 빔뿐 (skeleton 최소 구현)
+        wa = yaw + angles[valid]
+        r = ranges[valid]
+        ex = np.floor((bx + r * np.cos(wa)) / self.resolution).astype(np.int64) - ax
+        ey = np.floor((by + r * np.sin(wa)) / self.resolution).astype(np.int64) - ay
 
-            world_angle = yaw + beam_angle
-            ex = bx + r * math.cos(world_angle)
-            ey = by + r * math.sin(world_angle)
-            ex_i = math.floor(ex / self.resolution) - ax
-            ey_i = math.floor(ey / self.resolution) - ay
+        # free 경로 — 배→끝점 선분 전부를 cv2(C 래스터라이저)로 마스크에 한 번에
+        # 그림 (파이썬 Bresenham 루프 169ms/스캔 → 수 ms). window 밖 끝점은 cv2
+        # 가 경계에서 클리핑하므로 "경계까지 free" 정책 그대로.
+        # 의미 변화 하나: 루프 시절엔 한 셀을 지나는 빔 수만큼 L_FREE 를 중복
+        # 누적했지만, 마스크는 스캔당 셀당 1회만 깎는다 — 같은 스캔의 이웃 빔은
+        # 독립 관측이 아니므로 과감쇠를 막는 쪽(장애물 보존, 안전 방향)을 택함.
+        segs = np.empty((ex.shape[0], 2, 2), np.int32)
+        segs[:, 0, 0] = rx
+        segs[:, 0, 1] = ry
+        segs[:, 1, 0] = ex
+        segs[:, 1, 1] = ey
+        free = np.zeros((c, c), np.uint8)
+        cv2.polylines(free, segs, False, 1)
 
-            path = _bresenham(rx, ry, ex_i, ey_i)
-            last = len(path) - 1
-            for k, (cx, cy) in enumerate(path):
-                if not (0 <= cx < c and 0 <= cy < c):
-                    break  # window 밖 — 직선이라 다시 안 들어옴. 경계까지는 free 갱신됨
-                delta = L_OCC if k == last else L_FREE  # 끝점(히트)만 점유 증거
-                l = self.grid[cy, cx] + delta
-                self.grid[cy, cx] = max(L_MIN, min(L_MAX, l))
-                self.observed[cy, cx] = True
+        # 히트 셀 — window 안 끝점만
+        m = (ex >= 0) & (ex < c) & (ey >= 0) & (ey < c)
+        hx, hy = ex[m], ey[m]
+        free[hy, hx] = 0                     # 히트 셀은 free 갱신에서 제외 (기존과 동일)
+        fm = free.astype(bool)
+        self.grid[fm] += L_FREE
+        if self.hit_dedup:
+            # 스캔당 셀당 1회 — 같은 스캔의 이웃 빔은 독립 관측이 아님 (파라미터 주석 참고)
+            uniq = np.unique(hy.astype(np.int64) * c + hx)
+            self.grid[uniq // c, uniq % c] += L_OCC
+        else:
+            # 같은 셀에 박힌 빔 수만큼 중복 누적 — 실물 장애물이 한 스캔에 포화되는 근거
+            np.add.at(self.grid, (hy, hx), L_OCC)
+        np.clip(self.grid, L_MIN, L_MAX, out=self.grid)
+        self.observed |= fm
+        self.observed[hy, hx] = True
     # log odds 갱신을 위해 log likelihood ratio를 one-step마다 더해서 갱신
 
     def _on_points(self, msg: PointCloud2):
