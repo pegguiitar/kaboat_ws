@@ -83,18 +83,33 @@ def test_spread_is_isotropic():
     assert max(vals) == pytest.approx(min(vals), rel=1e-5)
 
 
-def test_gain_grows_radius_without_distorting_shape():
-    """게인을 키우면 원이 **커질 뿐** 찌그러지지 않는다 (비등방 버전의 회귀 방지)."""
+def test_gain_shrinks_far_side_without_distorting_shape():
+    """σ 게인은 **감쇄 폭**(최대 정규화) — 코앞·정면 = sigma 그대로, 멀거나
+    옆일수록 원이 줄어든다 (2026-07-17: 위로 부풀리는 구식은 3m 격자 틈을
+    물리적으로 닫았다). 그러면서도 여전히 원(등방 회귀 방지)."""
     grid, anchor = make_grid([(3.0, 0.0)])
     ix, iy = _cell_of(anchor, 3.0, 0.0)
-    small = build_dri(grid, (0.0, 0.0), 0.0, DriParams(k_dist=0.0, k_head=0.0))
-    big = build_dri(grid, (0.0, 0.0), 0.0, DriParams(k_dist=1.0, k_head=1.0))
+    flat = build_dri(grid, (0.0, 0.0), 0.0, DriParams(k_dist=0.0, k_head=0.0))
+    gained = build_dri(grid, (0.0, 0.0), 0.0, DriParams(k_dist=1.0, k_head=1.0))
 
-    # 더 큰 σ → 같은 셀 거리에서 덜 감쇠 (원이 커짐)
-    assert _ring(big, ix, iy, 7)[0] > _ring(small, ix, iy, 7)[0]
+    # 3m 정면(g<1)이라 게인이 붙으면 σ 가 상한보다 줄어든다 → 같은 거리에서 더 감쇠
+    assert _ring(gained, ix, iy, 7)[0] < _ring(flat, ix, iy, 7)[0]
     # 그러면서도 여전히 원
-    vals = _ring(big, ix, iy, 7)
+    vals = _ring(gained, ix, iy, 7)
     assert max(vals) == pytest.approx(min(vals), rel=1e-5)
+
+
+def test_gain_keeps_near_frontal_wider_than_far_side():
+    """감쇄는 상대적 — 게인이 켜져 있으면 가깝고 정면인 원이 멀고 옆인 원보다
+    넓다 (R1 의 '더 크게'는 이제 이 상대 경사 + 진폭 경사(유효 반경)로 달성)."""
+    p = DriParams(k_dist=1.0, k_head=1.0, a_dist=0.0, a_head=0.0)  # 진폭 고정
+    near, a1 = make_grid([(2.0, 0.0)])
+    far, a2 = make_grid([(0.0, 8.0)])          # 측면(+y, heading 은 +x) 8m
+    d_near = build_dri(near, (0.0, 0.0), 0.0, p)
+    d_far = build_dri(far, (0.0, 0.0), 0.0, p)
+    ring_near = _ring(d_near, *_cell_of(a1, 2.0, 0.0), 5)[0]
+    ring_far = _ring(d_far, *_cell_of(a2, 0.0, 8.0), 5)[0]
+    assert ring_near > ring_far
 
 
 def test_closer_obstacle_is_stronger():
