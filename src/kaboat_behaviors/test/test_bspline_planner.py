@@ -211,14 +211,24 @@ def test_spline_endpoints_and_start_tangent():
     assert cos > 0.995
 
 
-# ---------- (xi) hard_max — 포위 장면에서 None ----------
+# ---------- (xi) 하드 필터 — 포위 장면에서 None ----------
 
 def test_generate_returns_none_when_surrounded():
-    """전진 반평면이 3m 장애물 벽 — argmin 후보조차 hard_max 초과 → None (R9)."""
+    """전진 반평면이 3m 장애물 벽 — 첫 arc 의 안전 후보 전멸 → None (R9)."""
     wall = [(3.0 * math.cos(a), 3.0 * math.sin(a))
             for a in np.linspace(-math.pi / 2, math.pi / 2, 25)]
-    plan = gen(dri_of(wall), hard_max=1.0)
-    assert plan is None
+    assert gen(dri_of(wall)) is None
+
+
+def test_hard_filter_picks_gap_not_detour():
+    """하드 필터의 존재 이유 — 틈(threshold 이하 꼬리 위험)이 밭 밖 우회를
+    이긴다. 소프트 DRI 벌점 시절엔 꼬리 위험이 벌점으로 작동해 CP 가 DRI=0
+    지대로 도망갔다 (sim 실측: p4 가 좌우로 튕김)."""
+    field = [(x, y) for x in (4.0, 7.0) for y in (-3.0, 0.0, 3.0)]
+    plan = gen(dri_of(field), wp=(15.0, 1.5))    # 통로 y=1.5 정면
+    assert plan is not None
+    mid = plan.samples[(plan.samples[:, 0] > 3.0) & (plan.samples[:, 0] < 8.0)]
+    assert np.all(np.abs(mid[:, 1] - 1.5) < 1.5)  # 통로 안 — 밖(|y|>3)으로 안 나감
 
 
 # ---------- (xii) repair 실패 조건 ----------

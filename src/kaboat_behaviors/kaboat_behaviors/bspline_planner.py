@@ -10,8 +10,10 @@
   생성(generate)과 검사(check)는 분리(R3) — 생성은 가끔, 검사는 매 tick
   최신 DRI 로. 후보 탐색은 waypoint 방위 ±search_fov/2 부채꼴인데, 기본
   180° 는 임의값이 아니라 "waypoint 쪽 전진 성분 ≥ 0 인 반평면"이다(§7-5).
-  거기서 최선의 점조차 hard_max 를 넘으면 None — 전진 반평면에 답이 없다는
-  뜻이고, 그 상황의 답은 스플라인이 아니라 ESCAPE(후진, R9)다.
+  안전은 **하드 필터**: DRI > safe_threshold 후보는 제거하고, 생존자 중
+  방위 비용만으로 고른다 — 거품(σ) 이 이미 berth 를 인코딩하므로 비용에
+  DRI 를 또 넣는 건 이중 계산이다. 어떤 arc 든 생존자가 없으면 None —
+  전진 반평면에 답이 없다는 뜻이고, 그 답은 ESCAPE(후진, R9)다.
 
   t_look=1.0s 는 실측 전속 1.48 m/s 기준 재산출값(§7-5) — 5.0s 초안은
   p1 이 7.4m 로 튀어 스플라인이 나갔다 되돌아오는 첨점을 만들었다.
@@ -38,18 +40,24 @@ class PlannerParams:
     cp_min_gap: float = 0.5        # r_end 퇴화 방지: r_end ≥ ‖p1‖ + 2·이 값 [m]
     search_fov: float = math.radians(180.0)  # 후보 부채꼴 = wp 전진 반평면
     n_candidates: int = 31
-    # 후보 비용 가중 (sim 확정 §7-6): w_wp 0.3 은 "틈 관통 DRI ~0.5" 가
-    # "우회 방위비용 ~0.24" 에 져서 밭을 통째로 돌았다 — 1.0 으로 관통 우세.
-    # w_prev 0.5 는 후보 6° 양자화가 만드는 arc 간 S 잔물결 억제.
-    w_dri: float = 1.0
+    # 후보 비용 가중. DRI 항은 없다 — 안전은 비용이 아니라 **하드 필터**
+    # (아래 safe_threshold)다. 소프트 DRI 벌점 시절엔 threshold 이하의 안전한
+    # 꼬리 위험(0.4~0.6)도 벌점으로 작동해, CP 가 틈 대신 밭 밖 DRI=0 지대로
+    # 도망갔다(sim 실측 — 안전을 거품 크기와 비용에서 이중 계산한 탓).
+    # w_prev 는 후보 6° 양자화가 만드는 arc 간 S 잔물결 억제.
     w_wp: float = 1.0
     w_prev: float = 0.5
-    # check 위반 기준. berth(장애물과의 이격) 와의 관계: 위험 거품 반경 =
-    # σ·√(2·ln(A/threshold)) — 기본 DRI 게인에서 1.0 이면 정면 4m 장애물에
-    # ≈2.1m, 측면에 ≈1.15m (0.5 는 정면 거품이 2.7m 라 관성점 p1 이 이미
-    # 위반이 되는, 게인과 안 맞는 값이었다). 작업 5 튜닝 대상.
+    # 유일한 안전 기준선 — 생성(후보 하드 필터)과 검사(check 위반)가 같은
+    # 선을 쓴다. 후보는 선분 max DRI > 이 값이면 제거, 생존자 중 방위 비용
+    # argmin, 어떤 arc 든 생존자 0 이면 generate → None (구 hard_max 역할
+    # 흡수 — 생성이 "괜찮다"고 낸 경로를 같은 tick check 가 위반 판정하던
+    # 자기모순 제거). berth 관계: 거품 반경 = σ·√(2·ln(A/threshold)).
     safe_threshold: float = 1.0
-    hard_max: float = 3.0          # generate 포기 기준 → None (ESCAPE)
+    # 생성 필터는 threshold×이 값 에서 자른다 — 필터는 현(chord)으로 판정
+    # 하는데 스플라인은 굽이에서 현보다 수 cm 안쪽으로 붙어, 1.0 그대로면
+    # 경계 스침(실측 1.013)이 남는다. 0.85 = 위험 경사(≈2.7/m) 기준 ~5cm
+    # 편차 흡수. check 는 margin 없이 threshold 그대로 본다.
+    gen_margin: float = 0.85
     repair_max: int = 3            # tick 당 수리 한도 (노드가 쓰는 값)
     repair_dtheta: float = math.radians(6.0)  # 수리 1회 방위 이동각
     progress_window: float = 2.0   # check 진행 갱신 전방 탐색 창 [m]
@@ -102,17 +110,35 @@ def _pick_ref_obstacle(occ_xy, boat, yaw, p: PlannerParams):
     return float(rho[ok][np.argmin(eff)])
 
 
-def _arc_argmin(dri, origin, radius, wp_bearing, prev_bearing, p: PlannerParams):
-    """arc 위 비용 최소 후보의 (방위, 그 점의 DRI). 창 밖 후보는 inf 로 자연 탈락."""
+def _arc_pick(dri, origin, radius, wp_bearing, prev_pt, prev_bearing,
+              p: PlannerParams):
+    """arc 위 후보 선택 — 안전은 하드 필터, 선호는 방위 비용.
+
+    ① **직전 CP → 후보를 잇는 선분**(샘플 8점) 위 max DRI > safe_threshold 인
+       후보 제거 (창 밖 inf 도 자연 탈락). 후보 점 하나만 보면 점은 거품
+       밖인데 거기까지 가는 스플라인이 거품을 가로지르는 구멍이 남는다 —
+       가장 단순한 장면(정면 4m 장애물 1개)에서 위험 1.55 스침으로 실측.
+       선분은 스플라인 현(chord)의 근사지만 점 하나보다 훨씬 정직하다.
+    ② 생존자 중 w_wp·|wp방위차| + w_prev·|직전CP방위차| argmin
+    생존자 없으면 None — 호출측(generate)이 전체를 None 으로 (→ ESCAPE).
+    """
     half = 0.5 * p.search_fov
     bearings = wp_bearing + np.linspace(-half, half, p.n_candidates)
-    risks = dri.risk_at_many(origin[0] + radius * np.cos(bearings),
-                             origin[1] + radius * np.sin(bearings))
-    cost = (p.w_dri * risks
-            + p.w_wp * np.abs(bearings - wp_bearing)   # 부채꼴 폭 ≤ π 라 wrap 불필요
+    cands = np.stack([origin[0] + radius * np.cos(bearings),
+                      origin[1] + radius * np.sin(bearings)], axis=1)
+    # t=0(직전 CP 자신)은 제외 — 이미 직전 단계에서 판정된 점이다
+    ts = np.linspace(0.125, 1.0, 8)[:, None, None]
+    seg = prev_pt[None, None, :] + ts * (cands[None, :, :] - prev_pt[None, None, :])
+    risks = dri.risk_at_many(seg[..., 0].ravel(),
+                             seg[..., 1].ravel()).reshape(8, -1)
+    safe = risks.max(axis=0) <= p.safe_threshold * p.gen_margin
+    if not np.any(safe):
+        return None
+    cost = (p.w_wp * np.abs(bearings - wp_bearing)   # 부채꼴 폭 ≤ π 라 wrap 불필요
             + p.w_prev * np.abs([_wrap(b - prev_bearing) for b in bearings]))
+    cost[~safe] = np.inf
     i = int(np.argmin(cost))
-    return float(bearings[i]), float(risks[i])
+    return float(bearings[i]), cands[i]
 
 
 def generate(dri, boat_xy, boat_yaw: float, boat_vel_xy, waypoint_xy,
@@ -160,11 +186,13 @@ def generate(dri, boat_xy, boat_yaw: float, boat_vel_xy, waypoint_xy,
         bearings = [wp_bearing] * 4   # R7 — 전방 부채꼴에 장애물 없음, 직선
     else:
         bearings = []
+        prev_pt = p1                  # 선분 필터의 시작점 사슬: p1 → p2 → …
         prev_b = boat_yaw             # 첫 arc 의 연속성 기준 = p1 방향 = heading
         for r in radii:
-            b, risk = _arc_argmin(dri, boat, r, wp_bearing, prev_b, p)
-            if risk > p.hard_max:
-                return None            # 전진 반평면 포기 → 호출측이 ESCAPE (R9)
+            picked = _arc_pick(dri, boat, r, wp_bearing, prev_pt, prev_b, p)
+            if picked is None:
+                return None            # 안전 후보 전멸 → 호출측이 ESCAPE (R9)
+            b, prev_pt = picked
             bearings.append(b)
             prev_b = b
 

@@ -33,7 +33,10 @@
   p2~p5 는 **‖p1‖↔r_end 균등 사다리 arc** 위 비용 argmin (arc 는 장애물과
   무관 — r1 은 재생성 트리거 전용) → clamped cubic B-spline. 후보는
   **waypoint 전진 반평면**(±90°)에만 — 뒤로 가는 우회는 ESCAPE 소관.
-  최선 후보조차 hard_max 초과면 None.
+  안전은 **하드 필터**(직전 CP→후보 선분 max DRI > threshold 면 제거),
+  선호는 방위 비용만 — 거품(σ)이 이미 berth 를 인코딩하므로 비용에 DRI 를
+  또 넣으면 이중 계산(CP 가 틈 대신 DRI=0 지대로 도망감, sim 실측).
+  어떤 arc 든 생존자 0 이면 None.
 - **③ 검사/수리** (`check`/`repair` ✅): 생성과 분리 — 추종 중 재생성 없이
   매 tick 최신 DRI 로 전방 샘플 검사. 위반 시 CP 방위 이동 수리(4CP×±Δθ
   8후보 전수, 전방 max DRI 엄격 감소만 수락).
@@ -101,9 +104,9 @@ repair(plan, dri, violation_idx, p) -> bool   # CP 방위 이동, 실패 시 Fal
 | `planner.cp_min_gap` | 0.5 m | 📝 | r_end 퇴화 방지: r_end ≥ ‖p1‖+2·이 값 |
 | `planner.search_fov` | 180° | ✅ | 후보 부채꼴 = waypoint 전진 반평면 (뒤는 ESCAPE 소관) |
 | `planner.n_candidates` | 31 | 📝 | arc 당 후보 수 (= 6° 양자화 — w_prev 와 결합) |
-| `planner.w_dri / w_wp / w_prev` | 1.0 / 1.0 / 0.5 | ✅ | 후보 비용. w_wp 0.3 은 관통이 우회에 짐, w_prev 0.5 는 6° 양자화 S 잔물결 억제 |
-| `planner.safe_threshold` | 1.0 | 📝 | check 위반 기준. berth 결합: 거품 반경 = σ√(2ln(A/thr)) |
-| `planner.hard_max` | 3.0 | 📝 | generate 포기(None→ESCAPE) 기준 |
+| `planner.w_wp / w_prev` | 1.0 / 0.5 | ✅ | 후보 비용 = 방위 항 둘뿐 (DRI 항 없음 — 하드 필터로 이관). w_prev 는 6° 양자화 S 잔물결 억제. sim 하네스는 w_prev 0.8 시험 중 |
+| `planner.safe_threshold` | 1.0 | ✅ | **유일한 안전 기준선** — 생성(선분 하드 필터)·검사(check 위반) 공용. 거품 반경 = σ√(2ln(A/thr)). 구 w_dri(소프트 벌점)·hard_max(포기선) 삭제 |
+| `planner.gen_margin` | 0.85 | 📝 | 생성 필터는 thr×이 값 에서 자름 — 현(chord) 판정 vs 실제 스플라인의 수 cm 편차 흡수 (1.0 이면 경계 스침 1.013 실측) |
 | `planner.repair_max / repair_dtheta` | 3 / 6° | 📝 | tick 당 수리 한도 / 1회 이동각 |
 | `planner.progress_window` | 2.0 m | 📝 | check 진행 갱신 전방 창 |
 | `follow.lookahead / k_curv` | 1.5 m / — | ⬜ | 작업 3. 곡률 실측: 정상 회피 κ≈0.9~1.2, 전속 가용 0.37 → 감속 필수 |
@@ -162,6 +165,13 @@ repair(plan, dri, violation_idx, p) -> bool   # CP 방위 이동, 실패 시 Fal
 - 12f94d4 문서를 계약서 → 현황 스냅샷 형식으로 전면 재작성
 - f0201a5~5709971 occupancy_grid 발행 10Hz + 스캔 dedup (별도 작업 — occ_threshold
   의미에 영향 가능, a_head 재검증 때 같이 볼 것)
-- (이 커밋) **CP 사다리를 r1 에서 분리** — radii 항상 ‖p1‖↔r_end 균등 4분할,
+- dc19923 **CP 사다리를 r1 에서 분리** — radii 항상 ‖p1‖↔r_end 균등 4분할,
   r1 은 재생성 트리거 (a) 전용. 지평선 장애물 때 arc 뭉침([7.9,8.2,8.6,8.9] →
   경로가 밭 입구에서 끝남) 실측이 동기. r_first 클램프·horizon-out 특례 삭제
+- (이 커밋) **후보 선택을 소프트 DRI 비용 → 하드 필터로** (사용자 설계) —
+  직전 CP→후보 **선분** max DRI > threshold 면 제거, 생존자 중 방위 비용만
+  argmin. 동기: threshold 이하 꼬리 위험도 벌점으로 작동해 CP 가 틈 대신
+  DRI=0 지대로 도망감(p4 튕김 실측) = 거품 크기와 비용의 안전 이중 계산.
+  w_dri·hard_max 삭제, threshold 가 생성·검사 공용 유일 안전선. gen_margin
+  0.85 신설(chord↔스플라인 편차 흡수). 점 필터만으론 CP 사이 스플라인이
+  거품을 가로지름(1.55 실측) → 선분 필터로 확장
