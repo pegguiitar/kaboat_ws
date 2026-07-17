@@ -243,51 +243,75 @@ ros2 topic hz /imu/data                  # 센서 발행 주파수 확인
 ## 8. 수정 이력 (변경 로그)
 
 > 스택 알고리즘·설정을 의미 있게 바꾸면 **최신 항목을 맨 위에** 추가:
-> `### YYYY-MM-DD HH:MM — 요약` + 무엇을/왜 몇 문장. 파일 세부는 커밋 메시지로.
+> `### YYYY-MM-DD HH:MM — [영역] 요약` + 무엇을/왜 몇 문장. 파일 세부는 커밋
+> 메시지로. 영역 태그: `[occupancy_grid]` / `[obstacle]` + 세부 `[planner]`
+> `[DRI]` `[state machine]` 등을 나란히 붙임.
 
-### 2026-07-17 — DRI σ 게인을 확대 → 최대 정규화 감쇄로 (+ a_head 0.7)
+### 2026-07-17 — [obstacle] [state machine] 작업 3 설계·구현계획 확정 (코드 미착수)
+obstacle_planner 노드의 미결 알고리즘과 구현 구조를 사용자와 전부 확정.
+**알고리즘**: 상태기계 = FOLLOW/ESCAPE 2상태(재생성 트리거: r1 통과·r1 급락=
+기준 장애물 교체·주기 백스톱 / 긴급도 = 위반까지 거리+시간상한 / ESCAPE 탈출 =
+최소 이탈+연속 성공). follow_path = 기존 `seek_goal()` PD 조향 + 곡률 feedforward
+감속 `v = ω_max/κ`(실측 전속 가용 κ 0.37 = 0.52/1.48 이 근거). ESCAPE 조향 =
+후방 선분 DRI argmin 후진(포위 시만 전방위). waypoint 도착 판정은 안 만들고
+lookahead 캡만. **구현 구조**: 조종 정책을 순수 라이브러리 `avoid_fsm.py` 로
+신설하고 `obstacle_planner.py` 노드는 배선만(rclpy 무의존, YAW 게인은 노드 주입).
+분리 근거 = 새 코드 중 테스트가 잡을 수 있는 유일한 버그 부류(전이·타이머)를
+Node 메서드로 쓰면 rclpy.init 없이 생성이 안 돼 가짜 시계·합성 장면 루프(작업
+1·2 의 설계 오류를 전부 잡은 검증 방식)에서 빠지기 때문. 개발 4단계: ①
+follow_path+직선 stub → ② FOLLOW 사다리 → ③ ESCAPE → ④ 노드 통합·부표 밭
+관통. 상세·기각안은 AVOIDANCE_PLAN §1·§4.
+
+### 2026-07-17 — [obstacle] [DRI] σ 게인을 확대 → 최대 정규화 감쇄로 (+ a_head 0.7)
 "지금 퍼트림(σ 0.6)을 상한으로, 멀고 옆인 것만 덜 퍼뜨리자"는 사용자 지시.
 구식(근접·정면을 위로 확대)은 σ 를 0.88m 로 불려 3m 격자 틈을 DRI 층에서
 물리적으로 닫았다(pinch 1.12 실측). σ 게인은 진폭 게인과 중복 — 유효 반경 =
 σ√(2ln(A/thr)) 라 진하기 경사만으로 반경 경사가 생긴다. 밭 한복판 실측으로
 4 arc 전원 통로 관통 확인. 테스트 41개.
 
-### 2026-07-17 — 플래너 후보 선택을 소프트 DRI 비용 → 선분 하드 필터로
+### 2026-07-17 — [obstacle] [planner] 후보 선택을 소프트 DRI 비용 → 선분 하드 필터로
 사용자 설계 채택: 직전 CP→후보 선분 max DRI > safe_threshold 면 후보 제거,
 생존자 중 방위 비용(w_wp·w_prev)만 argmin. threshold 이하 꼬리 위험이 벌점으로
 작동해 CP 가 틈 대신 DRI=0 지대로 도망가던 문제(거품 크기·비용의 안전 이중
 계산) 해소. w_dri·hard_max 삭제 — threshold 가 생성·검사 공용 유일 안전선.
 gen_margin 0.85 신설 (chord 판정 vs 스플라인의 수 cm 편차 흡수). 테스트 40개.
 
-### 2026-07-16 22:57 — 플래너 CP 사다리를 r1 에서 분리 (dc19923)
+### 2026-07-16 22:57 — [obstacle] [planner] CP 사다리를 r1 에서 분리 (a22d0dc)
 radii 를 항상 ‖p1‖↔r_end 균등 4분할로 — r1(기준 장애물 실거리)은 재생성
 트리거 전용으로 강등. 장애물이 지평선 근처면 구 규칙(첫 arc=r1)이 arc 를
 [7.9,8.2,8.6,8.9] 로 뭉치게 해 경로가 장애물 밭 입구에서 끝나는 퇴화(sim
 실측)가 동기. berth 는 arc 위치가 아니라 arc 후보의 DRI 비용이 정한다.
 
-### 2026-07-16 21:31 — occupancy_grid 히트 dedup 기본 ON (`hit_dedup`)
-같은 스캔의 이웃 빔은 독립 관측이 아니므로 히트를 스캔당 셀당 1회로 캡(베이즈
-독립성 교정). A/B 실측(파도 gain 0.5, 45s): 수면반사 노이즈 피크≥90 비율 78→14%,
-수명 0.97→0.52s, 부표 가시성 손실 없음. 스캔 처리도 0.97→0.74ms 로 오히려
-빨라짐(`np.add.at` 산발 누적 → `np.unique`+인덱싱). threshold 는 50 유지
-(75 재검토는 이동 조건 재실측 후 — 정적에선 부표 duty75 90%+).
+### 2026-07-16 — [occupancy_grid] 발행 10Hz + 스캔 벡터화 + 히트 dedup 기본 ON
+`publish_rate` 1→10Hz(신규/유령 장애물의 소비자 노출 지연 최대 1s→0.1s),
+`_on_scan` 파이썬 Bresenham 루프를 numpy+`cv2.polylines` 로 교체(최악
+169→0.74ms/스캔). 같은 스캔의 이웃 빔은 독립 관측이 아니므로 히트를 스캔당
+셀당 1회로 캡(`hit_dedup`, 베이즈 독립성 교정) — 수면반사 노이즈 피크≥90 비율
+78→14%, 부표 가시성 손실 없음. `occ_threshold` 는 50 유지(75 재검토는 이동
+조건 재실측 후 — 정적에선 부표 duty75 90%+).
 
-### 2026-07-16 18:12 — occupancy_grid 발행 10Hz + 스캔 콜백 cv2 벡터화
-`publish_rate` 기본 1→10Hz(유령/신규 장애물의 소비자 노출 지연 최대 1s→0.1s),
-`_on_scan` 파이썬 Bresenham 루프를 numpy+`cv2.polylines` 로 교체(최악 169→0.84ms/스캔,
-free 는 스캔당 셀당 1회 감쇠로 단순화·히트 중복 누적은 유지). `occ_threshold` 는
-§7-6 실측(75만 돼도 원거리 부표 투명화)에 따라 50 유지.
+### 2026-07-16 — [obstacle] [planner] B-spline 로컬 플래너 구현 (`bspline_planner.py`)
+AVOIDANCE_PLAN 작업 2 완료 — generate/check/repair 순수 라이브러리 + 단독
+테스트(컨테이너 scipy 1.8 검증). `p1 = p0 + max(surge·t_look, 1m)·ĥ`(배의 운동
+구속은 yaw 실측 ~31°/s — 표류/저속 노이즈가 접선에서 빠짐), t_look 1.0s(5.0 은
+첨점 재현), repair 는 4CP×±Δθ 8후보 전수(최근접-CP 교착 실측). 기본값은 회피
+경기장(3m 격자 부표 밭) RViz 라이브 튜닝으로 실측 확정 — sigma 0.6·w_wp 1.0·
+w_prev 0.5·k_bear 1.5·occ_threshold 50. generate 0.27ms / repair 0.70ms.
+(같은 커밋에 AVOIDANCE_PLAN 을 현황 스냅샷 형식으로 전면 재작성 포함)
 
-### 2026-07-16 02:30 — DRI 격자 구현 (`dri.py`)
-AVOIDANCE_PLAN 작업 1 완료. sim 검증 중 초안 설계 4건(등방 전환, max 결합,
-노이즈 필터, 갱신 주기)을 수정 — 근거는 계획서 §7.
+### 2026-07-16 02:30 — [obstacle] [DRI] 위험도 격자 구현 (`dri.py`)
+AVOIDANCE_PLAN 작업 1 완료 — `/occupancy_grid` 점유 셀마다 가우시안을
+splat(가깝고 정면일수록 크고 진하게)하고 셀 결합은 max 로 하는 ROS 무의존
+순수 numpy 위험도 격자. sim 검증 중 초안 설계 4건 수정: 비등방 V자 → 등방
+가우시안, 합산 → max 결합, 노이즈 필터(`occ_threshold` 미만 셀 제외), 격자
+1Hz 가 아니라 배 pose 따라 매 tick(10Hz) 재계산. 장애물 밭 552셀 9.4ms.
 
-### 2026-07-15 21:52 — 장애물 회피 로컬 플래너 작업계획 확정 (AVOIDANCE_PLAN.MD)
+### 2026-07-15 21:52 — [obstacle] 회피 로컬 플래너 작업계획 확정 (AVOIDANCE_PLAN.MD)
 `obstacle_planner` 를 단순 반발 조향 → DRI + B-spline 로컬 플래너로 교체하는
 설계를 [AVOIDANCE_PLAN.MD](AVOIDANCE_PLAN.MD) 에 정리. 아직 구현 전(계획 문서만).
 DRI 비등방 가우시안 수식, 제어점 6개 규칙, 생성/검사/수리 분리, 재생성 트리거
 3종, ESCAPE(안전 경로 불가 시 후진), 모듈 인터페이스·작업 5분할 포함.
 
-### 2026-07-15 16:55 — occupancy_grid 를 rolling grid 로 리팩터
+### 2026-07-15 16:55 — [occupancy_grid] dict+prune → rolling grid 리팩터
 저장을 월드좌표 `dict`+`prune` → global 셀은 그대로 두고 배 중심 20×20m 창으로
 잘라 담는 고정 numpy 배열(정수 `np.roll`)로 교체해 `prune` 제거. 값·정확도는 동일, publish 는 벡터화로 경량화.
