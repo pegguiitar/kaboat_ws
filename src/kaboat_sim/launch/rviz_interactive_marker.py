@@ -99,11 +99,15 @@ class RVizInteractiveMarkerNode(Node):
             dx = feedback.pose.position.x
             dy = feedback.pose.position.y
             
-            # Map displacement (e.g. up to 2.0 meters) to Twist velocities
-            # linear.x: dx * scale (positive is forward)
-            # angular.z: dy * scale (positive Y in ROS is left, which maps to positive yaw)
-            self.linear_vel = float(max(-1.5, min(1.5, dx * 0.75)))
-            self.angular_vel = float(max(-1.0, min(1.0, dy * 0.5)))
+            # Map displacement (e.g. up to 2.0 meters) to Twist commands.
+            # 명령 = 최대추력 비율 (twist2thrust 정규화, 2026-07-17) — 계수는
+            # 구 scale=60 시절과 추력 N 동등: 45 N/m (클램프 ±90N), 30 N/m (±60N).
+            # ⚠️ 이 클램프(±90N)는 검증된 안전값(12N)보다 훨씬 큼 — 정규화
+            # 이전부터 그랬던 기존 위험(마커를 끝까지 끌면 전복 가능성). 동작
+            # 불변 원칙으로 유지하나, 손볼 거면 별도 커밋으로.
+            MAX_THRUST = 118.6
+            self.linear_vel = float(max(-90.0, min(90.0, dx * 45.0))) / MAX_THRUST
+            self.angular_vel = float(max(-60.0, min(60.0, dy * 30.0))) / MAX_THRUST
             
         elif feedback.event_type == InteractiveMarkerFeedback.MOUSE_UP:
             # Spring-loaded behavior: reset marker pose back to the origin

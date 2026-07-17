@@ -34,10 +34,13 @@ class KeyboardTeleop(Node):
     def __init__(self):
         super().__init__('keyboard_teleop')
 
+        # 명령 = 최대추력 비율 (twist2thrust 정규화, 2026-07-17).
+        # 기본값은 구 scale=60 시절 검증 동작과 추력 N 동일: 12N / 후진 6N / 차동 ±3N.
+        MAX_THRUST = 118.6
         self.declare_parameter('cmd_topic', '/cmd_vel')
-        self.declare_parameter('max_linear', 0.20)
-        self.declare_parameter('max_reverse', 0.10)
-        self.declare_parameter('max_angular', 0.05)
+        self.declare_parameter('max_linear', 12.0 / MAX_THRUST)
+        self.declare_parameter('max_reverse', 6.0 / MAX_THRUST)
+        self.declare_parameter('max_angular', 3.0 / MAX_THRUST)
         self.declare_parameter('rate_hz', 20.0)
         self.declare_parameter('timeout_sec', 0.35)
 

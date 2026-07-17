@@ -10,7 +10,7 @@ TODO(팀): VFH valley 탐색 + DRI 기반 제대로 된 로컬 플래너로 교�
 """
 import rclpy
 
-from .behavior_base import BehaviorBase
+from .behavior_base import BehaviorBase, MAX_THRUST
 from . import obstacle_avoidance_utils as oa
 
 
@@ -20,9 +20,9 @@ class ObstaclePlanner(BehaviorBase):
 
     def compute_cmd(self):
         cmd = self.seek_goal()
-        # 장애물 밭 전용 — 회피 게인/범위 강화해서 적용
+        # 장애물 밭 전용 — 회피 게인/범위 강화해서 적용 (54N = 구 게인 0.9 동등)
         saved_gain, saved_range = oa.GAIN, oa.AVOID_RANGE
-        oa.GAIN, oa.AVOID_RANGE = 0.9, 8.0
+        oa.GAIN, oa.AVOID_RANGE = 54.0 / MAX_THRUST, 8.0
         try:
             cmd = oa.apply_repulsion(cmd, self.occupancy_grid, self.odom)
         finally:

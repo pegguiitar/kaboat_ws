@@ -17,9 +17,11 @@ import math
 
 from geometry_msgs.msg import Twist
 
+from .behavior_base import MAX_THRUST
+
 AVOID_RANGE = 6.0        # 이 거리 안의 점유 셀만 고려 [m]
 AVOID_FOV = math.pi / 2  # 전방 ±45° 부채꼴만 고려
-GAIN = 0.5               # 반발 조향 게인
+GAIN = 30.0 / MAX_THRUST  # 반발 조향 게인 — steer 1 당 차동 30N (구 0.5 동등)
 OCC_THRESHOLD = 50       # 점유 확률[0~100] 이 값 이상인 셀만 장애물로 취급
 
 

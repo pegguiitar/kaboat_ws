@@ -16,7 +16,7 @@ import rclpy
 
 from kaboat_msgs.msg import MarkArray
 
-from .behavior_base import BehaviorBase
+from .behavior_base import BehaviorBase, MAX_THRUST
 from .obstacle_avoidance_utils import apply_repulsion
 
 
@@ -45,7 +45,8 @@ class DockingCtrl(BehaviorBase):
         if targets:
             best = max(targets, key=lambda m: m.confidence)
             cmd = self.seek_goal()
-            cmd.angular.z = 1.2 * best.bearing
+            # 표식 정렬 조향 — 오차 1rad 당 차동 72N (구 게인 1.2 동등)
+            cmd.angular.z = (72.0 / MAX_THRUST) * best.bearing
             cmd.linear.x = self.max_linear * 0.5   # 접안은 저속
         else:
             cmd = self.seek_goal()

@@ -8,7 +8,7 @@
      장애물 표현은 v5 대로 /occupancy_grid 단독 — 회피는 이 격자를 소비한다.
      도킹 전용 /detections/dock_marks 는 docking_ctrl 만 따로 구독한다)
   - active 인 동안 10Hz 로 compute_cmd() 를 호출해 /cmd/<이름> 에 Twist 발행
-  - 속도 상한 (twist2thrust 의 scale=60 기준, 추력이 안전 범위를 넘지 않게)
+  - 명령 상한 (명령 = 최대추력 비율 — 추력이 안전 범위(12N/±3N)를 넘지 않게)
 
 비활성일 때는 아무것도 발행하지 않는다 — cmd_mux 는 활성 behavior 의
 명령만 통과시키고, 300ms 워치독으로 끊김을 감지해 정지시킨다.
@@ -24,13 +24,17 @@ from nav_msgs.msg import Odometry, OccupancyGrid
 
 from kaboat_msgs.msg import MarkArray
 
-# twist2thrust scale=60 기준 속도 한계 (linear 0.2 → 12N, 직진 테스트 검증값).
+# 명령 의미(2026-07-17 정규화): linear.x/angular.z = 최대 추력 대비 비율 [-1,1].
+# 드라이버(twist2thrust, 실물은 ESC)가 자기 max_thrust 를 곱해 N 으로 변환한다.
+# 그래서 게인·상한은 물리량(N, N/rad)으로 적고 MAX_THRUST 로 나눠 명령화한다 —
+# 값들은 구 scale=60 시절 검증 동작(12N/±3N, §6)과 추력 N 단위로 동일.
 # ⚠️ 회전은 특히 보수적으로 — 축소 선체(1.1m)는 관성이 s⁵ 로 줄어 원본보다
 # 약 20배 민첩해서, 회전 명령이 크면 요 발진 → 선수 처박힘 → 전복한다 (실측 2회).
-DEFAULT_MAX_LINEAR = 0.20    # linear.x 상한
-DEFAULT_MAX_ANGULAR = 0.05   # angular.z 상한 (차동추력 ±3N)
-YAW_KP = 0.3                 # 방위 P 게인
-YAW_KD = 0.15                # 요레이트 감쇠 (발진 방지)
+MAX_THRUST = 118.6                        # [N] twist2thrust max_thrust 와 동일 유지
+DEFAULT_MAX_LINEAR = 12.0 / MAX_THRUST    # 전진 12N (최대의 ~10%) — 직진 검증값
+DEFAULT_MAX_ANGULAR = 3.0 / MAX_THRUST    # 차동추력 ±3N
+YAW_KP = 18.0 / MAX_THRUST                # 방위 P: 오차 1rad 당 차동 18N
+YAW_KD = 9.0 / MAX_THRUST                 # 요레이트 감쇠: 1rad/s 당 9N (발진 방지)
 
 
 def yaw_from_quaternion(q) -> float:

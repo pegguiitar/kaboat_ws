@@ -13,7 +13,7 @@ TODO(팀): 통과 판정, 쌍 매칭에 거리 임계값(너무 다르면 애초
 """
 import rclpy
 
-from .behavior_base import BehaviorBase
+from .behavior_base import BehaviorBase, MAX_THRUST
 from .obstacle_avoidance_utils import apply_repulsion
 
 
@@ -37,7 +37,8 @@ class GateFollower(BehaviorBase):
                        key=lambda rg: abs(rg[0].distance - rg[1].distance))
             mid_bearing = (r.bearing + g.bearing) / 2.0
             cmd = self.seek_goal()          # 기본 전진 성분
-            cmd.angular.z = 1.0 * mid_bearing  # 게이트 중점 우선 조향
+            # 게이트 중점 우선 조향 — 오차 1rad 당 차동 60N (구 게인 1.0 동등)
+            cmd.angular.z = (60.0 / MAX_THRUST) * mid_bearing
             cmd.linear.x = self.max_linear * 0.8
         else:
             cmd = self.seek_goal()
