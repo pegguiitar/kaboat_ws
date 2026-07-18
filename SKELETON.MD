@@ -8,8 +8,8 @@
 > **현재 상태**: 완성품이 아니라 **뼈대(skeleton)** 입니다. 센서→인식→behavior→
 > 제어까지 데이터가 끝까지 흐르고 배가 전복 없이 미션을 순서대로 전환하며
 > 이동하는 것까진 sim 으로 검증했지만, 각 behavior 의 실제 판단 로직(게이트
-> 쌍 매칭, 정밀 도킹, 진짜 VFH 회피 등)은 대부분 `TODO(팀)` 자리만 잡아둔
-> 상태입니다 — 아래 §4 참고.
+> 쌍 매칭, 정밀 도킹 등)은 대부분 `TODO(팀)` 자리만 잡아둔
+> 상태입니다(장애물 회피만 완성 — [AVOIDANCE.MD](AVOIDANCE.MD)) — 아래 §4 참고.
 
 ---
 
@@ -41,7 +41,7 @@
   ── 공유 버스 ──
   /occupancy_grid · /detections/buoys · /odom
   = behavior_base 가 일괄 구독하는 표준 토픽 묶음 (모든 behavior 공유).
-  회피는 /occupancy_grid 를 소비 (apply_repulsion). /detections/dock_marks
+  회피는 /occupancy_grid 로 위험도 지도를 만든다. /detections/dock_marks
   만 예외 — docking_ctrl 단독 구독.
 
 ② behavior (현재 미션 1개만 주도권) ────────────────────────
@@ -49,7 +49,7 @@
   station_keeper  → /cmd/station   (위치유지)
   docking_ctrl    → /cmd/dock      (도킹 — dock_marks)
   search_circler  → /cmd/search    (탐색 — buoys)
-  obstacle_planner→ /cmd/avoid     (장애물 회피 — grid 기반 DRI/VFH 자리)
+  obstacle_planner→ /cmd/avoid     (장애물 회피 — 위험도 지도 + 곡선 경로, 완성)
   (5개 전부 상주 — 비활성 상태에도 노드는 떠있고 compute_cmd() 만 안 돌림)
 
 제어 ──────────────────────────────────────────────────────
@@ -145,12 +145,18 @@ GPS(수평 ~1.5m/수직 ~3m) 전부 `kaboat_sim/urdf/wamv_kaboat.xacro` 주석�
 - **`search_circler.py`**: 구역 도착 후 마크 색 따라 좌/우 선회. TODO(팀): 규정에 맞는 선회 방향/횟수.
 - **`dri.py`** — 완성. `/occupancy_grid` → 위험도(DRI) 격자. 점유 셀마다 등방
   가우시안 splat(가깝거나 정면일수록 크고 진하게), 셀 결합은 **max**. ROS 무의존
-  순수 numpy(N3), `test/test_dri.py` 17개. 장애물 밭 552셀 9.4ms.
-- **`obstacle_planner.py`**: goal 추종 + 회피 게인 강화. **B-spline 로컬 플래너가
-  들어갈 자리** — 지금은 `obstacle_avoidance_utils` 단순 반발 조향으로 대체.
-  설계는 [AVOIDANCE_PLAN.MD](AVOIDANCE_PLAN.MD) 참고 (DRI 격자 → 제어점 6개
-  B-spline 생성/검사/수리 분리 → PD 경로추종). ⚠️ `build_dri` 는 매 tick(10Hz)
-  호출 — DRI 는 배 pose 의 함수라 격자 주기(1Hz)에 묶으면 안 됨(§7-4).
+  순수 numpy(N3), `test/test_dri.py` 18개. 장애물 밭 552셀 9.4ms.
+- **`bspline_planner.py`** — 완성. 위험도 격자 위에 제어점 6개짜리 곡선 경로를
+  만들고(`generate`)·검사하고(`check`)·수리한다(`repair`). ROS 무의존 순수
+  라이브러리, `test/test_bspline_planner.py` 23개.
+- **`avoid_fsm.py`** — 완성. 회피 조종 정책(따라가기/후진 탈출 상태기계 +
+  경로 추종 명령). 상태와 시간을 갖는 유일한 층이고, ROS 무의존이라 가짜
+  시계로 전이 로직을 테스트한다(`test/test_avoid_fsm.py` 28개).
+- **`obstacle_planner.py`** — 완성. 위 3개 라이브러리를 배선하는 얇은 ROS 노드
+  (구독·발행·파라미터만, 판단 로직 없음). 알고리즘·파라미터 설명은
+  [AVOIDANCE.MD](AVOIDANCE.MD).
+  ⚠️ `build_dri` 는 매 tick(10Hz) 호출 — 위험도는 배 pose 의 함수라 격자
+  주기(1Hz)에 묶으면 안 됨. 시간은 벽시계 말고 `/odom` 스탬프를 쓸 것.
 
 ### `kaboat_control` — 완성
 - **`cmd_mux.py`**: `/mission/state`에 맞는 `/cmd/*` 만 `/cmd_vel`로 통과.
@@ -286,7 +292,22 @@ param/설정으로 주입하며, avoid 의 v_cmd(m/s)→명령 변환은 함수 
 > 메시지로. 영역 태그: `[occupancy_grid]` / `[obstacle]` + 세부 `[planner]`
 > `[DRI]` `[state machine]` 등을 나란히 붙임.
 
-### 2026-07-17 — [control] 명령 의미 정규화: scale 임의상수 → 최대추력 비율 (동작 불변)
+### 2026-07-19 00:15 — [obstacle] [state machine] 작업 3 obstacle_planner 완성
+avoid 미션이 이제 위험도 지도 + 곡선 경로 플래너로 돈다. 조종 정책은 순수 모듈
+`avoid_fsm.py` 에 있고 노드는 배선만 한다. 경로를 따라가며 매 tick 안전을 검사해
+막히면 수리 → 재계획 → 후진 탈출의 3단 사다리로 대응하고, 속도는 경로 굽이에
+맞춰 자동 감속한다(v=ω_max/κ). 실측으로 정한 값: 후진 추력은 전진과 대칭
+(-1.48 m/s), /odom twist = body frame, 속도↔명령 멱지수 1.64,
+boundary_margin 0.5. 검증은 단위 테스트 41→69개 + sim 부표 밭 관통 8런 —
+**접촉 0**(최소 이격 0.48~0.90m), 전복·워치독 0, 후진 탈출 자연 발동 2회.
+그 검증 스택도 `scripts/demo/` 로 커밋했다 — 컨테이너 임시 폴더에만 있어서
+`docker compose down` 하면 접촉 0 의 근거를 재현할 수 없는 상태였다. 회피용
+launch 사본(한 줄 다른 9.6KB fork)은 `simulation.launch.py` 의 spawn 인자로
+대체. 문서 AVOIDANCE_PLAN.MD → **AVOIDANCE.MD**(계획서가 아니라 알고리즘·
+파라미터 설명서, 표는 §4). 함정: 노드 시간은 벽시계 말고 odom 스탬프 — sim 은
+시계가 둘이라 벽시계를 쓰면 RViz 표시가 죽고 타이머 주기도 틀어진다.
+
+### 2026-07-17 12:28 — [control] 명령 의미 정규화: scale 임의상수 → 최대추력 비율 (동작 불변)
 사용자 설계 채택 — "teleop/scale 사슬의 끝값을 기준 삼지 말고 스러스터
 스펙(노드) 기준으로". `/cmd_vel` 의 linear/angular 를 **최대 추력 대비 비율**
 로 재정의: 드라이버(twist2thrust, 실물은 ESC)가 자기 `max_thrust`(param,
@@ -297,7 +318,7 @@ rviz marker, 컨테이너 goto_point)을 추력 N 동등으로 환산 — 게인
 4케이스 PASS 로 검증, 5미션 회귀는 생략(작업 3 단계 ① 주행이 대신). 이로써
 실물 전환 시 컷 %·스펙이 드라이버 계층에 격리된다(§6 지도).
 
-### 2026-07-17 — [obstacle] [state machine] 작업 3 설계·구현계획 확정 (코드 미착수)
+### 2026-07-17 11:58 — [obstacle] [state machine] 작업 3 설계·구현계획 확정 (코드 미착수)
 obstacle_planner 노드의 미결 알고리즘과 구현 구조를 사용자와 전부 확정.
 **알고리즘**: 상태기계 = FOLLOW/ESCAPE 2상태(재생성 트리거: r1 통과·r1 급락=
 기준 장애물 교체·주기 백스톱 / 긴급도 = 위반까지 거리+시간상한 / ESCAPE 탈출 =
@@ -310,16 +331,16 @@ lookahead 캡만. **구현 구조**: 조종 정책을 순수 라이브러리 `av
 Node 메서드로 쓰면 rclpy.init 없이 생성이 안 돼 가짜 시계·합성 장면 루프(작업
 1·2 의 설계 오류를 전부 잡은 검증 방식)에서 빠지기 때문. 개발 4단계: ①
 follow_path+직선 stub → ② FOLLOW 사다리 → ③ ESCAPE → ④ 노드 통합·부표 밭
-관통. 상세·기각안은 AVOIDANCE_PLAN §1·§4.
+관통. 당시 검토·기각안은 이 커밋 시점의 AVOIDANCE.MD(git 히스토리) 참조.
 
-### 2026-07-17 — [obstacle] [DRI] σ 게인을 확대 → 최대 정규화 감쇄로 (+ a_head 0.7)
+### 2026-07-17 02:09 — [obstacle] [DRI] σ 게인을 확대 → 최대 정규화 감쇄로 (+ a_head 0.7)
 "지금 퍼트림(σ 0.6)을 상한으로, 멀고 옆인 것만 덜 퍼뜨리자"는 사용자 지시.
 구식(근접·정면을 위로 확대)은 σ 를 0.88m 로 불려 3m 격자 틈을 DRI 층에서
 물리적으로 닫았다(pinch 1.12 실측). σ 게인은 진폭 게인과 중복 — 유효 반경 =
 σ√(2ln(A/thr)) 라 진하기 경사만으로 반경 경사가 생긴다. 밭 한복판 실측으로
 4 arc 전원 통로 관통 확인. 테스트 41개.
 
-### 2026-07-17 — [obstacle] [planner] 후보 선택을 소프트 DRI 비용 → 선분 하드 필터로
+### 2026-07-17 01:54 — [obstacle] [planner] 후보 선택을 소프트 DRI 비용 → 선분 하드 필터로
 사용자 설계 채택: 직전 CP→후보 선분 max DRI > safe_threshold 면 후보 제거,
 생존자 중 방위 비용(w_wp·w_prev)만 argmin. threshold 이하 꼬리 위험이 벌점으로
 작동해 CP 가 틈 대신 DRI=0 지대로 도망가던 문제(거품 크기·비용의 안전 이중
@@ -332,7 +353,7 @@ radii 를 항상 ‖p1‖↔r_end 균등 4분할로 — r1(기준 장애물 실�
 [7.9,8.2,8.6,8.9] 로 뭉치게 해 경로가 장애물 밭 입구에서 끝나는 퇴화(sim
 실측)가 동기. berth 는 arc 위치가 아니라 arc 후보의 DRI 비용이 정한다.
 
-### 2026-07-16 — [occupancy_grid] 발행 10Hz + 스캔 벡터화 + 히트 dedup 기본 ON
+### 2026-07-16 21:31 — [occupancy_grid] 발행 10Hz + 스캔 벡터화 + 히트 dedup 기본 ON
 `publish_rate` 1→10Hz(신규/유령 장애물의 소비자 노출 지연 최대 1s→0.1s),
 `_on_scan` 파이썬 Bresenham 루프를 numpy+`cv2.polylines` 로 교체(최악
 169→0.74ms/스캔). 같은 스캔의 이웃 빔은 독립 관측이 아니므로 히트를 스캔당
@@ -341,24 +362,24 @@ radii 를 항상 ‖p1‖↔r_end 균등 4분할로 — r1(기준 장애물 실�
 조건 재실측 후 — 정적에선 부표 duty75 90%+).
 
 ### 2026-07-16 — [obstacle] [planner] B-spline 로컬 플래너 구현 (`bspline_planner.py`)
-AVOIDANCE_PLAN 작업 2 완료 — generate/check/repair 순수 라이브러리 + 단독
+AVOIDANCE.MD 작업 2 완료 — generate/check/repair 순수 라이브러리 + 단독
 테스트(컨테이너 scipy 1.8 검증). `p1 = p0 + max(surge·t_look, 1m)·ĥ`(배의 운동
 구속은 yaw 실측 ~31°/s — 표류/저속 노이즈가 접선에서 빠짐), t_look 1.0s(5.0 은
 첨점 재현), repair 는 4CP×±Δθ 8후보 전수(최근접-CP 교착 실측). 기본값은 회피
 경기장(3m 격자 부표 밭) RViz 라이브 튜닝으로 실측 확정 — sigma 0.6·w_wp 1.0·
 w_prev 0.5·k_bear 1.5·occ_threshold 50. generate 0.27ms / repair 0.70ms.
-(같은 커밋에 AVOIDANCE_PLAN 을 현황 스냅샷 형식으로 전면 재작성 포함)
+(같은 커밋에 AVOIDANCE.MD 을 현황 스냅샷 형식으로 전면 재작성 포함)
 
 ### 2026-07-16 02:30 — [obstacle] [DRI] 위험도 격자 구현 (`dri.py`)
-AVOIDANCE_PLAN 작업 1 완료 — `/occupancy_grid` 점유 셀마다 가우시안을
+AVOIDANCE.MD 작업 1 완료 — `/occupancy_grid` 점유 셀마다 가우시안을
 splat(가깝고 정면일수록 크고 진하게)하고 셀 결합은 max 로 하는 ROS 무의존
 순수 numpy 위험도 격자. sim 검증 중 초안 설계 4건 수정: 비등방 V자 → 등방
 가우시안, 합산 → max 결합, 노이즈 필터(`occ_threshold` 미만 셀 제외), 격자
 1Hz 가 아니라 배 pose 따라 매 tick(10Hz) 재계산. 장애물 밭 552셀 9.4ms.
 
-### 2026-07-15 21:52 — [obstacle] 회피 로컬 플래너 작업계획 확정 (AVOIDANCE_PLAN.MD)
+### 2026-07-15 21:52 — [obstacle] 회피 로컬 플래너 작업계획 확정 (AVOIDANCE.MD)
 `obstacle_planner` 를 단순 반발 조향 → DRI + B-spline 로컬 플래너로 교체하는
-설계를 [AVOIDANCE_PLAN.MD](AVOIDANCE_PLAN.MD) 에 정리. 아직 구현 전(계획 문서만).
+설계를 [AVOIDANCE.MD](AVOIDANCE.MD) 에 정리. 아직 구현 전(계획 문서만).
 DRI 비등방 가우시안 수식, 제어점 6개 규칙, 생성/검사/수리 분리, 재생성 트리거
 3종, ESCAPE(안전 경로 불가 시 후진), 모듈 인터페이스·작업 5분할 포함.
 

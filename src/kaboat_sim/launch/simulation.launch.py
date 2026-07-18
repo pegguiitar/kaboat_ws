@@ -149,6 +149,18 @@ def generate_launch_description():
         default_value='False',
         description='Whether to run Gazebo in headless mode (server only)'
     )
+
+    # 스폰 위치 — 기본값은 게이트 미션 시작점. 다른 미션을 검증할 때는
+    # launch 파일을 복사하지 말고 이 인자를 넘긴다
+    # (예: 회피 부표 밭 진입 = spawn_y:=75.0, scripts/demo/sim_avoid.sh).
+    spawn_args = [
+        DeclareLaunchArgument('spawn_x', default_value='2.0',
+                              description='배 스폰 x [m]'),
+        DeclareLaunchArgument('spawn_y', default_value='63.0',
+                              description='배 스폰 y [m]'),
+        DeclareLaunchArgument('spawn_yaw', default_value='0.0',
+                              description='배 스폰 선수각 [rad]'),
+    ]
     
     gazebo_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([
@@ -191,7 +203,10 @@ def generate_launch_description():
             '-world', 'kaboat_world',
             '-topic', 'robot_description',
             '-name', 'wamv_kaboat',
-            '-x', '2.0', '-y', '63.0', '-z', '0.2', '-Y', '0.0',
+            '-x', LaunchConfiguration('spawn_x'),
+            '-y', LaunchConfiguration('spawn_y'),
+            '-z', '0.2',
+            '-Y', LaunchConfiguration('spawn_yaw'),
         ],
         output='screen'
     )
@@ -219,6 +234,7 @@ def generate_launch_description():
 
     return LaunchDescription([
         headless_arg,
+        *spawn_args,
         set_plugin_path,
         set_resource_path,
         set_ld_library,

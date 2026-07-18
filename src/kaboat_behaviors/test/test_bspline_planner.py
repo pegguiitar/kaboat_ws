@@ -1,4 +1,4 @@
-"""bspline_planner.py 단독 테스트 (AVOIDANCE_PLAN.MD §2 작업 2) — ROS 없이 돈다.
+"""bspline_planner.py 단독 테스트 (AVOIDANCE.MD §3-2/§3-3) — ROS 없이 돈다.
 
 DriGrid 는 실제 build_dri 로 만든다 (합성 FakeGrid → 진짜 위험장) — 가짜
 위험장을 손으로 그리면 "위험장 모양에 대한 가정"이 테스트에 숨어들기 때문.
@@ -60,7 +60,7 @@ def test_stationary_p1_uses_heading_and_min_dist():
 
 
 def test_p1_direction_is_heading_not_velocity():
-    """p1 방향은 v̂ 가 아니라 heading (§7-7) — 순수 측면 표류는 관성이 아니다."""
+    """p1 방향은 v̂ 가 아니라 heading (§3-2) — 순수 측면 표류는 관성이 아니다."""
     plan = gen(dri_of([]), vel=(0.0, 0.9))    # 옆으로만 미끄러지는 중
     d1 = plan.cps[1] - plan.cps[0]
     assert d1[0] > 0 and abs(d1[1]) < 1e-9    # heading(+x) 방향
@@ -69,7 +69,7 @@ def test_p1_direction_is_heading_not_velocity():
 
 
 def test_p1_length_uses_surge_component_only():
-    """사선 활주: 길이는 ‖v‖ 가 아니라 heading 성분(surge)만 (§7-7)."""
+    """사선 활주: 길이는 ‖v‖ 가 아니라 heading 성분(surge)만 (§3-2)."""
     plan = gen(dri_of([]), vel=(1.2, 0.9))    # ‖v‖=1.5, surge=1.2
     d1 = plan.cps[1] - plan.cps[0]
     assert abs(d1[1]) < 1e-9
@@ -186,7 +186,7 @@ def test_ladder_spread_when_obstacle_at_horizon():
 
 def test_r_end_derived_from_actual_grid_geometry():
     """격자 recenter 지연(1Hz) 재현: 배가 창 중심에서 +1.5m. 명목 9m 를 쓰면
-    p5 후보 7/31 이 창 밖(inf)으로 죽던 장면 (§7-5) — 유도값은 8.5−margin."""
+    p5 후보 7/31 이 창 밖(inf)으로 죽던 장면 (§3-2) — 유도값은 8.5−margin."""
     grid, _ = make_grid([(6.0, 0.3)], boat_xy=(0.0, 0.0))   # 창은 (0,0) 중심
     boat = (1.5, 0.0)
     dri = build_dri(grid, boat, YAW, DriParams())
@@ -214,7 +214,7 @@ def test_spline_endpoints_and_start_tangent():
 # ---------- (xi) 하드 필터 — 포위 장면에서 None ----------
 
 def test_generate_returns_none_when_surrounded():
-    """전진 반평면이 3m 장애물 벽 — 첫 arc 의 안전 후보 전멸 → None (R9)."""
+    """전진 반평면이 3m 장애물 벽 — 첫 arc 의 안전 후보 전멸 → None)."""
     wall = [(3.0 * math.cos(a), 3.0 * math.sin(a))
             for a in np.linspace(-math.pi / 2, math.pi / 2, 25)]
     assert gen(dri_of(wall)) is None

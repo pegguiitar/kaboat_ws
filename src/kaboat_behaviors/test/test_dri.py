@@ -1,4 +1,4 @@
-"""dri.py 단독 테스트 (AVOIDANCE_PLAN.MD §2 작업 1) — ROS 없이 돈다.
+"""dri.py 단독 테스트 (AVOIDANCE.MD §3-1) — ROS 없이 돈다.
 
 OccupancyGrid msg 는 덕타이핑이라 같은 필드를 가진 수제 객체로 대체한다.
 """
@@ -133,7 +133,7 @@ def test_frontal_obstacle_is_stronger_than_beam():
 
 
 def test_unknown_cells_contribute_nothing():
-    """(iv) 미관측(-1) 셀은 기여 0 — free 취급 (R8)."""
+    """(iv) 미관측(-1) 셀은 기여 0 — free 취급)."""
     grid, _ = make_grid([], unknown_world=[(3.0, 0.0), (3.2, 0.0), (3.0, 0.2)])
     dri = build_dri(grid, (0.0, 0.0), 0.0, DriParams())
     assert np.all(dri.data == 0.0)
@@ -147,7 +147,7 @@ def test_below_threshold_cells_contribute_nothing():
 
 
 def test_cells_combine_by_max_not_sum():
-    """겹치는 장애물은 max 로 결합된다 (합산 아님, §7-2).
+    """겹치는 장애물은 max 로 결합된다 (합산 아님, §3-1).
 
     합산이면 두 장애물 사이 지점이 각각보다 높아져, 통과 가능한 틈을 오답으로
     차단한다. 충돌은 최근접 장애물이 결정하므로 max 가 맞다.
@@ -162,7 +162,7 @@ def test_cells_combine_by_max_not_sum():
 
 
 def test_max_keeps_dri_bounded_by_peak_amplitude():
-    """max 라 DRI 는 밀집도와 무관하게 max A 로 유계 — §1.3 비용 균형이 안정된다."""
+    """max 라 DRI 는 밀집도와 무관하게 max A 로 유계 — §3-2 비용 균형이 안정된다."""
     p = DriParams()
     dense, _ = make_grid([(2.0 + 0.2 * i, 0.2 * j) for i in range(8) for j in range(8)])
     dri = build_dri(dense, (0.0, 0.0), 0.0, p)
@@ -183,7 +183,7 @@ def test_passable_gap_is_not_blocked_by_distant_neighbours():
     both, _ = make_grid([(0.0, -1.5), (0.0, 1.5)])
 
     # 틈 한가운데. 정확한 등거리 지점을 world 좌표로 집으려 하면 셀 스냅에 걸리므로
-    # (§2 작업 1 함정), "반대편 장애물을 추가해도 값이 그대로냐" 로 검증한다.
+    # (자기 자신만 보면 못 잡는 함정), "반대편 장애물을 추가해도 값이 그대로냐" 로 검증한다.
     mid_lone = build_dri(lone, (0.0, 0.0), 0.0, p).risk_at(0.1, 0.1)
     mid_both = build_dri(both, (0.0, 0.0), 0.0, p).risk_at(0.1, 0.1)
 
@@ -192,7 +192,7 @@ def test_passable_gap_is_not_blocked_by_distant_neighbours():
 
 
 def test_zero_gains_reduce_to_uniform_gaussian():
-    """게인 4개 0 → 크기·세기가 고정된 균일 가우시안 (디버그 기준선, §1.1)."""
+    """게인 4개 0 → 크기·세기가 고정된 균일 가우시안 (디버그 기준선, §3-1)."""
     grid, _ = make_grid([(3.0, 0.0)])
     p = DriParams(sigma=0.6, k_dist=0.0, k_head=0.0, a_dist=0.0, a_head=0.0)
     dri = build_dri(grid, (0.0, 0.0), 0.0, p)
@@ -250,7 +250,7 @@ def test_empty_grid_is_all_zero():
 
 
 def test_grid_geometry_is_preserved():
-    """DRI 격자는 occupancy_grid 와 anchor/resolution/크기가 1:1 (N4)."""
+    """DRI 격자는 occupancy_grid 와 anchor/resolution/크기가 1:1)."""
     # 원점에서 멀리 떨어진 배 — anchor 가 음수/비대칭이어도 셀 대응이 어긋나면 안 됨
     boat = (12.3, -45.6)
     grid, anchor = make_grid([(boat[0] + 3.0, boat[1])], boat_xy=boat)

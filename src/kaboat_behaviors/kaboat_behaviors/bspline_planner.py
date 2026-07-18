@@ -1,5 +1,5 @@
 """bspline_planner — DRI 격자 위에서 B-spline 로컬 경로를 생성/검사/수리하는
-순수 라이브러리 (AVOIDANCE_PLAN.MD §1.2/§1.3 의 구현, ROS 의존 없음 — N3).
+순수 라이브러리 (AVOIDANCE.MD §3-2/§3-3 의 구현, ROS 의존 없음).
 
 설계 요지:
   경로는 제어점 6개짜리 clamped cubic B-spline. p0(배)·p1(관성점)이 시작
@@ -7,15 +7,15 @@
   이다 — 반지름이 단조증가라 "항상 바깥으로 전진"이 구조적으로 보장되고,
   수리(repair)는 반지름을 안 건드리므로 그 보장을 깨지 못한다.
 
-  생성(generate)과 검사(check)는 분리(R3) — 생성은 가끔, 검사는 매 tick
+  생성(generate)과 검사(check)는 분리 — 생성은 가끔, 검사는 매 tick
   최신 DRI 로. 후보 탐색은 waypoint 방위 ±search_fov/2 부채꼴인데, 기본
-  180° 는 임의값이 아니라 "waypoint 쪽 전진 성분 ≥ 0 인 반평면"이다(§7-5).
+  180° 는 임의값이 아니라 "waypoint 쪽 전진 성분 ≥ 0 인 반평면"이다(§3-2).
   안전은 **하드 필터**: DRI > safe_threshold 후보는 제거하고, 생존자 중
   방위 비용만으로 고른다 — 거품(σ) 이 이미 berth 를 인코딩하므로 비용에
   DRI 를 또 넣는 건 이중 계산이다. 어떤 arc 든 생존자가 없으면 None —
-  전진 반평면에 답이 없다는 뜻이고, 그 답은 ESCAPE(후진, R9)다.
+  전진 반평면에 답이 없다는 뜻이고, 그 답은 ESCAPE(후진)다.
 
-  t_look=1.0s 는 실측 전속 1.48 m/s 기준 재산출값(§7-5) — 5.0s 초안은
+  t_look=1.0s 는 실측 전속 1.48 m/s 기준 재산출값(§3-2) — 5.0s 초안은
   p1 이 7.4m 로 튀어 스플라인이 나갔다 되돌아오는 첨점을 만들었다.
 """
 from dataclasses import dataclass, field
@@ -28,14 +28,18 @@ from scipy.interpolate import BSpline
 @dataclass
 class PlannerParams:
     """§3 파라미터 표의 planner.* — 노드가 ROS param 에서 채워 넘긴다."""
-    t_look: float = 1.0            # p1 = surge·t_look [s] — §7-5 재산출값
+    t_look: float = 1.0            # p1 = surge·t_look [s] — §3-2 재산출값
     p1_min_dist: float = 1.0       # 정지/후진 시 접선 방향을 주기 위한 p1 하한 [m]
     bearing_max: float = math.radians(100.0)  # r1 후보 후방 하드컷
     # r1 방위 가중 — ρ_eff = ρ(1+k(1−cosΔθ)). 0.5 는 방금 지나친 측면(~85°)
-    # 부표가 계속 뽑혀 첫 arc 가 협상 끝난 장애물에 묶였다(§7-6) — 1.5 면
+    # 부표가 계속 뽑혀 첫 arc 가 협상 끝난 장애물에 묶였다(§3-2) — 1.5 면
     # 측면이 전방보다 2.4배 가까워야 뽑히고, 코앞 측면 위협은 여전히 이긴다.
     k_bear: float = 1.5
-    boundary_margin: float = 1.0   # r_end = 격자 내접 최대 반지름 − 이 값 [m]
+    # r_end = 격자 내접 최대 반지름 − 이 값 [m]. 1.0 → 0.5 (2026-07-18 사용자
+    # 채택): 개활수역 전속 직선·밭 관통 sim 에서 가짜 경계 위반 0 실측 —
+    # 동급 안전에 계획 지평선 +0.5m. 격자 recenter 지연이 커지면(실물 SLAM
+    # 등) 재검토.
+    boundary_margin: float = 0.5
     min_horizon: float = 3.0       # waypoint 가 코앞이어도 r_end 하한 [m]
     cp_min_gap: float = 0.5        # r_end 퇴화 방지: r_end ≥ ‖p1‖ + 2·이 값 [m]
     search_fov: float = math.radians(180.0)  # 후보 부채꼴 = wp 전진 반평면
@@ -96,8 +100,12 @@ def _sample_spline(cps: np.ndarray, spacing: float) -> np.ndarray:
     return np.vstack([np.stack([xs, ys], axis=1), dense[-1:]])
 
 
-def _pick_ref_obstacle(occ_xy, boat, yaw, p: PlannerParams):
-    """§1.3 기준 장애물 — 후방 하드컷 + 방위 가중 유효거리. 실거리 ρ 또는 None."""
+def pick_ref_obstacle(occ_xy, boat, yaw, p: PlannerParams):
+    """§3-2 기준 장애물 — 후방 하드컷 + 방위 가중 유효거리. 실거리 ρ 또는 None.
+
+    공개 함수 — generate 내부용이면서, FSM 재생성 트리거 (a')(현재 r1 급락
+    = 기준 장애물 교체 감지)가 generate 없이 매 tick 호출한다.
+    """
     if occ_xy is None or len(occ_xy) == 0:
         return None
     d = occ_xy - boat
@@ -143,14 +151,14 @@ def _arc_pick(dri, origin, radius, wp_bearing, prev_pt, prev_bearing,
 
 def generate(dri, boat_xy, boat_yaw: float, boat_vel_xy, waypoint_xy,
              p: PlannerParams, now_t: float = 0.0) -> Plan | None:
-    """제어점 6개 생성 + spline 샘플링 (§1.3). 전진 반평면에 답이 없으면 None."""
+    """제어점 6개 생성 + spline 샘플링 (§3-2). 전진 반평면에 답이 없으면 None."""
     boat = np.asarray(boat_xy, dtype=np.float64)
     vel = np.asarray(boat_vel_xy, dtype=np.float64)
-    # p1 방향 = heading, 길이 = surge(전진 성분)·t_look (§7-7).
+    # p1 방향 = heading, 길이 = surge(전진 성분)·t_look (§3-2).
     # 배의 진짜 구속은 yaw(≈31°/s 상한)다 — 전후는 역추력으로 제동 가능하고
     # sway 는 무액추에이션이라 항력이 죽인다. 그래서 접선은 v̂(표류·노이즈
     # 포함)가 아니라 heading 에 묶고, 관성 길이도 heading 성분만 센다.
-    # 후진 중엔 surge<0 → 하한으로 즉시 수축 (R9 자기교정이 더 빨라짐).
+    # 후진 중엔 surge<0 → 하한으로 즉시 수축 (ESCAPE 자기교정이 더 빨라짐).
     hdg = np.array([math.cos(boat_yaw), math.sin(boat_yaw)])
     surge = max(0.0, float(vel @ hdg))
     p1_len = max(surge * p.t_look, p.p1_min_dist)
@@ -160,7 +168,7 @@ def generate(dri, boat_xy, boat_yaw: float, boat_vel_xy, waypoint_xy,
     wp_bearing = math.atan2(wp[1] - boat[1], wp[0] - boat[0])
     wp_dist = float(np.hypot(*(wp - boat)))
 
-    # r_end = 배 중심 최대 내접원 − margin (§7-5-3: 격자 recenter 지연에도
+    # r_end = 배 중심 최대 내접원 − margin (§3-2: 격자 recenter 지연에도
     # arc 전체가 창 안임을 보장하는 최대 반지름) — waypoint 가 가까우면 거기까지만.
     res = dri.resolution
     hgt, wid = dri.data.shape
@@ -171,7 +179,7 @@ def generate(dri, boat_xy, boat_yaw: float, boat_vel_xy, waypoint_xy,
     r_end = min(r_end, max(wp_dist, p.min_horizon))
     r_end = max(r_end, p1_len + 2.0 * p.cp_min_gap)   # 퇴화 방지
 
-    r1 = _pick_ref_obstacle(dri.occ_xy, boat, boat_yaw, p)
+    r1 = pick_ref_obstacle(dri.occ_xy, boat, boat_yaw, p)
 
     # CP 사다리는 r1 과 무관 — 항상 ‖p1‖ ↔ r_end 균등 4분할.
     # 초안은 첫 arc 를 r1(기준 장애물 거리)에 앉혔는데, 장애물이 지평선
@@ -191,7 +199,7 @@ def generate(dri, boat_xy, boat_yaw: float, boat_vel_xy, waypoint_xy,
         for r in radii:
             picked = _arc_pick(dri, boat, r, wp_bearing, prev_pt, prev_b, p)
             if picked is None:
-                return None            # 안전 후보 전멸 → 호출측이 ESCAPE (R9)
+                return None            # 안전 후보 전멸 → 호출측이 ESCAPE)
             b, prev_pt = picked
             bearings.append(b)
             prev_b = b
@@ -211,7 +219,7 @@ def check(plan: Plan, dri, boat_xy, p: PlannerParams) -> int | None:
 
     진행 갱신이 부수효과: progress_idx 는 [현재, +progress_window] 창에서
     배와 최근접한 샘플로 단조 전진 (뒤로 안 돌아감). 검사 구간은 거기부터
-    끝까지 전부 — 먼 위반도 일찍 발견해 일찍 수리하는 게 이득 (§1.2).
+    끝까지 전부 — 먼 위반도 일찍 발견해 일찍 수리하는 게 이득 (§3-3).
     창 밖으로 나간 샘플은 risk=inf 라 자동으로 위반 취급된다.
     """
     n_win = max(1, int(round(p.progress_window / plan.spacing)))
@@ -252,7 +260,7 @@ def repair(plan: Plan, dri, violation_idx: int, p: PlannerParams) -> bool:
         for sgn in (1.0, -1.0):
             nb = plan.bearings[j] + sgn * p.repair_dtheta
             if abs(_wrap(nb - plan.wp_bearing)) > 0.5 * p.search_fov + 1e-12:
-                continue                        # arc 부채꼴 한계 (§1.2)
+                continue                        # arc 부채꼴 한계 (§3-3)
             cps = plan.cps.copy()
             cps[j + 2] = origin + plan.radii[j] * np.array([math.cos(nb),
                                                             math.sin(nb)])
@@ -270,3 +278,26 @@ def repair(plan: Plan, dri, violation_idx: int, p: PlannerParams) -> bool:
     plan.bearings[j] = nb
     plan.cps, plan.samples, plan.progress_idx = cps, samples, prog
     return True
+
+
+def curvature_ahead(plan: Plan, window: float) -> float:
+    """진행 위치부터 전방 window[m] 구간의 max |κ| [1/m].
+
+    follow 감속 v = ω_max/κ_max 의 입력 (§4). κ 는 B-spline 도함수로 해석
+    평가 — 샘플 유한차분은 spacing(0.1m) 에서 노이즈가 κ 봉우리를 만들어
+    감속이 덜컹거린다. 호길이↔파라미터 대응만 조밀 평가로 만든다.
+    samples 가 호길이 등간격이라 진행 호길이 = progress_idx·spacing.
+    """
+    spl = BSpline(_KNOTS, plan.cps, 3)
+    u = np.linspace(0.0, 1.0, 200)
+    pts = np.asarray(spl(u))
+    s = np.concatenate([[0.0], np.cumsum(np.hypot(*np.diff(pts, axis=0).T))])
+    s0 = plan.progress_idx * plan.spacing
+    mask = (s >= s0) & (s <= s0 + window)
+    if not np.any(mask):
+        mask[-1] = True                 # 경로 끝 도달 — 끝점 곡률이라도
+    d1 = np.asarray(spl.derivative(1)(u[mask]))
+    d2 = np.asarray(spl.derivative(2)(u[mask]))
+    num = np.abs(d1[:, 0] * d2[:, 1] - d1[:, 1] * d2[:, 0])
+    den = np.maximum((d1[:, 0] ** 2 + d1[:, 1] ** 2) ** 1.5, 1e-12)
+    return float(np.max(num / den))
