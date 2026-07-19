@@ -9,9 +9,10 @@ avoid_fsm.py docstring 참조.
 import dataclasses
 import math
 
+import numpy as np
 import rclpy
 from geometry_msgs.msg import PoseStamped, Twist
-from nav_msgs.msg import Path
+from nav_msgs.msg import OccupancyGrid, Path
 from visualization_msgs.msg import Marker, MarkerArray
 
 from .behavior_base import BehaviorBase, YAW_KP, YAW_KD, yaw_from_quaternion
@@ -34,10 +35,20 @@ class ObstaclePlanner(BehaviorBase):
         self.fsm_params = self._params_from('fsm', FsmParams)
         self.fsm = AvoidFsm(self.planner_params, self.fsm_params,
                             yaw_kp=YAW_KP, yaw_kd=YAW_KD)
-        # 디버그 출력 — RViz 와 향후 avoid_viz 가 구독. 로직 아님.
+        # 디버그 출력 — RViz 가 구독. 로직 아님.
+        # 별도 viz 노드를 두지 않는 이유: 위험도 지도는 여기서 이미 계산했으므로
+        # 그대로 내보내면 추가 계산이 0 이다. 별도 노드는 같은 걸 다시 계산해야
+        # 하고(실측 2.6~9.4ms/tick) 파라미터도 따로 갖게 돼 "RViz 에 보이는 지도"
+        # 와 "플래너가 쓰는 지도"가 갈리는 함정이 생긴다.
+        # 대신 아래 발행은 전부 구독자가 있을 때만 한다 — RViz 를 끄면 비용 0
+        # (구독자 확인 0.004ms vs 메시지 생성 0.8~0.9ms, 실측).
         # z 는 0.2 로 띄운다 — z=0 이면 RViz 에서 Map/DRI 레이어에 묻혀 안 보임.
         self.plan_pub = self.create_publisher(Path, '/avoid/plan', 1)
         self.cps_pub = self.create_publisher(MarkerArray, '/avoid/cps', 1)
+        self.dri_pub = self.create_publisher(OccupancyGrid, '/avoid/dri', 1)
+        # 위험도(무한대까지 가능)를 RViz costmap 색상표 0~100 으로 접는 나눗셈 값.
+        # 표시 전용 — 판단에는 안 쓴다.
+        self.declare_parameter('viz.dri_scale', 4.0)
 
     def _params_from(self, prefix: str, cls):
         defaults = cls()
@@ -83,10 +94,29 @@ class ObstaclePlanner(BehaviorBase):
         if out.event is not None:
             self.get_logger().info(f'[{out.state}] {out.event}',
                                    throttle_duration_sec=1.0)
-        self._publish_plan(out.plan)
+        self._publish_debug(out.plan, dri)
         cmd.linear.x = out.linear_x
         cmd.angular.z = out.angular_z
         return cmd
+
+    # ── 디버그 발행 (구독자 있을 때만) ──────────────────
+    def _publish_debug(self, plan, dri):
+        if self.count_subscribers('/avoid/dri') > 0:
+            self._publish_dri(dri)
+        if (self.count_subscribers('/avoid/plan') > 0
+                or self.count_subscribers('/avoid/cps') > 0):
+            self._publish_plan(plan)
+
+    def _publish_dri(self, dri):
+        """플래너가 방금 쓴 위험도 지도 그대로 — 재계산 없음."""
+        scale = float(self.get_parameter('viz.dri_scale').value)
+        out = OccupancyGrid()
+        out.header.stamp = self.odom.header.stamp
+        out.header.frame_id = self.occupancy_grid.header.frame_id
+        out.info = self.occupancy_grid.info   # anchor/해상도 동일 — 점유 지도와 정확히 겹침
+        vals = np.clip(dri.data / scale * 100.0, 0.0, 100.0)
+        out.data = np.rint(vals).astype(np.int8).ravel().tolist()
+        self.dri_pub.publish(out)
 
     def _publish_plan(self, plan):
         path = Path()

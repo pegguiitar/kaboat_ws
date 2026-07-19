@@ -19,7 +19,7 @@
 | 구독 | `/odom` | 배 위치·방향·속도. **시간의 기준이기도 하다** (§6) |
 | 구독 | `/mission/goal` `/mission/state` | 목표점 / 지금 이 behavior 차례인지 |
 | 발행 | `/cmd/avoid` | 속도·회전 명령 → `cmd_mux` → `/cmd_vel` |
-| 발행 | `/avoid/plan` `/avoid/cps` | 디버그용 경로·제어점·목표점 (RViz) |
+| 발행 | `/avoid/plan` `/avoid/cps` `/avoid/dri` | 디버그용 경로·제어점·목표점·위험도 지도 (RViz). **보는 사람이 있을 때만 발행** — RViz 를 끄면 만들지도 않는다 |
 
 ---
 
@@ -48,7 +48,6 @@
 | `bspline_planner.py` | 경로 기하 — 경로를 만들고/검사하고/수리. 시간·상태를 모름 |
 | `avoid_fsm.py` | 조종 정책 — 상태(따라가기/탈출)와 시간을 갖는 유일한 곳 |
 | `obstacle_planner.py` | ROS 노드 — 구독·발행·파라미터 배선만, 판단 로직 없음 |
-| `avoid_viz.py` | RViz 시각화 (예정 — 지금은 노드가 직접 디버그 발행) |
 
 주요 함수:
 
@@ -62,8 +61,13 @@ AvoidFsm.step(dri, pose, vel, yaw_rate, wp, now_t) -> StepOut   # tick 하나
 ```
 
 노드는 위험도 지도를 만들어 `AvoidFsm.step()` 에 넘기고, 돌려받은 명령을
-`/cmd/avoid` 로 발행하며, 디버그용으로 `/avoid/plan`(경로)·`/avoid/cps`(제어점과
-목표점)를 함께 낸다.
+`/cmd/avoid` 로 발행한다. 디버그 그림(`/avoid/plan` 경로, `/avoid/cps` 제어점과
+목표점, `/avoid/dri` 위험도 지도)도 같은 노드가 낸다 — **시각화 전용 노드를 따로
+두지 않는다.** 위험도 지도를 여기서 이미 계산했기 때문이다: 별도 노드는 같은 걸
+다시 계산해야 하고(2.6~9.4ms/tick), 파라미터도 따로 갖게 돼 "RViz 에 보이는 지도"와
+"플래너가 실제로 쓰는 지도"가 갈리는 함정이 생긴다. 대신 발행은 구독자가 있을
+때만 한다 — 구독자 확인은 0.004ms 인데 메시지 만들기는 0.8ms 라, RViz 를 끄면
+그만큼 절약된다(플래너 CPU 6.0% → 4.8% 실측).
 
 ## 3. 알고리즘
 
@@ -238,8 +242,7 @@ scripts/demo/sim_avoid.sh      # sim — 부표 밭 서쪽(2, 75)에 스폰
 scripts/demo/t2t.sh            # 드라이버 — 명령을 좌우 추력으로
 scripts/demo/avoid_stack.sh    # 점유 지도 + 명령 먹스 + 회피 플래너
 scripts/demo/mission_stub.sh   # 목표점 발행 (기본 = 밭 건너편 29, 76.5)
-scripts/demo/rviz_avoid.sh     # 보기 — 경로·제어점·목표점
-scripts/demo/dri_viz.sh        # 보기 — 위험도 지도 (RViz 에 겹쳐 그림)
+scripts/demo/rviz_avoid.sh     # 보기 — 경로·제어점·목표점·위험도 지도
 ```
 
 **판정 스크립트** (목표점을 인자로 준다):

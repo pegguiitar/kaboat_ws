@@ -133,10 +133,11 @@ GPS(수평 ~1.5m/수직 ~3m) 전부 `kaboat_sim/urdf/wamv_kaboat.xacro` 주석�
   제공. 명령 상한 `max_linear=0.20`, `max_angular=0.05`. ⚠️ 이 값들은 실측
   안전값 — 함부로 올리지 마세요(이유는 §6). **m/s 가 아니라 추력 명령**이라는
   점도 주의(0.20 → 실제 약 1.5 m/s, §6).
-- **`obstacle_avoidance_utils.py`**: 공통 회피-보정 함수. 5개 behavior 가 전부
-  `apply_repulsion(cmd, occupancy_grid, odom)` 을 import(각자 구현 시 회피가
-  제각각 되는 걸 방지). `/occupancy_grid`(점유 셀) 입력, 격자가 채워지므로 반발
-  회피 실동작. TODO(팀): VFH(valley 탐색)로 교체.
+- **`obstacle_avoidance_utils.py`**: 단순 반발 회피(`apply_repulsion`).
+  ⚠️ **지금 스택엔 회피가 두 종류다** — `obstacle_planner`(avoid 미션)는
+  위험도 지도 + 곡선 경로 플래너를 쓰고, 나머지 4개 behavior 는 아직 이
+  반발 조향을 쓴다. 특히 `station_keeper` 의 목표(15, 73)는 부표 밭 안쪽이라
+  회피가 필요한 구간이다. TODO(팀): 나머지도 플래너로 통일할지 결정.
 - **`gate_follower.py`**: red+green 이 같이 보이면 중점 방위로 조향, 아니면 goal.
   TODO(팀): 게이트 쌍 매칭(제일 가까운 것끼리), 통과 판정.
 - **`station_keeper.py`**: goal 접근 + 5m/5초 체류 판정. TODO(팀): 바람/파도 드리프트 보상.
@@ -145,7 +146,7 @@ GPS(수평 ~1.5m/수직 ~3m) 전부 `kaboat_sim/urdf/wamv_kaboat.xacro` 주석�
 - **`search_circler.py`**: 구역 도착 후 마크 색 따라 좌/우 선회. TODO(팀): 규정에 맞는 선회 방향/횟수.
 - **`dri.py`** — 완성. `/occupancy_grid` → 위험도(DRI) 격자. 점유 셀마다 등방
   가우시안 splat(가깝거나 정면일수록 크고 진하게), 셀 결합은 **max**. ROS 무의존
-  순수 numpy(N3), `test/test_dri.py` 18개. 장애물 밭 552셀 9.4ms.
+  순수 numpy, `test/test_dri.py` 18개. 장애물 밭 552셀 9.4ms.
 - **`bspline_planner.py`** — 완성. 위험도 격자 위에 제어점 6개짜리 곡선 경로를
   만들고(`generate`)·검사하고(`check`)·수리한다(`repair`). ROS 무의존 순수
   라이브러리, `test/test_bspline_planner.py` 23개.
@@ -169,6 +170,10 @@ GPS(수평 ~1.5m/수직 ~3m) 전부 `kaboat_sim/urdf/wamv_kaboat.xacro` 주석�
   신호 없이 위치만으로 판정. 순서 `gate → station → dock → search → avoid → done`
   고정(`MISSION_ORDER`). 전이마다 `/detector/enable`(latched)도 발행 — `dock`
   진입 시 true, 이탈 시 false(YOLO 추론 게이팅).
+  ⚠️ **전체 미션을 이어서 도는 통합 검증은 아직 안 했다.** 회피(`avoid`)만
+  구현이 끝났고 나머지 4개 behavior 는 placeholder 라, 지금 완주시켜 봐야
+  "죽지 않고 좌표를 찍었다" 이상은 알 수 없기 때문이다. 그 behavior 들이
+  실제 로직을 갖추면 그때 통합 회귀를 한다.
 
 ### `kaboat_bringup` — 완성
 - **`launch/autonomy.launch.py`**: 상시 인식 + behavior 5개 + `cmd_mux` +
@@ -292,20 +297,25 @@ param/설정으로 주입하며, avoid 의 v_cmd(m/s)→명령 변환은 함수 
 > 메시지로. 영역 태그: `[occupancy_grid]` / `[obstacle]` + 세부 `[planner]`
 > `[DRI]` `[state machine]` 등을 나란히 붙임.
 
+### 2026-07-19 13:32 — [obstacle] [DRI] [planner] 디버그 그림을 플래너 안으로
+위험도 지도(`/avoid/dri`)를 `obstacle_planner` 가 직접 발행한다 — 판단에 쓴 지도를
+그대로 내보내므로 추가 계산 0. 시각화 전용 노드 계획은 폐기하고 `dri_viz.py` 삭제
+(RViz 설정은 토픽명이 같아 그대로 동작). 디버그 3종(경로·제어점·위험도)은 구독자가
+있을 때만 만든다 — RViz 를 끄면 플래너 CPU 6.0% → 4.8%. §4 정정: 회피가 두 종류다
+(`obstacle_planner` 만 플래너, 나머지 4개는 반발 조향).
+
 ### 2026-07-19 00:15 — [obstacle] [state machine] 작업 3 obstacle_planner 완성
 avoid 미션이 이제 위험도 지도 + 곡선 경로 플래너로 돈다. 조종 정책은 순수 모듈
 `avoid_fsm.py` 에 있고 노드는 배선만 한다. 경로를 따라가며 매 tick 안전을 검사해
 막히면 수리 → 재계획 → 후진 탈출의 3단 사다리로 대응하고, 속도는 경로 굽이에
 맞춰 자동 감속한다(v=ω_max/κ). 실측으로 정한 값: 후진 추력은 전진과 대칭
-(-1.48 m/s), /odom twist = body frame, 속도↔명령 멱지수 1.64,
-boundary_margin 0.5. 검증은 단위 테스트 41→69개 + sim 부표 밭 관통 8런 —
-**접촉 0**(최소 이격 0.48~0.90m), 전복·워치독 0, 후진 탈출 자연 발동 2회.
-그 검증 스택도 `scripts/demo/` 로 커밋했다 — 컨테이너 임시 폴더에만 있어서
-`docker compose down` 하면 접촉 0 의 근거를 재현할 수 없는 상태였다. 회피용
-launch 사본(한 줄 다른 9.6KB fork)은 `simulation.launch.py` 의 spawn 인자로
-대체. 문서 AVOIDANCE_PLAN.MD → **AVOIDANCE.MD**(계획서가 아니라 알고리즘·
-파라미터 설명서, 표는 §4). 함정: 노드 시간은 벽시계 말고 odom 스탬프 — sim 은
-시계가 둘이라 벽시계를 쓰면 RViz 표시가 죽고 타이머 주기도 틀어진다.
+(-1.48 m/s), /odom twist = body frame, 속도↔명령 멱지수 1.64, boundary_margin
+0.5. 검증은 단위 테스트 41→69개 + sim 부표 밭 관통 8런 — **접촉 0**(최소 이격
+0.48~0.90m), 전복·워치독 0, 후진 탈출 자연 발동 2회. 검증 스택은 `scripts/demo/`,
+회피용 launch 사본은 `simulation.launch.py` 의 spawn 인자로 대체.
+문서 AVOIDANCE_PLAN.MD → **AVOIDANCE.MD**(알고리즘·파라미터 설명서).
+⚠️ 노드 시간은 벽시계 말고 odom 스탬프. 전체 미션 통합 검증은 안 했다
+(나머지 4개 behavior 가 placeholder — 전환 규칙은 §4 `kaboat_mission`).
 
 ### 2026-07-17 12:28 — [control] 명령 의미 정규화: scale 임의상수 → 최대추력 비율 (동작 불변)
 사용자 설계 채택 — "teleop/scale 사슬의 끝값을 기준 삼지 말고 스러스터
