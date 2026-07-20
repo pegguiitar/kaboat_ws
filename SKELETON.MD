@@ -110,15 +110,19 @@ GPS(수평 ~1.5m/수직 ~3m) 전부 `kaboat_sim/urdf/wamv_kaboat.xacro` 주석�
 - **`occupancy_grid.py`** (v5 · 장애물 표현 단독 담당, 상시): `/scan` Bresenham
   레이캐스팅으로 log-odds 누적(경로 셀=`L_FREE`, 히트 끝점=`L_OCC`) +
   `/camera/depth/points` z-band·거리(`CAM_RANGE`) 필터로 LiDAR 사각지대 보완
-  (점유 증거만) + IMU 롤/피치 `TILT_MAX`(15°) 초과 스캔 게이팅. 셀 좌표는
+  (점유 증거만) + IMU 롤/피치 `TILT_MAX`(10°) 초과 스캔 게이팅. 셀 좌표는
   **월드 정수격자(`floor(x/res)`, global)** 이고, 그 격자를 **배 중심 20×20m 창으로
   잘라 담는 고정 크기 numpy 배열(rolling grid)** 을 쓴다 — 배열 인덱스는 좌표가
   아니라 창에서의 위치이고, 배가 움직이면 anchor(배열 (0,0)의 global 인덱스)를
   절대위치에서 다시 잡아 정수 셀 단위 `np.roll` 로 창만 민다(셀의 global 정체성
   불변, 새 가장자리만 unknown). 월드 축 정렬 유지라 heading 회전 오차 없고,
-  발행 origin 을 격자에 스냅해 저장/발행 셀이 1:1(±1셀 aliasing 없음). 단독
+  발행 origin 을 격자에 스냅해 저장/발행 셀이 1:1(±1셀 aliasing 없음). 발행 시
+  배 `confirm_radius`(8m) 안 셀은 히트가 `confirm_hits`(3회)만큼 쌓여야 장애물로
+  내보내는 **확정 게이트** 를 둬 파도로 기운 LiDAR 가 찍는 수면 유령을 거른다 —
+  8m 밖은 게이트 없음(성긴 원거리 부표가 셀당 1히트라 같이 누르면 투명해짐). 단독
   실행: `ros2 run kaboat_perception occupancy_grid`. TODO(팀): decay(노후 셀
-  감쇠), 거리·빔각도 함수형 inverse sensor model(현재 `L_OCC`/`L_FREE` 상수).
+  감쇠 — 검토했으나 베이지안 의미 흐림+잔여 미실측이라 보류), 거리·빔각도
+  함수형 inverse sensor model(현재 `L_OCC`/`L_FREE` 상수).
 - **`buoy_detector.py`** (v5, 상시·학습 불필요): HSV 색 블롭 → `/detections/buoys`.
   `buoy_detector_pipeline.svg` 5단계 중 **① HSV 마스크만 실동작**, ②블롭 기하 →
   ③수면 컨텍스트 → ④LiDAR 교차확인 → ⑤N-of-M 시간 추적은 훅만 자리. TODO(팀): ②~⑤.
@@ -296,6 +300,13 @@ param/설정으로 주입하며, avoid 의 v_cmd(m/s)→명령 변환은 함수 
 > `### YYYY-MM-DD HH:MM — [영역] 요약` + 무엇을/왜 몇 문장. 파일 세부는 커밋
 > 메시지로. 영역 태그: `[occupancy_grid]` / `[obstacle]` + 세부 `[planner]`
 > `[DRI]` `[state machine]` 등을 나란히 붙임.
+
+### 2026-07-20 17:09 — [occupancy_grid] 파도로 기운 LiDAR 가 수면을 장애물로 찍는 문제 완화 (tilt 10° + 확정 게이트)
+파도로 롤/피치하면 2D LiDAR 가 수면을 훑어 없는 장애물이 발행돼 회피 노드로 넘어갔다. 기울기
+게이트를 15°→10° 로 낮춰 유령 스캔을 더 일찍 버리고, 발행 단계에 확정 게이트를 넣었다 — 배
+8m 안 셀은 히트가 3회쯤 쌓여야 장애물로 내보내고 그 아래는 free 로 눌러 방랑하는 수면 유령을
+가린다. 8m 밖은 게이트 없음(원거리 부표도 셀당 1히트라 같이 누르면 투명해짐, dri.py 주석).
+decay 는 베이지안 의미를 흐려 보류.
 
 ### 2026-07-20 16:00 — [sim] [파도] 파도 세기·빈도를 11월 연안 부두 수준으로
 `perception_task.sdf` 의 wavefield 발행값에서 gain 0.5→1.7, period 5.0→4.0s
