@@ -8,9 +8,13 @@
   수리(repair)는 반지름을 안 건드리므로 그 보장을 깨지 못한다.
 
   생성(generate)과 검사(check)는 분리 — 생성은 가끔, 검사는 매 tick
-  최신 DRI 로. 후보 탐색은 waypoint 방위 ±search_fov/2 부채꼴인데, 기본
-  180° 는 임의값이 아니라 "waypoint 쪽 전진 성분 ≥ 0 인 반평면"이다(§3-2).
-  안전은 **하드 필터**: DRI > safe_threshold 후보는 제거하고, 생존자 중
+  최신 DRI 로. 후보 탐색은 waypoint 방위 ±search_fov/2 부채꼴 — 이론적
+  최대치인 180°는 "waypoint 쪽 전진 성분 ≥ 0 인 반평면"(§3-2)이지만, 기본값은
+  120°로 좁혀뒀다(2026-07-20). wp_bearing 이 헤딩과 크게 벌어진 상황(급회전
+  직후 등)에서 180° 부채꼴이면 p2 가 헤딩 기준 거의 정반대까지 뽑혀 배가
+  옆/뒤로 도는 것처럼 보이는 사례가 실측됐기 때문 — 부채꼴 중심은 여전히
+  wp_bearing 이라 헤딩 자체는 탐색에 관여 안 하고, 폭만 좁혀 최악의 이탈각을
+  줄인 것. 안전은 **하드 필터**: DRI > safe_threshold 후보는 제거하고, 생존자 중
   방위 비용만으로 고른다 — 거품(σ) 이 이미 berth 를 인코딩하므로 비용에
   DRI 를 또 넣는 건 이중 계산이다. 어떤 arc 든 생존자가 없으면 None —
   전진 반평면에 답이 없다는 뜻이고, 그 답은 ESCAPE(후진)다.
@@ -42,7 +46,12 @@ class PlannerParams:
     boundary_margin: float = 0.5
     min_horizon: float = 3.0       # waypoint 가 코앞이어도 r_end 하한 [m]
     cp_min_gap: float = 0.5        # r_end 퇴화 방지: r_end ≥ ‖p1‖ + 2·이 값 [m]
-    search_fov: float = math.radians(180.0)  # 후보 부채꼴 = wp 전진 반평면
+    # 후보 부채꼴 = wp 중심 ±search_fov/2. 원래 180°(wp 전진 반평면 전체, §3-2)
+    # 였는데, wp_bearing 이 헤딩과 크게 벌어진 상황(급회전 직후 등)에서 p2 가
+    # 헤딩 기준 거의 정반대까지 뽑혀 배가 옆/뒤로 도는 것처럼 보이는 사례가
+    # 실측돼 120°로 좁힘 (2026-07-20, 사용자 판단). 부채꼴 폭만 좁아지고
+    # 중심은 여전히 wp_bearing — 헤딩은 이 탐색에 전혀 관여하지 않는다.
+    search_fov: float = math.radians(120.0)
     n_candidates: int = 31
     # 후보 비용 가중. DRI 항은 없다 — 안전은 비용이 아니라 **하드 필터**
     # (아래 safe_threshold)다. 소프트 DRI 벌점 시절엔 threshold 이하의 안전한
