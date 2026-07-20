@@ -64,20 +64,19 @@
   gz_type_name: "gz.msgs.NavSat"
   direction: GZ_TO_ROS
 
-# ── Odometry (sim ground truth) → /odom ──────────────
-# 실물 전환 시 robot_localization EKF 가 동일한 /odom 으로 발행 (이 항목 제거)
-- ros_topic_name: "/odom"
+# ── Odometry ground truth → /odom_ground_truth ──
+# /odom 은 이 정답값이 아니라, odom_gps_noise 노드가 여기에 GPS 수준 위치오차
+# (~50cm)를 얹어 발행한다(simulation.launch.py 참고). ground truth 는 노이즈
+# 노드의 입력이자, RViz 등에서 추정치 대 정답 비교용으로도 쓴다.
+- ros_topic_name: "/odom_ground_truth"
   gz_topic_name: "/model/wamv_kaboat/odometry"
   ros_type_name: "nav_msgs/msg/Odometry"
   gz_type_name: "gz.msgs.Odometry"
   direction: GZ_TO_ROS
 
-# odom → base_link TF (obstacle_detector 의 장애물 좌표 변환용)
-- ros_topic_name: "/tf"
-  gz_topic_name: "/model/wamv_kaboat/tf"
-  ros_type_name: "tf2_msgs/msg/TFMessage"
-  gz_type_name: "gz.msgs.Pose_V"
-  direction: GZ_TO_ROS
+# 주의: ground truth TF(odom→wamv/base_link) 브릿지는 의도적으로 뺐다 —
+# odom_gps_noise 노드가 노이즈 낀 위치와 일치하는 같은 TF 엣지를 발행하므로,
+# 여기서도 브릿지하면 정답 TF 와 노이즈 TF 가 이중 발행돼 충돌한다.
 
 # ── 추력 명령 (ROS → GZ) ─────────────────────────────
 - ros_topic_name: "/wamv/thrusters/left/thrust"

@@ -32,6 +32,7 @@ install(PROGRAMS
   launch/rviz_interactive_marker.py
   launch/straight_drive_test.py
   launch/keyboard_teleop.py
+  launch/odom_gps_noise.py
   DESTINATION lib/${PROJECT_NAME}
   )
 

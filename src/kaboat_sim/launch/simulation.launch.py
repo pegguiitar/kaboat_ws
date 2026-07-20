@@ -232,6 +232,22 @@ def generate_launch_description():
         output='screen'
     )
 
+    # 8. 위치추정 노이즈 모델 — ground truth(/odom_ground_truth)에 GPS 수준
+    #    위치오차(기본 ~50cm, OU 상관잡음)를 얹어 /odom 으로 재발행하고
+    #    odom→base_link TF 도 같은 위치로 발행한다(odom_gps_noise.py).
+    #    실물의 GNSS+IMU→EKF 파이프라인은 실물 전환 시 별도 launch 로 붙인다
+    #    — sim 에서 EKF 를 튜닝해봐야 실 센서 노이즈에 묶인 튜닝이 실물로
+    #    이월되지 않으므로, sim 은 "결과 오차"만 직접 모델링한다.
+    #    (그래서 bridge_config.yaml 은 ground truth 를 /odom_ground_truth 로
+    #    두고 /odom·TF 는 이 노드가 만든다.)
+    odom_gps_noise = Node(
+        package='kaboat_sim',
+        executable='odom_gps_noise.py',
+        name='odom_gps_noise',
+        output='screen',
+        parameters=[{'use_sim_time': True}],
+    )
+
     return LaunchDescription([
         headless_arg,
         *spawn_args,
@@ -242,5 +258,6 @@ def generate_launch_description():
         robot_state_publisher,
         spawn_robot,
         ros_gz_bridge,
-        rviz_interactive_marker
+        rviz_interactive_marker,
+        odom_gps_noise,
     ])
