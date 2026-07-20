@@ -297,6 +297,12 @@ param/설정으로 주입하며, avoid 의 v_cmd(m/s)→명령 변환은 함수 
 > 메시지로. 영역 태그: `[occupancy_grid]` / `[obstacle]` + 세부 `[planner]`
 > `[DRI]` `[state machine]` 등을 나란히 붙임.
 
+### 2026-07-20 16:00 — [sim] [파도] 파도 세기·빈도를 11월 연안 부두 수준으로
+`perception_task.sdf` 의 wavefield 발행값에서 gain 0.5→1.7, period 5.0→4.0s
+두 개만 바꿨다(steepness 0·direction 0 그대로). 유의파고 Hs 약 0.16m→0.34m,
+평균 파장 39m→25m 로 짧고 잦은 잔물결이 된다. 물리(Surface)·시각(WaveVisual)이
+같은 토픽을 읽어 자동으로 함께 반영된다.
+
 ### 2026-07-19 13:32 — [obstacle] [DRI] [planner] 디버그 그림을 플래너 안으로
 위험도 지도(`/avoid/dri`)를 `obstacle_planner` 가 직접 발행한다 — 판단에 쓴 지도를
 그대로 내보내므로 추가 계산 0. 시각화 전용 노드 계획은 폐기하고 `dri_viz.py` 삭제
