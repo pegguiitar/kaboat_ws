@@ -119,11 +119,6 @@ class OccupancyGridNode(Node):
         self.declare_parameter('cam_height', 0.5)    # 카메라 장착 높이(수면 기준) [m]
         self.declare_parameter('cam_z_min', 0.1)     # z-band 하한 — 수면 근처 제외 [m]
         self.declare_parameter('cam_z_max', 2.0)     # z-band 상한 — 상부구조물/하늘 제외 [m]
-        self.declare_parameter('confirm_radius', 8.0)  # 이 거리 안 셀만 확정 요구 [m]
-        # 근~중거리(≤confirm_radius)는 confirm_hits 만큼 히트가 쌓여야 장애물로 발행.
-        # 방랑 1히트 수면 유령(자세 흔들림)을 소비자에게서 가리는 게이트. 원거리는
-        # 게이트 없음 — 성긴 원거리 부표가 셀당 1히트라 눌리면 투명해짐(dri.py 주석).
-        self.declare_parameter('confirm_hits', 3.0)   # 근~중거리 확정에 필요한 히트 수
 
         self.resolution = float(self.get_parameter('resolution').value)
         self.size = float(self.get_parameter('size').value)
@@ -134,9 +129,6 @@ class OccupancyGridNode(Node):
         self.cam_height = float(self.get_parameter('cam_height').value)
         self.cam_z_min = float(self.get_parameter('cam_z_min').value)
         self.cam_z_max = float(self.get_parameter('cam_z_max').value)
-        self.confirm_radius = float(self.get_parameter('confirm_radius').value)
-        self.confirm_hits = float(self.get_parameter('confirm_hits').value)
-        self.confirm_L = self.confirm_hits * L_OCC  # 확정 log-odds 문턱 (3히트≈2.55)
 
         self.odom = None
         self.tilted = False
@@ -145,8 +137,6 @@ class OccupancyGridNode(Node):
         self.anchor = None
         self.grid = np.zeros((self.cells, self.cells), dtype=np.float32)  # log-odds
         self.observed = np.zeros((self.cells, self.cells), dtype=bool)    # 관측 여부
-        # 셀 인덱스 격자 (확정 게이트의 거리 계산용) — 한 번 만들어 재사용
-        self.iy_idx, self.ix_idx = np.mgrid[0:self.cells, 0:self.cells]
 
         self.create_subscription(LaserScan, '/scan', self._on_scan, 10)
         self.create_subscription(Odometry, '/odom', self._on_odom, 10)
@@ -330,20 +320,6 @@ class OccupancyGridNode(Node):
 
         p = 1.0 / (1.0 + np.exp(-self.grid))
         data = np.where(self.observed, np.rint(p * 100.0), -1.0)
-
-        # 근~중거리 확정 게이트 — confirm_radius 안에서는 confirm_hits(≈3회)만큼
-        # log-odds 가 쌓인 셀만 장애물로 내보내고, 그 아래(방랑 1~2히트 수면 유령
-        # 포함)는 free(0)로 눌러 소비자(DRI 등)에게서 가린다. 원거리는 게이트 없이
-        # 1히트도 통과 — 성긴 원거리 부표가 투명해지는 걸 막기 위함(dri.py 주석 참고).
-        bx = self.odom.pose.pose.position.x
-        by = self.odom.pose.pose.position.y
-        rx = math.floor(bx / self.resolution) - self.anchor[0]
-        ry = math.floor(by / self.resolution) - self.anchor[1]
-        dx = (self.ix_idx - rx) * self.resolution
-        dy = (self.iy_idx - ry) * self.resolution
-        near = (dx * dx + dy * dy) <= self.confirm_radius * self.confirm_radius
-        unconfirmed = near & self.observed & (self.grid < self.confirm_L)
-        data[unconfirmed] = 0.0
 
         grid.data = data.astype(np.int8).ravel().tolist()
         self.pub.publish(grid)

@@ -141,9 +141,19 @@ def test_unknown_cells_contribute_nothing():
 
 def test_below_threshold_cells_contribute_nothing():
     """occ_threshold 미만의 약한 점유확률 셀도 위험원이 아니다."""
-    grid, _ = make_grid([(3.0, 0.0)], value=40)  # 기본 threshold 50 미만
+    grid, _ = make_grid([(3.0, 0.0)], value=40)  # threshold 50 미만
     dri = build_dri(grid, (0.0, 0.0), 0.0, DriParams(occ_threshold=50))
     assert np.all(dri.data == 0.0)
+
+
+def test_default_threshold_requires_three_hits():
+    """기본 occ_threshold=90 = "3히트는 봐야 믿는다" — 회피 단에서 근거리
+    유령(1~2히트)을 배제한다. occupancy_grid 발행값은 1회→70·2회→85·3회→93 이라
+    85(2히트)는 투명, 93(3히트)만 위험원. (원거리 1히트 부표 포기가 이 결정의 대가.)"""
+    two_hit, _ = make_grid([(3.0, 0.0)], value=85)   # 2히트 — 문턱 미달
+    three_hit, _ = make_grid([(3.0, 0.0)], value=93)  # 3히트 — 통과
+    assert np.all(build_dri(two_hit, (0.0, 0.0), 0.0, DriParams()).data == 0.0)
+    assert build_dri(three_hit, (0.0, 0.0), 0.0, DriParams()).data.max() > 0.0
 
 
 def test_cells_combine_by_max_not_sum():
