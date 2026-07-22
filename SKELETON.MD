@@ -34,7 +34,7 @@
                                   /camera/depth/points, /imu/data, /gps/fix
        │
        ├─▶ occupancy_grid      → /occupancy_grid          (장애물 격자 — v5 단일 장애물 표현)
-       ├─▶ buoy_detector       → /detections/buoys        (HSV 상시 · 학습 불필요)
+       ├─▶ buoy_detector       → /detections/buoys        (전역 좌표 부표맵 · HSV 상시 · 학습 불필요)
        └─▶ dock_mark_detector  → /detections/dock_marks   (YOLO 자리 · dock state 만 추론)
        localization(=gz odom / 실물은 robot_localization) → /odom, /tf
 
@@ -104,7 +104,10 @@ GPS(수평 ~1.5m/수직 ~3m) 전부 `kaboat_sim/urdf/wamv_kaboat.xacro` 주석�
 
 ### `kaboat_msgs` — 완성
 공용 메시지. `Obstacle`/`ObstacleArray`(위치+반지름), `Mark`/`MarkArray`
-(색/모양/신뢰도/방위/거리). 필드가 더 필요하면 여기에 추가.
+(색/모양/신뢰도/방위/거리 — 카메라 상대, dock_mark 용), `Buoy`/`BuoyArray`
+(id/색/**전역 Point 좌표**/신뢰도 — 부표맵 용). 필드가 더 필요하면 여기에 추가.
+⚠️ 부표는 `Mark`(극좌표)가 아니라 `Buoy`(월드 좌표)로 나간다 — 점유지도
+cell 과 구분되는 "좌표 랜드마크". 극좌표는 소비자가 자기 odom 으로 재계산.
 
 ### `kaboat_perception` — 골격 + 일부 알고리즘 (v5 정렬)
 - **`occupancy_grid.py`** (v5 · 장애물 표현 단독 담당, 상시): `/scan` Bresenham
@@ -123,9 +126,26 @@ GPS(수평 ~1.5m/수직 ~3m) 전부 `kaboat_sim/urdf/wamv_kaboat.xacro` 주석�
   실행: `ros2 run kaboat_perception occupancy_grid`. TODO(팀): decay(노후 셀
   감쇠 — 검토했으나 베이지안 의미 흐림+잔여 미실측이라 보류), 거리·빔각도
   함수형 inverse sensor model(현재 `L_OCC`/`L_FREE` 상수).
-- **`buoy_detector.py`** (v5, 상시·학습 불필요): HSV 색 블롭 → `/detections/buoys`.
-  `buoy_detector_pipeline.svg` 5단계 중 **① HSV 마스크만 실동작**, ②블롭 기하 →
-  ③수면 컨텍스트 → ④LiDAR 교차확인 → ⑤N-of-M 시간 추적은 훅만 자리. TODO(팀): ②~⑤.
+- **`buoy_detector.py`** (v5, 상시·학습 불필요): 카메라·LiDAR·odom → `/detections/buoys`
+  (`BuoyArray`, frame="odom" — **전역 좌표 부표맵**). 매 프레임 ①HSV 색 →
+  ②기하 필터(원형도·solidity·종횡비로 눈부심 줄무늬 제거) → ③수면 필터
+  (아래 ⚠️) → ④거리(depth 3×3 median)·방위(아래 ⚠️) → ⑤LiDAR 교차확인
+  (그 방위에 반사 있나 — 광학 유령 제거) → ⑥odom 으로 전역 (x,y) 투영 →
+  ⑦시간 융합. ⑦은 ROS 무의존 순수 모듈 **`buoy_tracker.py`**(데이터 결합·
+  N-of-M 확정·prune·색 투표·EMA 위치평활)에 있고 노드는 배선만 — avoid 스택의
+  순수 라이브러리+얇은 노드 패턴 그대로. RViz 디버그로 `/detections/buoys_viz`
+  (MarkerArray, 색 구+id 텍스트)를 구독자 있을 때만 발행 — `scripts/demo/buoy.rviz`.
+  `test/test_buoy_tracker.py` 22개.
+  ⚠️ **방위(④)는 camera_info K 를 안 믿는다** — 이 sim 의 gz camera_info 는
+  width 는 1280 이라면서 K 는 320px 기준(ppx≈160)으로 어긋나, 그대로 쓰면
+  모든 방위가 ~60° 쏠린다(RViz 데모로 발견). 그래서 주점이 이미지 중심 근처일
+  때만(실물 D455 정상) K 를 쓰고, 아니면 xacro HFOV·실제 이미지 폭으로 초점거리를
+  유도하는 핀홀 모델로 방위를 낸다(자기 일관적).
+  ⚠️ **수면 필터(③)는 "수평선 아래"가 아니다** — 부표는 키가 있어 수평선 위로
+  솟고 가까울수록 콘 중심이 더 위로 잡힌다(sim 실측: 5m 부표 cy≈0.43H). 그래서
+  참 수평선보다 위(`horizon_frac` 0.30)에 하늘 컷선을 두고 그보다 위만 하늘로
+  버린다(IMU pitch 보정). TODO(팀): HSV·기하·컷선 임계는 sim 부표 원색 기준이라
+  실물 현장 재캘리브(§7), "시야 안인데 안 보임" prune(현재 drop_time 만).
 - **`dock_mark_detector.py`** (v5, 도킹 state 만 추론): `/detector/enable`
   (latched) 이 true 인 동안만 이미지 처리 → `/detections/dock_marks`.
   **아직 YOLO 아님** — `hsv_blobs()` 재사용 placeholder, `shape="unknown"`.
@@ -136,14 +156,17 @@ GPS(수평 ~1.5m/수직 ~3m) 전부 `kaboat_sim/urdf/wamv_kaboat.xacro` 주석�
   판단, PD 제어(`YAW_KP=0.3`, `YAW_KD=0.15`)로 목표점 추종하는 `seek_goal()`
   제공. 명령 상한 `max_linear=0.20`, `max_angular=0.05`. ⚠️ 이 값들은 실측
   안전값 — 함부로 올리지 마세요(이유는 §6). **m/s 가 아니라 추력 명령**이라는
-  점도 주의(0.20 → 실제 약 1.5 m/s, §6).
+  점도 주의(0.20 → 실제 약 1.5 m/s, §6). 부표는 `BuoyArray`(전역 좌표)로
+  구독하고, `buoy_range_bearing()`·`visible_buoys()`가 자기 odom 으로 배 기준
+  거리·방위를 계산해준다(부표맵은 뒤·먼 것도 보관하므로 전방 ±50°·15m 필터).
 - **`obstacle_avoidance_utils.py`**: 단순 반발 회피(`apply_repulsion`).
   ⚠️ **지금 스택엔 회피가 두 종류다** — `obstacle_planner`(avoid 미션)는
   위험도 지도 + 곡선 경로 플래너를 쓰고, 나머지 4개 behavior 는 아직 이
   반발 조향을 쓴다. 특히 `station_keeper` 의 목표(15, 73)는 부표 밭 안쪽이라
   회피가 필요한 구간이다. TODO(팀): 나머지도 플래너로 통일할지 결정.
-- **`gate_follower.py`**: red+green 이 같이 보이면 중점 방위로 조향, 아니면 goal.
-  TODO(팀): 게이트 쌍 매칭(제일 가까운 것끼리), 통과 판정.
+- **`gate_follower.py`**: 전방 시야에 red+green 이 같이 보이면(`visible_buoys`)
+  거리 가장 비슷한 쌍의 중점 방위로 조향, 아니면 goal. TODO(팀): 쌍 매칭 거리
+  임계(너무 다르면 페어 아님), 통과 판정.
 - **`station_keeper.py`**: goal 접근 + 5m/5초 체류 판정. TODO(팀): 바람/파도 드리프트 보상.
 - **`docking_ctrl.py`**: `/detections/dock_marks` **단독 구독**(v5). 지정 색
   (`target_color`) 마크 보이면 저속 접근. TODO(팀): YOLO 후 `target_shape` 매칭, 접안 정렬.
@@ -291,6 +314,11 @@ param/설정으로 주입하며, avoid 의 v_cmd(m/s)→명령 변환은 함수 
   높이나 마커 형상 문제로 추정 — `gate_follower`가 LiDAR 융합을 쓰면 먼저 원인 규명.
 - **`buoy_detector`/dock_mark placeholder 의 HSV 임계값은 sim 부표 원색 기준**.
   실제 카메라/조명에선 재캘리브레이션 필요(셔터·AWB 고정 후 현장 캘리브).
+- **sim `/camera/camera_info` 의 K 가 해상도와 안 맞음**: width 는 1280 이라
+  발행하면서 초점거리·주점(ppx≈160, fx≈277)은 320px 기준이다(gz rgbd 특성).
+  이 K 를 그대로 방위 계산에 쓰면 ~60° 쏠린다 — `buoy_detector` 는 주점이
+  중심 근처일 때만 K 를 믿고 아니면 HFOV 로 폴백(§4). camera_info 를 쓰는 다른
+  노드를 붙일 때 같은 함정 주의.
 
 ---
 
@@ -300,6 +328,34 @@ param/설정으로 주입하며, avoid 의 v_cmd(m/s)→명령 변환은 함수 
 > `### YYYY-MM-DD HH:MM — [영역] 요약` + 무엇을/왜 몇 문장. 파일 세부는 커밋
 > 메시지로. 영역 태그: `[occupancy_grid]` / `[obstacle]` + 세부 `[planner]`
 > `[DRI]` `[state machine]` 등을 나란히 붙임.
+
+### 2026-07-22 16:58 — [buoy_detector] RViz 데모로 방위·수면필터 버그 2건 수정
+RViz 로 부표맵을 띄웠더니 부표가 실제 좌표에서 10m 넘게 어긋났다. 원인 둘: (1) sim
+camera_info 의 K 가 320px 기준인데 이미지가 1280px 이라, 그 K 로 방위를 계산해 모든
+부표가 ~60° 오른쪽으로 쏠렸다 → 주점이 중심 근처일 때만 K 를 믿고 아니면 HFOV·이미지
+폭으로 방위를 유도하게 고쳤다. (2) 수면 필터가 "수평선 아래만 통과"라 수평선 위로 솟는
+부표를 통째로 잘랐다 → 하늘 컷선을 수평선보다 위(horizon_frac 0.30)로 내렸다. 고친 뒤
+검출 좌표가 실제 게이트 부표(red y=60.5·green y=65.5)에 ~0.5m(GPS 노이즈 수준)로 붙는
+것을 sim 으로 확인. 부표맵 RViz 마커(`/detections/buoys_viz`)와 데모 스크립트
+(`scripts/demo/buoy.rviz`·`sim_buoy.sh` 등)도 추가.
+
+### 2026-07-22 16:35 — [behavior] 부표 소비자를 BuoyArray(전역 좌표)로 전환
+`gate_follower`·`search_circler` 가 옛 `MarkArray`(카메라 상대 bearing) 대신 `BuoyArray`
+(전역 좌표 부표맵)를 쓰게 바꿨다. behavior_base 에 월드 좌표 부표를 배 기준 거리·방위로
+바꾸는 `buoy_range_bearing()` 과, 부표맵이 뒤·먼 것도 보관하니 전방 ±50°·15m 안만 골라주는
+`visible_buoys()` 를 넣었다 — 게이트 쌍 매칭·색 선회가 이걸로 "지금 보이는" 부표만 본다.
+docking_ctrl 은 dock_marks 라 그대로. sim 에서 gate 활성·`/cmd/gate` 발행 확인, 상대 기하
+왕복 테스트 포함 behaviors 테스트 80개 통과.
+
+### 2026-07-22 16:08 — [buoy_detector] 부표를 전역 좌표 랜드마크로 검출·추적 (Buoy/BuoyArray 신설)
+부표 출력을 카메라 상대 극좌표(`Mark`)에서 **월드(odom) 좌표 부표맵**(`Buoy`/`BuoyArray`)으로
+바꿨다 — 점유지도 cell 과 구분되는 색·id 를 가진 점 랜드마크다. 파이프라인은 HSV 색 →
+기하 필터(눈부심 줄무늬 제거) → 수면 필터(수평선 위 하늘 제거) → depth 3×3 median 거리 +
+camera_info 로 방위 → LiDAR 교차확인 → odom 전역 투영 → 시간 융합 순서다. 시간 융합(같은
+부표를 프레임 간 연결·N-of-M 확정·미관측 삭제·색 투표·위치 평활)은 ROS 무의존 순수 모듈
+`buoy_tracker.py` 로 빼 avoid 스택처럼 가짜 시계로 테스트했다(22개 통과). sim 라이브 검증에서
+부표 하나가 확정 뒤 id·색·좌표를 안정 유지함을 확인. `gate_follower`·`search_circler` 의
+`MarkArray`→`BuoyArray` 소비자 전환은 아직 안 함(넷 다 placeholder).
 
 ### 2026-07-22 15:24 — [obstacle] [DRI] [occupancy_grid] 장애물 판정 문턱을 DRI 로 일원화
 DRI 의 occ_threshold 를 50 에서 95 로 올렸다 — 히트 4번(발행값 97) 이상만 장애물, 3번 이하

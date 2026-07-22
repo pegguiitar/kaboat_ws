@@ -22,7 +22,12 @@ from std_msgs.msg import String
 from geometry_msgs.msg import Twist, PoseStamped
 from nav_msgs.msg import Odometry, OccupancyGrid
 
-from kaboat_msgs.msg import MarkArray
+from kaboat_msgs.msg import BuoyArray
+
+# 부표맵은 뒤쪽·먼 것까지 보관하므로, "지금 카메라에 보이는" 것만 쓰려는
+# behavior 는 전방 시야로 걸러 쓴다 (buoy_range_bearing/visible_buoys).
+BUOY_MAX_RANGE = 15.0            # [m] 이보다 먼 부표맵 항목은 현재 시야 아님으로 취급
+BUOY_HALF_FOV = math.radians(50)  # [rad] 전방 ±50°만 (카메라 87° HFOV 언저리)
 
 # 명령 의미(2026-07-17 정규화): linear.x/angular.z = 최대 추력 대비 비율 [-1,1].
 # 드라이버(twist2thrust, 실물은 ESC)가 자기 max_thrust 를 곱해 N 으로 변환한다.
@@ -67,7 +72,7 @@ class BehaviorBase(Node):
         self.state = ''
         self.goal = None          # PoseStamped | None
         self.odom = None          # Odometry | None
-        self.buoys = []           # list[kaboat_msgs.Mark] — buoy_detector(HSV 상시)
+        self.buoys = []           # list[kaboat_msgs.Buoy] — 전역(odom) 좌표 부표맵
         self.occupancy_grid = None  # OccupancyGrid | None — 회피(apply_repulsion) 소비처
 
         # mission_manager 가 latched(transient_local) 로 발행 — 늦게 떠도 수신
@@ -76,7 +81,7 @@ class BehaviorBase(Node):
         self.create_subscription(PoseStamped, '/mission/goal', self._on_goal, latched)
 
         self.create_subscription(Odometry, '/odom', self._on_odom, 10)
-        self.create_subscription(MarkArray, '/detections/buoys', self._on_buoys, 10)
+        self.create_subscription(BuoyArray, '/detections/buoys', self._on_buoys, 10)
         self.create_subscription(OccupancyGrid, '/occupancy_grid', self._on_grid, 1)
 
         self.cmd_pub = self.create_publisher(Twist, self.CMD_TOPIC, 10)
@@ -98,8 +103,8 @@ class BehaviorBase(Node):
     def _on_odom(self, msg: Odometry):
         self.odom = msg
 
-    def _on_buoys(self, msg: MarkArray):
-        self.buoys = list(msg.marks)
+    def _on_buoys(self, msg: BuoyArray):
+        self.buoys = list(msg.buoys)
 
     def _on_grid(self, msg: OccupancyGrid):
         self.occupancy_grid = msg
@@ -144,6 +149,45 @@ class BehaviorBase(Node):
         target_yaw = math.atan2(dy, dx)
         yaw = yaw_from_quaternion(self.odom.pose.pose.orientation)
         return normalize_angle(target_yaw - yaw)
+
+    # ── 부표맵 헬퍼 (월드 좌표 → 배 기준 상대 기하) ──────────────
+
+    def buoy_range_bearing(self, buoy):
+        """월드 좌표 부표 1개 → 배 기준 (거리[m], 방위[rad, 좌측 +]).
+
+        부표맵은 odom 프레임 좌표라, 극좌표(거리·방위)는 소비자가 자기 odom
+        으로 그때그때 계산한다 — buoy_detector 가 극좌표를 안 주는 이유다.
+        odom 이 아직 없으면 None.
+        """
+        if self.odom is None:
+            return None
+        px = self.odom.pose.pose.position.x
+        py = self.odom.pose.pose.position.y
+        yaw = yaw_from_quaternion(self.odom.pose.pose.orientation)
+        dx = buoy.position.x - px
+        dy = buoy.position.y - py
+        return math.hypot(dx, dy), normalize_angle(math.atan2(dy, dx) - yaw)
+
+    def visible_buoys(self, color=None, max_range=BUOY_MAX_RANGE,
+                      half_fov=BUOY_HALF_FOV):
+        """지금 전방 시야 안에 있는 부표 목록 → [(buoy, 거리, 방위), ...].
+
+        부표맵은 뒤로 지나간 것·먼 것도 보관하므로, "카메라에 지금 보이는"
+        것처럼 쓰려는 behavior 는 이걸로 거리·전방각 필터를 건다. color 를
+        주면 그 색만. 거리가 가까운 순으로 정렬해 돌려준다.
+        """
+        out = []
+        for m in self.buoys:
+            if color is not None and m.color != color:
+                continue
+            rb = self.buoy_range_bearing(m)
+            if rb is None:
+                continue
+            dist, bearing = rb
+            if dist <= max_range and abs(bearing) <= half_fov:
+                out.append((m, dist, bearing))
+        out.sort(key=lambda t: t[1])
+        return out
 
     def seek_goal(self, slow_radius: float = 3.0) -> Twist:
         """goal 을 향한 PD 제어 Twist. 모든 behavior 의 이동 기본기.

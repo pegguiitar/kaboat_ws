@@ -27,10 +27,12 @@ class SearchCircler(BehaviorBase):
             return apply_repulsion(cmd, self.occupancy_grid, self.odom)
 
         # 구역 안 — 색 따라 선회 (skeleton 규칙: green 좌선회, red 우선회)
+        # 부표맵은 뒤 것·먼 것도 보관하므로 전방 시야(visible_buoys)로 걸러
+        # "지금 보이는" 색만 본다.
         from geometry_msgs.msg import Twist
         cmd = Twist()
-        greens = [m for m in self.buoys if m.color == 'green']
-        reds = [m for m in self.buoys if m.color == 'red']
+        greens = self.visible_buoys('green')
+        reds = self.visible_buoys('red')
         if greens and not reds:
             cmd.angular.z = +self.max_angular
             cmd.linear.x = self.max_linear * 0.5
