@@ -35,29 +35,38 @@
       <pose>25 11 0 0 0 0</pose>
     </include>
 
-    <!-- ---- 오렌지 장애물 격자 (3m 간격, 상/하단은 성기게, 중간 2줄은 6열 전부) ---- -->
-    <!-- Row 1 (top, y=21): 4개 -->
-    <include><name>obs_r1_1</name><uri>model://basic_buoy_orange</uri><pose>13 21 0 0 0 0</pose></include>
-    <include><name>obs_r1_2</name><uri>model://basic_buoy_orange</uri><pose>16 21 0 0 0 0</pose></include>
-    <include><name>obs_r1_3</name><uri>model://basic_buoy_orange</uri><pose>19 21 0 0 0 0</pose></include>
-    <include><name>obs_r1_4</name><uri>model://basic_buoy_orange</uri><pose>22 21 0 0 0 0</pose></include>
-    <!-- Row 2 (y=18): 6개 -->
-    <include><name>obs_r2_1</name><uri>model://basic_buoy_orange</uri><pose>10 18 0 0 0 0</pose></include>
-    <include><name>obs_r2_2</name><uri>model://basic_buoy_orange</uri><pose>13 18 0 0 0 0</pose></include>
-    <include><name>obs_r2_3</name><uri>model://basic_buoy_orange</uri><pose>16 18 0 0 0 0</pose></include>
-    <include><name>obs_r2_4</name><uri>model://basic_buoy_orange</uri><pose>19 18 0 0 0 0</pose></include>
-    <include><name>obs_r2_5</name><uri>model://basic_buoy_orange</uri><pose>22 18 0 0 0 0</pose></include>
-    <include><name>obs_r2_6</name><uri>model://basic_buoy_orange</uri><pose>25 18 0 0 0 0</pose></include>
-    <!-- Row 3 (y=15): 6개 -->
-    <include><name>obs_r3_1</name><uri>model://basic_buoy_orange</uri><pose>10 15 0 0 0 0</pose></include>
-    <include><name>obs_r3_2</name><uri>model://basic_buoy_orange</uri><pose>13 15 0 0 0 0</pose></include>
-    <include><name>obs_r3_3</name><uri>model://basic_buoy_orange</uri><pose>16 15 0 0 0 0</pose></include>
-    <include><name>obs_r3_4</name><uri>model://basic_buoy_orange</uri><pose>19 15 0 0 0 0</pose></include>
-    <include><name>obs_r3_5</name><uri>model://basic_buoy_orange</uri><pose>22 15 0 0 0 0</pose></include>
-    <include><name>obs_r3_6</name><uri>model://basic_buoy_orange</uri><pose>25 15 0 0 0 0</pose></include>
-    <!-- Row 4 (bottom, y=12): 2개 -->
-    <include><name>obs_r4_1</name><uri>model://basic_buoy_orange</uri><pose>16 12 0 0 0 0</pose></include>
-    <include><name>obs_r4_2</name><uri>model://basic_buoy_orange</uri><pose>19 12 0 0 0 0</pose></include>
+    <!-- ---- 오렌지 장애물 슬라롬 (x방향 지그재그) ----
+         배 진행방향은 +x — 그 축을 따라 열(column)을 3m 간격으로 세우고, 교대
+         열을 y 로 1.5m 엇갈리게(벽돌 stagger) 배치해 배가 +x 로 가면서 좌우(y)
+         로 위빙하게 만든다(진행축 x, 오실레이션 y). 부표 중심간 거리 3m(대회
+         규격) 유지 — 열 내부 y간격 3m, 열간 x간격 3m → 최소 중심간격 3m, 대각
+         이웃 3.35m. 홀수 열(x=10·16·22)은 배 경로(y=15)에 부표가 걸려 위빙을
+         강제하고, 짝수 열(x=13·19·25)은 그 자리에 틈(y=15)이 생긴다.
+         부표 크기·모양(geometry)은 basic_buoy_orange 그대로, 총 18개. -->
+    <!-- Col 1 (x=10, 경로 위): 3개 -->
+    <include><name>obs_c1_1</name><uri>model://basic_buoy_orange</uri><pose>10 12 0 0 0 0</pose></include>
+    <include><name>obs_c1_2</name><uri>model://basic_buoy_orange</uri><pose>10 15 0 0 0 0</pose></include>
+    <include><name>obs_c1_3</name><uri>model://basic_buoy_orange</uri><pose>10 18 0 0 0 0</pose></include>
+    <!-- Col 2 (x=13, y +1.5 — 경로 y=15 에 틈): 3개 -->
+    <include><name>obs_c2_1</name><uri>model://basic_buoy_orange</uri><pose>13 13.5 0 0 0 0</pose></include>
+    <include><name>obs_c2_2</name><uri>model://basic_buoy_orange</uri><pose>13 16.5 0 0 0 0</pose></include>
+    <include><name>obs_c2_3</name><uri>model://basic_buoy_orange</uri><pose>13 19.5 0 0 0 0</pose></include>
+    <!-- Col 3 (x=16, 경로 위): 3개 -->
+    <include><name>obs_c3_1</name><uri>model://basic_buoy_orange</uri><pose>16 12 0 0 0 0</pose></include>
+    <include><name>obs_c3_2</name><uri>model://basic_buoy_orange</uri><pose>16 15 0 0 0 0</pose></include>
+    <include><name>obs_c3_3</name><uri>model://basic_buoy_orange</uri><pose>16 18 0 0 0 0</pose></include>
+    <!-- Col 4 (x=19, y +1.5): 3개 -->
+    <include><name>obs_c4_1</name><uri>model://basic_buoy_orange</uri><pose>19 13.5 0 0 0 0</pose></include>
+    <include><name>obs_c4_2</name><uri>model://basic_buoy_orange</uri><pose>19 16.5 0 0 0 0</pose></include>
+    <include><name>obs_c4_3</name><uri>model://basic_buoy_orange</uri><pose>19 19.5 0 0 0 0</pose></include>
+    <!-- Col 5 (x=22, 경로 위): 3개 -->
+    <include><name>obs_c5_1</name><uri>model://basic_buoy_orange</uri><pose>22 12 0 0 0 0</pose></include>
+    <include><name>obs_c5_2</name><uri>model://basic_buoy_orange</uri><pose>22 15 0 0 0 0</pose></include>
+    <include><name>obs_c5_3</name><uri>model://basic_buoy_orange</uri><pose>22 18 0 0 0 0</pose></include>
+    <!-- Col 6 (x=25, y +1.5): 3개 -->
+    <include><name>obs_c6_1</name><uri>model://basic_buoy_orange</uri><pose>25 13.5 0 0 0 0</pose></include>
+    <include><name>obs_c6_2</name><uri>model://basic_buoy_orange</uri><pose>25 16.5 0 0 0 0</pose></include>
+    <include><name>obs_c6_3</name><uri>model://basic_buoy_orange</uri><pose>25 19.5 0 0 0 0</pose></include>
 
     <!-- ---- 하단 채널(항로추종): 초록 삼각형 5개 / 빨간 삼각형 5개.
          x방향(같은 행 내 인접 부표 간) 5m, y방향(빨강-초록 행 간) 5m 간격.
@@ -80,18 +89,26 @@
     <include><name>search_red_1</name><uri>https://fuel.gazebosim.org/1.0/openrobotics/models/mb_marker_buoy_red</uri><pose>57 16 0 0 0 0</pose></include>
     <include><name>search_orange_2</name><uri>model://basic_buoy_orange</uri><pose>55 11 0 0 0 0</pose></include>
 
-    <!-- ---- 도킹 접안 구조물 (파란 빗살, x=67~70 부근, 세로 12m) ---- -->
-    <!-- 3개 이빨, 폭(세로) 1.5m, 이빨 사이 간격 2m, 깊이(가로) 3m 로 균일.
-         2(간격)+1.5(이빨1)+2(간격)+1.5(이빨2)+2(간격)+1.5(이빨3)+2(간격) = 12.5m -->
+    <!-- ---- 도킹 접안 구조물 (파란 빗살, x=67~70 부근, 세로 12m) ----
+         도면(그림): 핑거 4개(양 끝 포함) + 슬롯 3개. 핑거 폭(세로) 1.5m,
+         슬롯 간격 2m, 핑거 깊이(가로) 3m → 4×1.5 + 3×2 = 12m.
+         핑거 y중심 = 0.75 / 4.25 / 7.75 / 11.25 (양 끝 0.75·11.25 가 구조물
+         끝까지 튀어나옴 — 이전 3핑거는 가운데만 있고 끝은 밋밋했음). 뒷벽이
+         y=0~12 전체를 x=70 선에서 지지.
+         ⚠️ 가라앉지 않음: 이 구조물은 model <static>true</static> 의 링크라
+         중력·부력을 받지 않는 고정 지오메트리다(부표처럼 buoyancy 플러그인을
+         쓰는 떠있는 물체가 아님). z: 링크 pose z=0.75 + 박스 높이 1.5 →
+         z=0~1.5 로 수면(z=0) 위에 얹혀 고정. -->
     <link name="dock_structure">
       <pose>0 0 0.75 0 0 0</pose>
 
-      <collision name="tooth1_collision">
-        <pose>68.5 2.75 0 0 0 0</pose>
+      <!-- 핑거 1 (하단 끝, y=0.75) -->
+      <collision name="finger1_collision">
+        <pose>68.5 0.75 0 0 0 0</pose>
         <geometry><box><size>3.0 1.5 1.5</size></box></geometry>
       </collision>
-      <visual name="tooth1_visual">
-        <pose>68.5 2.75 0 0 0 0</pose>
+      <visual name="finger1_visual">
+        <pose>68.5 0.75 0 0 0 0</pose>
         <geometry><box><size>3.0 1.5 1.5</size></box></geometry>
         <material>
           <ambient>0.1 0.3 0.8 1.0</ambient>
@@ -99,12 +116,13 @@
         </material>
       </visual>
 
-      <collision name="tooth2_collision">
-        <pose>68.5 6.25 0 0 0 0</pose>
+      <!-- 핑거 2 (y=4.25) -->
+      <collision name="finger2_collision">
+        <pose>68.5 4.25 0 0 0 0</pose>
         <geometry><box><size>3.0 1.5 1.5</size></box></geometry>
       </collision>
-      <visual name="tooth2_visual">
-        <pose>68.5 6.25 0 0 0 0</pose>
+      <visual name="finger2_visual">
+        <pose>68.5 4.25 0 0 0 0</pose>
         <geometry><box><size>3.0 1.5 1.5</size></box></geometry>
         <material>
           <ambient>0.1 0.3 0.8 1.0</ambient>
@@ -112,12 +130,13 @@
         </material>
       </visual>
 
-      <collision name="tooth3_collision">
-        <pose>68.5 9.75 0 0 0 0</pose>
+      <!-- 핑거 3 (y=7.75) -->
+      <collision name="finger3_collision">
+        <pose>68.5 7.75 0 0 0 0</pose>
         <geometry><box><size>3.0 1.5 1.5</size></box></geometry>
       </collision>
-      <visual name="tooth3_visual">
-        <pose>68.5 9.75 0 0 0 0</pose>
+      <visual name="finger3_visual">
+        <pose>68.5 7.75 0 0 0 0</pose>
         <geometry><box><size>3.0 1.5 1.5</size></box></geometry>
         <material>
           <ambient>0.1 0.3 0.8 1.0</ambient>
@@ -125,14 +144,28 @@
         </material>
       </visual>
 
-      <!-- 뒷벽: 세 이빨을 x=70 선에서 지지하는 배경 벽 (선택적, 시각적 완성도용) -->
+      <!-- 핑거 4 (상단 끝, y=11.25) -->
+      <collision name="finger4_collision">
+        <pose>68.5 11.25 0 0 0 0</pose>
+        <geometry><box><size>3.0 1.5 1.5</size></box></geometry>
+      </collision>
+      <visual name="finger4_visual">
+        <pose>68.5 11.25 0 0 0 0</pose>
+        <geometry><box><size>3.0 1.5 1.5</size></box></geometry>
+        <material>
+          <ambient>0.1 0.3 0.8 1.0</ambient>
+          <diffuse>0.1 0.3 0.8 1.0</diffuse>
+        </material>
+      </visual>
+
+      <!-- 뒷벽: 네 핑거를 x=70 선에서 지지하는 배경 벽 (y=0~12 전체) -->
       <collision name="backwall_collision">
-        <pose>70.4 6.25 0 0 0 0</pose>
-        <geometry><box><size>0.8 12.5 1.5</size></box></geometry>
+        <pose>70.4 6.0 0 0 0 0</pose>
+        <geometry><box><size>0.8 12.0 1.5</size></box></geometry>
       </collision>
       <visual name="backwall_visual">
-        <pose>70.4 6.25 0 0 0 0</pose>
-        <geometry><box><size>0.8 12.5 1.5</size></box></geometry>
+        <pose>70.4 6.0 0 0 0 0</pose>
+        <geometry><box><size>0.8 12.0 1.5</size></box></geometry>
         <material>
           <ambient>0.08 0.2 0.6 1.0</ambient>
           <diffuse>0.08 0.2 0.6 1.0</diffuse>
