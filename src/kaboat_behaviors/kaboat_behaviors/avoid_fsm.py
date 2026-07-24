@@ -33,7 +33,7 @@ class FsmParams:
     lookahead: float = 2.0        # 📝 follow 목표점 전방 호길이 [m]
     kappa_window: float = 2.0     # 📝 곡률 감속 전방 창 [m]
     v_min: float = 0.3            # 📝 곡률 감속 하한 [m/s]
-    v_max: float = 1.1            # 📝 현재 회피 추종 상한 [m/s] (교정 전속은 v_full)
+    v_max: float = 1.4            # 📝 현재 회피 추종 상한 [m/s] (교정 전속은 v_full)
     omega_max: float = 0.52       # ✅ 실측 최대 요레이트 [rad/s] — v = ω_max/κ
     slow_radius: float = 3.0      # seek_goal 과 동일 — waypoint 근접 감속 반경 [m]
     t_backstop: float = 3.0       # 📝 재생성 트리거 (c) 주기 [s]

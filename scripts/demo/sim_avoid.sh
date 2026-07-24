@@ -14,4 +14,4 @@ done
 pkill -KILL -f '[o]dom_gps_noise.py' 2>/dev/null || true
 
 # sigma=0.25m인 OU 위치잡음 — 오차의 약 95%(2σ)가 50cm 이내.
-exec ros2 launch kaboat_sim simulation.launch.py headless:=False spawn_y:=75.0 odom_noise_sigma:=0.25
+exec ros2 launch kaboat_sim simulation.launch.py headless:=True spawn_y:=75.0 odom_noise_sigma:=0.25
