@@ -8,6 +8,7 @@
      장애물 표현은 v5 대로 /occupancy_grid 단독 — 회피는 이 격자를 소비한다.
      도킹 전용 /detections/dock_marks 는 docking_ctrl 만 따로 구독한다)
   - active 인 동안 10Hz 로 compute_cmd() 를 호출해 /cmd/<이름> 에 Twist 발행
+  - behavior 고유 완료 조건을 달성하면 /mission/complete 에 state 이름 발행
   - 명령 상한 (명령 = 최대추력 비율 — 추력이 안전 범위(12N/±3N)를 넘지 않게)
 
 비활성일 때는 아무것도 발행하지 않는다 — cmd_mux 는 활성 behavior 의
@@ -70,6 +71,7 @@ class BehaviorBase(Node):
         self.max_angular = float(self.get_parameter('max_angular').value)
 
         self.state = ''
+        self._completion_sent = False
         self.goal = None          # PoseStamped | None
         self.odom = None          # Odometry | None
         self.buoys = []           # list[kaboat_msgs.Buoy] — 전역(odom) 좌표 부표맵
@@ -85,6 +87,7 @@ class BehaviorBase(Node):
         self.create_subscription(OccupancyGrid, '/occupancy_grid', self._on_grid, 1)
 
         self.cmd_pub = self.create_publisher(Twist, self.CMD_TOPIC, 10)
+        self.complete_pub = self.create_publisher(String, '/mission/complete', 10)
         self.create_timer(0.1, self._tick)  # 10Hz
 
         self.get_logger().info(
@@ -92,10 +95,17 @@ class BehaviorBase(Node):
 
     # ── 콜백 ─────────────────────────────────────────
     def _on_state(self, msg: String):
+        was_active = self.active
         if msg.data != self.state:
             self.get_logger().info(f"state 변경 '{self.state}' → '{msg.data}' "
                                    f"({'활성' if msg.data == self.STATE_NAME else '대기'})")
         self.state = msg.data
+        is_active = self.active
+        if not was_active and is_active:
+            self._completion_sent = False
+            self.on_activate()
+        elif was_active and not is_active:
+            self.on_deactivate()
 
     def _on_goal(self, msg: PoseStamped):
         self.goal = msg
@@ -127,6 +137,23 @@ class BehaviorBase(Node):
     def compute_cmd(self):
         """활성 상태에서 10Hz 로 호출. Twist 를 반환 (None 이면 미발행)."""
         raise NotImplementedError
+
+    def on_activate(self):
+        """자기 mission state 진입 시 1회 호출. 서브클래스 상태 초기화용."""
+
+    def on_deactivate(self):
+        """자기 mission state 이탈 시 1회 호출. 서브클래스 정리용."""
+
+    def report_complete(self):
+        """현재 behavior 완료를 한 activation 당 한 번 발행한다."""
+        if not self.active or self._completion_sent:
+            return
+        msg = String()
+        msg.data = self.STATE_NAME
+        self.complete_pub.publish(msg)
+        self._completion_sent = True
+        self.get_logger().info(
+            f"behavior '{self.STATE_NAME}' 완료 신호 → /mission/complete")
 
     # ── 위치 제어 공통 헬퍼 ────────────────────────────
 

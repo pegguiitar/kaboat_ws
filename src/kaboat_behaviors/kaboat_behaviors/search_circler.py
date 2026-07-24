@@ -11,18 +11,27 @@ import rclpy
 from .behavior_base import BehaviorBase
 from .obstacle_avoidance_utils import apply_repulsion
 
-# 도착 판정 반경 — mission_manager 의 전환 반경(1m)보다 작아야 한다.
-# 크게 잡으면 목표점 밖에서 선회만 하다가 미션 전환(1m 진입)이 영영 안 일어난다.
+# 탐색은 목표점 0.8m 이내에서 시작한다. 따라서 완료 신호가 발생할 때
+# mission_manager 의 별도 2m 웨이포인트 조건도 함께 만족한다.
 ARRIVE_RADIUS = 0.8
+SEARCH_TIME = 5.0
 
 
 class SearchCircler(BehaviorBase):
     STATE_NAME = 'search'
     CMD_TOPIC = '/cmd/search'
 
+    def __init__(self):
+        super().__init__()
+        self._circle_since = None
+
+    def on_activate(self):
+        self._circle_since = None
+
     def compute_cmd(self):
         # 아직 구역 밖이면 접근부터
         if self.distance_to_goal() > ARRIVE_RADIUS:
+            self._circle_since = None
             cmd = self.seek_goal()
             return apply_repulsion(cmd, self.occupancy_grid, self.odom)
 
@@ -31,6 +40,12 @@ class SearchCircler(BehaviorBase):
         # "지금 보이는" 색만 본다.
         from geometry_msgs.msg import Twist
         cmd = Twist()
+        now = self.get_clock().now()
+        if self._circle_since is None:
+            self._circle_since = now
+        elif ((now - self._circle_since).nanoseconds * 1e-9 >= SEARCH_TIME):
+            self.report_complete()
+
         greens = self.visible_buoys('green')
         reds = self.visible_buoys('red')
         if greens and not reds:

@@ -72,22 +72,22 @@ from sensor_msgs.msg import LaserScan, PointCloud2, Imu
 from nav_msgs.msg import Odometry, OccupancyGrid
 import sensor_msgs_py.point_cloud2 as pc2
 
-L_OCC = 0.85              # 히트 셀 log-odds 증가량 (≈ logit(0.7))
-L_FREE = -0.4             # 경로(자유공간) 셀 log-odds 감소량 (≈ logit(0.4))
+L_OCC = 0.80              # 히트 셀 log-odds 증가량 (≈ logit(0.7))
+L_FREE = -0.6             # 경로(자유공간) 셀 log-odds 감소량 (≈ logit(0.4))
 # 둘 다 거리/빔각도 무관 고정값 — 진짜 inverse sensor model 이면 거리·빔중심
 # 이탈각의 함수여야 하는데, 그러면 복잡해지니 skeleton 은 상수로 근사 (TODO 2)
-L_OCC_CAM = 0.5            # 뎁스캠 히트 log-odds 증가량 — 실외 IR 뎁스는 LiDAR
+L_OCC_CAM = 0.0            # 뎁스캠 히트 log-odds 증가량 — 실외 IR 뎁스는 LiDAR
                            # 보다 신뢰도가 낮다고 보고 L_OCC(0.85)보다 약하게 잡음
 CAM_RANGE_MIN, CAM_RANGE_MAX = 0.6, 6.0  # 실물 D455 유효 뎁스 범위 [m]
 # sim 의 clip(0.1~100m)은 그 밖도 "유효값"으로 내보내지만(wamv_kaboat.xacro
 # 주석 참고) 실물은 그 범위 밖에서 부정확 — 여기서 걸러야 함 (안 그러면
 # 카메라 근접 노이즈/배 자신의 구조물, 원거리 오탐이 전부 장애물로 잡힘)
-L_MIN, L_MAX = -2.0, 4.35  # log-odds 클램프. 상한 4.35(≈5히트)면 포화 확률 ≈99 —
+L_MIN, L_MAX = -4.5, 4.35  # log-odds 클램프. 상한 4.35(≈5히트)면 포화 확률 ≈99 —
 # DRI 문턱 95 위로 free ~3.5스캔의 여유가 생겨 부표가 경계(95~97)에서 안 깜빡인다.
 # 상한을 올려도 유령엔 영향 없다: 3히트 해수면 유령(93)은 애초에 상한 근처에 못 가
 # 감쇄 속도가 그대로고, 상한까지 쌓이는 건 꾸준히 관측되는 실제 장애물뿐이다(예전 3.5는
 # 포화 97이라 문턱에 바짝 붙어 free 레이 한둘에 깜빡였다).
-TILT_MAX = math.radians(10.0)  # 이 이상 기울면 해당 스캔 버림 (15→10: 파도 유령 근원 축소)
+TILT_MAX = math.radians(15.0)  # 이 이상 기울면 해당 스캔 버림 (15→10: 파도 유령 근원 축소)
 
 
 def _yaw(q) -> float:

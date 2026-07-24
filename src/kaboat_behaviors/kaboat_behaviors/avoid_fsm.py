@@ -33,7 +33,7 @@ class FsmParams:
     lookahead: float = 2.0        # 📝 follow 목표점 전방 호길이 [m]
     kappa_window: float = 2.0     # 📝 곡률 감속 전방 창 [m]
     v_min: float = 0.3            # 📝 곡률 감속 하한 [m/s]
-    v_max: float = 1.48           # ✅ SKELETON §6 실측 전속 [m/s] (cmd 0.101 에서)
+    v_max: float = 1.1            # 📝 현재 회피 추종 상한 [m/s] (교정 전속은 v_full)
     omega_max: float = 0.52       # ✅ 실측 최대 요레이트 [rad/s] — v = ω_max/κ
     slow_radius: float = 3.0      # seek_goal 과 동일 — waypoint 근접 감속 반경 [m]
     t_backstop: float = 3.0       # 📝 재생성 트리거 (c) 주기 [s]
@@ -84,8 +84,9 @@ def follow_cmd(plan: Plan, boat_xy, yaw: float, yaw_rate: float, wp_xy,
 
     조향은 seek_goal() 과 같은 PD(게인도 노드가 같은 값 주입), 목표점만
     경로 위 lookahead 점. 감속은 전방 창 max κ 로 v = clamp(ω_max/κ, v_min,
-    v_max) — κ_avail = ω/v 라 전속(1.48)에선 0.35 밖에 못 내는데 회피 경로는
-    κ 0.9~1.2 가 필요해(실측) 조향만으론 물리적으로 못 따라간다.
+    v_max) — κ_avail = ω/v 라 교정 전속(1.48)에선 0.35, 현재 회피 상한
+    1.1m/s에서도 0.47뿐인데 경로는 κ 0.9~1.2가 필요해(실측) 조향만으론
+    물리적으로 못 따라간다.
     heading 오차 비례 감속 항은 v1 제외 — seek_goal 의 이산 규칙(오차 >60°
     면 저속)만 재사용한다 (제자리 급회전 = 전복 위험 차단, SKELETON §6).
     """
@@ -95,7 +96,7 @@ def follow_cmd(plan: Plan, boat_xy, yaw: float, yaw_rate: float, wp_xy,
 
     # 목표점: 진행 위치 + lookahead 호길이 앞 샘플. waypoint 근접 시 wp 로
     # 캡 — r_end 가 min_horizon 으로 클램프돼 경로가 wp 를 지나쳐 뻗는 문제
-    # 차단 (도착 판정은 mission_manager 1m 전담 — 여기선 안 만든다).
+    # 차단 (도착·완료 보고는 obstacle_planner/mission_manager 담당).
     if wp_dist <= fsm.lookahead:
         target = wp
     else:

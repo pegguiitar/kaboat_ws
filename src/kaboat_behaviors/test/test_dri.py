@@ -233,7 +233,8 @@ def test_closer_obstacle_gets_bigger_radius():
     cf = (math.floor(8.0 / RES) + 0.5) * RES
     assert dn.risk_at(cn, 0.1) == pytest.approx(df.risk_at(cf, 0.1), rel=1e-3)
     # 같은 거리만큼 옆으로(=berth 방향) 벗어났을 때 가까운 쪽이 덜 감쇠
-    assert dn.risk_at(cn, 1.6) > df.risk_at(cf, 1.6)
+    # sigma 기본값을 0.6→0.5로 줄인 뒤에도 두 3σ 패치 안에 드는 1m 지점에서 비교.
+    assert dn.risk_at(cn, 1.1) > df.risk_at(cf, 1.1)
 
 
 def test_risk_at_outside_window_is_inf():

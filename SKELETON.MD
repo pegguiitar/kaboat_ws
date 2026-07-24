@@ -57,7 +57,7 @@
   twist2thrust (kaboat_sim 기존 노드 재사용)     → 좌우 추력
 
 관리 ──────────────────────────────────────────────────────
-  mission_manager: /odom 과 목표좌표 거리 < 1m → 다음 미션 전환
+  mission_manager: behavior 완료 신호 + 목표좌표 거리 ≤ 2m → 다음 미션 전환
                    gate → station → dock → search → avoid → done
                    /detector/enable (Bool, latched) — dock state 에서만 true
                    → dock_mark_detector 의 YOLO 추론 게이팅
@@ -168,8 +168,13 @@ cell 과 구분되는 "좌표 랜드마크". 극좌표는 소비자가 자기 od
   거리 가장 비슷한 쌍의 중점 방위로 조향, 아니면 goal. TODO(팀): 쌍 매칭 거리
   임계(너무 다르면 페어 아님), 통과 판정.
 - **`station_keeper.py`**: goal 접근 + 5m/5초 체류 판정. TODO(팀): 바람/파도 드리프트 보상.
-- **`docking_ctrl.py`**: `/detections/dock_marks` **단독 구독**(v5). 지정 색
-  (`target_color`) 마크 보이면 저속 접근. TODO(팀): YOLO 후 `target_shape` 매칭, 접안 정렬.
+- **`docking_fsm.py` / `docking_ctrl.py`**: ROS 비의존 상태기계
+  `APPROACH → ACQUIRE → ALIGN → ENTER → HOLD → REVERSE → COMPLETE`.
+  waypoint에서 지정 색/모양 표식을 획득하고 방위 오차 5° 이내 정렬, 표식
+  1m까지 저속 접안, 3초 정지 후 후진한다. waypoint 반경 1.8m로 복귀한
+  시점에만 완료 신호를 보내므로 mission_manager의 2m 조건과 함께 만족한다.
+  `/detections/dock_marks`를 단독 구독하고 0.5초 넘은 관측은 버린다.
+  순수 FSM은 `test/test_docking_fsm.py`에서 전이·표식 유실·완료 조건을 검증한다.
 - **`search_circler.py`**: 구역 도착 후 마크 색 따라 좌/우 선회. TODO(팀): 규정에 맞는 선회 방향/횟수.
 - **`dri.py`** — 완성. `/occupancy_grid` → 위험도(DRI) 격자. 점유 셀마다 등방
   가우시안 splat(가깝거나 정면일수록 크고 진하게), 셀 결합은 **max**. ROS 무의존
@@ -193,10 +198,15 @@ cell 과 구분되는 "좌표 랜드마크". 극좌표는 소비자가 자기 od
 
 ### `kaboat_mission` — 완성 (규칙은 팀 합의로 확정)
 - **`mission_manager.py`**: `/odom`과 목표좌표(`kaboat_bringup/config/mission_params.yaml`)
-  거리가 `transition_radius`(기본 1.0m) 이내면 다음 미션 전환 — behavior 완료
-  신호 없이 위치만으로 판정. 순서 `gate → station → dock → search → avoid → done`
+  거리가 `transition_radius`(기본 2.0m) 이내이고, 현재 behavior가
+  `/mission/complete`에 자기 state 이름을 보낸 경우에만 다음 미션으로 전환한다.
+  완료 신호가 먼저 오면 현재 미션 동안 기억하며, 다른 state 이름의 신호는
+  무시한다. 순서 `gate → station → dock → search → avoid → done`
   고정(`MISSION_ORDER`). 전이마다 `/detector/enable`(latched)도 발행 — `dock`
   진입 시 true, 이탈 시 false(YOLO 추론 게이팅).
+  현재 완료 기준은 `gate`/`avoid` 목표 2m 진입, `station` 목표 5m 안에서
+  5초 유지, `search` 목표 0.8m 안에서 5초 선회, `dock`은 접안·3초 정지 후
+  후진하여 waypoint 반경 1.8m로 복귀하는 것이다.
   ⚠️ **전체 미션을 이어서 도는 통합 검증은 아직 안 했다.** 회피(`avoid`)만
   구현이 끝났고 나머지 4개 behavior 는 placeholder 라, 지금 완주시켜 봐야
   "죽지 않고 좌표를 찍었다" 이상은 알 수 없기 때문이다. 그 behavior 들이

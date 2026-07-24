@@ -59,17 +59,16 @@ class ObstaclePlanner(BehaviorBase):
             kw[f.name] = self.get_parameter(name).value
         return cls(**kw)
 
-    def _on_state(self, msg):
-        was_active = self.active
-        super()._on_state(msg)
-        if was_active and not self.active:
-            # 비활성→재활성 시 낡은 plan·상태 이월 금지 
-            self.fsm.reset()
+    def on_deactivate(self):
+        # 비활성→재활성 시 낡은 plan·상태 이월 금지
+        self.fsm.reset()
 
     def compute_cmd(self):
         cmd = Twist()
         if self.odom is None or self.goal is None or self.occupancy_grid is None:
             return cmd   # 데이터 없음 — 정지 명령 발행 (워치독 침묵 금지)
+        if self.distance_to_goal() <= 2.0:
+            self.report_complete()
 
         pos = self.odom.pose.pose.position
         yaw = yaw_from_quaternion(self.odom.pose.pose.orientation)

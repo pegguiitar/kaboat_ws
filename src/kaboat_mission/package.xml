@@ -3,7 +3,7 @@
 <package format="3">
   <name>kaboat_mission</name>
   <version>0.1.0</version>
-  <description>mission_manager — 종합임무 state machine. 목표점 1m 이내 진입 시 다음 미션으로 전환.</description>
+  <description>mission_manager — behavior 완료 신호와 목표점 2m 이내 조건으로 전환하는 종합임무 state machine.</description>
   <maintainer email="taekwon3611@gmail.com">kaboat</maintainer>
   <license>Apache-2.0</license>
 

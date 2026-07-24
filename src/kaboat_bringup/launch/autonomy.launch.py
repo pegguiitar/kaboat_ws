@@ -12,7 +12,7 @@
   ② behavior ×5   gate_follower, station_keeper, docking_ctrl,
                    search_circler, obstacle_planner
   제어            cmd_mux(워치독), twist2thrust(kaboat_sim 재사용)
-  관리            mission_manager (1m 전환 규칙, mission_params.yaml)
+  관리            mission_manager (behavior 완료 + 목표 2m 전환 규칙)
 
 실물 전환 시 시뮬레이터 대신 실제 센서 드라이버 + robot_localization 을
 띄우면 이 launch 는 그대로 재사용한다 (토픽 인터페이스 동일).
