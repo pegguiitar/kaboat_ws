@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y \
     lsb-release \
     python3-pip \
     python3-vcstool \
+    ros-humble-robot-localization \
     && rm -rf /var/lib/apt/lists/*
 
 # 2. Gazebo (OSRF) apt 저장소 추가 + Gazebo Garden 설치

@@ -219,7 +219,10 @@ def test_closer_obstacle_gets_bigger_radius():
     비등방 버전에선 이 확대가 σ_along(방사축)에만 걸려서 배가 지나가는
     berth(방위 방향 폭)를 전혀 안 넓혔다. 등방이라 σ 가 곧 berth 다.
     """
-    p = DriParams(k_dist=1.0, k_head=0.0, a_dist=0.0, a_head=0.0)  # 크기 게인만
+    # sigma 명시 고정 — 기본값에 암묵 의존하면 기본값 튜닝(예: 0.6→0.45)마다
+    # 측정점(1.6m)이 3σ 컷오프 밖으로 밀려나 깨진다 (실측: sigma=0.45 에선
+    # 근/원 둘 다 0 이 되어 버림). 다른 sigma 지정 테스트들과 동일한 패턴.
+    p = DriParams(sigma=0.6, k_dist=1.0, k_head=0.0, a_dist=0.0, a_head=0.0)  # 크기 게인만
     near, _ = make_grid([(2.0, 0.0)])
     far, _ = make_grid([(8.0, 0.0)])
     dn = build_dri(near, (0.0, 0.0), 0.0, p)
