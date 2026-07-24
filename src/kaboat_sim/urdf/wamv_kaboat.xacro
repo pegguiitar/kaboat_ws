@@ -193,7 +193,7 @@
     </sensor>
   </gazebo>
 
-  <!-- Odometry (sim 전용 ground truth) — mission_manager 의 1m 전환 판정과
+  <!-- Odometry (sim 전용 ground truth) — mission_manager 의 2m 전환 판정과
        behavior 들의 위치 제어가 구독하는 /odom 의 sim 쪽 공급원.
        스폰 시점 pose 를 원점으로 하는 odom 좌표계로 발행한다 (스폰이 0,0 이므로
        world 좌표와 사실상 동일). 실물 전환 시 이 플러그인 대신

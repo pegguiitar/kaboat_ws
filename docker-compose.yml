@@ -16,6 +16,15 @@ services:
     environment:
       - DISPLAY=${DISPLAY}
       - QT_X11_NO_MITSHM=1
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     volumes:
       # 호스트의 src(kaboat_sim, vrx, ros_gz 포함)를 컨테이너 내부 워크스페이스의 src로 마운트
       - ./src:/workspace/kaboat_ws/src
@@ -27,5 +36,10 @@ services:
       - ./scripts:/workspace/kaboat_ws/scripts:ro
       # GUI 화면 출력을 위한 X11 소켓 공유
       - /tmp/.X11-unix:/tmp/.X11-unix:ro
+      # DISPLAY 자동 보정: docker exec -it 로 새 셸을 열 때마다 실제 살아있는
+      # X11 소켓 기준으로 DISPLAY 를 다시 맞춰서, 컨테이너 생성 시점에 고정된
+      # 값이 stale 해져도(호스트 디스플레이 세션 번호 변경 등) 매번 손으로
+      # -e DISPLAY=$DISPLAY 를 넘기거나 컨테이너를 재생성할 필요가 없게 한다.
+      - ./scripts/bash_aliases_display.sh:/root/.bash_aliases:ro
     stdin_open: true
     tty: true

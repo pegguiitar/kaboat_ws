@@ -67,8 +67,12 @@ def test_follow_curvature_slows_down():
     """기본 창(2m)엔 굽이가 아직 안 들어와 감속이 없는 게 정상 —
     창을 굽이(3~5m 지점)까지 넓혀 감속 경로를 검증한다."""
     fsm = make_fsm()
-    plan = acquire(fsm, dri_of([(4.0, 0.2)])).plan
-    p = FsmParams(kappa_window=6.0)
+    # 좁은 후보 FOV와 높은 직진성 가중치에서는 단일 장애물을 완만하게 피한다.
+    # 감속 메커니즘 자체는 S자 곡률이 확실히 생기는 두 장애물로 검증한다.
+    plan = acquire(fsm, dri_of([(3.0, -0.5), (4.0, 1.0)])).plan
+    # 현재 기본 v_max=1.1에서는 이 곡률도 그대로 추종 가능하다. 감속 공식 자체는
+    # 기존 교정 전속 1.48m/s를 넣어 곡률 제한이 실제로 작동하는지 검증한다.
+    p = FsmParams(kappa_window=6.0, v_max=1.48)
     lin, _ = follow_cmd(plan, BOAT, YAW, 0.0, WP_FAR, p, KP, KD)
     assert lin < speed_to_cmd(p.v_max, p) - 1e-12
     assert lin >= speed_to_cmd(p.v_min, p) * min(15.0 / p.slow_radius, 1.0) - 1e-12
@@ -96,7 +100,7 @@ def test_follow_large_heading_error_slow_forward():
 
 
 def test_follow_slows_near_waypoint():
-    """slow_radius 안 — 도착 감속 (mission_manager 1m 전환 전 과속 방지)."""
+    """slow_radius 안 — 도착 감속 (mission_manager 2m 전환 전 과속 방지)."""
     fsm = make_fsm()
     wp = (2.0, 0.0)
     plan = acquire(fsm, dri_of([]), wp=wp).plan
@@ -216,7 +220,8 @@ def test_violation_regen_when_repair_cannot_fix():
     """정면 덩어리 — 수리 한도로 못 내리면 즉시 재생성으로 우회."""
     fsm = make_fsm(t_backstop=1e9)
     acquire(fsm, dri_of([]), wp=(9.0, 0.0))
-    blob = [(6.0, y) for y in np.arange(-1.2, 1.21, 0.4)]
+    # ±30° 후보 범위 안에서 새 경로를 확보할 수 있는 폭의 정면 덩어리.
+    blob = [(6.0, y) for y in np.arange(-1.0, 1.01, 0.4)]
     out = fsm.step(dri_of(blob), BOAT, YAW, V_FULL, 0.0, (9.0, 0.0), 0.1)
     assert out.event == 'violation_regen'
     assert check(out.plan, dri_of(blob), BOAT, fsm.p) is None

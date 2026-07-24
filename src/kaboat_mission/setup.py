@@ -14,7 +14,7 @@ setup(
     zip_safe=True,
     maintainer='kaboat',
     maintainer_email='taekwon3611@gmail.com',
-    description='mission_manager (종합임무 state machine, 1m 전환 규칙)',
+    description='mission_manager (behavior 완료 + 목표점 2m 전환 규칙)',
     license='Apache-2.0',
     entry_points={
         'console_scripts': [

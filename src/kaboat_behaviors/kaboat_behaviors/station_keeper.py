@@ -2,8 +2,8 @@
 
 skeleton:
   goal 을 향한 P 제어로 접근/유지하고, 5m 이내 체류 시간을 로그로 출력.
-  (다음 미션 전환 자체는 mission_manager 의 1m 규칙이 담당 — 여기의
-   5m/5s 는 규정상 "유지 동작"의 달성 여부 확인용)
+  5m/5s 유지 달성 시 완료 신호를 보내고, mission_manager 가 목표점 2m
+  이내 조건까지 확인한 뒤 다음 미션으로 전환한다.
 
 TODO(팀): 바람/파도 드리프트 보상 (heading 유지 포함 station keeping)
 """
@@ -25,10 +25,14 @@ class StationKeeper(BehaviorBase):
         self._inside_since = None
         self._reported = False
 
+    def on_activate(self):
+        self._inside_since = None
+        self._reported = False
+
     def compute_cmd(self):
         dist = self.distance_to_goal()
 
-        # 5m/5s 유지 판정 로그 (전환은 mission_manager 몫)
+        # 5m/5s 유지 완료를 보고한다 (최종 전환은 mission_manager 몫).
         now = self.get_clock().now()
         if dist <= HOLD_RADIUS:
             if self._inside_since is None:
@@ -37,6 +41,7 @@ class StationKeeper(BehaviorBase):
                     (now - self._inside_since).nanoseconds * 1e-9 >= HOLD_TIME:
                 self.get_logger().info(f'위치유지 달성 — {HOLD_RADIUS}m 이내 {HOLD_TIME}s 유지 완료')
                 self._reported = True
+                self.report_complete()
         else:
             self._inside_since = None
 

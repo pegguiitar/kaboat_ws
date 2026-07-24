@@ -13,7 +13,7 @@
          GUI 로 실제 도면과 대조하며 조정이 필요할 수 있습니다.
     ===================================================================== -->
 
-    <!-- ---- 좌측 구역 모서리 빨간 부표 4개 (30m 존 경계, "5m"/"2m"/"12m" 치수) ---- -->
+    <!-- ==== 좌측 구역 모서리 빨간 부표 4개 (30m 존 경계, "5m"/"2m"/"12m" 치수) ==== -->
     <include>
       <name>gate_red_left_top</name>
       <uri>https://fuel.gazebosim.org/1.0/openrobotics/models/mb_marker_buoy_red</uri>
@@ -24,10 +24,15 @@
       <uri>https://fuel.gazebosim.org/1.0/openrobotics/models/mb_marker_buoy_red</uri>
       <pose>5 11 0 0 0 0</pose>
     </include>
+    <!-- y=23 이 아니라 24 — x=25 열 슬라롬 4번째 부표 obs_c6_4(25, 22.5)와
+         원래 0.5m 밖에 안 떨어져 스폰 시 서로 파고들며 부표를 80° 넘어뜨렸다
+         (실측 2026-07-24). 1m 올려 1.5m 여유 확보. 이 마커는 부력 플러그인
+         없는 Fuel 모델이라 어차피 가라앉아 안 보이므로 위치 조정의 시각적
+         영향은 없고, 경계 코너 의미는 유지된다. -->
     <include>
       <name>gate_red_mid_top</name>
       <uri>https://fuel.gazebosim.org/1.0/openrobotics/models/mb_marker_buoy_red</uri>
-      <pose>25 23 0 0 0 0</pose>
+      <pose>25 24 0 0 0 0</pose>
     </include>
     <include>
       <name>gate_red_mid_bottom</name>
@@ -35,42 +40,52 @@
       <pose>25 11 0 0 0 0</pose>
     </include>
 
-    <!-- ---- 오렌지 장애물 슬라롬 (x방향 지그재그) ----
+    <!-- ==== 오렌지 장애물 슬라롬 (x방향 지그재그) ====
          배 진행방향은 +x — 그 축을 따라 열(column)을 3m 간격으로 세우고, 교대
          열을 y 로 1.5m 엇갈리게(벽돌 stagger) 배치해 배가 +x 로 가면서 좌우(y)
          로 위빙하게 만든다(진행축 x, 오실레이션 y). 부표 중심간 거리 3m(대회
          규격) 유지 — 열 내부 y간격 3m, 열간 x간격 3m → 최소 중심간격 3m, 대각
          이웃 3.35m. 홀수 열(x=10·16·22)은 배 경로(y=15)에 부표가 걸려 위빙을
-         강제하고, 짝수 열(x=13·19·25)은 그 자리에 틈(y=15)이 생긴다.
-         부표 크기·모양(geometry)은 basic_buoy_orange 그대로, 총 18개. -->
-    <!-- Col 1 (x=10, 경로 위): 3개 -->
+         강제하고, 짝수 열(x=13·19·25)은 그 자리에 틈(y=15)이 생긴다. 각 열
+         4번째 부표는 기존 3m 간격을 그대로 이어 +y 쪽으로 추가(구역 경계
+         y=23 안쪽, 짝수 열 기준 최소 여유 0.5m — basic_buoy_orange 반지름
+         0.267m 감안해도 겹치지 않음). 부표 크기·모양은 그대로, 총 24개. -->
+    <!-- Col 1 (x=10, 경로 위): 4개 -->
     <include><name>obs_c1_1</name><uri>model://basic_buoy_orange</uri><pose>10 12 0 0 0 0</pose></include>
     <include><name>obs_c1_2</name><uri>model://basic_buoy_orange</uri><pose>10 15 0 0 0 0</pose></include>
     <include><name>obs_c1_3</name><uri>model://basic_buoy_orange</uri><pose>10 18 0 0 0 0</pose></include>
-    <!-- Col 2 (x=13, y +1.5 — 경로 y=15 에 틈): 3개 -->
+    <include><name>obs_c1_4</name><uri>model://basic_buoy_orange</uri><pose>10 21 0 0 0 0</pose></include>
+    <!-- Col 2 (x=13, y +1.5 — 경로 y=15 에 틈): 4개 -->
     <include><name>obs_c2_1</name><uri>model://basic_buoy_orange</uri><pose>13 13.5 0 0 0 0</pose></include>
     <include><name>obs_c2_2</name><uri>model://basic_buoy_orange</uri><pose>13 16.5 0 0 0 0</pose></include>
     <include><name>obs_c2_3</name><uri>model://basic_buoy_orange</uri><pose>13 19.5 0 0 0 0</pose></include>
-    <!-- Col 3 (x=16, 경로 위): 3개 -->
+    <include><name>obs_c2_4</name><uri>model://basic_buoy_orange</uri><pose>13 22.5 0 0 0 0</pose></include>
+    <!-- Col 3 (x=16, 경로 위): 4개 -->
     <include><name>obs_c3_1</name><uri>model://basic_buoy_orange</uri><pose>16 12 0 0 0 0</pose></include>
     <include><name>obs_c3_2</name><uri>model://basic_buoy_orange</uri><pose>16 15 0 0 0 0</pose></include>
     <include><name>obs_c3_3</name><uri>model://basic_buoy_orange</uri><pose>16 18 0 0 0 0</pose></include>
-    <!-- Col 4 (x=19, y +1.5): 3개 -->
+    <include><name>obs_c3_4</name><uri>model://basic_buoy_orange</uri><pose>16 21 0 0 0 0</pose></include>
+    <!-- Col 4 (x=19, y +1.5): 4개 -->
     <include><name>obs_c4_1</name><uri>model://basic_buoy_orange</uri><pose>19 13.5 0 0 0 0</pose></include>
     <include><name>obs_c4_2</name><uri>model://basic_buoy_orange</uri><pose>19 16.5 0 0 0 0</pose></include>
     <include><name>obs_c4_3</name><uri>model://basic_buoy_orange</uri><pose>19 19.5 0 0 0 0</pose></include>
-    <!-- Col 5 (x=22, 경로 위): 3개 -->
+    <include><name>obs_c4_4</name><uri>model://basic_buoy_orange</uri><pose>19 22.5 0 0 0 0</pose></include>
+    <!-- Col 5 (x=22, 경로 위): 4개 -->
     <include><name>obs_c5_1</name><uri>model://basic_buoy_orange</uri><pose>22 12 0 0 0 0</pose></include>
     <include><name>obs_c5_2</name><uri>model://basic_buoy_orange</uri><pose>22 15 0 0 0 0</pose></include>
     <include><name>obs_c5_3</name><uri>model://basic_buoy_orange</uri><pose>22 18 0 0 0 0</pose></include>
-    <!-- Col 6 (x=25, y +1.5): 3개 -->
+    <include><name>obs_c5_4</name><uri>model://basic_buoy_orange</uri><pose>22 21 0 0 0 0</pose></include>
+    <!-- Col 6 (x=25, y +1.5): 4개. obs_c6_4 는 등간격 y=22.5. 이 열은 구역경계
+         마커 gate_red_mid_top 과 x=25 로 겹쳐 스폰 충돌이 났는데, 부표를 옮기는
+         대신 마커를 y=23→24 로 올려 해결했다(위 마커 주석 참고). -->
     <include><name>obs_c6_1</name><uri>model://basic_buoy_orange</uri><pose>25 13.5 0 0 0 0</pose></include>
     <include><name>obs_c6_2</name><uri>model://basic_buoy_orange</uri><pose>25 16.5 0 0 0 0</pose></include>
     <include><name>obs_c6_3</name><uri>model://basic_buoy_orange</uri><pose>25 19.5 0 0 0 0</pose></include>
+    <include><name>obs_c6_4</name><uri>model://basic_buoy_orange</uri><pose>25 22.5 0 0 0 0</pose></include>
 
-    <!-- ---- 하단 채널(항로추종): 초록 삼각형 5개 / 빨간 삼각형 5개.
+    <!-- ==== 하단 채널(항로추종): 초록 삼각형 5개 / 빨간 삼각형 5개.
          x방향(같은 행 내 인접 부표 간) 5m, y방향(빨강-초록 행 간) 5m 간격.
-         배는 이 채널을 왼쪽(x=5)에서 오른쪽(x=25 밖)으로 직진 통과한다. ---- -->
+         배는 이 채널을 왼쪽(x=5)에서 오른쪽(x=25 밖)으로 직진 통과한다. ==== -->
     <include><name>gate_green_1</name><uri>model://buoy_cone_green</uri><pose>5  5.5 0 0 0 0</pose></include>
     <include><name>gate_green_2</name><uri>model://buoy_cone_green</uri><pose>10 5.5 0 0 0 0</pose></include>
     <include><name>gate_green_3</name><uri>model://buoy_cone_green</uri><pose>15 5.5 0 0 0 0</pose></include>
@@ -82,14 +97,14 @@
     <include><name>gate_red_4</name><uri>model://buoy_cone_red</uri><pose>20 0.5 0 0 0 0</pose></include>
     <include><name>gate_red_5</name><uri>model://buoy_cone_red</uri><pose>25 0.5 0 0 0 0</pose></include>
 
-    <!-- ---- 우측 구역 (x: 49~70, 21m 존) ---- -->
+    <!-- ==== 우측 구역 (x: 49~70, 21m 존) ==== -->
     <!-- 오렌지-초록 쌍 (10m 가로 간격), 빨간 1개(4m 아래), 오렌지 1개(추가 5m 아래) -->
     <include><name>search_orange_1</name><uri>model://basic_buoy_orange</uri><pose>52 20 0 0 0 0</pose></include>
     <include><name>search_green_1</name><uri>model://basic_buoy_green</uri><pose>62 20 0 0 0 0</pose></include>
     <include><name>search_red_1</name><uri>https://fuel.gazebosim.org/1.0/openrobotics/models/mb_marker_buoy_red</uri><pose>57 16 0 0 0 0</pose></include>
     <include><name>search_orange_2</name><uri>model://basic_buoy_orange</uri><pose>55 11 0 0 0 0</pose></include>
 
-    <!-- ---- 도킹 접안 구조물 (파란 빗살, x=67~70 부근, 세로 12m) ----
+    <!-- ==== 도킹 접안 구조물 (파란 빗살, x=67~70 부근, 세로 12m) ====
          도면(그림): 핑거 4개(양 끝 포함) + 슬롯 3개. 핑거 폭(세로) 1.5m,
          슬롯 간격 2m, 핑거 깊이(가로) 3m → 4×1.5 + 3×2 = 12m.
          핑거 y중심 = 0.75 / 4.25 / 7.75 / 11.25 (양 끝 0.75·11.25 가 구조물
@@ -169,6 +184,38 @@
         <material>
           <ambient>0.08 0.2 0.6 1.0</ambient>
           <diffuse>0.08 0.2 0.6 1.0</diffuse>
+        </material>
+      </visual>
+
+      <!-- 슬롯별 도킹 표식. 뒷벽 서쪽 면(x=70.0)보다 3cm 앞에 둔 visual-only
+           패널이라 충돌 형상은 바꾸지 않는다. 현재 dock_mark_detector의 HSV
+           placeholder가 검출하며, YOLO 도입 뒤에는 같은 위치의 shape mesh로
+           교체한다. 슬롯 중심 y = 2.5 / 6.0 / 9.5m. -->
+      <visual name="dock_mark_green">
+        <pose>69.97 2.5 0 0 0 0</pose>
+        <geometry><box><size>0.04 1.0 1.0</size></box></geometry>
+        <material>
+          <ambient>0.02 0.9 0.05 1.0</ambient>
+          <diffuse>0.02 0.9 0.05 1.0</diffuse>
+          <emissive>0.01 0.2 0.01 1.0</emissive>
+        </material>
+      </visual>
+      <visual name="dock_mark_red">
+        <pose>69.97 6.0 0 0 0 0</pose>
+        <geometry><box><size>0.04 1.0 1.0</size></box></geometry>
+        <material>
+          <ambient>0.95 0.02 0.02 1.0</ambient>
+          <diffuse>0.95 0.02 0.02 1.0</diffuse>
+          <emissive>0.2 0.01 0.01 1.0</emissive>
+        </material>
+      </visual>
+      <visual name="dock_mark_orange">
+        <pose>69.97 9.5 0 0 0 0</pose>
+        <geometry><box><size>0.04 1.0 1.0</size></box></geometry>
+        <material>
+          <ambient>1.0 0.35 0.02 1.0</ambient>
+          <diffuse>1.0 0.35 0.02 1.0</diffuse>
+          <emissive>0.2 0.07 0.01 1.0</emissive>
         </material>
       </visual>
     </link>

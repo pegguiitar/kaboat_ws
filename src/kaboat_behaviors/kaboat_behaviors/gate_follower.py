@@ -23,6 +23,11 @@ class GateFollower(BehaviorBase):
     CMD_TOPIC = '/cmd/gate'
 
     def compute_cmd(self):
+        # 현재 skeleton 의 gate 완료 정의는 채널 출구 waypoint 2m 이내 진입.
+        # mission_manager 도 독립적으로 같은 2m 위치 조건을 확인한다.
+        if self.distance_to_goal() <= 2.0:
+            self.report_complete()
+
         # visible_buoys('red') → [(buoy, 거리[m], 방위[rad,좌+]), ...] (가까운 순).
         # buoy 는 kaboat_msgs/Buoy (id·color·position(odom좌표)·confidence).
         reds = self.visible_buoys('red')

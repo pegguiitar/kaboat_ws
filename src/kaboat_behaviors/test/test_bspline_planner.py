@@ -11,7 +11,7 @@ import pytest
 
 from kaboat_behaviors.dri import DriParams, build_dri
 from kaboat_behaviors.bspline_planner import (
-    Plan, PlannerParams, check, generate, repair)
+    Plan, PlannerParams, _arc_pick, check, generate, repair)
 from test_dri import make_grid, RES
 
 BOAT = (0.0, 0.0)
@@ -32,6 +32,52 @@ def gen(dri, vel=V_FULL, wp=WP_FAR, boat=BOAT, yaw=YAW, **kw):
 
 def p1_len(plan):
     return float(np.hypot(*(plan.cps[1] - plan.cps[0])))
+
+
+# ---------- arc 후보 선택 — 제한 범위 최소 DRI ----------
+
+class BearingRisk:
+    """원점에서 target_bearing 방향으로 갈수록 낮아지는 합성 DRI."""
+
+    def __init__(self, target_bearing):
+        self.target_bearing = target_bearing
+
+    def risk_at_many(self, xs, ys):
+        bearings = np.arctan2(ys, xs)
+        delta = (bearings - self.target_bearing + math.pi) % (2.0 * math.pi) - math.pi
+        return 0.1 + 0.3 * np.abs(delta)
+
+
+def test_arc_pick_prefers_lower_dri_inside_angle_slack():
+    """직진의 위험 차이가 0.03보다 크면 위험 허용대 안의 가장 직선 후보를 고른다."""
+    p = PlannerParams()
+    bearing, _ = _arc_pick(
+        BearingRisk(math.radians(6.0)),
+        np.array([0.0, 0.0]), 5.0, 0.0,
+        np.array([0.0, 0.0]), 0.0, p)
+    # 현재 90°/31후보는 3° 간격. 최저 위험은 6°지만 3°도 차이 0.03 이내다.
+    assert bearing == pytest.approx(math.radians(3.0))
+
+
+def test_arc_pick_prefers_straight_when_risk_gap_is_within_slack():
+    """위험 차이가 0.03 이내면 기하 비용이 가장 낮은 직진 후보를 고른다."""
+    p = PlannerParams()
+    bearing, _ = _arc_pick(
+        BearingRisk(math.radians(3.0)),
+        np.array([0.0, 0.0]), 5.0, 0.0,
+        np.array([0.0, 0.0]), 0.0, p)
+    assert bearing == pytest.approx(0.0)
+
+
+def test_arc_pick_does_not_chase_dri_minimum_outside_angle_slack():
+    """전역 최저점이 40°에 있어도 기하 최적 주변 ±12° 밖으로는 도망가지 않는다."""
+    p = PlannerParams()
+    bearing, _ = _arc_pick(
+        BearingRisk(math.radians(40.0)),
+        np.array([0.0, 0.0]), 5.0, 0.0,
+        np.array([0.0, 0.0]), 0.0, p)
+    # 제한 범위 최저점은 12°지만 9°도 위험 차이 0.03 이내라 더 직선적인 9° 선택.
+    assert bearing == pytest.approx(math.radians(9.0))
 
 
 # ---------- (i) radii 단조증가 — p1 포함 ----------

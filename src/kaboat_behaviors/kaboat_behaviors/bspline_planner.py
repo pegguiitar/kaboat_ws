@@ -10,14 +10,17 @@
   생성(generate)과 검사(check)는 분리 — 생성은 가끔, 검사는 매 tick
   최신 DRI 로. 후보 탐색은 waypoint 방위 ±search_fov/2 부채꼴 — 이론적
   최대치인 180°는 "waypoint 쪽 전진 성분 ≥ 0 인 반평면"(§3-2)이지만, 기본값은
-  120°로 좁혀뒀다(2026-07-20). wp_bearing 이 헤딩과 크게 벌어진 상황(급회전
-  직후 등)에서 180° 부채꼴이면 p2 가 헤딩 기준 거의 정반대까지 뽑혀 배가
-  옆/뒤로 도는 것처럼 보이는 사례가 실측됐기 때문 — 부채꼴 중심은 여전히
-  wp_bearing 이라 헤딩 자체는 탐색에 관여 안 하고, 폭만 좁혀 최악의 이탈각을
-  줄인 것. 안전은 **하드 필터**: DRI > safe_threshold 후보는 제거하고, 생존자 중
-  방위 비용만으로 고른다 — 거품(σ) 이 이미 berth 를 인코딩하므로 비용에
-  DRI 를 또 넣는 건 이중 계산이다. 어떤 arc 든 생존자가 없으면 None —
-  전진 반평면에 답이 없다는 뜻이고, 그 답은 ESCAPE(후진)다.
+  90°로 좁혀뒀다. wp_bearing 이 헤딩과 크게 벌어진 상황(급회전 직후 등)에서
+  넓은 부채꼴이면 p2 가 헤딩 기준 거의 정반대까지 뽑혀 배가 옆/뒤로 도는
+  것처럼 보이는 사례가 실측됐기 때문 — 부채꼴 중심은 여전히 wp_bearing 이라
+  헤딩 자체는 탐색에 관여 안 하고, 폭만 좁혀 최악의 이탈각을 줄인 것.
+  안전은 **하드 필터**: DRI > safe_threshold 후보는 제거한다. 생존자
+  중 먼저 방위 비용 최적점 주변(dri_angle_slack)으로 탐색 범위를 제한한 뒤,
+  그 안에서 선분 최대 DRI 최저값과 risk_straight_slack 이내인 후보를 추린다.
+  거의 같은 위험이면 그중 방위 비용이 가장 낮은 후보를 골라 직진성을
+  회복한다. 전역 최소 DRI 를 바로 고르지 않으므로 빈 바다로 과도하게
+  우회하지 않으면서 경계에 붙는 경로도 피한다. 어떤 arc 든 생존자가 없으면
+  None — 전진 반평면에 답이 없다는 뜻이고, 그 답은 ESCAPE(후진)다.
 
   t_look=1.0s 는 실측 전속 1.48 m/s 기준 재산출값(§3-2) — 5.0s 초안은
   p1 이 7.4m 로 튀어 스플라인이 나갔다 되돌아오는 첨점을 만들었다.
@@ -49,22 +52,28 @@ class PlannerParams:
     # 후보 부채꼴 = wp 중심 ±search_fov/2. 원래 180°(wp 전진 반평면 전체, §3-2)
     # 였는데, wp_bearing 이 헤딩과 크게 벌어진 상황(급회전 직후 등)에서 p2 가
     # 헤딩 기준 거의 정반대까지 뽑혀 배가 옆/뒤로 도는 것처럼 보이는 사례가
-    # 실측돼 120°로 좁힘 (2026-07-20, 사용자 판단). 부채꼴 폭만 좁아지고
-    # 중심은 여전히 wp_bearing — 헤딩은 이 탐색에 전혀 관여하지 않는다.
-    search_fov: float = math.radians(120.0)
+    # 실측돼 120°→90°로 좁힘. 부채꼴 폭만 좁아지고 중심은 여전히
+    # wp_bearing — 헤딩은 이 탐색에 전혀 관여하지 않는다.
+    search_fov: float = math.radians(90.0)
     n_candidates: int = 31
-    # 후보 비용 가중. DRI 항은 없다 — 안전은 비용이 아니라 **하드 필터**
-    # (아래 safe_threshold)다. 소프트 DRI 벌점 시절엔 threshold 이하의 안전한
-    # 꼬리 위험(0.4~0.6)도 벌점으로 작동해, CP 가 틈 대신 밭 밖 DRI=0 지대로
-    # 도망갔다(sim 실측 — 안전을 거품 크기와 비용에서 이중 계산한 탓).
-    # w_prev 는 후보 6° 양자화가 만드는 arc 간 S 잔물결 억제.
+    # 후보 기하 비용 가중. 먼저 이 비용의 최적 안전 후보를 찾고, 그 후보의
+    # 방위 ±dri_angle_slack 안에서만 DRI 최소 후보를 찾는다. 전역 DRI argmin
+    # 시절처럼 CP 가 밭 밖 DRI=0 지대로 도망가는 것은 막되, 위험 경계에
+    # 간신히 걸친 직선 후보를 무조건 고르는 것도 피한다.
+    # w_prev 는 직전 CP 방향을 유지해 후보 방위 양자화가 만드는 arc 간
+    # S 잔물결을 억제한다. 목표 방향과 동등하게 반영하도록 1.0.
     w_wp: float = 1.0
-    w_prev: float = 0.5
+    w_prev: float = 1.0
+    dri_angle_slack: float = math.radians(12.0)  # 기하 최적 후보 주변 DRI 탐색 반폭
+    # 제한 범위의 최소 max DRI 와 이 값 이내면 위험이 사실상 같다고 보고
+    # geom_cost 로 직진성을 고른다. 안전 기준선(1.0)의 3%에 해당한다.
+    risk_straight_slack: float = 0.03
     # 유일한 안전 기준선 — 생성(후보 하드 필터)과 검사(check 위반)가 같은
-    # 선을 쓴다. 후보는 선분 max DRI > 이 값이면 제거, 생존자 중 방위 비용
-    # argmin, 어떤 arc 든 생존자 0 이면 generate → None (구 hard_max 역할
-    # 흡수 — 생성이 "괜찮다"고 낸 경로를 같은 tick check 가 위반 판정하던
-    # 자기모순 제거). berth 관계: 거품 반경 = σ·√(2·ln(A/threshold)).
+    # 선을 쓴다. 후보는 선분 max DRI > 이 값이면 제거하고 제한 각도 안에서
+    # 최소 DRI 근처 후보 중 가장 직선적인 것을 고른다. 어떤 arc 든 생존자
+    # 0 이면 generate → None (구 hard_max 역할 흡수 — 생성이 "괜찮다"고
+    # 낸 경로를 같은 tick check 가 위반 판정하던 자기모순 제거).
+    # berth 관계: 거품 반경 = σ·√(2·ln(A/threshold)).
     safe_threshold: float = 1.0
     # 생성 필터는 threshold×이 값 에서 자른다 — 필터는 현(chord)으로 판정
     # 하는데 스플라인은 굽이에서 현보다 수 cm 안쪽으로 붙어, 1.0 그대로면
@@ -129,14 +138,17 @@ def pick_ref_obstacle(occ_xy, boat, yaw, p: PlannerParams):
 
 def _arc_pick(dri, origin, radius, wp_bearing, prev_pt, prev_bearing,
               p: PlannerParams):
-    """arc 위 후보 선택 — 안전은 하드 필터, 선호는 방위 비용.
+    """arc 위 후보 선택 — 하드 필터 + 제한 범위 최소 DRI 근처 직진 우선.
 
     ① **직전 CP → 후보를 잇는 선분**(샘플 8점) 위 max DRI > safe_threshold 인
        후보 제거 (창 밖 inf 도 자연 탈락). 후보 점 하나만 보면 점은 거품
        밖인데 거기까지 가는 스플라인이 거품을 가로지르는 구멍이 남는다 —
        가장 단순한 장면(정면 4m 장애물 1개)에서 위험 1.55 스침으로 실측.
        선분은 스플라인 현(chord)의 근사지만 점 하나보다 훨씬 정직하다.
-    ② 생존자 중 w_wp·|wp방위차| + w_prev·|직전CP방위차| argmin
+    ② 생존자 중 w_wp·|wp방위차| + w_prev·|직전CP방위차| 가 최소인 기준
+       후보를 찾고, 그 방위 ±dri_angle_slack 로 탐색 범위를 제한
+    ③ 제한 범위의 선분 max DRI 최저값 + risk_straight_slack 이내 후보 중
+       기하 비용 argmin
     생존자 없으면 None — 호출측(generate)이 전체를 None 으로 (→ ESCAPE).
     """
     half = 0.5 * p.search_fov
@@ -148,13 +160,31 @@ def _arc_pick(dri, origin, radius, wp_bearing, prev_pt, prev_bearing,
     seg = prev_pt[None, None, :] + ts * (cands[None, :, :] - prev_pt[None, None, :])
     risks = dri.risk_at_many(seg[..., 0].ravel(),
                              seg[..., 1].ravel()).reshape(8, -1)
-    safe = risks.max(axis=0) <= p.safe_threshold * p.gen_margin
+    seg_risk = risks.max(axis=0)
+    safe = seg_risk <= p.safe_threshold * p.gen_margin
     if not np.any(safe):
         return None
-    cost = (p.w_wp * np.abs(bearings - wp_bearing)   # 부채꼴 폭 ≤ π 라 wrap 불필요
-            + p.w_prev * np.abs([_wrap(b - prev_bearing) for b in bearings]))
-    cost[~safe] = np.inf
-    i = int(np.argmin(cost))
+    geom_cost = (
+        p.w_wp * np.abs(bearings - wp_bearing)  # 부채꼴 폭 ≤ π 라 wrap 불필요
+        + p.w_prev * np.abs([_wrap(b - prev_bearing) for b in bearings])
+    )
+    geom_cost[~safe] = np.inf
+    geom_best = int(np.argmin(geom_cost))
+
+    # 전역 DRI 최소를 택하면 밭 밖의 0 지대로 과도하게 우회할 수 있으므로,
+    # 기하 최적 안전 후보 주변으로만 범위를 제한한다.
+    near_geom_best = np.abs(
+        [_wrap(b - bearings[geom_best]) for b in bearings]
+    ) <= p.dri_angle_slack + 1e-12
+    allowed = safe & near_geom_best
+
+    min_risk = float(np.min(seg_risk[allowed]))
+    near_min_risk = allowed & (
+        seg_risk <= min_risk + p.risk_straight_slack + 1e-12
+    )
+    straight_cost = geom_cost.copy()
+    straight_cost[~near_min_risk] = np.inf
+    i = int(np.argmin(straight_cost))
     return float(bearings[i]), cands[i]
 
 

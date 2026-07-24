@@ -240,17 +240,31 @@ def generate_launch_description():
     #    이월되지 않으므로, sim 은 "결과 오차"만 직접 모델링한다.
     #    (그래서 bridge_config.yaml 은 ground truth 를 /odom_ground_truth 로
     #    두고 /odom·TF 는 이 노드가 만든다.)
+    # odom 위치노이즈 세기(sigma[m])를 런치 인자로 노출 — 기본은 노드 기본값과
+    # 동일한 0.25(GPS 수준). 회피 데모처럼 노이즈 없이 순수 알고리즘만 보고
+    # 싶을 때 odom_noise_sigma:=0.0 을 주면 /odom 이 ground truth 와 같아진다.
+    # (TF(odom→base_link)도 이 노드가 같이 내므로 RViz 의 배·스캔 표시까지
+    #  노이즈가 사라진다 — 단순 토픽 리매핑으로는 격자만 깨끗해지고 TF 는 튄다.)
+    odom_noise_arg = DeclareLaunchArgument(
+        'odom_noise_sigma', default_value='0.25',
+        description='odom 위치오차 정상 stddev [m]. 0 이면 ground truth 와 동일')
+
     odom_gps_noise = Node(
         package='kaboat_sim',
         executable='odom_gps_noise.py',
         name='odom_gps_noise',
         output='screen',
-        parameters=[{'use_sim_time': True}],
+        parameters=[{
+            'use_sim_time': True,
+            'sigma': ParameterValue(LaunchConfiguration('odom_noise_sigma'),
+                                    value_type=float),
+        }],
     )
 
     return LaunchDescription([
         headless_arg,
         *spawn_args,
+        odom_noise_arg,
         set_plugin_path,
         set_resource_path,
         set_ld_library,

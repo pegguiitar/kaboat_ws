@@ -4,13 +4,15 @@
        → avoid(장애물 회피) → done
 
 전환 규칙 (팀 합의):
-  |현재위치(/odom) − 현재 미션 목표좌표| < transition_radius(기본 1.0m)
-  이면 다음 state 로 전이한다. behavior 는 완료 신호를 낼 필요가 없다.
+  1) 현재 미션 behavior 가 /mission/complete 로 자기 state 이름을 발행하고
+  2) |현재위치(/odom) − 현재 미션 목표좌표| ≤ transition_radius(기본 2.0m)
+  두 조건을 모두 만족하면 다음 state 로 전이한다.
 
 발행   /mission/state (String, latched)  — cmd_mux 와 모든 behavior 가 구독
        /mission/goal  (PoseStamped, latched) — 현재 미션의 목표좌표
        /detector/enable (Bool, latched)  — dock_mark_detector YOLO 추론 게이팅
                                             (state == 'dock' 일 때만 true)
+구독   /mission/complete (String) — 완료한 behavior 의 state 이름
 
 미션별 목표좌표는 파라미터(waypoints.<state>)로 주입한다
 — kaboat_bringup/config/mission_params.yaml 참고.
@@ -21,7 +23,7 @@
     ros2 run kaboat_mission mission_manager --ros-args \
         -p start_state:=dock -p single_mission:=true
   start_state 로 바로 그 미션에서 시작하고, single_mission:=true 면 그
-  미션 목표 도달 후 다음으로 안 넘어가고 바로 'done'(정지)으로 간다 —
+  완료 신호와 목표 2m 조건 달성 후 다음으로 안 넘어가고 바로 'done'(정지)으로 간다 —
   cmd_mux 가 멈추니 배가 목표 근처에서 안전하게 정지한 채로 결과를 볼 수 있다.
 """
 import math
@@ -51,7 +53,7 @@ class MissionManager(Node):
     def __init__(self):
         super().__init__('mission_manager')
 
-        self.declare_parameter('transition_radius', 1.0)   # 전환 판정 반경 [m]
+        self.declare_parameter('transition_radius', 2.0)   # 전환 판정 반경 [m]
         self.declare_parameter('auto_start', True)          # 켜지면 바로 첫 미션 시작
         self.declare_parameter('start_state', '')            # 단일 미션 테스트용 시작 지점
         self.declare_parameter('single_mission', False)      # true 면 start_state 하나만 하고 done
@@ -65,6 +67,8 @@ class MissionManager(Node):
         }
 
         self.odom = None
+        # 완료 신호가 웨이포인트 도착보다 먼저 와도 잃지 않고 기억한다.
+        self.behavior_complete = False
 
         start_state = self.get_parameter('start_state').value
         self.single_mission = bool(self.get_parameter('single_mission').value)
@@ -86,6 +90,7 @@ class MissionManager(Node):
         self.pub_detector_enable = self.create_publisher(Bool, '/detector/enable', latched)
 
         self.create_subscription(Odometry, '/odom', self.on_odom, 10)
+        self.create_subscription(String, '/mission/complete', self.on_complete, 10)
         self.create_timer(0.2, self.tick)  # 5Hz 판정
 
         wp_str = ', '.join(f"{n}({w[0]:.0f},{w[1]:.0f})" for n, w in self.waypoints.items())
@@ -118,6 +123,7 @@ class MissionManager(Node):
             f"미션 [{self.idx+1}/{len(MISSION_ORDER)}] '{state}' 시작 — 목표 ({wp[0]}, {wp[1]})")
 
     def set_state(self, state: str):
+        self.behavior_complete = False
         msg = String()
         msg.data = state
         self.pub_state.publish(msg)
@@ -126,9 +132,22 @@ class MissionManager(Node):
         enable.data = (state == 'dock')
         self.pub_detector_enable.publish(enable)
 
-    # ── 1m 전환 판정 ──────────────────────────────────
+    # ── behavior 완료 + 2m 전환 판정 ──────────────────
     def on_odom(self, msg: Odometry):
         self.odom = msg
+
+    def on_complete(self, msg: String):
+        if not (0 <= self.idx < len(MISSION_ORDER)):
+            return
+        state = MISSION_ORDER[self.idx]
+        if msg.data != state:
+            self.get_logger().warning(
+                f"현재 미션은 '{state}' — 다른 완료 신호 '{msg.data}' 무시")
+            return
+        if not self.behavior_complete:
+            self.behavior_complete = True
+            self.get_logger().info(
+                f"behavior '{state}' 완료 신호 수신 — 목표 {self.radius}m 이내 진입 대기")
 
     def tick(self):
         if self.odom is None or not (0 <= self.idx < len(MISSION_ORDER)):
@@ -136,9 +155,11 @@ class MissionManager(Node):
         wp = self.waypoints[MISSION_ORDER[self.idx]]
         dx = wp[0] - self.odom.pose.pose.position.x
         dy = wp[1] - self.odom.pose.pose.position.y
-        if math.hypot(dx, dy) < self.radius:
+        inside_waypoint = math.hypot(dx, dy) <= self.radius
+        if self.behavior_complete and inside_waypoint:
             self.get_logger().info(
-                f"목표 {self.radius}m 이내 진입 — '{MISSION_ORDER[self.idx]}' 완료")
+                f"behavior 완료 + 목표 {self.radius}m 이내 진입 — "
+                f"'{MISSION_ORDER[self.idx]}' 완료")
             if self.single_mission:
                 self.get_logger().info(
                     'single_mission=true — 다음 미션으로 안 넘어가고 done 으로 정지')

@@ -17,12 +17,12 @@
 
 mission_manager:
   ros__parameters:
-    transition_radius: 1.0   # [m] 목표점 이내 진입 시 다음 미션 전환 (팀 합의)
+    transition_radius: 2.0   # [m] behavior 완료 신호 + 목표점 이내 진입 시 전환
     auto_start: true
 
     waypoints:
       gate:    [27.0, 63.0]   # 하단 빨강/초록 채널(x=5~25, y=0.5~5.5) 오른쪽 끝 통과
       station: [15.0, 73.0]   # 좌측 구역 중심부 (오렌지 장애물 밭 안쪽 — 회피 겸용 경로)
-      dock:    [65.0, 66.0]   # 도킹 구조물(x=67~70) 바로 앞
+      dock:    [65.0, 66.0]   # 가운데 빨강 슬롯(y=66) 정면 staging/후진 복귀점
       search:  [57.0, 76.0]   # 우측 탐색 구역 (오렌지/초록/빨강 부표 사이)
       avoid:   [17.5, 77.0]   # 오렌지 장애물 밭 중심
