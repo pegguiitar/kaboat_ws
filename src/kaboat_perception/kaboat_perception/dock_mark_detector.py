@@ -31,7 +31,8 @@ from kaboat_msgs.msg import Mark, MarkArray
 
 try:
     from cv_bridge import CvBridge
-    from kaboat_perception.buoy_detector import hsv_blobs, distance_at, CV_AVAILABLE
+    from kaboat_perception.buoy_detector import hsv_blobs, CV_AVAILABLE
+    from kaboat_perception.depth_utils import depth_to_meters, distance_at
 except ImportError:
     CV_AVAILABLE = False
 
@@ -64,7 +65,12 @@ class DockMarkDetector(Node):
             '/detector/enable=true 인 동안만 추론 → /detections/dock_marks')
 
     def _on_depth(self, msg: Image):
-        self.depth = self.bridge.imgmsg_to_cv2(msg, desired_encoding='passthrough')
+        raw = self.bridge.imgmsg_to_cv2(msg, desired_encoding='passthrough')
+        try:
+            self.depth = depth_to_meters(raw, msg.encoding)
+        except ValueError as exc:
+            self.depth = None
+            self.get_logger().error(str(exc), throttle_duration_sec=5.0)
 
     def _on_enable(self, msg: Bool):
         if msg.data != self.enabled:
@@ -79,6 +85,13 @@ class DockMarkDetector(Node):
 
         frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
         width = frame.shape[1]
+        depth = self.depth
+        if depth is not None and depth.shape[:2] != frame.shape[:2]:
+            self.get_logger().error(
+                'RGB/depth 해상도가 다릅니다 — RGB에 정렬된 depth 토픽을 사용하세요 '
+                f'(RGB={frame.shape[:2]}, depth={depth.shape[:2]})',
+                throttle_duration_sec=5.0)
+            depth = None
 
         out = MarkArray()
         out.header = msg.header
@@ -90,7 +103,7 @@ class DockMarkDetector(Node):
             mark.shape = 'unknown'   # TODO(팀): YOLO 모양 클래스 (circle/triangle/square)
             mark.confidence = min(area / 5000.0, 1.0)
             mark.bearing = float(bearing)
-            mark.distance = distance_at(self.depth, cx, cy)
+            mark.distance = distance_at(depth, cx, cy)
             out.marks.append(mark)
         self.pub.publish(out)
 

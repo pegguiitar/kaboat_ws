@@ -36,6 +36,7 @@ from visualization_msgs.msg import Marker, MarkerArray
 from kaboat_msgs.msg import Buoy, BuoyArray
 from kaboat_perception.buoy_tracker import (
     BuoyTracker, TrackerParams, Detection, project_to_world)
+from kaboat_perception.depth_utils import depth_to_meters, distance_at
 
 try:
     import cv2
@@ -119,27 +120,6 @@ def filter_waterline(candidates, sky_row):
     구름·먼 물가만 — 그것만 버린다. 노드가 IMU pitch 로 보정해 넘긴다.
     """
     return [c for c in candidates if c[4] >= sky_row]
-
-
-def distance_at(depth_frame, cx: float, cy: float, win: int = 3) -> float:
-    """depth 프레임에서 (cx,cy) 주변 win×win 창의 median 거리[m]. 무효면 -1.0.
-
-    단일 픽셀은 노이즈·구멍(NaN/0)에 취약해 작년 코드처럼 작은 창의 median 을
-    쓴다. RGB·depth 픽셀 정렬을 전제로 하므로 같은 카메라·해상도여야 한다.
-    """
-    if depth_frame is None:
-        return -1.0
-    h, w = depth_frame.shape[:2]
-    px, py = int(cx), int(cy)
-    if not (0 <= px < w and 0 <= py < h):
-        return -1.0
-    x1, x2 = max(px - win, 0), min(px + win + 1, w)
-    y1, y2 = max(py - win, 0), min(py + win + 1, h)
-    roi = np.asarray(depth_frame[y1:y2, x1:x2], dtype=np.float32)
-    valid = roi[np.isfinite(roi) & (roi > 0.0)]
-    if valid.size == 0:
-        return -1.0   # 전부 NaN/inf/0 — depth 유효범위 밖이거나 무반사
-    return float(np.median(valid))
 
 
 def bearing_from_pixel(cx: float, width: float, fx: float, ppx: float,
@@ -236,9 +216,14 @@ class BuoyDetector(Node):
             'buoy_detector 시작 (HSV→기하→수면→depth→lidar→전역추적) → /detections/buoys')
 
     def _on_depth(self, msg: Image):
-        # passthrough — gz rgbd_camera 는 32FC1(미터 단위 float) 로 발행.
-        # 실물(D455)도 aligned_depth 스트림을 같은 인코딩으로 맞추면 코드 변경 불필요.
-        self.depth = self.bridge.imgmsg_to_cv2(msg, desired_encoding='passthrough')
+        # 내부 표현은 항상 float32 미터. Gazebo는 32FC1[m], RealSense ROS의
+        # aligned depth는 기본 16UC1[mm]라 encoding에 따라 여기서 한 번 통일한다.
+        raw = self.bridge.imgmsg_to_cv2(msg, desired_encoding='passthrough')
+        try:
+            self.depth = depth_to_meters(raw, msg.encoding)
+        except ValueError as exc:
+            self.depth = None
+            self.get_logger().error(str(exc), throttle_duration_sec=5.0)
 
     def _on_info(self, msg: CameraInfo):
         self.fx = msg.k[0]        # K = [fx 0 cx; 0 fy cy; 0 0 1]
@@ -264,6 +249,13 @@ class BuoyDetector(Node):
 
         frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
         height, width = frame.shape[:2]
+        depth = self.depth
+        if depth is not None and depth.shape[:2] != frame.shape[:2]:
+            self.get_logger().error(
+                'RGB/depth 해상도가 다릅니다 — RGB에 정렬된 depth 토픽을 사용하세요 '
+                f'(RGB={frame.shape[:2]}, depth={depth.shape[:2]})',
+                throttle_duration_sec=5.0)
+            depth = None
 
         # ① 색 → ② 기하 → ③ 수면
         candidates = hsv_blobs(frame)
@@ -279,7 +271,7 @@ class BuoyDetector(Node):
         detections = []
         for color, _cnt, area, cx, cy in candidates:
             bearing = bearing_from_pixel(cx, width, self.fx, self.ppx, self.hfov)
-            distance = distance_at(self.depth, cx, cy)     # ④ depth median
+            distance = distance_at(depth, cx, cy)          # ④ depth median
             if distance < 0.0:
                 continue                                   # 거리 미상 부표는 투영 불가
             if not self._lidar_ok(bearing, distance):      # ⑤ 라이다 교차확인

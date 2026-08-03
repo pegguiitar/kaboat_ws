@@ -20,8 +20,8 @@
   direction: GZ_TO_ROS
 
 # ── Depth Cam (실물: Intel D455) ─────────────────────
-# ros 이름은 실물 realsense2_camera 드라이버의 기본 발행 이름과 동일하게 맞춤
-# → 실물 전환 시 리매핑 불필요.
+# ros 이름은 자율주행 스택의 센서 표준 인터페이스다. 최신 realsense2_camera의
+# 기본 이름(/camera/camera/...)은 kaboat_bringup/d455.launch.py가 여기로 remap한다.
 # RGB 컬러 → /camera/color/image_raw (buoy_detector HSV, dock_mark YOLO 입력)
 - ros_topic_name: "/camera/color/image_raw"
   gz_topic_name: "/camera/depth/image"

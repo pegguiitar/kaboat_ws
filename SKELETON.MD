@@ -136,6 +136,11 @@ cell 과 구분되는 "좌표 랜드마크". 극좌표는 소비자가 자기 od
   순수 라이브러리+얇은 노드 패턴 그대로. RViz 디버그로 `/detections/buoys_viz`
   (MarkerArray, 색 구+id 텍스트)를 구독자 있을 때만 발행 — `scripts/demo/buoy.rviz`.
   `test/test_buoy_tracker.py` 22개.
+  실물 D455는 `ros2 launch kaboat_bringup d455.launch.py`로 실행한다. 이 launch가
+  `align_depth.enable=true`로 RGB 기준 정렬 depth를 켜고 RealSense 기본 토픽을
+  위 표준 토픽으로 remap한다. 노드는 Gazebo `32FC1`[m]와 RealSense
+  `16UC1`[mm]를 모두 받아 내부에서 float32 미터로 통일하며, RGB/depth 해상도가
+  다르면 잘못된 픽셀 거리를 쓰지 않고 오류를 출력한다.
   ⚠️ **방위(④)는 camera_info K 를 안 믿는다** — 이 sim 의 gz camera_info 는
   width 는 1280 이라면서 K 는 320px 기준(ppx≈160)으로 어긋나, 그대로 쓰면
   모든 방위가 ~60° 쏠린다(RViz 데모로 발견). 그래서 주점이 이미지 중심 근처일
@@ -338,6 +343,15 @@ param/설정으로 주입하며, avoid 의 v_cmd(m/s)→명령 변환은 함수 
 > `### YYYY-MM-DD HH:MM — [영역] 요약` + 무엇을/왜 몇 문장. 파일 세부는 커밋
 > 메시지로. 영역 태그: `[occupancy_grid]` / `[obstacle]` + 세부 `[planner]`
 > `[DRI]` `[state machine]` 등을 나란히 붙임.
+
+### 2026-08-04 00:58 — [buoy_detector] [D455] 정렬 Depth·단위 처리를 실물/Sim 공통화
+RealSense D455의 RGB와 Depth는 각각 `sensor_msgs/Image`로 들어오므로, 실물 launch에서
+`align_depth.enable=true`와 `enable_sync=true`를 켜 RGB 픽셀 기준으로 정렬한 Depth를
+표준 토픽 `/camera/depth/image_raw`에 remap했다. `buoy_detector`와
+`dock_mark_detector`는 RealSense `16UC1`[mm]와 Gazebo `32FC1`[m]를 공통 유틸에서
+`float32` 미터로 통일하며, RGB/Depth 해상도가 다르면 동일 픽셀의 거리로 오인하지 않도록
+해당 Depth 프레임을 사용하지 않고 오류를 출력한다. 단위 변환·무효 Depth median 처리를
+순수 함수로 분리하고 테스트 5개를 추가했다.
 
 ### 2026-07-22 16:58 — [buoy_detector] RViz 데모로 방위·수면필터 버그 2건 수정
 RViz 로 부표맵을 띄웠더니 부표가 실제 좌표에서 10m 넘게 어긋났다. 원인 둘: (1) sim
