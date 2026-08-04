@@ -21,6 +21,9 @@ import numpy as np
 from .bspline_planner import (
     Plan, PlannerParams, check, curvature_ahead, generate, pick_ref_obstacle,
     repair)
+from .motion_controller import (
+    DesiredVelocity, MotionControllerParams, control_velocity,
+    speed_to_command)
 
 
 @dataclass
@@ -62,8 +65,15 @@ class StepOut:
     event: str | None = None      # tick 에서 일어난 일 (로깅) — 없으면 None
 
 
-def _wrap(a: float) -> float:
-    return (a + math.pi) % (2.0 * math.pi) - math.pi
+def _controller_params(p: FsmParams, yaw_kp: float,
+                       yaw_kd: float) -> MotionControllerParams:
+    return MotionControllerParams(
+        yaw_kp=yaw_kp,
+        yaw_kd=yaw_kd,
+        cmd_full=p.cmd_full,
+        v_full=p.v_full,
+        cmd_exp=p.cmd_exp,
+    )
 
 
 def speed_to_cmd(v: float, p: FsmParams) -> float:
@@ -74,7 +84,7 @@ def speed_to_cmd(v: float, p: FsmParams) -> float:
     (cmd 절반 = 6N 이 0.74 아닌 0.97 m/s). 변환을 이 함수 하나로 격리해
     두는 이유: 실물 전환 시 교정 곡선만 여기서 교체 (SKELETON §6 지도).
     """
-    return p.cmd_full * (max(0.0, v) / p.v_full) ** p.cmd_exp
+    return speed_to_command(v, _controller_params(p, 0.0, 0.0))
 
 
 def follow_cmd(plan: Plan, boat_xy, yaw: float, yaw_rate: float, wp_xy,
@@ -108,16 +118,27 @@ def follow_cmd(plan: Plan, boat_xy, yaw: float, yaw_rate: float, wp_xy,
             # 방위가 정의되도록 wp 를 임시 목표로 (안전은 check 가 보장)
             target = wp
 
-    err = _wrap(math.atan2(target[1] - boat[1], target[0] - boat[0]) - yaw)
-    angular = yaw_kp * err - yaw_kd * yaw_rate
-
     kappa = curvature_ahead(plan, fsm.kappa_window)
     v = fsm.v_max if kappa < 1e-6 else min(max(fsm.omega_max / kappa,
                                                fsm.v_min), fsm.v_max)
-    if abs(err) > math.pi / 3:
-        v = min(v, 0.3 * fsm.v_max)   # 큰 방위 오차 — 저속 전진 유지 (seek_goal 규칙)
-    v *= min(wp_dist / fsm.slow_radius, 1.0)  # waypoint 근접 감속 (seek_goal 규칙)
-    return speed_to_cmd(v, fsm), angular
+    wp_scale = min(wp_dist / fsm.slow_radius, 1.0)
+    v *= wp_scale  # waypoint 근접 감속 (seek_goal 규칙)
+
+    direction = target - boat
+    norm = float(np.hypot(*direction))
+    if norm <= 1e-12:
+        desired = DesiredVelocity(0.0, 0.0)
+    else:
+        desired = DesiredVelocity(
+            vx=float(v * direction[0] / norm),
+            vy=float(v * direction[1] / norm),
+        )
+    out = control_velocity(
+        desired, yaw, yaw_rate, _controller_params(fsm, yaw_kp, yaw_kd),
+        # 기존 순서: 큰 오차 속도캡 후 waypoint 감속. 두 조건이 동시에
+        # 걸려도 refactor 전과 같은 명령이 되도록 캡에도 wp_scale을 적용한다.
+        turn_speed_limit=0.3 * fsm.v_max * wp_scale)
+    return out.linear_x, out.angular_z
 
 
 def escape_pick(dri, boat_xy, yaw: float, planner: PlannerParams,
@@ -167,9 +188,14 @@ def escape_cmd(dri, boat_xy, yaw: float, yaw_rate: float,
     조향 부호는 전진과 동일 (2026-07-18 sim 실측: wz +0.44 vs +0.49).
     """
     target, surrounded = escape_pick(dri, boat_xy, yaw, planner, fsm)
-    err = _wrap(target - (yaw + math.pi))
-    angular = yaw_kp * err - yaw_kd * yaw_rate
-    return -speed_to_cmd(fsm.v_escape, fsm), angular, surrounded
+    desired = DesiredVelocity(
+        vx=fsm.v_escape * math.cos(target),
+        vy=fsm.v_escape * math.sin(target),
+        reverse=True,
+    )
+    out = control_velocity(
+        desired, yaw, yaw_rate, _controller_params(fsm, yaw_kp, yaw_kd))
+    return out.linear_x, out.angular_z, surrounded
 
 
 class AvoidFsm:

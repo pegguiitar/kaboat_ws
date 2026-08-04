@@ -344,6 +344,15 @@ param/설정으로 주입하며, avoid 의 v_cmd(m/s)→명령 변환은 함수 
 > 메시지로. 영역 태그: `[occupancy_grid]` / `[obstacle]` + 세부 `[planner]`
 > `[DRI]` `[state machine]` 등을 나란히 붙임.
 
+### 2026-08-04 14:09 — [behavior] [control] 속도벡터 기반 공통 조종 모듈 분리
+각 behavior가 월드(`odom`) 좌표계 목표 속도벡터 `DesiredVelocity(vx, vy, reverse)`를
+만들면 목표 선수각 계산, yaw PD, 큰 방위오차 감속, m/s→정규화 추력 변환을 공통으로
+수행하는 ROS 비의존 `motion_controller.py`를 추가했다. 별도 노드는 만들지 않았으며
+기존 `/cmd/<behavior> → cmd_mux` 구조를 유지한다. 먼저 Avoid의 B-spline lookahead
+방향·곡률 기반 속도와 ESCAPE 후진 방향을 이 모듈에 연결했고, refactor 전 명령을 유지하는
+회귀 테스트를 포함한 순수 behavior 테스트 94개를 통과했다. 컨테이너 avoidance 단독
+주행에서도 목표 `(29.0, 76.5)` 도달과 `/mission/complete` 발행을 확인했다.
+
 ### 2026-08-04 00:58 — [buoy_detector] [D455] 정렬 Depth·단위 처리를 실물/Sim 공통화
 RealSense D455의 RGB와 Depth는 각각 `sensor_msgs/Image`로 들어오므로, 실물 launch에서
 `align_depth.enable=true`와 `enable_sync=true`를 켜 RGB 픽셀 기준으로 정렬한 Depth를

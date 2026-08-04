@@ -7,6 +7,7 @@
 import math
 
 import numpy as np
+import pytest
 
 from kaboat_behaviors.dri import DriParams, build_dri
 from kaboat_behaviors.bspline_planner import PlannerParams, check, curvature_ahead
@@ -107,6 +108,17 @@ def test_follow_slows_near_waypoint():
     p = FsmParams()
     lin, _ = follow_cmd(plan, BOAT, YAW, 0.0, wp, p, KP, KD)
     assert lin < speed_to_cmd(p.v_max, p) * (2.0 / p.slow_radius) + 1e-12
+
+
+def test_follow_combines_large_heading_and_waypoint_slowdown_in_old_order():
+    """공통 조종기 분리 전과 동일하게 회전 속도캡 뒤 거리감속을 적용한다."""
+    fsm = make_fsm()
+    wp = (-2.0, 0.0)
+    plan = acquire(fsm, dri_of([]), wp=wp).plan
+    p = FsmParams()
+    lin, _ = follow_cmd(plan, BOAT, YAW, 0.0, wp, p, KP, KD)
+    expected_v = 0.3 * p.v_max * (2.0 / p.slow_radius)
+    assert lin == pytest.approx(speed_to_cmd(expected_v, p))
 
 
 # ---------- AvoidFsm.step — 기본 흐름 ----------
