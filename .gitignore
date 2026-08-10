@@ -1,0 +1,13 @@
+# ROS 2 workspace artifacts are generated locally by colcon.
+/build/
+/install/
+/log/
+
+# Python caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Editor/OS files
+.vscode/
+.DS_Store

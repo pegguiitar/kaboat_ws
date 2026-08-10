@@ -68,6 +68,7 @@ import cv2
 import numpy as np
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import LaserScan, PointCloud2, Imu
 from nav_msgs.msg import Odometry, OccupancyGrid
 import sensor_msgs_py.point_cloud2 as pc2
@@ -142,10 +143,14 @@ class OccupancyGridNode(Node):
         self.grid = np.zeros((self.cells, self.cells), dtype=np.float32)  # log-odds
         self.observed = np.zeros((self.cells, self.cells), dtype=bool)    # 관측 여부
 
-        self.create_subscription(LaserScan, '/scan', self._on_scan, 10)
+        self.create_subscription(
+            LaserScan, '/scan', self._on_scan, qos_profile_sensor_data)
         self.create_subscription(Odometry, '/odom', self._on_odom, 10)
-        self.create_subscription(Imu, '/imu/data', self._on_imu, 10)
-        self.create_subscription(PointCloud2, '/camera/depth/points', self._on_points, 5)
+        self.create_subscription(
+            Imu, '/imu/data', self._on_imu, qos_profile_sensor_data)
+        self.create_subscription(
+            PointCloud2, '/camera/depth/points', self._on_points,
+            qos_profile_sensor_data)
 
         self.pub = self.create_publisher(OccupancyGrid, '/occupancy_grid', 1)
         self.create_timer(1.0 / rate, self._publish)

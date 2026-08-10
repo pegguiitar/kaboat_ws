@@ -29,6 +29,7 @@ import math
 
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import Image, LaserScan, CameraInfo, Imu
 from nav_msgs.msg import Odometry
 from visualization_msgs.msg import Marker, MarkerArray
@@ -205,11 +206,19 @@ class BuoyDetector(Node):
         self.fx = None            # camera_info 초점거리 px (방위각 정밀화)
         self.ppx = None           # camera_info 주점 x px
         self.pitch = 0.0          # ③ 수평선 보정용 IMU pitch [rad]
-        self.create_subscription(Image, '/camera/color/image_raw', self.on_image, 10)
-        self.create_subscription(Image, '/camera/depth/image_raw', self._on_depth, 10)
-        self.create_subscription(CameraInfo, '/camera/camera_info', self._on_info, 10)
-        self.create_subscription(LaserScan, '/scan', self._on_scan, 10)
-        self.create_subscription(Imu, '/imu/data', self._on_imu, 10)
+        # 실제 센서 드라이버는 대역폭/지연 때문에 Best Effort(SensorDataQoS)를
+        # 쓰는 경우가 많다. Reliable 기본 QoS로 구독하면 DDS QoS 불일치로
+        # 토픽 이름은 보여도 콜백이 한 번도 실행되지 않을 수 있다.
+        self.create_subscription(
+            Image, '/camera/color/image_raw', self.on_image, qos_profile_sensor_data)
+        self.create_subscription(
+            Image, '/camera/depth/image_raw', self._on_depth, qos_profile_sensor_data)
+        self.create_subscription(
+            CameraInfo, '/camera/camera_info', self._on_info, qos_profile_sensor_data)
+        self.create_subscription(
+            LaserScan, '/scan', self._on_scan, qos_profile_sensor_data)
+        self.create_subscription(
+            Imu, '/imu/data', self._on_imu, qos_profile_sensor_data)
         self.create_subscription(Odometry, '/odom', self._on_odom, 10)
 
         self.get_logger().info(

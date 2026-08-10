@@ -1,0 +1,41 @@
+sensor_health_monitor:
+  ros__parameters:
+    report_period_sec: 2.0
+    startup_grace_sec: 10.0
+
+    # 아래 topic만 각 제조사 드라이버 출력에 맞춰 바꾸면 나머지 코드는 유지된다.
+    color:
+      enabled: true
+      topic: /camera/color/image_raw
+      min_rate_hz: 10.0
+      timeout_sec: 1.0
+    depth:
+      enabled: true
+      topic: /camera/depth/image_raw
+      min_rate_hz: 10.0
+      timeout_sec: 1.0
+    camera_info:
+      enabled: true
+      topic: /camera/camera_info
+      min_rate_hz: 5.0
+      timeout_sec: 1.0
+    scan:
+      enabled: true
+      topic: /scan
+      min_rate_hz: 5.0
+      timeout_sec: 1.0
+    imu:
+      enabled: true
+      topic: /imu/data
+      min_rate_hz: 20.0
+      timeout_sec: 0.5
+    gps:
+      enabled: true
+      topic: /gps/fix
+      min_rate_hz: 1.0
+      timeout_sec: 3.0
+    pointcloud:
+      enabled: false
+      topic: /camera/depth/points
+      min_rate_hz: 5.0
+      timeout_sec: 1.0

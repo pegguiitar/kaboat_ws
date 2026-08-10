@@ -23,7 +23,7 @@ TODO(팀): YOLOv8 추론으로 교체 —
 """
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, DurabilityPolicy
+from rclpy.qos import QoSProfile, DurabilityPolicy, qos_profile_sensor_data
 from sensor_msgs.msg import Image
 from std_msgs.msg import Bool
 
@@ -58,8 +58,10 @@ class DockMarkDetector(Node):
 
         self.bridge = CvBridge()
         self.depth = None   # buoy_detector 와 동일한 뎁스 프레임 캐시 패턴
-        self.create_subscription(Image, '/camera/color/image_raw', self.on_image, 10)
-        self.create_subscription(Image, '/camera/depth/image_raw', self._on_depth, 10)
+        self.create_subscription(
+            Image, '/camera/color/image_raw', self.on_image, qos_profile_sensor_data)
+        self.create_subscription(
+            Image, '/camera/depth/image_raw', self._on_depth, qos_profile_sensor_data)
         self.get_logger().info(
             'dock_mark_detector 대기 (YOLO placeholder=HSV) — '
             '/detector/enable=true 인 동안만 추론 → /detections/dock_marks')

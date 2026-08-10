@@ -9,10 +9,13 @@
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
+  <exec_depend>ament_index_python</exec_depend>
   <exec_depend>kaboat_perception</exec_depend>
   <exec_depend>kaboat_behaviors</exec_depend>
   <exec_depend>kaboat_control</exec_depend>
   <exec_depend>kaboat_mission</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
   <exec_depend>realsense2_camera</exec_depend>
   <exec_depend>rviz2</exec_depend>
 
