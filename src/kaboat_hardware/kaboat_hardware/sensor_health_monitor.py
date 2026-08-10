@@ -5,6 +5,7 @@ import time
 
 import rclpy
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
+from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import CameraInfo, Image, Imu, LaserScan, NavSatFix, PointCloud2
@@ -19,6 +20,7 @@ SENSOR_TYPES = {
     'scan': LaserScan,
     'imu': Imu,
     'gps': NavSatFix,
+    'odom': Odometry,
     'pointcloud': PointCloud2,
 }
 
@@ -36,6 +38,7 @@ class SensorHealthMonitor(Node):
             'scan': ('/scan', True, 5.0, 1.0),
             'imu': ('/imu/data', True, 20.0, 0.5),
             'gps': ('/gps/fix', True, 1.0, 3.0),
+            'odom': ('/odom', True, 10.0, 1.0),
             'pointcloud': ('/camera/depth/points', False, 5.0, 1.0),
         }
 
@@ -136,6 +139,25 @@ class SensorHealthMonitor(Node):
             elif not (math.isfinite(msg.latitude) and math.isfinite(msg.longitude)):
                 level = ERROR
                 fields['fix_check'] = 'non-finite coordinates'
+        elif name == 'odom':
+            position = msg.pose.pose.position
+            velocity = msg.twist.twist.linear
+            values = (
+                position.x, position.y, position.z,
+                velocity.x, velocity.y, velocity.z,
+            )
+            fields = {
+                'position_xyz': (
+                    f'{position.x:.3f}, {position.y:.3f}, {position.z:.3f}'),
+                'speed_mps': f'{math.sqrt(velocity.x**2 + velocity.y**2 + velocity.z**2):.3f}',
+                'child_frame_id': msg.child_frame_id or '<empty>',
+            }
+            if not all(math.isfinite(value) for value in values):
+                level = ERROR
+                fields['odometry_check'] = 'non-finite pose or velocity'
+            elif not msg.child_frame_id:
+                level = WARN
+                fields['odometry_check'] = 'empty child_frame_id'
         elif name == 'pointcloud':
             fields = {'width': str(msg.width), 'height': str(msg.height)}
             if msg.width == 0:

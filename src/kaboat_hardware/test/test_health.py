@@ -1,3 +1,5 @@
+import pytest
+
 from kaboat_hardware.health import ERROR, OK, WARN, TopicTracker
 
 
@@ -26,4 +28,4 @@ def test_rate_and_frame_are_reported():
     level, message, _age, rate = tracker.evaluate(1.25, 0.0, 0.0)
     assert level == OK
     assert message == 'receiving'
-    assert rate == 10.0
+    assert rate == pytest.approx(10.0)

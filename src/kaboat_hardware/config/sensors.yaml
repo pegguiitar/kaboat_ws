@@ -34,6 +34,11 @@ sensor_health_monitor:
       topic: /gps/fix
       min_rate_hz: 1.0
       timeout_sec: 3.0
+    odom:
+      enabled: true
+      topic: /odom
+      min_rate_hz: 10.0
+      timeout_sec: 1.0
     pointcloud:
       enabled: false
       topic: /camera/depth/points

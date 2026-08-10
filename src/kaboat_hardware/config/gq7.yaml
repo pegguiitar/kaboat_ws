@@ -1,0 +1,28 @@
+microstrain_inertial_driver:
+  ros__parameters:
+    # 패키지 udev rule이 GQ7 main port에 만드는 고정 이름이다.
+    port: /dev/microstrain_main
+    baudrate: 115200
+
+    # 케이블을 다시 꽂았을 때 포트를 재탐색하고 현재 설정으로 재연결한다.
+    poll_port: true
+    poll_rate_hz: 1.0
+    poll_max_tries: -1
+    reconnect_attempts: 10
+    configure_after_reconnect: true
+
+    # 첫 실물 검증에서는 SensorConnect/장치에 저장된 보정 및 안테나 설정을
+    # 덮어쓰지 않는다. 안테나 lever arm과 장착 자세를 실측한 뒤에만 변경한다.
+    device_setup: false
+    save_settings: false
+
+    use_enu_frame: true
+    frame_id: imu_link
+    mount_frame_id: base_link
+    target_frame_id: base_link
+    publish_mount_to_frame_id_transform: false
+    tf_mode: 0
+
+    # NTRIP/RTK 보정 입력은 별도 설정 전까지 비활성화한다.
+    ntrip_interface_enable: false
+    raw_file_enable: false
