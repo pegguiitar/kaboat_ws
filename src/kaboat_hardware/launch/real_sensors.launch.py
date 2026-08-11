@@ -42,7 +42,11 @@ def generate_launch_description():
         actions=[
             SetRemap(src='/gnss_1/llh_position', dst='/gps/fix'),
             SetRemap(src='/gnss_2/llh_position', dst='/gps/fix_secondary'),
-            SetRemap(src='/ekf/odometry_map', dst='/odom'),
+            # ⚠️ 실내 수조에서는 apriltag_odom 이 /odom 을 발행하므로 이 remap 을
+            # 꺼야 한다. 켠 채로 두면 EKF 가 수렴하는 순간 /odom 발행자가 둘이
+            # 되어 두 좌표계가 섞인다 (GNSS 미수렴 중에는 조용해서 안 드러남).
+            SetRemap(src='/ekf/odometry_map', dst='/odom',
+                     condition=IfCondition(LaunchConfiguration('enable_odom_remap'))),
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
                     PathJoinSubstitution([
@@ -72,6 +76,12 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'gq7_config_file', default_value=default_gq7_config,
             description='GQ7 드라이버 override 설정'),
+        DeclareLaunchArgument(
+            'enable_odom_remap', default_value='true',
+            description='GQ7 EKF → /odom remap. 실내 수조(apriltag_odom)에서는 false'),
+        DeclareLaunchArgument(
+            'publish_tf', default_value='true',
+            description='RViz Fixed Frame 용 최소 TF. 스택 자체는 TF 를 쓰지 않는다'),
         LogInfo(
             msg='D455 driver disabled. 연결 후 enable_d455:=true 로 실행하세요.',
             condition=UnlessCondition(enable_d455)),
@@ -86,5 +96,16 @@ def generate_launch_description():
             name='sensor_health_monitor',
             output='screen',
             parameters=[config_file, {'use_sim_time': False}],
+        ),
+        # RViz 가 Fixed Frame 을 해석하려면 TF 트리가 있어야 한다. 실물에는
+        # 발행자가 없어(gq7.yaml 의 tf_mode: 0) 여기서 최소 체인만 채운다 —
+        # 제어 경로에는 관여하지 않는다.
+        Node(
+            package='kaboat_hardware',
+            executable='odom_tf_broadcaster',
+            name='odom_tf_broadcaster',
+            output='screen',
+            condition=IfCondition(LaunchConfiguration('publish_tf')),
+            parameters=[{'use_sim_time': False}],
         ),
     ])

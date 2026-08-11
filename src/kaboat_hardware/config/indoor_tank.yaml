@@ -1,0 +1,73 @@
+# 실내 수조 시험 설정 — 천장 AprilTag + GQ7 자이로 → /odom
+#
+# ⚠️ TODO(팀): 수조 실측 후 채울 값에 [수조] 표시를 해뒀다. 그 전까지는
+#              배선·부호 검증만 가능하고 주행 시험은 하지 말 것.
+
+apriltag_odom:
+  ros__parameters:
+    # ── 프레임 이름 ────────────────────────────────────
+    odom_frame: odom
+    base_frame: base_link
+    # apriltag_ros 가 내는 TF 이름. 'tag<패밀리>:<id>' 형식이지만 버전마다
+    # 다르므로 실제 이름을 확인해 맞출 것:
+    #   ros2 run tf2_tools view_frames
+    tag_frame: "tag36h11:0"
+    camera_frame: ceiling_camera
+
+    # ── [수조] 천장 카메라 설치 자세 (odom → camera) ───
+    # 수조 원점을 어디로 잡을지 정한 뒤 실측해 채운다. 이 값이 곧 좌표계
+    # 정의라, 여기가 틀리면 모든 위치가 그만큼 통째로 어긋난다.
+    publish_camera_tf: true
+    camera_xyz: [0.0, 0.0, 3.0]      # [수조] 원점 기준 카메라 위치 [m]
+    camera_rpy: [3.14159, 0.0, 0.0]  # [수조] 바닥을 내려다보는 자세
+
+    # ── 배에 붙인 태그의 장착 오차 ─────────────────────
+    tag_yaw_offset: 0.0        # 태그 정면과 선수 방향의 차 [rad]
+    tag_offset_xy: [0.0, 0.0]  # 선체 중심 기준 태그 위치 [m]
+
+    # ── 타이밍 ─────────────────────────────────────────
+    publish_rate: 30.0         # 카메라 프레임률에 맞춘다
+    tag_timeout_sec: 0.3       # 이보다 오래된 검출이면 /odom 발행 중단
+    imu_timeout_sec: 0.5
+    imu_topic: /imu/data
+
+    # ── 속도 추정 ──────────────────────────────────────
+    # 5mm 검출 노이즈 기준 속도 노이즈 RMS 실측(테스트):
+    #   window=1프레임 0.205 m/s / window=0.15s 0.042 / +EMA 0.011
+    # 늘리면 조용해지지만 지연이 커져 D항의 감쇠 효과가 떨어진다.
+    vel_window_sec: 0.15
+    vel_filter_tau: 0.15
+    vel_max_speed: 3.0         # 이보다 빠른 미분값은 검출 튐으로 보고 버림
+
+    # ⚠️ 각속도는 자이로에서 직접 받는다 — yaw 미분은 각도 오차 1°가
+    #    0.52 rad/s(=실측 ω_max)로 증폭돼 D항을 포화시킨다.
+    use_imu_yaw_rate: true
+    # ⚠️ 반시계(좌회전)에서 /imu/data 의 angular_velocity.z 가 양수인지
+    #    손으로 돌려 확인할 것. 반대면 -1.0. 부호가 틀리면 D항이 감쇠가
+    #    아니라 발진 방향으로 작용한다 (SKELETON §6 전복 사고와 같은 경로).
+    yaw_rate_sign: 1.0
+    gyro_bias_z: 0.0           # 정지 실측 바이어스 [rad/s], 0.01 이하면 무시 가능
+
+    # ── 공분산 ─────────────────────────────────────────
+    pose_stddev_xy: 0.02
+    pose_stddev_yaw: 0.02
+    twist_stddev: 0.05
+
+
+# ── [수조] 여기부터는 수조 크기가 정해져야 채울 수 있다 ──────────────
+#
+# 현재 값들은 실제 경기장(수십 m, 전속 1.48 m/s) 기준이라 실내 수조에서는
+# 전부 과대하다. 아래는 재산출이 필요한 목록이며, 정해지기 전에는 주행
+# 시험을 하지 말 것.
+#
+#   occupancy_grid:  size(20.0m) → 수조를 덮는 크기로
+#   mission_manager: waypoints(경기장 좌표) → 수조 좌표로 전면 교체
+#                    transition_radius(2.0m)
+#   obstacle_planner fsm: d_panic(3.0m) escape_radius(2.5m) lookahead(2.0m)
+#                         slow_radius(3.0m) v_max(1.4m/s)
+#   obstacle_planner planner: min_horizon(3.0m)
+#   behavior_base:   max_linear/max_angular — 실물 스러스터 확정 후 재실측
+#
+# 추가 주의: 수조 벽이 LiDAR 에 전부 장애물로 잡혀 격자가 사방으로 막힌
+# 상태가 된다. avoid 플래너는 "전진 반평면에 답 없음" → ESCAPE(후진) 로
+# 갈 것이다. 회피 시험을 하려면 이걸 감안해 파라미터를 잡아야 한다.

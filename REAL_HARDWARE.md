@@ -3,6 +3,9 @@
 이 브랜치의 첫 단계는 **모터를 구동하지 않고 센서 입력만 확인**하는 것이다.
 `real_sensors.launch.py`는 ESC/추력 노드를 실행하지 않는다.
 
+> 현장 점검 명령과 판정 기준은 **[SENSOR_CHECK.md](SENSOR_CHECK.md)** 에 모아뒀다.
+> 실내 수조(천장 AprilTag) 모드는 아래 §"실내 수조 시험" 참고.
+
 ## 센서 토픽 계약
 
 | 장치 | ROS 2 타입 | KABOAT 표준 토픽 | 필수 frame_id 예시 |
@@ -147,6 +150,68 @@ ros2 topic echo /odom --once
 - IMU quaternion norm이 유효하고 orientation이 제공되는지
 - GNSS fix 상태와 좌표가 유효한지
 - GQ7 INS odometry의 위치/속도가 유한하고 child frame이 존재하는지
+
+## 실내 수조 시험 (천장 AprilTag)
+
+실내는 GNSS가 물리적으로 안 잡혀 GQ7 EKF `/odom`을 쓸 수 없다. 대신 천장에
+고정한 카메라로 배 위의 AprilTag를 추적해 `/odom`을 만든다.
+
+```bash
+# 천장 카메라 PC — 검출은 배가 아니라 방 쪽에서 돈다
+sudo apt install ros-humble-apriltag-ros ros-humble-image-proc
+ros2 run image_proc image_proc --ros-args -r image:=/ceiling_cam/image_raw
+ros2 run apriltag_ros apriltag_node --ros-args \
+    -r image_rect:=/ceiling_cam/image_rect \
+    -r camera_info:=/ceiling_cam/camera_info
+
+# 배 (Jetson)
+ros2 launch kaboat_hardware indoor_tank.launch.py
+```
+
+필드별로 출처가 다르다 — 각 센서가 제일 잘하는 것만 취한다.
+
+| `/odom` 필드 | 출처 | 이유 |
+|---|---|---|
+| `pose.position` / `orientation` | AprilTag | 절대 측정, 드리프트 없음 |
+| `twist.angular.z` | **GQ7 자이로** | 직접 측정. yaw 미분은 각도 오차 1°가 0.52 rad/s(=실측 ω_max)로 증폭돼 D항을 포화시킨다 |
+| `twist.linear.x/y` | AprilTag 위치 미분 | 가속도 적분은 자세 오차 1°만 있어도 10초에 1.7 m/s 발산 |
+
+속도 노이즈는 5mm 검출 오차 기준 실측(`test_pose_velocity.py`)으로
+window 1프레임 0.205 m/s → window 0.15s 0.042 → +EMA **0.011 m/s**.
+
+`ceiling camera → tag` TF만 apriltag_ros가 발행하고, `odom → camera` 설치
+자세는 `apriltag_odom`이 정적 TF로 낸다 — tf2가 합성을 대신하므로 노드는
+행렬 계산을 하지 않는다.
+
+### 준비물
+
+- **카메라 캘리브레이션 필수** — pose는 `camera_info` 내부 파라미터로 계산된다.
+  `ros2 run camera_calibration cameracalibrator ...`
+- **왜곡 보정 이미지(`image_rect`)** — 광각 렌즈면 수조 가장자리 오차가 크다.
+- 태그 패밀리 `tag36h11`, 이미지에서 한 변 최소 40~60 px.
+  **인쇄물을 자로 재서 그 값을 `size`에 넣는다** (프린터 배율 오차가 거리
+  오차에 그대로 비례).
+
+### ⚠️ `/odom` 발행자 중복
+
+`indoor_tank.launch.py`는 GQ7의 EKF→`/odom` remap을 자동으로 끈다
+(`enable_odom_remap:=false`). `real_sensors.launch.py`를 직접 쓸 때는 수동으로
+꺼야 한다 — 안 끄면 EKF가 수렴하는 순간 발행자가 둘이 되어 두 좌표계가 섞인다.
+GNSS 미수렴 중에는 조용해서 드러나지 않으니 주의.
+
+### ⚠️ 파라미터 스케일
+
+현재 값들은 실제 경기장(수십 m, 전속 1.48 m/s) 기준이라 실내 수조에서는
+전부 과대하다. `d_panic`(3.0m)·`escape_radius`(2.5m)·`lookahead`(2.0m)·
+`min_horizon`(3.0m)·`transition_radius`(2.0m)·occupancy_grid `size`(20m)와
+경기장 좌표 waypoint를 수조 실측값으로 재산출해야 한다. 목록은
+[`indoor_tank.yaml`](src/kaboat_hardware/config/indoor_tank.yaml) 하단에 있다.
+
+또 **수조 벽이 LiDAR에 전부 장애물로 잡혀** 격자가 사방으로 막힌다. avoid
+플래너는 "전진 반평면에 답 없음" → ESCAPE(후진)로 갈 것이다. 회피 시험은
+이걸 감안해 파라미터를 잡은 뒤에 한다.
+
+---
 
 ## 자율주행 스택 안전 기본값
 
