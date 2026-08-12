@@ -1,0 +1,28 @@
+imu_dead_reckoning_odom:
+  ros__parameters:
+    imu_topic: /imu/data
+    odom_topic: /odom
+    odom_frame: odom
+    base_frame: base_link
+    publish_tf: true
+
+    # 전원을 켠 뒤 이 시간 동안 GQ7과 TG-50을 움직이지 않는다.
+    calibration_duration_sec: 2.0
+    calibration_gyro_limit: 0.08
+    calibration_accel_tolerance: 0.8
+
+    gravity: 9.80665
+    accel_deadband: 0.06
+    accel_filter_tau: 0.08
+    # 드리프트 폭주를 늦추는 시험용 감쇠다. 0이면 감쇠하지 않는다.
+    velocity_damping_tau: 8.0
+    max_accel: 3.0
+    max_speed: 2.0
+    max_dt: 0.05
+
+    # 등속 이동과 정지를 IMU만으로 구분할 수 없으므로 기본 비활성이다.
+    # true면 멈춘 뒤 속도를 0으로 묶지만 부드러운 등속 이동도 정지로 오인한다.
+    zupt_enabled: false
+    stationary_accel_threshold: 0.10
+    stationary_gyro_threshold: 0.025
+    stationary_hold_sec: 0.5

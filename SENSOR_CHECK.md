@@ -419,7 +419,52 @@ ros2 topic info /odom --verbose | grep "Publisher count"   # 반드시 1
 
 ---
 
-## 11. 프로세스 정리
+## 11. GPS/AprilTag 전 임시 IMU dead-reckoning 시험
+
+TG-50과 GQ7을 손으로 같이 움직이며 `/occupancy_grid`가 이동·회전에 따라
+갱신되는지만 확인하는 **단기 시험 전용** 모드다. GQ7 자세로 중력을 제거한
+평면 가속도를 두 번 적분해 `/odom`을 만들므로, 시간이 갈수록 위치가 반드시
+드리프트한다. 항법·미션·모터 주행에는 사용하지 않는다.
+
+```bash
+source /opt/ros/humble/setup.bash
+source /home/msga2026/Desktop/kaboat_ws/ydlidar_ws/install/setup.bash
+source /home/msga2026/Desktop/kaboat_ws/repo/install/setup.bash
+
+ros2 launch kaboat_hardware imu_tg50_mapping.launch.py
+```
+
+시작 직후 `2초` 동안 GQ7과 TG-50을 바닥에 놓고 움직이지 않는다. 로그에
+`보정 완료 — /odom 발행 시작`이 나온 뒤 두 센서를 장착 상태 그대로 천천히
+같이 움직인다. launch에는 GQ7, TG-50, 임시 odom, occupancy-grid, RViz만
+포함되며 모터·미션·행동 노드는 실행하지 않는다.
+
+```bash
+ros2 topic hz /imu/data          # 약 100 Hz
+ros2 topic hz /scan              # 약 10 Hz
+ros2 topic hz /odom              # 약 100 Hz
+ros2 topic hz /occupancy_grid    # 약 10 Hz
+
+# 현재 위치·속도·상대 yaw만 원점으로 재설정 (바이어스 보정은 유지)
+ros2 service call /imu_dead_reckoning_odom/reset std_srvs/srv/Trigger '{}'
+```
+
+파라미터는
+[`imu_dead_reckoning.yaml`](src/kaboat_hardware/config/imu_dead_reckoning.yaml)에
+있다. 정지 감지(`zupt_enabled`)는 기본적으로 끈다. 켜면 멈춘 뒤 속도
+드리프트는 줄지만, IMU만으로는 등속 이동과 정지를 구분할 수 없어 부드럽게
+운반하는 구간을 정지로 잘못 판단할 수 있다.
+
+시험이 끝나면 launch를 종료한다. 이후 AprilTag/GQ7 EKF `/odom`과 동시에
+실행하면 발행자가 둘이 되므로 다음 값은 반드시 `1`이어야 한다.
+
+```bash
+ros2 topic info /odom --verbose | grep "Publisher count"
+```
+
+---
+
+## 12. 프로세스 정리
 
 이전 프로세스가 남아 토픽이 꼬이는 경우가 흔하다.
 
@@ -434,7 +479,7 @@ ps -ef | grep -E "gz sim|ros2 launch|parameter_bridge|robot_state_publisher" \
 
 ---
 
-## 12. 요약 — 실내에서 확인 가능한 범위
+## 13. 요약 — 실내에서 확인 가능한 범위
 
 | 항목 | 실내 | 합격 기준 |
 |---|---|---|

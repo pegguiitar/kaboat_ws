@@ -156,6 +156,17 @@ ros2 topic echo /odom --once
 실내는 GNSS가 물리적으로 안 잡혀 GQ7 EKF `/odom`을 쓸 수 없다. 대신 천장에
 고정한 카메라로 배 위의 AprilTag를 추적해 `/odom`을 만든다.
 
+AprilTag 설치 전 TG-50와 Occupancy Grid 파이프라인만 짧게 시험할 때는 다음
+임시 IMU dead-reckoning launch를 쓴다. 가속도 이중 적분이라 빠르게 드리프트하며
+모터 주행용이 아니다. 시작 후 2초간 센서를 움직이지 말아야 한다.
+
+```bash
+ros2 launch kaboat_hardware imu_tg50_mapping.launch.py
+```
+
+세부 판정 및 리셋 명령은 [`SENSOR_CHECK.md`](SENSOR_CHECK.md)의
+`GPS/AprilTag 전 임시 IMU dead-reckoning 시험` 절을 따른다.
+
 ```bash
 # 천장 카메라 PC — 검출은 배가 아니라 방 쪽에서 돈다
 sudo apt install ros-humble-apriltag-ros ros-humble-image-proc
