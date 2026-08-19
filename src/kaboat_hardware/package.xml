@@ -10,7 +10,11 @@
   <buildtool_depend>ament_python</buildtool_depend>
 
   <exec_depend>kaboat_bringup</exec_depend>
+  <exec_depend>apriltag_msgs</exec_depend>
+  <exec_depend>apriltag_ros</exec_depend>
+  <exec_depend>camera_ros</exec_depend>
   <exec_depend>diagnostic_msgs</exec_depend>
+  <exec_depend>image_proc</exec_depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>microstrain_inertial_driver</exec_depend>
@@ -22,6 +26,7 @@
   <exec_depend>tf2_ros</exec_depend>
   <exec_depend>std_srvs</exec_depend>
   <exec_depend>rviz2</exec_depend>
+  <exec_depend>rclcpp_components</exec_depend>
   <exec_depend>ydlidar_ros2_driver</exec_depend>
 
   <test_depend>python3-pytest</test_depend>

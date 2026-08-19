@@ -155,6 +155,8 @@ ros2 topic echo /odom --once
 
 실내는 GNSS가 물리적으로 안 잡혀 GQ7 EKF `/odom`을 쓸 수 없다. 대신 천장에
 고정한 카메라로 배 위의 AprilTag를 추적해 `/odom`을 만든다.
+같은 Wi-Fi를 통한 노트북→Jetson 연결과 웹캠 보정 절차는
+[`APRILTAG_WIFI_SETUP.md`](APRILTAG_WIFI_SETUP.md)에 정리돼 있다.
 
 AprilTag 설치 전 TG-50와 Occupancy Grid 파이프라인만 짧게 시험할 때는 다음
 임시 IMU dead-reckoning launch를 쓴다. 가속도 이중 적분이라 빠르게 드리프트하며
@@ -168,12 +170,9 @@ ros2 launch kaboat_hardware imu_tg50_mapping.launch.py
 `GPS/AprilTag 전 임시 IMU dead-reckoning 시험` 절을 따른다.
 
 ```bash
-# 천장 카메라 PC — 검출은 배가 아니라 방 쪽에서 돈다
-sudo apt install ros-humble-apriltag-ros ros-humble-image-proc
-ros2 run image_proc image_proc --ros-args -r image:=/ceiling_cam/image_raw
-ros2 run apriltag_ros apriltag_node --ros-args \
-    -r image_rect:=/ceiling_cam/image_rect \
-    -r camera_info:=/ceiling_cam/camera_info
+# 천장 카메라 노트북 — tag_size는 인쇄한 태그 실측값으로 변경
+ros2 launch kaboat_hardware ceiling_apriltag.launch.py \
+  tag_id:=0 tag_size:=0.162
 
 # 배 (Jetson)
 ros2 launch kaboat_hardware indoor_tank.launch.py

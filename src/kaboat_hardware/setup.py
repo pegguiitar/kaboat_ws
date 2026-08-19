@@ -27,6 +27,7 @@ setup(
             'sensor_health_monitor = kaboat_hardware.sensor_health_monitor:main',
             'odom_tf_broadcaster = kaboat_hardware.odom_tf_broadcaster:main',
             'apriltag_odom = kaboat_hardware.apriltag_odom:main',
+            'ceiling_apriltag_status = kaboat_hardware.ceiling_apriltag_status:main',
             'imu_dead_reckoning_odom = kaboat_hardware.imu_dead_reckoning_odom:main',
         ],
     },

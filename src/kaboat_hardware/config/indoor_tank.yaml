@@ -28,6 +28,8 @@ apriltag_odom:
     # ── 타이밍 ─────────────────────────────────────────
     publish_rate: 30.0         # 카메라 프레임률에 맞춘다
     tag_timeout_sec: 0.3       # 이보다 오래된 검출이면 /odom 발행 중단
+    # 노트북 검출 stamp가 Jetson 시각보다 이 이상 미래면 clock 불일치로 거부
+    clock_skew_tolerance_sec: 0.2
     imu_timeout_sec: 0.5
     imu_topic: /imu/data
 

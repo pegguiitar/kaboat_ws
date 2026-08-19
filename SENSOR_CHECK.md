@@ -374,13 +374,13 @@ Map `/occupancy_grid` · LaserScan `/scan` · Odometry `/odom` 이 뜬다.
 ## 10. 실내 수조 모드 (AprilTag)
 
 GNSS 대신 천장 AprilTag + GQ7 자이로로 `/odom` 을 만든다.
+노트북 웹캠 설치·보정·Wi-Fi DDS 연결의 전체 절차는
+[`APRILTAG_WIFI_SETUP.md`](APRILTAG_WIFI_SETUP.md)를 따른다.
 
 ```bash
-# 천장 카메라 PC
-ros2 run image_proc image_proc --ros-args -r image:=/ceiling_cam/image_raw
-ros2 run apriltag_ros apriltag_node --ros-args \
-    -r image_rect:=/ceiling_cam/image_rect \
-    -r camera_info:=/ceiling_cam/camera_info
+# 천장 카메라 노트북 (tag_size는 인쇄물 실측값으로 변경)
+ros2 launch kaboat_hardware ceiling_apriltag.launch.py \
+  tag_id:=0 tag_size:=0.162
 
 # 배 (Jetson)
 ros2 launch kaboat_hardware indoor_tank.launch.py

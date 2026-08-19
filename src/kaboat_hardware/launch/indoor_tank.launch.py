@@ -8,17 +8,16 @@
 
 모터는 실행하지 않는다 — real_sensors.launch.py 와 같은 규약.
 
-AprilTag 검출기(apriltag_ros)는 **이 launch 에 없다.** 천장 카메라는 배가
-아니라 방에 고정돼 있어 별도 PC 에서 도는 게 자연스럽고, 검출 스탬프도
-그쪽에서 찍혀야 네트워크 지터가 시간축에 안 들어가기 때문이다. 검출 PC 에서:
+AprilTag 검출기는 **이 launch 에 없다.** 천장 카메라는 별도 노트북에서
+`ceiling_apriltag.launch.py`로 실행한다. 영상은 노트북에서 처리하고 /tf와
+/apriltag/detections만 DDS로 공유한다. 자세한 설치·보정·Wi-Fi 설정은 저장소
+루트의 APRILTAG_WIFI_SETUP.md를 따른다.
 
-    sudo apt install ros-humble-apriltag-ros ros-humble-image-proc
-    ros2 run image_proc image_proc --ros-args -r image:=/ceiling_cam/image_raw
-    ros2 run apriltag_ros apriltag_node --ros-args \
-        -r image_rect:=/ceiling_cam/image_rect \
-        -r camera_info:=/ceiling_cam/camera_info
+    # 노트북 — tag_size는 인쇄물 실측값[m]
+    ros2 launch kaboat_hardware ceiling_apriltag.launch.py \
+        tag_id:=0 tag_size:=0.162
 
-    # 두 PC 의 ROS_DOMAIN_ID 를 맞추고 같은 서브넷에 둘 것
+    # 두 PC의 ROS_DOMAIN_ID를 맞추고 ROS_LOCALHOST_ONLY=0으로 둘 것
 
 사용법:
     ros2 launch kaboat_hardware indoor_tank.launch.py

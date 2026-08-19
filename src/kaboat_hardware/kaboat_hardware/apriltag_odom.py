@@ -84,6 +84,9 @@ class AprilTagOdom(Node):
         # ── 타이밍 ─────────────────────────────────────
         self.declare_parameter('publish_rate', 30.0)       # TF 폴링 주기 [Hz]
         self.declare_parameter('tag_timeout_sec', 0.3)     # 이보다 오래되면 유실
+        # 노트북 시각이 Jetson보다 미래면 단순 age 검사만으로는 오래된 pose를
+        # 정상으로 오인한다. chrony가 깨진 상태를 별도로 거부한다.
+        self.declare_parameter('clock_skew_tolerance_sec', 0.2)
         self.declare_parameter('imu_timeout_sec', 0.5)
         self.declare_parameter('imu_topic', '/imu/data')
 
@@ -110,6 +113,8 @@ class AprilTagOdom(Node):
         self.tag_offset_xy = [float(v) for v in
                               self.get_parameter('tag_offset_xy').value]
         self.tag_timeout = float(self.get_parameter('tag_timeout_sec').value)
+        self.clock_skew_tolerance = float(
+            self.get_parameter('clock_skew_tolerance_sec').value)
         self.imu_timeout = float(self.get_parameter('imu_timeout_sec').value)
         self.use_imu_yaw_rate = bool(
             self.get_parameter('use_imu_yaw_rate').value)
@@ -187,8 +192,13 @@ class AprilTagOdom(Node):
 
         stamp = _stamp_sec(tf.header.stamp)
         now = self.get_clock().now().nanoseconds * 1e-9
-        if now - stamp > self.tag_timeout:
-            self._mark_lost(f'태그 유실 — 마지막 검출 {now - stamp:.2f}s 전')
+        age = now - stamp
+        if age < -self.clock_skew_tolerance:
+            self._mark_lost(
+                f'노트북 시각이 Jetson보다 {-age:.2f}s 미래 — chrony 동기화 필요')
+            return
+        if age > self.tag_timeout:
+            self._mark_lost(f'태그 유실 — 마지막 검출 {age:.2f}s 전')
             return
         # 같은 검출을 두 번 내보내지 않는다. 스탬프가 뒤로 가는 경우도 여기서
         # 걸린다 — avoid FSM 이 이 스탬프를 시계로 쓰므로 단조성이 필수다.
