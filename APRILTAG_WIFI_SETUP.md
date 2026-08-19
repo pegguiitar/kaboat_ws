@@ -1,5 +1,9 @@
 # 천장 AprilTag → Wi-Fi → Jetson `/odom`
 
+노트북에서 Jetson 없이 AprilTag 검출만 먼저 확인할 때는
+[`APRILTAG_LAPTOP_DETECTION_CHECK.md`](APRILTAG_LAPTOP_DETECTION_CHECK.md)를
+따른다.
+
 천장 웹캠 영상은 노트북 안에서 처리하고, 계산된 AprilTag TF와 검출 상태만
 ROS 2 DDS로 Jetson에 보낸다. 원본 영상은 Jetson이 구독하지 않으므로 Wi-Fi
 대역폭을 계속 사용하지 않는다.
