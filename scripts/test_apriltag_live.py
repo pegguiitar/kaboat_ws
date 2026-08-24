@@ -142,14 +142,20 @@ def main():
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
     dict_families = {}
-    if hasattr(cv2.aruco, 'DICT_APRILTAG_36h11'):
-        dict_families['tag36h11'] = cv2.aruco.Dictionary_get(cv2.aruco.DICT_APRILTAG_36h11) if hasattr(cv2.aruco, 'Dictionary_get') else cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
-    if hasattr(cv2.aruco, 'DICT_APRILTAG_25h9'):
-        dict_families['tag25h9'] = cv2.aruco.Dictionary_get(cv2.aruco.DICT_APRILTAG_25h9) if hasattr(cv2.aruco, 'Dictionary_get') else cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_25h9)
-    if hasattr(cv2.aruco, 'DICT_APRILTAG_16h5'):
-        dict_families['tag16h5'] = cv2.aruco.Dictionary_get(cv2.aruco.DICT_APRILTAG_16h5) if hasattr(cv2.aruco, 'Dictionary_get') else cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_16h5)
-    if hasattr(cv2.aruco, 'DICT_4X4_50'):
-        dict_families['ArUco_4x4'] = cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_50) if hasattr(cv2.aruco, 'Dictionary_get') else cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
+    for name, dict_id in [
+        ('tag36h11', getattr(cv2.aruco, 'DICT_APRILTAG_36h11', None)),
+        ('tag25h9', getattr(cv2.aruco, 'DICT_APRILTAG_25h9', None)),
+        ('tag16h5', getattr(cv2.aruco, 'DICT_APRILTAG_16h5', None)),
+        ('ArUco_4x4', getattr(cv2.aruco, 'DICT_4X4_50', None)),
+        ('ArUco_5x5', getattr(cv2.aruco, 'DICT_5X5_50', None)),
+        ('ArUco_6x6', getattr(cv2.aruco, 'DICT_6X6_50', None)),
+        ('ArUco_Original', getattr(cv2.aruco, 'DICT_ARUCO_ORIGINAL', None)),
+    ]:
+        if dict_id is not None:
+            if hasattr(cv2.aruco, 'getPredefinedDictionary'):
+                dict_families[name] = cv2.aruco.getPredefinedDictionary(dict_id)
+            elif hasattr(cv2.aruco, 'Dictionary_get'):
+                dict_families[name] = cv2.aruco.Dictionary_get(dict_id)
 
     params = get_detector_params()
 
