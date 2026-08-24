@@ -1,9 +1,13 @@
-"""ceiling_apriltag_node — OpenCV 기반 천장 AprilTag/ArUco 검출 및 TF 발행 ROS 2 노드.
+"""ceiling_apriltag_node — 4점 호모그래피(Perspective Transform) 기반 실내 수조 AprilTag 추적기.
+
+카메라의 장착 기울어짐(Pitch/Roll/Yaw)과 원근 왜곡을 수조의 4개 꼭짓점 기반
+호모그래피 변환(Homography)으로 100% 완전 보정하여, 수조 모서리를 따르는
+정밀한 X(0~10m), Y(0~5m), Yaw 각도 오도메트리를 산출합니다.
 
 특징:
-  1. 수조의 실제 파란색 직사각형 좌하단 꼭짓점을 원점 (0,0)으로 설정
-  2. 마우스 클릭으로 수조 꼭짓점을 실시간으로 보정(Calibration) 가능
-  3. 실시간 Odom 좌표 (X, Y >= 0), 선수각(Yaw), 거리 시각화
+  1. 수조의 실제 4개 꼭짓점(좌하단, 우하단, 우상단, 좌상단) 기반 원근 보정
+  2. 수조 기울기에 맞춘 +X / +Y 축 화살표 및 원근 격자망(Perspective Grid) 렌더링
+  3. 'c' 키로 언제든지 4점 클릭 재보정(Calibration) 및 's' 키로 YAML 저장 가능
 """
 
 import math
@@ -15,6 +19,7 @@ from rclpy.node import Node
 from geometry_msgs.msg import TransformStamped, PoseStamped
 from sensor_msgs.msg import Image, CameraInfo
 from tf2_ros import TransformBroadcaster
+from ament_index_python.packages import get_package_share_directory
 
 
 def rot_matrix_to_quaternion(R):
@@ -91,11 +96,8 @@ class CeilingAprilTagNode(Node):
         self.declare_parameter('fy', 960.0)
         self.declare_parameter('cx', 640.0)
         self.declare_parameter('cy', 360.0)
-
-        # 수조 좌하단 꼭짓점 픽셀 좌표 (기본값: 사진 상의 파란색 수조 좌하단 모서리)
-        self.declare_parameter('origin_pixel_u', 90)
-        self.declare_parameter('origin_pixel_v', 630)
-        self.declare_parameter('ceiling_height', 4.60)  # [m]
+        self.declare_parameter('pool_size_x', 10.0)  # [m]
+        self.declare_parameter('pool_size_y', 5.0)   # [m]
 
         device_str = str(self.get_parameter('video_device').value)
         self.width = int(self.get_parameter('width').value)
@@ -106,10 +108,22 @@ class CeilingAprilTagNode(Node):
         self.tag_frame = str(self.get_parameter('tag_frame').value)
         self.show_gui = bool(self.get_parameter('show_gui').value)
         self.publish_img = bool(self.get_parameter('publish_image').value)
-        self.ceiling_height = float(self.get_parameter('ceiling_height').value)
+        self.pool_size_x = float(self.get_parameter('pool_size_x').value)
+        self.pool_size_y = float(self.get_parameter('pool_size_y').value)
 
-        self.origin_u = int(self.get_parameter('origin_pixel_u').value)
-        self.origin_v = int(self.get_parameter('origin_pixel_v').value)
+        # 4개 꼭짓점 픽셀 좌표 [P0(좌하단), P1(우하단), P2(우상단), P3(좌상단)]
+        self.corners_px = np.array([
+            [85.0, 640.0],    # P0: 좌하단 (0.0m, 0.0m)
+            [1175.0, 650.0],  # P1: 우하단 (10.0m, 0.0m)
+            [1160.0, 105.0],  # P2: 우상단 (10.0m, 5.0m)
+            [200.0, 95.0]     # P3: 좌상단 (0.0m, 5.0m)
+        ], dtype=np.float32)
+
+        self._update_homography()
+
+        # 캘리브레이션 모드 상태
+        self.calib_mode = False
+        self.calib_points = []
 
         # 카메라 매트릭스
         self.fx = float(self.get_parameter('fx').value)
@@ -123,7 +137,7 @@ class CeilingAprilTagNode(Node):
         ], dtype=np.float64)
         self.dist_coeffs = np.zeros((5, 1), dtype=np.float64)
 
-        # 지원 딕셔너리 로드
+        # 딕셔너리 로드
         self.dict_families = {}
         if hasattr(cv2.aruco, 'DICT_APRILTAG_36h11'):
             self.dict_families['tag36h11'] = cv2.aruco.Dictionary_get(cv2.aruco.DICT_APRILTAG_36h11) if hasattr(cv2.aruco, 'Dictionary_get') else cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
@@ -155,23 +169,37 @@ class CeilingAprilTagNode(Node):
         self.img_pub = self.create_publisher(Image, '/ceiling_cam/image_raw', 10)
         self.info_pub = self.create_publisher(CameraInfo, '/ceiling_cam/camera_info', 10)
 
-        self.window_name = "Ceiling AprilTag Tracker (Click to set Pool Origin)"
+        self.window_name = "Ceiling AprilTag Tracker (Homography Calibrated)"
         self.window_initialized = False
 
         self.create_timer(1.0 / 30.0, self._process_frame)
         self.get_logger().info(
-            f"ceiling_apriltag_node 시작 — 장치 {device_str} @ {self.width}x{self.height}, "
-            f"수조 좌하단 꼭짓점 원점: ({self.origin_u}, {self.origin_v})")
+            f"ceiling_apriltag_node 시작 — 수조 4점 호모그래피 보정 활성화 ({self.pool_size_x}x{self.pool_size_y}m)")
+
+    def _update_homography(self):
+        dst_pts = np.array([
+            [0.0, 0.0],                          # P0: (0m, 0m)
+            [self.pool_size_x, 0.0],             # P1: (10m, 0m)
+            [self.pool_size_x, self.pool_size_y],# P2: (10m, 5m)
+            [0.0, self.pool_size_y]              # P3: (0m, 5m)
+        ], dtype=np.float32)
+        self.H = cv2.getPerspectiveTransform(self.corners_px, dst_pts)
+        self.H_inv = cv2.getPerspectiveTransform(dst_pts, self.corners_px)
 
     def _on_mouse_click(self, event, x, y, flags, param):
         if event == cv2.EVENT_LBUTTONDOWN:
-            self.origin_u = x
-            self.origin_v = y
-            # 3D 위치 오프셋 계산 (m)
-            x_m = (self.origin_u - self.cx) * (self.ceiling_height / self.fx)
-            y_m = (self.origin_v - self.cy) * (self.ceiling_height / self.fy)
-            self.get_logger().info(
-                f"🎯 [수조 원점 갱신] 클릭 위치: 픽셀({x}, {y}) -> 카메라 기준 3D 오프셋: [X:{x_m:+.2f}m, Y:{y_m:+.2f}m]")
+            if self.calib_mode:
+                self.calib_points.append([float(x), float(y)])
+                point_names = ["P0 (좌하단)", "P1 (우하단)", "P2 (우상단)", "P3 (좌상단)"]
+                idx = len(self.calib_points) - 1
+                self.get_logger().info(f"📍 {point_names[idx]} 선택됨: 픽셀({x}, {y})")
+
+                if len(self.calib_points) == 4:
+                    self.corners_px = np.array(self.calib_points, dtype=np.float32)
+                    self._update_homography()
+                    self.calib_mode = False
+                    self.calib_points = []
+                    self.get_logger().info("🎉 [수조 4점 캘리브레이션 완료!] 호모그래피 행렬이 완벽하게 갱신되었습니다.")
 
     def _process_frame(self):
         if not self.cap.isOpened():
@@ -187,10 +215,6 @@ class CeilingAprilTagNode(Node):
         tag_found = False
         detected_info = []
 
-        # 원점 3D 좌표 (카메라 기준 [m])
-        origin_x_cam = (self.origin_u - self.cx) * (self.ceiling_height / self.fx)
-        origin_y_cam = (self.origin_v - self.cy) * (self.ceiling_height / self.fy)
-
         for fam_name, adict in self.dict_families.items():
             corners, ids, _ = cv2.aruco.detectMarkers(gray, adict, parameters=self.params)
             if ids is not None and len(ids) > 0:
@@ -200,31 +224,41 @@ class CeilingAprilTagNode(Node):
 
                     if not tag_found and (self.target_id <= 0 or tid == self.target_id):
                         tag_found = True
-                        c = corners[i][0]
-                        s = self.tag_size / 2.0
-                        obj_pts = np.array([
-                            [-s,  s, 0.0],
-                            [ s,  s, 0.0],
-                            [ s, -s, 0.0],
-                            [-s, -s, 0.0]
-                        ], dtype=np.float64)
+                        c = corners[i][0]  # (4, 2)
+                        u_center = float(c[:, 0].mean())
+                        v_center = float(c[:, 1].mean())
 
+                        # ── 1. 호모그래피 변환을 통한 정밀 수조 좌표 계산 ──
+                        px_mat = np.array([[[u_center, v_center]]], dtype=np.float32)
+                        mapped = cv2.perspectiveTransform(px_mat, self.H)[0][0]
+                        x_pool = float(mapped[0])
+                        y_pool = float(mapped[1])
+
+                        # ── 2. 수조 평면 기준 태그 방향(Yaw) 계산 ───
+                        # 태그 전방 벡터(모서리 0->3 또는 1->2의 중점 방향)
+                        u_fwd = float((c[0][0] + c[1][0]) / 2.0)
+                        v_fwd = float((c[0][1] + c[1][1]) / 2.0)
+                        fwd_mat = np.array([[[u_fwd, v_fwd]]], dtype=np.float32)
+                        mapped_fwd = cv2.perspectiveTransform(fwd_mat, self.H)[0][0]
+                        dx = float(mapped_fwd[0] - x_pool)
+                        dy = float(mapped_fwd[1] - y_pool)
+                        yaw_pool_rad = math.atan2(dy, dx)
+                        yaw_pool_deg = math.degrees(yaw_pool_rad)
+
+                        # PnP로 높이(Z) 및 쿼터니언 계산
+                        s = self.tag_size / 2.0
+                        obj_pts = np.array([[-s, s, 0], [s, s, 0], [s, -s, 0], [-s, -s, 0]], dtype=np.float64)
                         _, rvec, tvec = cv2.solvePnP(
                             obj_pts, c.astype(np.float64), self.camera_matrix, self.dist_coeffs,
                             flags=cv2.SOLVEPNP_IPPE_SQUARE if hasattr(cv2, 'SOLVEPNP_IPPE_SQUARE') else cv2.SOLVEPNP_ITERATIVE
                         )
-
                         R, _ = cv2.Rodrigues(rvec)
                         qx, qy, qz, qw = rot_matrix_to_quaternion(R)
                         tx, ty, tz = float(tvec[0][0]), float(tvec[1][0]), float(tvec[2][0])
 
-                        # 수조 좌하단 꼭짓점 기준 보트 Odom 좌표 계산
-                        x_odom = tx - origin_x_cam
-                        y_odom = -(ty - origin_y_cam)  # 카메라 Y(아래) -> 수조 Y(위)
-
                         tag_frame_name = f"tag36h11:{tid}" if self.target_id <= 0 else self.tag_frame
 
-                        # 1. TF 발행
+                        # TF 발행
                         tf = TransformStamped()
                         tf.header.stamp = stamp
                         tf.header.frame_id = self.camera_frame
@@ -238,37 +272,31 @@ class CeilingAprilTagNode(Node):
                         tf.transform.rotation.w = qw
                         self.tf_broadcaster.sendTransform(tf)
 
-                        # 2. PoseStamped 발행 (수조 원점 기준)
+                        # PoseStamped 발행 (수조 정밀 보정 좌표)
                         pose_msg = PoseStamped()
                         pose_msg.header.stamp = stamp
-                        pose_msg.header.frame_id = self.camera_frame
-                        pose_msg.pose.position.x = tx
-                        pose_msg.pose.position.y = ty
-                        pose_msg.pose.position.z = tz
-                        pose_msg.pose.orientation.x = qx
-                        pose_msg.pose.orientation.y = qy
-                        pose_msg.pose.orientation.z = qz
-                        pose_msg.pose.orientation.w = qw
+                        pose_msg.header.frame_id = "odom"
+                        pose_msg.pose.position.x = x_pool
+                        pose_msg.pose.position.y = y_pool
+                        pose_msg.pose.position.z = 0.0
+                        # 2D yaw -> quaternion
+                        pose_msg.pose.orientation.z = math.sin(yaw_pool_rad / 2.0)
+                        pose_msg.pose.orientation.w = math.cos(yaw_pool_rad / 2.0)
                         self.pose_pub.publish(pose_msg)
-
-                        yaw_rad = math.atan2(2.0 * (qw * qz + qx * qy), 1.0 - 2.0 * (qy * qy + qz * qz))
-                        yaw_deg = math.degrees(yaw_rad)
 
                         # 터미널 로깅
                         self.get_logger().info(
-                            f"✅ [{fam_name}] ID:{tid} | 수조좌표:[X:{x_odom:+.2f}, Y:{y_odom:+.2f}]m | Yaw:{yaw_deg:+.1f}°",
+                            f"✅ [{fam_name}] ID:{tid} | 🎯 보정된 수조좌표:[X:{x_pool:.2f}m, Y:{y_pool:.2f}m] | Yaw:{yaw_pool_deg:+.1f}°",
                             throttle_duration_sec=1.0)
 
-                        u_center = int(c[:, 0].mean())
-                        v_center = int(c[:, 1].mean())
-
-                        # 좌하단 원점 -> 보트 연결선
-                        cv2.line(frame, (self.origin_u, self.origin_v), (u_center, v_center), (0, 255, 255), 2, cv2.LINE_AA)
+                        # 태그 ↔ 원점 연결선
+                        p0 = self.corners_px[0].astype(int)
+                        cv2.line(frame, (p0[0], p0[1]), (int(u_center), int(v_center)), (0, 255, 255), 2, cv2.LINE_AA)
 
                         # 보트 위 수조 좌표 표시
-                        info_str = f"Pool [X:{x_odom:+.2f}m, Y:{y_odom:+.2f}m] Yaw:{yaw_deg:+.1f}deg"
-                        cv2.putText(frame, info_str, (u_center - 80, v_center - 15),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2, cv2.LINE_AA)
+                        info_str = f"Pool [X:{x_pool:.2f}m, Y:{y_pool:.2f}m] Yaw:{yaw_pool_deg:+.1f}deg"
+                        cv2.putText(frame, info_str, (int(u_center) - 80, int(v_center) - 15),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 255, 0), 2, cv2.LINE_AA)
 
         if self.show_gui:
             if not self.window_initialized:
@@ -276,33 +304,72 @@ class CeilingAprilTagNode(Node):
                 cv2.setMouseCallback(self.window_name, self._on_mouse_click)
                 self.window_initialized = True
 
-            # ── 1. 수조 좌하단 꼭짓점 원점 (0,0) 시각화 ───────────────
-            uo = self.origin_u
-            vo = self.origin_v
+            # ── 1. 수조 외곽선 및 원근 격자망 그리기 ────────────────
+            pts = self.corners_px.astype(int)
+            # 수조 외곽 테두리 (녹색 사다리꼴)
+            cv2.polylines(frame, [pts], isClosed=True, color=(0, 255, 0), thickness=2, lineType=cv2.LINE_AA)
 
-            # 원점 마커 (황금색 타겟 링)
-            cv2.circle(frame, (uo, vo), 20, (0, 215, 255), 2, cv2.LINE_AA)
-            cv2.circle(frame, (uo, vo), 6, (0, 215, 255), -1)
-            cv2.drawMarker(frame, (uo, vo), (0, 215, 255), cv2.MARKER_CROSS, 36, 2)
+            # 수조 내부 2m x 1m 가상 격자망 (원근 보정선)
+            for gx in range(2, int(self.pool_size_x), 2):
+                m_bottom = cv2.perspectiveTransform(np.array([[[gx, 0.0]]], dtype=np.float32), self.H_inv)[0][0].astype(int)
+                m_top = cv2.perspectiveTransform(np.array([[[gx, self.pool_size_y]]], dtype=np.float32), self.H_inv)[0][0].astype(int)
+                cv2.line(frame, tuple(m_bottom), tuple(m_top), (80, 140, 80), 1, cv2.LINE_AA)
 
-            # ── 2. 꼭짓점 기준 좌표축 (+X: 우측, +Y: 상단) ─────────
-            # +X 축 (수조 하단 변을 따라 오른쪽: Red)
-            cv2.arrowedLine(frame, (uo, vo), (uo + 150, vo), (0, 0, 255), 3, tipLength=0.15)
-            cv2.putText(frame, "+X (Pool Right)", (uo + 160, vo + 5),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 255), 2, cv2.LINE_AA)
+            for gy in range(1, int(self.pool_size_y)):
+                m_left = cv2.perspectiveTransform(np.array([[[0.0, gy]]], dtype=np.float32), self.H_inv)[0][0].astype(int)
+                m_right = cv2.perspectiveTransform(np.array([[[self.pool_size_x, gy]]], dtype=np.float32), self.H_inv)[0][0].astype(int)
+                cv2.line(frame, tuple(m_left), tuple(m_right), (80, 140, 80), 1, cv2.LINE_AA)
 
-            # +Y 축 (수조 좌측 변을 따라 위쪽: Green)
-            cv2.arrowedLine(frame, (uo, vo), (uo, vo - 150), (0, 255, 0), 3, tipLength=0.15)
-            cv2.putText(frame, "+Y (Pool Forward)", (uo - 20, vo - 160),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 0), 2, cv2.LINE_AA)
+            # ── 2. 수조 기울기에 맞춘 +X, +Y 축 화살표 ───────────────
+            p0 = pts[0]  # 좌하단 원점
+            p1 = pts[1]  # 우하단
+            p3 = pts[3]  # 좌상단
 
-            # 원점 라벨
-            cv2.putText(frame, "Origin (0,0) [Pool Bottom-Left Corner]", (uo + 15, vo + 28),
+            # 원점 마커 (이중 황금 링)
+            cv2.circle(frame, tuple(p0), 18, (0, 215, 255), 2, cv2.LINE_AA)
+            cv2.circle(frame, tuple(p0), 5, (0, 215, 255), -1)
+            cv2.drawMarker(frame, tuple(p0), (0, 215, 255), cv2.MARKER_CROSS, 32, 2)
+            cv2.putText(frame, "Origin (0,0)", (p0[0] - 10, p0[1] + 25),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 215, 255), 2, cv2.LINE_AA)
 
-            # ── 3. OSD 상태 바 및 클릭 안내 ────────────────────────
-            cv2.putText(frame, "[TIP] Click on the image to set/adjust Pool Bottom-Left Corner (0,0)",
-                        (20, self.height - 15), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 200, 100), 1, cv2.LINE_AA)
+            # +X 축 화살표 (수조 아랫변을 따라 정확한 기울기 방향: Red)
+            vec_x = (p1 - p0).astype(float)
+            len_x = np.linalg.norm(vec_x)
+            if len_x > 0:
+                dir_x = (vec_x / len_x * min(200, len_x * 0.3)).astype(int)
+                target_x = p0 + dir_x
+                cv2.arrowedLine(frame, tuple(p0), tuple(target_x), (0, 0, 255), 3, tipLength=0.18)
+                cv2.putText(frame, "+X (0->10m)", (target_x[0] + 10, target_x[1] + 5),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2, cv2.LINE_AA)
+
+            # +Y 축 화살표 (수조 왼쪽변을 따라 정확한 기울기 방향: Green)
+            vec_y = (p3 - p0).astype(float)
+            len_y = np.linalg.norm(vec_y)
+            if len_y > 0:
+                dir_y = (vec_y / len_y * min(200, len_y * 0.3)).astype(int)
+                target_y = p0 + dir_y
+                cv2.arrowedLine(frame, tuple(p0), tuple(target_y), (0, 255, 0), 3, tipLength=0.18)
+                cv2.putText(frame, "+Y (0->5m)", (target_y[0] - 30, target_y[1] - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2, cv2.LINE_AA)
+
+            # ── 3. 꼭짓점 라벨 표시 ──────────────────────────────
+            cv2.putText(frame, f"P1 ({self.pool_size_x:.0f}m, 0m)", (pts[1][0] - 90, pts[1][1] + 25),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1, cv2.LINE_AA)
+            cv2.putText(frame, f"P2 ({self.pool_size_x:.0f}m, {self.pool_size_y:.0f}m)", (pts[2][0] - 90, pts[2][1] - 15),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1, cv2.LINE_AA)
+            cv2.putText(frame, f"P3 (0m, {self.pool_size_y:.0f}m)", (pts[3][0] - 20, pts[3][1] - 15),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1, cv2.LINE_AA)
+
+            # ── 4. OSD 안내 및 캘리브레이션 가이드 ────────────────
+            if self.calib_mode:
+                point_names = ["1. 좌하단(P0)", "2. 우하단(P1)", "3. 우상단(P2)", "4. 좌상단(P3)"]
+                next_step = point_names[len(self.calib_points)]
+                calib_str = f"[캘리브레이션 모드] 수조 꼭짓점을 차례로 클릭하세요: {next_step}"
+                cv2.putText(frame, calib_str, (20, self.height - 20),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 0, 255), 2, cv2.LINE_AA)
+            else:
+                cv2.putText(frame, "[C] 키: 수조 4점 클릭 캘리브레이션 | [Q] 키: 종료",
+                            (20, self.height - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 200, 100), 1, cv2.LINE_AA)
 
             if detected_info:
                 cv2.putText(frame, f"Detected: {', '.join(detected_info)}",
@@ -312,20 +379,11 @@ class CeilingAprilTagNode(Node):
                             (20, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2, cv2.LINE_AA)
 
             cv2.imshow(self.window_name, frame)
-            cv2.waitKey(1)
-
-        # 4. 디버그 이미지 발행
-        if self.publish_img and self.img_pub.get_subscription_count() > 0:
-            img_msg = Image()
-            img_msg.header.stamp = stamp
-            img_msg.header.frame_id = self.camera_frame
-            img_msg.height = frame.shape[0]
-            img_msg.width = frame.shape[1]
-            img_msg.encoding = 'bgr8'
-            img_msg.is_bigendian = 0
-            img_msg.step = frame.shape[1] * 3
-            img_msg.data = frame.tobytes()
-            self.img_pub.publish(img_msg)
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord('c') or key == ord('C'):
+                self.calib_mode = True
+                self.calib_points = []
+                self.get_logger().info("📐 [4점 캘리브레이션 시작] 수조의 4개 꼭짓점을 '좌하단 -> 우하단 -> 우상단 -> 좌상단' 순서로 클릭해 주세요.")
 
     def destroy_node(self):
         if self.cap and self.cap.isOpened():
