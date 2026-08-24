@@ -200,11 +200,26 @@ class CeilingAprilTagNode(Node):
                 self.get_logger().warn(f"캘리브레이션 파일 로드 오류: {e}")
 
     def _get_curve_pt(self, norm_val, pts_list):
-        idx_float = norm_val * (len(pts_list) - 1)
-        i0 = int(math.floor(idx_float))
-        i1 = min(i0 + 1, len(pts_list) - 1)
-        t = idx_float - i0
-        return (1.0 - t) * np.array(pts_list[i0], dtype=np.float64) + t * np.array(pts_list[i1], dtype=np.float64)
+        n = len(pts_list)
+        if n == 0:
+            return np.zeros(2, dtype=np.float64)
+        if n == 1:
+            return np.array(pts_list[0], dtype=np.float64)
+
+        idx_float = norm_val * (n - 1)
+        if idx_float <= 0.0:
+            p0 = np.array(pts_list[0], dtype=np.float64)
+            p1 = np.array(pts_list[1], dtype=np.float64)
+            return p0 + idx_float * (p1 - p0)
+        elif idx_float >= (n - 1):
+            p_last = np.array(pts_list[-1], dtype=np.float64)
+            p_prev = np.array(pts_list[-2], dtype=np.float64)
+            return p_last + (idx_float - (n - 1)) * (p_last - p_prev)
+        else:
+            i0 = int(math.floor(idx_float))
+            i1 = min(i0 + 1, n - 1)
+            t = idx_float - i0
+            return (1.0 - t) * np.array(pts_list[i0], dtype=np.float64) + t * np.array(pts_list[i1], dtype=np.float64)
 
     def _coons_patch(self, u, v):
         c_bot = self._get_curve_pt(u, self.bottom_x_pts)
