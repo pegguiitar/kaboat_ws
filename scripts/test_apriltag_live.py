@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""카메라 연결 및 AprilTag/ArUco 실시간 검출 테스트 (수조 곡면 피팅 + 우하단 외삽 지원).
+"""카메라 연결 및 AprilTag/ArUco 실시간 검출 테스트 (Y축 1m 간격 클릭 캘리브레이션 지원).
 
 특징:
-  1. 실제 파란색 수조의 4변 곡면 테두리(하단 휨, 상단 휨, 원근 경사)를 정밀 피팅
-  2. 화면 밖으로 잘린 우하단 꼭짓점(P1: 10m, 0m)을 원근 투영으로 자동 외삽/보간
-  3. 곡면을 완벽히 따라가는 +X / +Y 축 및 1m x 1m 정밀 원근 격자망 렌더링
-  4. 'C' 키를 누르면 마우스 4점 클릭으로 현장에서 곡면 제어점 재보정 가능
+  1. 'Y' 키를 누르면 수조 좌측 모서리를 따라 1m 간격(0m, 1m, 2m, 3m, 4m, 5m)으로 직접 클릭하여 Y축 완벽 보정
+  2. 화면에 [Y=1.0m], [Y=2.0m] 등 뱃지와 1m 마커 실시간 렌더링
+  3. 곡면 역투영으로 보트의 정확한 X, Y 오도메트리 산출
 """
 
 import math
@@ -17,43 +16,46 @@ import numpy as np
 pool_size_x = 10.0
 pool_size_y = 5.0
 
-# ── 실제 수조 영상에 완벽하게 피팅된 곡면 제어점 ────────────────
-P0 = np.array([78.0, 645.0], dtype=np.float64)       # 좌하단 원점 (0m, 0m)
-P3 = np.array([195.0, 78.0], dtype=np.float64)       # 좌상단 (0m, 5m)
-P2 = np.array([1175.0, 95.0], dtype=np.float64)      # 우상단 (10m, 5m)
-P1 = np.array([1310.0, 675.0], dtype=np.float64)     # 우하단 (10m, 0m) [외삽됨]
+# ── Y축 1m 간격 제어점 목록 (0m ~ 5m) ─────────────────────────
+y_control_pts = [
+    np.array([78.0, 645.0]),   # Y=0m (Origin)
+    np.array([92.0, 530.0]),   # Y=1m
+    np.array([110.0, 415.0]),  # Y=2m
+    np.array([135.0, 300.0]),  # Y=3m
+    np.array([162.0, 185.0]),  # Y=4m
+    np.array([195.0, 78.0])    # Y=5m (Top-Left)
+]
 
-M_bot = np.array([640.0, 716.0], dtype=np.float64)   # 하단 곡선 볼록점
-M_top = np.array([640.0, 68.0], dtype=np.float64)    # 상단 곡선
-M_left = np.array([125.0, 360.0], dtype=np.float64)  # 좌측 곡선
-M_right = np.array([1260.0, 380.0], dtype=np.float64)# 우측 곡선
+P0 = y_control_pts[0].copy()
+P3 = y_control_pts[-1].copy()
+P2 = np.array([1175.0, 95.0], dtype=np.float64)
+P1 = np.array([1310.0, 675.0], dtype=np.float64)
 
-calib_mode = False
-calib_step = 0
+M_bot = np.array([640.0, 716.0], dtype=np.float64)
+M_top = np.array([640.0, 68.0], dtype=np.float64)
 
-
-def extrapolate_missing_corner():
-    global P1, M_right, M_left
-    vec_left = P0 - P3
-    dir_right = np.array([-vec_left[0] * 1.08, vec_left[1] * 1.02])
-    P1 = np.array([P2[0] + dir_right[0], P0[1] + 30.0], dtype=np.float64)
-    if P1[0] < 1270:
-        P1[0] = 1310.0
-    if P1[1] < 650:
-        P1[1] = 675.0
-    M_right = (P1 + P2) / 2.0
-    M_left = (P0 + P3) / 2.0
+calib_y_mode = False
+calib_y_step = 0
+calib_y_temp = []
 
 
 def quad_bezier(A, M, B, t):
     return (1.0 - t)**2 * A + 2.0 * (1.0 - t) * t * M + t**2 * B
 
 
+def get_left_curve_pt(v_norm):
+    idx_float = v_norm * (len(y_control_pts) - 1)
+    i0 = int(math.floor(idx_float))
+    i1 = min(i0 + 1, len(y_control_pts) - 1)
+    t = idx_float - i0
+    return (1.0 - t) * y_control_pts[i0] + t * y_control_pts[i1]
+
+
 def coons_patch(u, v):
     c_bot = quad_bezier(P0, M_bot, P1, u)
     c_top = quad_bezier(P3, M_top, P2, u)
-    c_left = quad_bezier(P0, M_left, P3, v)
-    c_right = quad_bezier(P1, M_right, P2, v)
+    c_left = get_left_curve_pt(v)
+    c_right = (1.0 - v) * P1 + v * P2
     corner_blend = (1.0 - u) * (1.0 - v) * P0 + u * (1.0 - v) * P1 + (1.0 - u) * v * P3 + u * v * P2
     return (1.0 - v) * c_bot + v * c_top + (1.0 - u) * c_left + u * c_right - corner_blend
 
@@ -79,28 +81,21 @@ def pixel_to_pool_metric(target_px):
 
 
 def on_mouse_click(event, x, y, flags, param):
-    global calib_mode, calib_step, P0, M_bot, P2, P3
-    if event == cv2.EVENT_LBUTTONDOWN and calib_mode:
+    global calib_y_mode, calib_y_step, calib_y_temp, y_control_pts, P0, P3
+    if event == cv2.EVENT_LBUTTONDOWN and calib_y_mode:
         pt = np.array([float(x), float(y)], dtype=np.float64)
-        if calib_step == 0:
-            P0 = pt
-            print(f"📍 1. Bottom-Left(P0) set: ({x}, {y})")
-            calib_step += 1
-        elif calib_step == 1:
-            M_bot = pt
-            print(f"📍 2. Bottom-Mid(M_bot) set: ({x}, {y})")
-            calib_step += 1
-        elif calib_step == 2:
-            P2 = pt
-            print(f"📍 3. Top-Right(P2) set: ({x}, {y})")
-            calib_step += 1
-        elif calib_step == 3:
-            P3 = pt
-            print(f"📍 4. Top-Left(P3) set: ({x}, {y})")
-            extrapolate_missing_corner()
-            calib_mode = False
-            calib_step = 0
-            print(f"🎉 Calibration Done! Extrapolated P1: {P1.astype(int)}")
+        calib_y_temp.append(pt)
+        print(f"📍 Y={calib_y_step}m Point set: ({x}, {y})")
+        calib_y_step += 1
+
+        if calib_y_step >= 6:
+            y_control_pts = [p.copy() for p in calib_y_temp]
+            P0 = y_control_pts[0].copy()
+            P3 = y_control_pts[-1].copy()
+            calib_y_mode = False
+            calib_y_step = 0
+            calib_y_temp = []
+            print("🎉 [Y-Axis 1m Calibration Completed!]")
 
 
 def get_detector_params():
@@ -130,7 +125,7 @@ def get_detector_params():
 
 
 def main():
-    global calib_mode, calib_step
+    global calib_y_mode, calib_y_step, calib_y_temp
     device_idx = int(sys.argv[1]) if len(sys.argv) > 1 else 2
     print(f"Opening camera /dev/video{device_idx}...")
 
@@ -158,14 +153,14 @@ def main():
 
     params = get_detector_params()
 
-    window_name = "AprilTag Camera Test (Fitted Curved Surface)"
+    window_name = "AprilTag Camera Test (Press 'Y' for 1m Calibration)"
     cv2.namedWindow(window_name)
     cv2.setMouseCallback(window_name, on_mouse_click)
 
     print("\n=======================================================")
-    print(" AprilTag Live Test (Curved Surface Fitted)")
-    print(" Press 'C' key on window to re-calibrate 4 points.")
-    print(" Press 'Q' key on window to exit.")
+    print(" AprilTag Live Test (Interactive 1m Step Calibration)")
+    print(" Press 'Y' on window to click: 0m -> 1m -> 2m -> 3m -> 4m -> 5m")
+    print(" Press 'Q' on window to exit.")
     print("=======================================================\n")
 
     while True:
@@ -222,39 +217,31 @@ def main():
             line_pts = np.array([coons_patch(t, v_norm) for t in t_samples], dtype=np.int32)
             cv2.polylines(frame, [line_pts], isClosed=False, color=(80, 150, 80), thickness=1, lineType=cv2.LINE_AA)
 
-        p0 = P0.astype(int)
-        cv2.circle(frame, tuple(p0), 18, (0, 215, 255), 2, cv2.LINE_AA)
-        cv2.circle(frame, tuple(p0), 5, (0, 215, 255), -1)
-        cv2.drawMarker(frame, tuple(p0), (0, 215, 255), cv2.MARKER_CROSS, 32, 2)
-        cv2.putText(frame, "Origin (0,0)", (p0[0] - 10, p0[1] + 25),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 215, 255), 2, cv2.LINE_AA)
+        # ── Y축 1m 간격 제어점 마커 표시 ──
+        for m_idx, pt in enumerate(y_control_pts):
+            p_int = pt.astype(int)
+            cv2.circle(frame, tuple(p_int), 6, (0, 255, 255), -1, cv2.LINE_AA)
+            cv2.circle(frame, tuple(p_int), 10, (0, 200, 255), 2, cv2.LINE_AA)
+            cv2.putText(frame, f"Y={m_idx}m", (p_int[0] + 12, p_int[1] + 5),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2, cv2.LINE_AA)
 
+        p0 = P0.astype(int)
         pt_x_arrow = coons_patch(0.20, 0.0).astype(int)
         cv2.arrowedLine(frame, tuple(p0), tuple(pt_x_arrow), (0, 0, 255), 3, tipLength=0.2)
-        cv2.putText(frame, "+X Axis (Pool Right 0->10m)", (pt_x_arrow[0] + 10, pt_x_arrow[1] + 5),
+        cv2.putText(frame, "+X Axis (0->10m)", (pt_x_arrow[0] + 10, pt_x_arrow[1] + 5),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2, cv2.LINE_AA)
 
-        pt_y_arrow = coons_patch(0.0, 0.25).astype(int)
+        pt_y_arrow = y_control_pts[1].astype(int)
         cv2.arrowedLine(frame, tuple(p0), tuple(pt_y_arrow), (0, 255, 0), 3, tipLength=0.2)
-        cv2.putText(frame, "+Y Axis (Pool Forward 0->5m)", (pt_y_arrow[0] - 30, pt_y_arrow[1] - 10),
+        cv2.putText(frame, "+Y Axis (0->5m)", (pt_y_arrow[0] - 25, pt_y_arrow[1] - 15),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2, cv2.LINE_AA)
 
-        p3 = P3.astype(int)
-        p2 = P2.astype(int)
-        cv2.putText(frame, f"P3 (0m, {pool_size_y:.0f}m)", (p3[0] - 20, p3[1] - 15),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1, cv2.LINE_AA)
-        cv2.putText(frame, f"P2 ({pool_size_x:.0f}m, {pool_size_y:.0f}m)", (p2[0] - 90, p2[1] - 15),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1, cv2.LINE_AA)
-        cv2.putText(frame, "[Extrapolated P1 (10m, 0m)]", (actual_w - 250, actual_h - 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (100, 200, 255), 1, cv2.LINE_AA)
-
-        if calib_mode:
-            names = ["1. Bottom-Left(P0)", "2. Bottom-Mid(M_bot)", "3. Top-Right(P2)", "4. Top-Left(P3)"]
-            calib_str = f"[Calibration Mode] Click on image: {names[calib_step]}"
+        if calib_y_mode:
+            calib_str = f"[Y-Axis Calib] Click on left wall: Y = {calib_y_step}.0m point"
             cv2.putText(frame, calib_str, (20, actual_h - 20),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 0, 255), 2, cv2.LINE_AA)
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2, cv2.LINE_AA)
         else:
-            cv2.putText(frame, "[C] Key: Calibrate Pool Mesh | [Q] Key: Quit",
+            cv2.putText(frame, "[Y] Key: 1m Step Calib (0m->5m) | [Q] Key: Quit",
                         (20, actual_h - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 200, 100), 1, cv2.LINE_AA)
 
         if detected_info:
@@ -266,10 +253,11 @@ def main():
 
         cv2.imshow(window_name, frame)
         key = cv2.waitKey(1) & 0xFF
-        if key == ord('c') or key == ord('C'):
-            calib_mode = True
-            calib_step = 0
-            print("📐 [Curved Calibration Started] Click 'Bottom-Left(P0) -> Bottom-Mid(M_bot) -> Top-Right(P2) -> Top-Left(P3)'")
+        if key == ord('y') or key == ord('Y'):
+            calib_y_mode = True
+            calib_y_step = 0
+            calib_y_temp = []
+            print("📐 [Y-Axis 1m Calibration] Click 'Y=0m -> 1m -> 2m -> 3m -> 4m -> 5m' along the left wall.")
         if key == ord('q') or key == 27:
             break
 
