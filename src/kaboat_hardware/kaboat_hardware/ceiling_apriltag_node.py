@@ -233,17 +233,57 @@ class CeilingAprilTagNode(Node):
                             f"✅ [{fam_name}] 태그 인식! ID:{tid} 위치:[X:{tx:+.2f}, Y:{ty:+.2f}, Z:{tz:+.2f}]m",
                             throttle_duration_sec=1.0)
 
-                        cv2.putText(frame, f"{fam_name} ID:{tid} pos:[{tx:.2f}, {ty:.2f}, {tz:.2f}]m",
-                                    (int(c[0][0]), int(c[0][1]) - 10),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+                        u_center = int(c[:, 0].mean())
+                        v_center = int(c[:, 1].mean())
+                        yaw_rad = math.atan2(2.0 * (qw * qz + qx * qy), 1.0 - 2.0 * (qy * qy + qz * qz))
+                        yaw_deg = math.degrees(yaw_rad)
+                        dist_2d = math.sqrt(tx * tx + ty * ty)
+
+                        # 태그 -> 원점 연결선
+                        cx_int, cy_int = int(self.camera_matrix[0, 2]), int(self.camera_matrix[1, 2])
+                        cv2.line(frame, (cx_int, cy_int), (u_center, v_center), (255, 255, 0), 2, cv2.LINE_AA)
+
+                        # 태그 정보 오버레이
+                        info_str = f"Odom [X:{tx:+.2f}, Y:{-ty:+.2f}]m | Dist:{dist_2d:.2f}m | Yaw:{yaw_deg:+.1f}deg"
+                        cv2.putText(frame, info_str, (u_center - 80, v_center - 15),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 255), 2, cv2.LINE_AA)
 
         if self.show_gui:
+            cx_int = int(self.camera_matrix[0, 2])
+            cy_int = int(self.camera_matrix[1, 2])
+
+            # ── 1. 수조 중심 원점 (0, 0) 및 격자선 오버레이 ───────────
+            # 전체 화면 중심선
+            cv2.line(frame, (0, cy_int), (self.width, cy_int), (80, 80, 80), 1, cv2.LINE_AA)
+            cv2.line(frame, (cx_int, 0), (cx_int, self.height), (80, 80, 80), 1, cv2.LINE_AA)
+
+            # 원점 마커 (이중 원 + 십자선)
+            cv2.circle(frame, (cx_int, cy_int), 18, (0, 255, 255), 2, cv2.LINE_AA)
+            cv2.circle(frame, (cx_int, cy_int), 4, (0, 255, 255), -1)
+            cv2.drawMarker(frame, (cx_int, cy_int), (0, 255, 255), cv2.MARKER_CROSS, 32, 2)
+
+            # ── 2. 좌표축 (+X, +Y) 화살표 ──────────────────────────
+            # +X 축 (오른쪽: Red)
+            cv2.arrowedLine(frame, (cx_int, cy_int), (cx_int + 120, cy_int), (0, 0, 255), 3, tipLength=0.2)
+            cv2.putText(frame, "+X (Right)", (cx_int + 130, cy_int + 5),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 255), 2, cv2.LINE_AA)
+
+            # +Y 축 (위쪽: Green / 수조 진행방향)
+            cv2.arrowedLine(frame, (cx_int, cy_int), (cx_int, cy_int - 120), (0, 255, 0), 3, tipLength=0.2)
+            cv2.putText(frame, "+Y (Up)", (cx_int - 25, cy_int - 130),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 0), 2, cv2.LINE_AA)
+
+            # 원점 라벨
+            cv2.putText(frame, "Origin (0, 0) [Pool Center]", (cx_int + 10, cy_int + 30),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2, cv2.LINE_AA)
+
+            # ── 3. 상태 표시 OSD 바 ──────────────────────────────
             if detected_info:
                 cv2.putText(frame, f"Detected: {', '.join(detected_info)}",
-                            (20, 45), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+                            (20, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 0), 2, cv2.LINE_AA)
             else:
-                cv2.putText(frame, "No AprilTag Detected",
-                            (20, 45), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+                cv2.putText(frame, f"Searching for AprilTag/ArUco ID:{self.target_id}...",
+                            (20, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2, cv2.LINE_AA)
 
             cv2.imshow("Ceiling AprilTag Tracker", frame)
             cv2.waitKey(1)

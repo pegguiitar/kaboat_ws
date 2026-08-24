@@ -98,13 +98,36 @@ def main():
                 for tag_id in ids.flatten():
                     detected_info.append(f"{fam_name} ID:{tag_id}")
 
+        cx_int = actual_w // 2
+        cy_int = actual_h // 2
+
+        # ── 1. 수조 중심 원점 (0, 0) 및 격자선 오버레이 ───────────
+        cv2.line(frame, (0, cy_int), (actual_w, cy_int), (80, 80, 80), 1, cv2.LINE_AA)
+        cv2.line(frame, (cx_int, 0), (cx_int, actual_h), (80, 80, 80), 1, cv2.LINE_AA)
+
+        cv2.circle(frame, (cx_int, cy_int), 18, (0, 255, 255), 2, cv2.LINE_AA)
+        cv2.circle(frame, (cx_int, cy_int), 4, (0, 255, 255), -1)
+        cv2.drawMarker(frame, (cx_int, cy_int), (0, 255, 255), cv2.MARKER_CROSS, 32, 2)
+
+        # ── 2. 좌표축 (+X, +Y) 화살표 ──────────────────────────
+        cv2.arrowedLine(frame, (cx_int, cy_int), (cx_int + 120, cy_int), (0, 0, 255), 3, tipLength=0.2)
+        cv2.putText(frame, "+X (Right)", (cx_int + 130, cy_int + 5),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 255), 2, cv2.LINE_AA)
+
+        cv2.arrowedLine(frame, (cx_int, cy_int), (cx_int, cy_int - 120), (0, 255, 0), 3, tipLength=0.2)
+        cv2.putText(frame, "+Y (Up)", (cx_int - 25, cy_int - 130),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 0), 2, cv2.LINE_AA)
+
+        cv2.putText(frame, "Origin (0, 0) [Pool Center]", (cx_int + 10, cy_int + 30),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2, cv2.LINE_AA)
+
         # OSD 정보 표시
         if detected_info:
             text = f"Detected: {', '.join(detected_info)}"
-            cv2.putText(frame, text, (20, 45), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+            cv2.putText(frame, text, (20, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 0), 2, cv2.LINE_AA)
         else:
-            cv2.putText(frame, "No AprilTag Detected (Looking for tag36h11 / tag25h9 / tag16h5)",
-                        (20, 45), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+            cv2.putText(frame, "Searching for AprilTag / ArUco...",
+                        (20, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2, cv2.LINE_AA)
 
         cv2.putText(frame, f"Res: {actual_w}x{actual_h} | Press 'q' to exit",
                     (20, actual_h - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1)
