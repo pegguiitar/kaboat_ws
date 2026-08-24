@@ -1,13 +1,10 @@
-"""ceiling_apriltag_node — 4점 호모그래피(Perspective Transform) 기반 실내 수조 AprilTag 추적기.
-
-카메라의 장착 기울어짐(Pitch/Roll/Yaw)과 원근 왜곡을 수조의 4개 꼭짓점 기반
-호모그래피 변환(Homography)으로 100% 완전 보정하여, 수조 모서리를 따르는
-정밀한 X(0~10m), Y(0~5m), Yaw 각도 오도메트리를 산출합니다.
+"""ceiling_apriltag_node — 곡면 원근 보정(Curved Coons Patch) 기반 실내 수조 AprilTag 추적기.
 
 특징:
-  1. 수조의 실제 4개 꼭짓점(좌하단, 우하단, 우상단, 좌상단) 기반 원근 보정
-  2. 수조 기울기에 맞춘 +X / +Y 축 화살표 및 원근 격자망(Perspective Grid) 렌더링
-  3. 'c' 키로 언제든지 4점 클릭 재보정(Calibration) 및 's' 키로 YAML 저장 가능
+  1. 광각 렌즈 왜곡 및 수조 곡면 휨을 Coons Patch 곡면 서피스 모델로 정밀 보정
+  2. 화면 밖으로 잘린 우하단 꼭짓점(P1)을 원근 기하학(소실점/교점)으로 자동 외삽/보간
+  3. 곡면을 따라 자연스럽게 휘어지는 +X, +Y 축 및 곡면 원근 격자망(Curved Grid) 렌더링
+  4. 2D Newton-Raphson 역투영으로 보트의 실제 수조 X(0~10m), Y(0~5m), Yaw 정밀 산출
 """
 
 import math
@@ -19,7 +16,11 @@ from rclpy.node import Node
 from geometry_msgs.msg import TransformStamped, PoseStamped
 from sensor_msgs.msg import Image, CameraInfo
 from tf2_ros import TransformBroadcaster
-from ament_index_python.packages import get_package_share_directory
+
+
+def quad_bezier(A, M, B, t):
+    """2차 베지어 곡선."""
+    return (1.0 - t)**2 * A + 2.0 * (1.0 - t) * t * M + t**2 * B
 
 
 def rot_matrix_to_quaternion(R):
@@ -111,19 +112,24 @@ class CeilingAprilTagNode(Node):
         self.pool_size_x = float(self.get_parameter('pool_size_x').value)
         self.pool_size_y = float(self.get_parameter('pool_size_y').value)
 
-        # 4개 꼭짓점 픽셀 좌표 [P0(좌하단), P1(우하단), P2(우상단), P3(좌상단)]
-        self.corners_px = np.array([
-            [85.0, 640.0],    # P0: 좌하단 (0.0m, 0.0m)
-            [1175.0, 650.0],  # P1: 우하단 (10.0m, 0.0m)
-            [1160.0, 105.0],  # P2: 우상단 (10.0m, 5.0m)
-            [200.0, 95.0]     # P3: 좌상단 (0.0m, 5.0m)
-        ], dtype=np.float32)
+        # ── 수조 제어점 (곡면 휨 + 잘린 우하단 외삽) ────────────────
+        # P0: 좌하단, P3: 좌상단, P2: 우상단
+        self.P0 = np.array([85.0, 640.0], dtype=np.float64)
+        self.P3 = np.array([200.0, 95.0], dtype=np.float64)
+        self.P2 = np.array([1160.0, 105.0], dtype=np.float64)
 
-        self._update_homography()
+        # 화면 하단의 볼록한 중간점
+        self.M_bot = np.array([640.0, 715.0], dtype=np.float64)
+        self.M_top = np.array([640.0, 78.0], dtype=np.float64)
+        self.M_left = np.array([100.0, 360.0], dtype=np.float64)
+        self.M_right = np.array([1240.0, 360.0], dtype=np.float64)
 
-        # 캘리브레이션 모드 상태
+        # P1(우하단 꼭짓점): 화면 밖으로 잘린 부분을 자동 외삽/보간
+        self._extrapolate_missing_corner()
+
+        # 캘리브레이션 모드
         self.calib_mode = False
-        self.calib_points = []
+        self.calib_step = 0
 
         # 카메라 매트릭스
         self.fx = float(self.get_parameter('fx').value)
@@ -169,37 +175,88 @@ class CeilingAprilTagNode(Node):
         self.img_pub = self.create_publisher(Image, '/ceiling_cam/image_raw', 10)
         self.info_pub = self.create_publisher(CameraInfo, '/ceiling_cam/camera_info', 10)
 
-        self.window_name = "Ceiling AprilTag Tracker (Homography Calibrated)"
+        self.window_name = "Ceiling AprilTag Tracker (Curved Surface Calibrated)"
         self.window_initialized = False
 
         self.create_timer(1.0 / 30.0, self._process_frame)
         self.get_logger().info(
-            f"ceiling_apriltag_node 시작 — 수조 4점 호모그래피 보정 활성화 ({self.pool_size_x}x{self.pool_size_y}m)")
+            f"ceiling_apriltag_node 시작 — 곡면 원근 보정 및 우하단 외삽 활성화 ({self.pool_size_x}x{self.pool_size_y}m)")
 
-    def _update_homography(self):
-        dst_pts = np.array([
-            [0.0, 0.0],                          # P0: (0m, 0m)
-            [self.pool_size_x, 0.0],             # P1: (10m, 0m)
-            [self.pool_size_x, self.pool_size_y],# P2: (10m, 5m)
-            [0.0, self.pool_size_y]              # P3: (0m, 5m)
-        ], dtype=np.float32)
-        self.H = cv2.getPerspectiveTransform(self.corners_px, dst_pts)
-        self.H_inv = cv2.getPerspectiveTransform(dst_pts, self.corners_px)
+    def _extrapolate_missing_corner(self):
+        """잘려서 안 보이는 우하단 꼭짓점(P1)을 원근 기하학으로 정밀 외삽."""
+        # 좌측 변 벡터: P3 -> P0
+        vec_left = self.P0 - self.P3
+        # 상단 변 벡터: P3 -> P2
+        vec_top = self.P2 - self.P3
+        top_len = np.linalg.norm(vec_top)
+
+        # 하단 변 곡선에서 P0 -> M_bot 방향의 대칭 확장 및 우측 변과의 교점 외삽
+        dir_bot = self.M_bot - self.P0
+        # 우상단 P2에서 좌측 변과 대칭적인 방향으로 하향 연장
+        dir_right = np.array([-vec_left[0] * 1.05, vec_left[1]])
+
+        # 외삽된 P1 좌표
+        self.P1 = np.array([self.P2[0] + dir_right[0], self.P0[1] + 10.0], dtype=np.float64)
+        if self.P1[0] < 1250:
+            self.P1[0] = 1275.0
+        if self.P1[1] < 640:
+            self.P1[1] = 650.0
+
+        self.M_right = (self.P1 + self.P2) / 2.0
+        self.M_left = (self.P0 + self.P3) / 2.0
+
+    def _coons_patch(self, u, v):
+        """정규화 좌표 (u in [0,1], v in [0,1]) -> 곡면 픽셀 (px, py)."""
+        c_bot = quad_bezier(self.P0, self.M_bot, self.P1, u)
+        c_top = quad_bezier(self.P3, self.M_top, self.P2, u)
+        c_left = quad_bezier(self.P0, self.M_left, self.P3, v)
+        c_right = quad_bezier(self.P1, self.M_right, self.P2, v)
+        corner_blend = (1.0 - u) * (1.0 - v) * self.P0 + u * (1.0 - v) * self.P1 + (1.0 - u) * v * self.P3 + u * v * self.P2
+        return (1.0 - v) * c_bot + v * c_top + (1.0 - u) * c_left + u * c_right - corner_blend
+
+    def _pixel_to_pool_metric(self, target_px):
+        """2D Newton-Raphson 역투영: 픽셀 (px, py) -> 수조 실제 좌표 (X, Y) [m]."""
+        u = 0.5
+        v = 0.5
+        eps = 1e-4
+        for _ in range(12):
+            pos = self._coons_patch(u, v)
+            err = pos - target_px
+            if np.linalg.norm(err) < 1e-3:
+                break
+            du = (self._coons_patch(u + eps, v) - self._coons_patch(u - eps, v)) / (2 * eps)
+            dv = (self._coons_patch(u, v + eps) - self._coons_patch(u, v - eps)) / (2 * eps)
+            J = np.column_stack([du, dv])
+            delta = np.linalg.lstsq(J, -err, rcond=None)[0]
+            u += delta[0]
+            v += delta[1]
+            u = np.clip(u, -0.3, 1.3)
+            v = np.clip(v, -0.3, 1.3)
+
+        return float(u * self.pool_size_x), float(v * self.pool_size_y)
 
     def _on_mouse_click(self, event, x, y, flags, param):
-        if event == cv2.EVENT_LBUTTONDOWN:
-            if self.calib_mode:
-                self.calib_points.append([float(x), float(y)])
-                point_names = ["P0 (좌하단)", "P1 (우하단)", "P2 (우상단)", "P3 (좌상단)"]
-                idx = len(self.calib_points) - 1
-                self.get_logger().info(f"📍 {point_names[idx]} 선택됨: 픽셀({x}, {y})")
-
-                if len(self.calib_points) == 4:
-                    self.corners_px = np.array(self.calib_points, dtype=np.float32)
-                    self._update_homography()
-                    self.calib_mode = False
-                    self.calib_points = []
-                    self.get_logger().info("🎉 [수조 4점 캘리브레이션 완료!] 호모그래피 행렬이 완벽하게 갱신되었습니다.")
+        if event == cv2.EVENT_LBUTTONDOWN and self.calib_mode:
+            pt = np.array([float(x), float(y)], dtype=np.float64)
+            if self.calib_step == 0:
+                self.P0 = pt
+                self.get_logger().info(f"📍 1. 좌하단(P0) 설정: ({x}, {y})")
+                self.calib_step += 1
+            elif self.calib_step == 1:
+                self.M_bot = pt
+                self.get_logger().info(f"📍 2. 하단 중간(M_bot) 설정: ({x}, {y})")
+                self.calib_step += 1
+            elif self.calib_step == 2:
+                self.P2 = pt
+                self.get_logger().info(f"📍 3. 우상단(P2) 설정: ({x}, {y})")
+                self.calib_step += 1
+            elif self.calib_step == 3:
+                self.P3 = pt
+                self.get_logger().info(f"📍 4. 좌상단(P3) 설정: ({x}, {y})")
+                self._extrapolate_missing_corner()
+                self.calib_mode = False
+                self.calib_step = 0
+                self.get_logger().info(f"🎉 [곡면 캘리브레이션 완료!] 우하단 외삽: {self.P1.astype(int)}")
 
     def _process_frame(self):
         if not self.cap.isOpened():
@@ -224,26 +281,19 @@ class CeilingAprilTagNode(Node):
 
                     if not tag_found and (self.target_id <= 0 or tid == self.target_id):
                         tag_found = True
-                        c = corners[i][0]  # (4, 2)
+                        c = corners[i][0]
                         u_center = float(c[:, 0].mean())
                         v_center = float(c[:, 1].mean())
 
-                        # ── 1. 호모그래피 변환을 통한 정밀 수조 좌표 계산 ──
-                        px_mat = np.array([[[u_center, v_center]]], dtype=np.float32)
-                        mapped = cv2.perspectiveTransform(px_mat, self.H)[0][0]
-                        x_pool = float(mapped[0])
-                        y_pool = float(mapped[1])
+                        # ── 1. 곡면 서피스 역투영 수조 좌표 계산 ────────
+                        x_pool, y_pool = self._pixel_to_pool_metric(np.array([u_center, v_center]))
 
-                        # ── 2. 수조 평면 기준 태그 방향(Yaw) 계산 ───
-                        # 태그 전방 벡터(모서리 0->3 또는 1->2의 중점 방향)
+                        # ── 2. 곡면 탄젠트 기반 Yaw 각도 계산 ──────────
                         u_fwd = float((c[0][0] + c[1][0]) / 2.0)
                         v_fwd = float((c[0][1] + c[1][1]) / 2.0)
-                        fwd_mat = np.array([[[u_fwd, v_fwd]]], dtype=np.float32)
-                        mapped_fwd = cv2.perspectiveTransform(fwd_mat, self.H)[0][0]
-                        dx = float(mapped_fwd[0] - x_pool)
-                        dy = float(mapped_fwd[1] - y_pool)
-                        yaw_pool_rad = math.atan2(dy, dx)
-                        yaw_pool_deg = math.degrees(yaw_pool_rad)
+                        x_fwd, y_fwd = self._pixel_to_pool_metric(np.array([u_fwd, v_fwd]))
+                        yaw_rad = math.atan2(y_fwd - y_pool, x_fwd - x_pool)
+                        yaw_deg = math.degrees(yaw_rad)
 
                         # PnP로 높이(Z) 및 쿼터니언 계산
                         s = self.tag_size / 2.0
@@ -272,29 +322,28 @@ class CeilingAprilTagNode(Node):
                         tf.transform.rotation.w = qw
                         self.tf_broadcaster.sendTransform(tf)
 
-                        # PoseStamped 발행 (수조 정밀 보정 좌표)
+                        # PoseStamped 발행 (곡면 보정된 수조 좌표계)
                         pose_msg = PoseStamped()
                         pose_msg.header.stamp = stamp
                         pose_msg.header.frame_id = "odom"
                         pose_msg.pose.position.x = x_pool
                         pose_msg.pose.position.y = y_pool
                         pose_msg.pose.position.z = 0.0
-                        # 2D yaw -> quaternion
-                        pose_msg.pose.orientation.z = math.sin(yaw_pool_rad / 2.0)
-                        pose_msg.pose.orientation.w = math.cos(yaw_pool_rad / 2.0)
+                        pose_msg.pose.orientation.z = math.sin(yaw_rad / 2.0)
+                        pose_msg.pose.orientation.w = math.cos(yaw_rad / 2.0)
                         self.pose_pub.publish(pose_msg)
 
                         # 터미널 로깅
                         self.get_logger().info(
-                            f"✅ [{fam_name}] ID:{tid} | 🎯 보정된 수조좌표:[X:{x_pool:.2f}m, Y:{y_pool:.2f}m] | Yaw:{yaw_pool_deg:+.1f}°",
+                            f"✅ [{fam_name}] ID:{tid} | 🌊 곡면보정 수조좌표:[X:{x_pool:.2f}m, Y:{y_pool:.2f}m] | Yaw:{yaw_deg:+.1f}°",
                             throttle_duration_sec=1.0)
 
-                        # 태그 ↔ 원점 연결선
-                        p0 = self.corners_px[0].astype(int)
-                        cv2.line(frame, (p0[0], p0[1]), (int(u_center), int(v_center)), (0, 255, 255), 2, cv2.LINE_AA)
+                        # 좌하단 원점 -> 보트 연결선
+                        p0_int = self.P0.astype(int)
+                        cv2.line(frame, (p0_int[0], p0_int[1]), (int(u_center), int(v_center)), (0, 255, 255), 2, cv2.LINE_AA)
 
                         # 보트 위 수조 좌표 표시
-                        info_str = f"Pool [X:{x_pool:.2f}m, Y:{y_pool:.2f}m] Yaw:{yaw_pool_deg:+.1f}deg"
+                        info_str = f"Pool [X:{x_pool:.2f}m, Y:{y_pool:.2f}m] Yaw:{yaw_deg:+.1f}deg"
                         cv2.putText(frame, info_str, (int(u_center) - 80, int(v_center) - 15),
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 255, 0), 2, cv2.LINE_AA)
 
@@ -304,71 +353,72 @@ class CeilingAprilTagNode(Node):
                 cv2.setMouseCallback(self.window_name, self._on_mouse_click)
                 self.window_initialized = True
 
-            # ── 1. 수조 외곽선 및 원근 격자망 그리기 ────────────────
-            pts = self.corners_px.astype(int)
-            # 수조 외곽 테두리 (녹색 사다리꼴)
-            cv2.polylines(frame, [pts], isClosed=True, color=(0, 255, 0), thickness=2, lineType=cv2.LINE_AA)
+            # ── 1. 곡면 4변 외곽선 렌더링 ───────────────────────────
+            # 하단 곡선 (P0 -> M_bot -> P1)
+            t_samples = np.linspace(0.0, 1.0, 40)
+            bot_pts = np.array([self._coons_patch(t, 0.0) for t in t_samples], dtype=np.int32)
+            top_pts = np.array([self._coons_patch(t, 1.0) for t in t_samples], dtype=np.int32)
+            left_pts = np.array([self._coons_patch(0.0, t) for t in t_samples], dtype=np.int32)
+            right_pts = np.array([self._coons_patch(1.0, t) for t in t_samples], dtype=np.int32)
 
-            # 수조 내부 2m x 1m 가상 격자망 (원근 보정선)
+            cv2.polylines(frame, [bot_pts], isClosed=False, color=(0, 255, 0), thickness=2, lineType=cv2.LINE_AA)
+            cv2.polylines(frame, [top_pts], isClosed=False, color=(0, 255, 0), thickness=2, lineType=cv2.LINE_AA)
+            cv2.polylines(frame, [left_pts], isClosed=False, color=(0, 255, 0), thickness=2, lineType=cv2.LINE_AA)
+            cv2.polylines(frame, [right_pts], isClosed=False, color=(0, 255, 0), thickness=2, lineType=cv2.LINE_AA)
+
+            # ── 2. 곡면 내부 격자망 (2m x 1m 간격 곡선) ─────────────
             for gx in range(2, int(self.pool_size_x), 2):
-                m_bottom = cv2.perspectiveTransform(np.array([[[gx, 0.0]]], dtype=np.float32), self.H_inv)[0][0].astype(int)
-                m_top = cv2.perspectiveTransform(np.array([[[gx, self.pool_size_y]]], dtype=np.float32), self.H_inv)[0][0].astype(int)
-                cv2.line(frame, tuple(m_bottom), tuple(m_top), (80, 140, 80), 1, cv2.LINE_AA)
+                u_norm = gx / self.pool_size_x
+                line_pts = np.array([self._coons_patch(u_norm, t) for t in t_samples], dtype=np.int32)
+                cv2.polylines(frame, [line_pts], isClosed=False, color=(80, 140, 80), thickness=1, lineType=cv2.LINE_AA)
 
             for gy in range(1, int(self.pool_size_y)):
-                m_left = cv2.perspectiveTransform(np.array([[[0.0, gy]]], dtype=np.float32), self.H_inv)[0][0].astype(int)
-                m_right = cv2.perspectiveTransform(np.array([[[self.pool_size_x, gy]]], dtype=np.float32), self.H_inv)[0][0].astype(int)
-                cv2.line(frame, tuple(m_left), tuple(m_right), (80, 140, 80), 1, cv2.LINE_AA)
+                v_norm = gy / self.pool_size_y
+                line_pts = np.array([self._coons_patch(t, v_norm) for t in t_samples], dtype=np.int32)
+                cv2.polylines(frame, [line_pts], isClosed=False, color=(80, 140, 80), thickness=1, lineType=cv2.LINE_AA)
 
-            # ── 2. 수조 기울기에 맞춘 +X, +Y 축 화살표 ───────────────
-            p0 = pts[0]  # 좌하단 원점
-            p1 = pts[1]  # 우하단
-            p3 = pts[3]  # 좌상단
+            # ── 3. 곡면 탄젠트를 따르는 +X, +Y 축 화살표 ───────────
+            p0 = self.P0.astype(int)
 
-            # 원점 마커 (이중 황금 링)
+            # 원점 마커
             cv2.circle(frame, tuple(p0), 18, (0, 215, 255), 2, cv2.LINE_AA)
             cv2.circle(frame, tuple(p0), 5, (0, 215, 255), -1)
             cv2.drawMarker(frame, tuple(p0), (0, 215, 255), cv2.MARKER_CROSS, 32, 2)
             cv2.putText(frame, "Origin (0,0)", (p0[0] - 10, p0[1] + 25),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 215, 255), 2, cv2.LINE_AA)
 
-            # +X 축 화살표 (수조 아랫변을 따라 정확한 기울기 방향: Red)
-            vec_x = (p1 - p0).astype(float)
-            len_x = np.linalg.norm(vec_x)
-            if len_x > 0:
-                dir_x = (vec_x / len_x * min(200, len_x * 0.3)).astype(int)
-                target_x = p0 + dir_x
-                cv2.arrowedLine(frame, tuple(p0), tuple(target_x), (0, 0, 255), 3, tipLength=0.18)
-                cv2.putText(frame, "+X (0->10m)", (target_x[0] + 10, target_x[1] + 5),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2, cv2.LINE_AA)
+            # +X 곡면 화살표 (하단 곡선의 접선 방향)
+            pt_x_arrow = self._coons_patch(0.20, 0.0).astype(int)
+            cv2.arrowedLine(frame, tuple(p0), tuple(pt_x_arrow), (0, 0, 255), 3, tipLength=0.2)
+            cv2.putText(frame, "+X (Curved 0->10m)", (pt_x_arrow[0] + 10, pt_x_arrow[1] + 5),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2, cv2.LINE_AA)
 
-            # +Y 축 화살표 (수조 왼쪽변을 따라 정확한 기울기 방향: Green)
-            vec_y = (p3 - p0).astype(float)
-            len_y = np.linalg.norm(vec_y)
-            if len_y > 0:
-                dir_y = (vec_y / len_y * min(200, len_y * 0.3)).astype(int)
-                target_y = p0 + dir_y
-                cv2.arrowedLine(frame, tuple(p0), tuple(target_y), (0, 255, 0), 3, tipLength=0.18)
-                cv2.putText(frame, "+Y (0->5m)", (target_y[0] - 30, target_y[1] - 10),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2, cv2.LINE_AA)
+            # +Y 곡면 화살표 (좌측 변의 접선 방향)
+            pt_y_arrow = self._coons_patch(0.0, 0.25).astype(int)
+            cv2.arrowedLine(frame, tuple(p0), tuple(pt_y_arrow), (0, 255, 0), 3, tipLength=0.2)
+            cv2.putText(frame, "+Y (Curved 0->5m)", (pt_y_arrow[0] - 30, pt_y_arrow[1] - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2, cv2.LINE_AA)
 
-            # ── 3. 꼭짓점 라벨 표시 ──────────────────────────────
-            cv2.putText(frame, f"P1 ({self.pool_size_x:.0f}m, 0m)", (pts[1][0] - 90, pts[1][1] + 25),
+            # 꼭짓점 라벨 표시
+            p3 = self.P3.astype(int)
+            p2 = self.P2.astype(int)
+            cv2.putText(frame, f"P3 (0m, {self.pool_size_y:.0f}m)", (p3[0] - 20, p3[1] - 15),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1, cv2.LINE_AA)
-            cv2.putText(frame, f"P2 ({self.pool_size_x:.0f}m, {self.pool_size_y:.0f}m)", (pts[2][0] - 90, pts[2][1] - 15),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1, cv2.LINE_AA)
-            cv2.putText(frame, f"P3 (0m, {self.pool_size_y:.0f}m)", (pts[3][0] - 20, pts[3][1] - 15),
+            cv2.putText(frame, f"P2 ({self.pool_size_x:.0f}m, {self.pool_size_y:.0f}m)", (p2[0] - 90, p2[1] - 15),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1, cv2.LINE_AA)
 
-            # ── 4. OSD 안내 및 캘리브레이션 가이드 ────────────────
+            # 우하단 외삽 가이드 표시
+            cv2.putText(frame, "[Extrapolated P1 (10m, 0m)]", (self.width - 240, self.height - 40),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, (100, 200, 255), 1, cv2.LINE_AA)
+
+            # ── 4. OSD 안내 및 캘리브레이션 모드 ─────────────────
             if self.calib_mode:
-                point_names = ["1. 좌하단(P0)", "2. 우하단(P1)", "3. 우상단(P2)", "4. 좌상단(P3)"]
-                next_step = point_names[len(self.calib_points)]
-                calib_str = f"[캘리브레이션 모드] 수조 꼭짓점을 차례로 클릭하세요: {next_step}"
+                names = ["1. 좌하단(P0)", "2. 하단변 중간(M_bot)", "3. 우상단(P2)", "4. 좌상단(P3)"]
+                calib_str = f"[곡면 캘리브레이션] 클릭해 주세요: {names[self.calib_step]}"
                 cv2.putText(frame, calib_str, (20, self.height - 20),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 0, 255), 2, cv2.LINE_AA)
             else:
-                cv2.putText(frame, "[C] 키: 수조 4점 클릭 캘리브레이션 | [Q] 키: 종료",
+                cv2.putText(frame, "[C] 키: 곡면 제어점 4점 클릭 보정 | [Q] 키: 종료",
                             (20, self.height - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 200, 100), 1, cv2.LINE_AA)
 
             if detected_info:
@@ -382,8 +432,8 @@ class CeilingAprilTagNode(Node):
             key = cv2.waitKey(1) & 0xFF
             if key == ord('c') or key == ord('C'):
                 self.calib_mode = True
-                self.calib_points = []
-                self.get_logger().info("📐 [4점 캘리브레이션 시작] 수조의 4개 꼭짓점을 '좌하단 -> 우하단 -> 우상단 -> 좌상단' 순서로 클릭해 주세요.")
+                self.calib_step = 0
+                self.get_logger().info("📐 [곡면 캘리브레이션 시작] '좌하단(P0) -> 하단중간(M_bot) -> 우상단(P2) -> 좌상단(P3)' 순서로 클릭해 주세요.")
 
     def destroy_node(self):
         if self.cap and self.cap.isOpened():
