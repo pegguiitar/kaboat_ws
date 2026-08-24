@@ -1,29 +1,23 @@
-# 노트북 천장 웹캠용 AprilTag 검출 설정.
+# 외부 USB 천장 카메라 AprilTag 검출 설정.
 #
-# tag.size / tag.sizes 는 검은색 테두리 바깥쪽 한 변의 실제 길이[m]다.
-# 프린터 배율 오차가 위치 스케일 오차로 그대로 이어지므로 반드시 자로 재서
-# ceiling_apriltag.launch.py 의 tag_size 인자로 덮어쓴다.
-
+# 중요: size 는 태그의 검은 테두리 바깥 한 변을 자로 잰 실제 길이[m]로 바꾼다.
+# 이 값이나 camera_info 보정값이 틀리면 검출은 돼도 /odom 거리 스케일은 틀린다.
 /**:
   ros__parameters:
     image_transport: raw
     family: 36h11
-    size: 0.160
-    max_hamming: 0
-    qos_profile: sensor_data
-
+    size: 0.300                 # 실제 태그 한 변 길이 [m] (30cm)
+    max_hamming: 2              # 원거리 인식률 향상을 위한 해밍 에러 보정 (0 -> 2)
+    pose_estimation_method: pnp
     detector:
-      threads: 2
-      decimate: 1.5
+      threads: 4
+      decimate: 1.0             # 천장 카메라는 작은 태그를 보므로 해상도 축소 안함(1.0)
       blur: 0.0
       refine: true
       sharpening: 0.25
       debug: false
-
-    pose_estimation_method: "pnp"
-
-    # launch 인자가 이 목록을 덮어쓴다. 기본값은 tag36h11 ID 0 한 장이다.
+    # 배에 부착한 태그 하나만 TF로 낸다. frame 이름은 indoor_tank.yaml과 맞춘다.
     tag:
-      ids: [0]
-      frames: ["tag36h11:0"]
-      sizes: [0.160]
+      ids: [1]
+      frames: ["tag36h11:1"]
+      sizes: [0.300]

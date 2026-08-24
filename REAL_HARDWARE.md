@@ -202,6 +202,47 @@ window 1프레임 0.205 m/s → window 0.15s 0.042 → +EMA **0.011 m/s**.
   **인쇄물을 자로 재서 그 값을 `size`에 넣는다** (프린터 배율 오차가 거리
   오차에 그대로 비례).
 
+### 외부 USB 웹캠(천장 카메라 PC) 빠른 시작
+
+레포에는 UVC 외부 웹캠 → 왜곡 보정 → AprilTag 검출을 한 번에 올리는 launch가
+있다. USB A 포트에 연결한 뒤 실제 장치 번호를 확인한다. 내장 웹캠이 있으면
+외부 카메라는 보통 `/dev/video2`부터 잡히지만, **반드시 아래 명령 결과를 쓴다.**
+
+```bash
+cd ~/kaboat_ws                 # 이 레포의 실제 경로로 바꾼다
+./scripts/install_apriltag_dependencies.sh
+source /opt/ros/humble/setup.bash
+colcon build --symlink-install --packages-select kaboat_hardware
+source install/setup.bash
+
+v4l2-ctl --list-devices
+```
+
+먼저 외부 카메라를 보정한다. 보정 중에는 체커보드를 여러 거리·각도에서 화면에
+채우고, 결과 yaml 파일을 보관한다.
+
+```bash
+ros2 run v4l2_camera v4l2_camera_node --ros-args \
+  -r __ns:=/ceiling_cam -p video_device:=/dev/video2
+ros2 run camera_calibration cameracalibrator --size 8x6 --square 0.024 \
+  image:=/ceiling_cam/image_raw camera:=/ceiling_cam
+```
+
+`--size`와 `--square`는 **사용한 체커보드의 내부 코너 수와 실제 한 칸 길이[m]**로
+바꾼다. 저장된 보정 yaml의 경로와 태그의 실제 검은 테두리 한 변[m]을
+`src/kaboat_hardware/config/ceiling_apriltag.yaml`의 `size`·`tag.sizes`에 같은
+값으로 반영한 뒤 다시 빌드한다.
+
+```bash
+ros2 launch kaboat_hardware ceiling_apriltag.launch.py \
+  video_device:=/dev/video2 \
+  camera_info_url:=file:///home/$USER/.ros/camera_info/ceiling.yaml
+```
+
+정상이라면 `/ceiling_cam/image_rect`, `/detections`, 그리고
+`ceiling camera optical frame → tag36h11:0` TF가 나온다. 이 PC와 배 Jetson은
+같은 네트워크·`ROS_DOMAIN_ID`여야 하며, 두 시스템의 시간이 동기화돼야 한다.
+
 ### ⚠️ `/odom` 발행자 중복
 
 `indoor_tank.launch.py`는 GQ7의 EKF→`/odom` remap을 자동으로 끈다
@@ -223,12 +264,38 @@ GNSS 미수렴 중에는 조용해서 드러나지 않으니 주의.
 
 ---
 
+## 실물 스러스터(모터/ESC) 제어 드라이버
+
+실물 모터 구동 노드는 `kaboat_hardware/thruster_driver`를 사용한다.
+`/cmd_vel`(`[-1.0, 1.0]`)을 구독하여 차동 구동 좌/우 PWM(1000~2000µs)을 생성하고 하드웨어로 전달한다.
+
+### 1) 모터 드라이버 실행
+
+```bash
+# 1-1. 하드웨어 미연결 벤치/더미 테스트
+ros2 launch kaboat_hardware thrusters.launch.py hardware_type:=dummy
+
+# 1-2. 아두이노/ESP32 USB 시리얼 연결 (<PWM_L,PWM_R>\n 형식)
+ros2 launch kaboat_hardware thrusters.launch.py hardware_type:=serial
+
+# 1-3. Jetson I2C 버스 직결 PCA9685 16채널 PWM 모듈
+ros2 launch kaboat_hardware thrusters.launch.py hardware_type:=pca9685
+```
+
+### 2) 안전 기능 및 수동 조종 오버라이드
+- **300ms 워치독**: `/cmd_vel` 수신이 0.3초 이상 끊기면 자동으로 1500µs(중립/정지) 전송.
+- **RC Manual Override**: RC 수신기 수동 조종 토픽(`/rc/cmd_vel`) 수신 시 자율주행 명령을 즉시 무시하고 수동 조종 우선 적용.
+- **비상 정지(E-Stop)**: `/emergency_stop`(`std_msgs/Bool`, `data: true`) 수신 시 즉시 PWM 중립 차단.
+- **가속도 제한(Slew Rate)**: `max_slew_rate`(기본 2.0/s)로 급가속에 의한 전압 강하 및 요 발진/전복 방지.
+- **불감대(Deadband)**: `deadband_us`(기본 ±25µs)로 ESC 불감대를 건너뛰어 저속 제어성 확보.
+
+---
+
 ## 자율주행 스택 안전 기본값
 
 `autonomy.launch.py`는 `use_sim_time:=false`, `use_sim_actuator:=false`가 기본이다.
-따라서 실물에서 실행해도 Gazebo용 `twist2thrust.py`는 뜨지 않는다. 아직 실제
-ESC 드라이버는 연결하지 않았으므로 센서 검증이 끝나기 전에는 별도 모터 노드를
-추가하지 않는다.
+따라서 실물에서 실행해도 Gazebo용 `twist2thrust.py`는 뜨지 않는다. 실물 주행 시에는
+위 `thrusters.launch.py`를 함께 실행하여 모터를 제어한다.
 
 시뮬레이터에서 기존 동작을 재현할 때만 명시적으로 켠다.
 
@@ -236,3 +303,4 @@ ESC 드라이버는 연결하지 않았으므로 센서 검증이 끝나기 전�
 ros2 launch kaboat_bringup autonomy.launch.py \
   use_sim_time:=true use_sim_actuator:=true
 ```
+

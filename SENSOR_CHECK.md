@@ -490,3 +490,292 @@ ps -ef | grep -E "gz sim|ros2 launch|parameter_bridge|robot_state_publisher" \
 | `/gps/fix` **좌표** | ❌ | 실외 필요 |
 | `/odom` (GQ7 EKF) | ❌ | 실외 + 이동 필요 |
 | `/odom` (AprilTag) | ✅ | 30 Hz, §10 |
+
+---
+
+# 부록 — 토픽별 예시 메시지
+
+아래는 **실제 ROS 2 메시지 정의로 생성**한 것이라 필드명·구조가 `ros2 topic
+echo` 출력과 정확히 일치한다. 값은 현장에서 기대하는 전형값이다.
+
+> 긴 배열(`ranges`, 이미지 `data`, 격자 `data`)은 `--no-arr` 로 접었다.
+> 공분산 36개짜리는 지면 관계로 대각 성분만 표시했다 — 실제 출력은 전부 나온다.
+
+## `/scan` — `sensor_msgs/msg/LaserScan`
+
+```bash
+ros2 topic echo /scan --once --no-arr
+```
+
+```yaml
+header:
+  stamp:
+    sec: 1786423041
+    nanosec: 412773000
+  frame_id: laser_link
+angle_min: -3.141592653589793
+angle_max: 3.141592653589793
+angle_increment: 0.0031415926535897933
+time_increment: 5.0e-05
+scan_time: 0.1
+range_min: 0.05
+range_max: 50.0
+ranges: '<sequence type: float, length: 2000>'
+intensities: '<sequence type: float, length: 2000>'
+```
+
+거리 배열은 따로 본다 (`.inf` = 무반사, 정상):
+
+```bash
+ros2 topic echo /scan --once --field ranges | head -20
+```
+
+```
+- .inf
+- 12.437000274658203
+- 12.402999877929688
+- 3.740999937057495
+- 3.7269999980926514
+- .inf
+- 0.9210000038146973
+```
+
+## `/imu/data` — `sensor_msgs/msg/Imu`
+
+실내·정지 상태의 GQ7. **`orientation_covariance[0] = -1.0` 은 "orientation
+미제공" 규약**이고, GQ7 은 자력계가 없어 실내에서 이게 정상이다.
+
+```yaml
+header:
+  stamp: {sec: 1786423041, nanosec: 412773000}
+  frame_id: imu_link
+orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}
+orientation_covariance: [-1.0, 0.0, ..., 0.0]      # [0]=-1 → 미제공
+angular_velocity:
+  x: 0.0021
+  y: -0.0014
+  z: 0.0008                                        # ★ 정지 바이어스
+angular_velocity_covariance: [2.5e-06, 0.0, ..., 2.5e-06]
+linear_acceleration:
+  x: 0.0412
+  y: -0.0187
+  z: 9.8061                                        # 중력 (ENU, 정상)
+linear_acceleration_covariance: [0.0001, 0.0, ..., 0.0001]
+```
+
+**스택이 쓰는 건 `angular_velocity.z` 하나뿐이다.** 정지 시 `|z| < 0.01`,
+반시계 회전 시 **양수**.
+
+## `/gps/fix` — `sensor_msgs/msg/NavSatFix`
+
+### 실내 (no-fix) — ★ 이게 정상 결과
+
+```yaml
+header:
+  stamp: {sec: 1786423041, nanosec: 412773000}
+  frame_id: gnss_1_antenna_link
+status:
+  status: -1                                       # STATUS_NO_FIX
+  service: 1                                       # SERVICE_GPS
+latitude: 0.0
+longitude: 0.0
+altitude: 0.0
+position_covariance: [0.0, ..., 0.0]
+position_covariance_type: 0                        # COVARIANCE_TYPE_UNKNOWN
+```
+
+### 실외 (fix 획득)
+
+```yaml
+status:
+  status: 0                                        # STATUS_FIX
+  service: 1
+latitude: 36.14273841
+longitude: 128.39561203
+altitude: 64.213
+position_covariance: [2.25, 0.0, 0.0, 0.0, 2.25, 0.0, 0.0, 0.0, 9.0]
+position_covariance_type: 2                        # DIAGONAL_KNOWN
+```
+
+`status` 값: `-1` no-fix · `0` fix · `1` SBAS · `2` GBAS(RTK).
+`position_covariance` 대각이 수평 분산[m²] — 2.25 = stddev 1.5 m.
+
+## `/odom` — `nav_msgs/msg/Odometry`
+
+AprilTag 소스 기준. 공분산이 36개라 보통 `--field` 로 나눠 본다.
+
+```bash
+ros2 topic echo /odom --once --field pose.pose
+ros2 topic echo /odom --once --field twist.twist
+```
+
+```yaml
+header:
+  stamp: {sec: 1786423041, nanosec: 412773000}     # ★ FSM 의 시계
+  frame_id: odom                                   # 아무도 안 읽음
+child_frame_id: base_link                          # 비면 health WARN
+pose:
+  pose:
+    position: {x: 2.4137, y: 1.0852, z: 0.0}
+    orientation: {x: 0.0, y: 0.0, z: 0.1494, w: 0.9888}   # yaw ≈ 17.2°
+  covariance: [0.0004, ..., 0.0004]                # [0]=x [7]=y [35]=yaw
+twist:
+  twist:
+    linear: {x: 0.3971, y: -0.0083, z: 0.0}        # ★ body frame
+    angular: {x: 0.0, y: 0.0, z: 0.1974}           # ★ D항 입력
+  covariance: [0.0025, ..., 0.0025]
+```
+
+⚠️ `twist.linear` 은 **body frame**(전방 x, 좌측 y)이다 — 월드 속도가 아니다.
+
+## `/camera/color/image_raw` · `/camera/depth/image_raw`
+
+```bash
+ros2 topic echo /camera/color/image_raw --once --no-arr
+```
+
+```yaml
+header:
+  stamp: {sec: 1786423041, nanosec: 412773000}
+  frame_id: camera_color_optical_frame
+height: 480
+width: 640
+encoding: rgb8
+is_bigendian: 0
+step: 1920                                         # width × 3
+data: '<sequence type: uint8, length: 921600>'
+```
+
+depth (RealSense 정렬):
+
+```yaml
+height: 480
+width: 640
+encoding: 16UC1                                    # [mm]. Gazebo 는 32FC1 [m]
+is_bigendian: 0
+step: 1280                                         # width × 2
+data: '<sequence type: uint8, length: 614400>'
+```
+
+⚠️ **color 와 depth 의 `height`/`width` 가 같아야 한다.** 다르면
+`buoy_detector` 가 같은 픽셀의 거리로 오인하지 않으려고 그 프레임을 버린다.
+
+## `/camera/camera_info` — `sensor_msgs/msg/CameraInfo`
+
+```yaml
+header:
+  stamp: {sec: 1786423041, nanosec: 412773000}
+  frame_id: camera_color_optical_frame
+height: 480
+width: 640
+distortion_model: plumb_bob
+d: [0.0, 0.0, 0.0, 0.0, 0.0]
+k: [385.21,   0.0, 321.47,
+      0.0, 385.21, 238.92,
+      0.0,   0.0,    1.0]
+r: [1.0, 0.0, 0.0,  0.0, 1.0, 0.0,  0.0, 0.0, 1.0]
+p: [385.21,   0.0, 321.47, 0.0,
+      0.0, 385.21, 238.92, 0.0,
+      0.0,   0.0,    1.0,  0.0]
+binning_x: 0
+binning_y: 0
+roi: {x_offset: 0, y_offset: 0, height: 0, width: 0, do_rectify: false}
+```
+
+⚠️ **`k[2]`(cx) 가 `width/2` 근처인지 확인한다.** 위 예는 321.47 ≈ 640/2 로
+정상. sim 에서는 width 1280 인데 cx≈160 이라 방위가 ~60° 쏠린 전례가 있다
+(SKELETON §7). `k[0]`=fx, `k[4]`=fy, `k[2]`=cx, `k[5]`=cy.
+
+## `/occupancy_grid` — `nav_msgs/msg/OccupancyGrid` (인식 출력)
+
+```bash
+ros2 topic echo /occupancy_grid --once --no-arr
+```
+
+```yaml
+header:
+  stamp: {sec: 1786423041, nanosec: 412773000}
+  frame_id: odom
+info:
+  map_load_time: {sec: 0, nanosec: 0}
+  resolution: 0.2                                  # 셀 크기 [m]
+  width: 100                                       # 20m / 0.2m
+  height: 100
+  origin:
+    position: {x: -7.6, y: -8.8, z: 0.0}           # 격자에 스냅된 값
+    orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}  # 항상 월드축 정렬
+data: '<sequence type: int8, length: 10000>'
+```
+
+`data` 는 row-major, 값은 **`-1` 미관측 · `0~100` 점유확률[%]**.
+셀 (ix, iy) → `data[iy * width + ix]`, 월드 좌표 → `origin + (ix+0.5)*resolution`.
+
+log-odds 특성상 발행값이 히트 횟수의 함수다 — 1회 70 · 2회 85 · 3회 93 ·
+4회 이상 포화 97~99. DRI 의 `occ_threshold` 95 는 "4히트는 봐야 믿는다".
+
+## `/detections/buoys` — `kaboat_msgs/msg/BuoyArray` (인식 출력)
+
+```yaml
+header:
+  stamp: {sec: 1786423041, nanosec: 412773000}
+  frame_id: odom                                   # ★ 전역 좌표
+buoys:
+- id: 3
+  color: red                                       # red|green|orange|unknown
+  position: {x: 14.82, y: 60.47, z: 0.0}           # odom 프레임 [m]
+  confidence: 0.87
+- id: 5
+  color: green
+  position: {x: 14.91, y: 65.52, z: 0.0}
+  confidence: 0.91
+```
+
+점유격자 cell 과 달리 **색·정체성(id)·전역좌표를 갖는 점 랜드마크**다.
+극좌표(거리·방위)는 소비자가 자기 odom 으로 계산한다
+(`behavior_base.buoy_range_bearing()`).
+
+## `/diagnostics` — `diagnostic_msgs/msg/DiagnosticArray`
+
+```yaml
+header:
+  stamp: {sec: 1786423041, nanosec: 412773000}
+  frame_id: ''
+status:
+- level: "\0"                                      # OK
+  name: kaboat/sensors/scan
+  message: receiving
+  hardware_id: kaboat-real
+  values:
+  - {key: topic, value: /scan}
+  - {key: messages, value: '187'}
+  - {key: rate_hz, value: '9.94'}
+  - {key: age_sec, value: '0.043'}
+  - {key: frame_id, value: laser_link}
+  - {key: beams, value: '2000'}
+  - {key: valid_ranges, value: '1362'}
+- level: "\x01"                                    # WARN
+  name: kaboat/sensors/gps
+  message: receiving with warning
+  values:
+  - {key: status, value: '-1'}
+  - {key: fix_check, value: no GNSS fix}
+- level: "\x02"                                    # ERROR
+  name: kaboat/sensors/odom
+  message: no messages
+  values:
+  - {key: messages, value: '0'}
+  - {key: rate_hz, value: '0.00'}
+  - {key: frame_id, value: <empty>}
+```
+
+센서별 추가 `values` 키:
+
+| 센서 | 키 |
+|---|---|
+| color / depth | `resolution` `encoding` (+`data_check`) |
+| camera_info | `resolution` `fx` (+`calibration_check`) |
+| scan | `beams` `valid_ranges` (+`data_check`) |
+| imu | `orientation_norm` (+`orientation_check`) |
+| gps | `status` `latitude` `longitude` (+`fix_check`) |
+| odom | `position_xyz` `speed_mps` `child_frame_id` (+`odometry_check`) |
+| pointcloud | `width` `height` (+`data_check`) |

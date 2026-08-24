@@ -29,6 +29,8 @@ setup(
             'apriltag_odom = kaboat_hardware.apriltag_odom:main',
             'ceiling_apriltag_status = kaboat_hardware.ceiling_apriltag_status:main',
             'imu_dead_reckoning_odom = kaboat_hardware.imu_dead_reckoning_odom:main',
+            'thruster_driver = kaboat_hardware.thruster_driver:main',
+            'ceiling_apriltag_node = kaboat_hardware.ceiling_apriltag_node:main',
         ],
     },
 )

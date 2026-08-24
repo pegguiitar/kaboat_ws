@@ -1,0 +1,40 @@
+# KABOAT 실물 스러스터 / ESC 제어 파라미터
+
+thruster_driver:
+  ros__parameters:
+    # ── 하드웨어 통신 백엔드 ───────────────────────────
+    # 'dummy'   : 하드웨어 미연결 벤치 테스트 (기본값)
+    # 'serial'  : 아두이노/MCU USB 시리얼 연결 (<PWM_L,PWM_R>\n 형식)
+    # 'pca9685' : Jetson I2C 버스 직결 PCA9685 16채널 PWM 모듈
+    hardware_type: "dummy"
+    port: "/dev/ttyUSB0"
+    baudrate: 115200
+
+    # PCA9685 I2C 설정 (hardware_type == 'pca9685' 일 때 사용)
+    i2c_bus: 1
+    pca9685_address: 0x40
+    left_channel: 0
+    right_channel: 1
+
+    # ── PWM 펄스폭 매핑 [µs] ───────────────────────────
+    neutral_pwm: 1500           # 정지 (ESC 중립)
+    max_forward_pwm: 1900       # 최대 전진 (100% 전진)
+    max_reverse_pwm: 1100       # 최대 후진 (100% 후진)
+    deadband_us: 25             # 불감대 폭 (1475~1525µs 는 1500µs 중립 처리)
+
+    # ── 모터 보정 및 튜닝 ──────────────────────────────
+    left_trim: 1.0              # 좌측 모터 출력 미세조정 배율
+    right_trim: 1.0             # 우측 모터 출력 미세조정 배율
+    invert_left: false          # 좌측 회전방향 반전
+    invert_right: false         # 우측 회전방향 반전
+
+    # 급가속/전압강하/요 발진 방지 슬루레이트 [초당 최대 변화율]
+    # 2.0 = 0% 에서 100% 출력까지 최소 0.5초 소요
+    max_slew_rate: 2.0
+
+    # ── 타이밍 및 안전 워치독 ──────────────────────────
+    update_rate_hz: 50.0        # ESC PWM 신호 주기 (50Hz)
+    timeout_sec: 0.3            # /cmd_vel 수신 중단 시 중립 전환 시간 [s]
+    enable_rc_override: true    # RC 조종기 입력 시 자동 오버라이드 활성화
+    rc_timeout_sec: 0.5         # RC 조종 신호 유효 판정 시간 [s]
+

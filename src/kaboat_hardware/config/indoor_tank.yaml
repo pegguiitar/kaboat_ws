@@ -11,15 +11,14 @@ apriltag_odom:
     # apriltag_ros 가 내는 TF 이름. 'tag<패밀리>:<id>' 형식이지만 버전마다
     # 다르므로 실제 이름을 확인해 맞출 것:
     #   ros2 run tf2_tools view_frames
-    tag_frame: "tag36h11:0"
+    tag_frame: "tag36h11:1"
     camera_frame: ceiling_camera
 
     # ── [수조] 천장 카메라 설치 자세 (odom → camera) ───
     # 수조 원점을 어디로 잡을지 정한 뒤 실측해 채운다. 이 값이 곧 좌표계
     # 정의라, 여기가 틀리면 모든 위치가 그만큼 통째로 어긋난다.
     publish_camera_tf: true
-    camera_xyz: [0.0, 0.0, 3.0]      # [수조] 원점 기준 카메라 위치 [m]
-    camera_rpy: [3.14159, 0.0, 0.0]  # [수조] 바닥을 내려다보는 자세
+    camera_xyz: [0.0, 0.0, 4.6]      # [수조] 천장 카메라 높이 실측값 4.6m
 
     # ── 배에 붙인 태그의 장착 오차 ─────────────────────
     tag_yaw_offset: 0.0        # 태그 정면과 선수 방향의 차 [rad]
