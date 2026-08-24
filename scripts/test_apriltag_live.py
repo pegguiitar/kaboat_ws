@@ -1,19 +1,35 @@
 #!/usr/bin/env python3
-"""카메라 연결 및 AprilTag 실시간 인식 단독 테스트 스크립트 (원거리/천장 카메라 최적화).
+"""카메라 연결 및 AprilTag/ArUco 실시간 검출 테스트 스크립트 (수조 꼭짓점 원점 지원).
 
-개선 사항:
-  1. HD(1280x720) MJPG 고해상도 캡처 (천장 원거리 태그 픽셀 확보)
-  2. 원거리/소형 마커 검출 파라미터 최적화 (minMarkerPerimeterRate, Subpixel Refinement)
-  3. tag36h11 외 다른 패밀리(tag25h9, tag16h5, ARUCO) 자동 감지 지원
-
-사용법:
-  python3 scripts/test_apriltag_live.py [카메라번호 (기본: 2)]
-
-종료: 영상 창에서 'q' 또는 ESC 키 입력
+기능:
+  1. 실제 파란색 수조 좌하단 꼭짓점에 원점 (0,0)과 좌표축 (+X, +Y) 표시
+  2. 마우스 클릭으로 수조 꼭짓점 원점을 화면에서 자유롭게 보정 가능
+  3. 실시간 보트 위치 [X, Y] 및 거리, 선수각 표시
 """
 
+import math
 import sys
 import cv2
+import numpy as np
+
+# 기본 수조 좌하단 꼭짓점 픽셀 (사용자가 화면 클릭 시 갱신됨)
+origin_u = 90
+origin_v = 630
+ceiling_height = 4.60
+fx = 960.0
+fy = 960.0
+cx = 640.0
+cy = 360.0
+
+
+def on_mouse_click(event, x, y, flags, param):
+    global origin_u, origin_v
+    if event == cv2.EVENT_LBUTTONDOWN:
+        origin_u = x
+        origin_v = y
+        x_m = (origin_u - cx) * (ceiling_height / fx)
+        y_m = (origin_v - cy) * (ceiling_height / fy)
+        print(f"🎯 [수조 원점 갱신] 클릭 픽셀: ({x}, {y}) -> 카메라 기준 3D 오프셋: [X:{x_m:+.2f}m, Y:{y_m:+.2f}m]")
 
 
 def get_detector_params():
@@ -22,21 +38,18 @@ def get_detector_params():
     else:
         params = cv2.aruco.DetectorParameters()
 
-    # ── 원거리/소형 태그 검출 튜닝 ─────────────────────
-    params.minMarkerPerimeterRate = 0.005      # 기본 0.03 -> 0.005로 완화하여 멀리 있는 작은 태그 감지
+    params.minMarkerPerimeterRate = 0.005
     params.maxMarkerPerimeterRate = 4.0
     params.adaptiveThreshWinSizeMin = 3
     params.adaptiveThreshWinSizeMax = 45
     params.adaptiveThreshWinSizeStep = 3
     params.adaptiveThreshConstant = 7.0
 
-    # 서브픽셀 코너 정밀화
     if hasattr(cv2.aruco, 'CORNER_REFINE_SUBPIX'):
         params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX
 
-    # AprilTag 전용 파라미터
     if hasattr(params, 'aprilTagQuadDecimate'):
-        params.aprilTagQuadDecimate = 1.0     # 1.0 = 원본 해상도 유지(축소 안 함)
+        params.aprilTagQuadDecimate = 1.0
     if hasattr(params, 'aprilTagCriticalRad'):
         params.aprilTagCriticalRad = 0.1745
     if hasattr(params, 'aprilTagMinWhiteBlackDiff'):
@@ -46,27 +59,27 @@ def get_detector_params():
 
 
 def main():
+    global origin_u, origin_v, cx, cy
     device_idx = int(sys.argv[1]) if len(sys.argv) > 1 else 2
     print(f"카메라 장치 /dev/video{device_idx} 연결 시도 중...")
 
     cap = cv2.VideoCapture(device_idx)
     if not cap.isOpened():
-        print(f"오류: /dev/video{device_idx} 를 열 수 없습니다. (장치가 사용 중이거나 연결 안 됨)")
+        print(f"오류: /dev/video{device_idx} 를 열 수 없습니다.")
         sys.exit(1)
 
-    # 1280x720 MJPG 고해상도 설정
     cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
     actual_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     actual_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    print(f"카메라 해상도: {actual_w}x{actual_h}")
+    cx = actual_w / 2.0
+    cy = actual_h / 2.0
 
-    # 패밀리별 딕셔너리
     dict_families = {}
     if hasattr(cv2.aruco, 'DICT_APRILTAG_36h11'):
-        dict_families['tag36h11 (표준)'] = cv2.aruco.Dictionary_get(cv2.aruco.DICT_APRILTAG_36h11) if hasattr(cv2.aruco, 'Dictionary_get') else cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
+        dict_families['tag36h11'] = cv2.aruco.Dictionary_get(cv2.aruco.DICT_APRILTAG_36h11) if hasattr(cv2.aruco, 'Dictionary_get') else cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
     if hasattr(cv2.aruco, 'DICT_APRILTAG_25h9'):
         dict_families['tag25h9'] = cv2.aruco.Dictionary_get(cv2.aruco.DICT_APRILTAG_25h9) if hasattr(cv2.aruco, 'Dictionary_get') else cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_25h9)
     if hasattr(cv2.aruco, 'DICT_APRILTAG_16h5'):
@@ -75,71 +88,90 @@ def main():
         dict_families['ArUco_4x4'] = cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_50) if hasattr(cv2.aruco, 'Dictionary_get') else cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
 
     params = get_detector_params()
+    camera_matrix = np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]], dtype=np.float64)
+    dist_coeffs = np.zeros((5, 1), dtype=np.float64)
+
+    window_name = "AprilTag Camera Test (Click to set Pool Origin)"
+    cv2.namedWindow(window_name)
+    cv2.setMouseCallback(window_name, on_mouse_click)
 
     print("\n=======================================================")
-    print(" AprilTag 실시간 테스트 시작 (1280x720 고해상도 모드)")
+    print(" AprilTag 실시간 테스트 시작 (수조 꼭짓점 원점 모드)")
+    print(" [팁] 화면의 파란색 수조 좌하단 꼭짓점을 마우스로 클릭하면 원점이 보정됩니다!")
     print(" 화면 창에서 'q' 키를 누르면 종료됩니다.")
     print("=======================================================\n")
 
     while True:
         ret, frame = cap.read()
         if not ret:
-            print("프레임을 읽을 수 없습니다.")
             break
 
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         detected_info = []
 
-        # 패밀리별 검출 시도 (tag36h11 우선)
+        origin_x_cam = (origin_u - cx) * (ceiling_height / fx)
+        origin_y_cam = (origin_v - cy) * (ceiling_height / fy)
+
         for fam_name, adict in dict_families.items():
             corners, ids, _ = cv2.aruco.detectMarkers(gray, adict, parameters=params)
             if ids is not None and len(ids) > 0:
-                cv2.aruco.drawDetectedMarkers(frame, corners, ids)
-                for tag_id in ids.flatten():
-                    detected_info.append(f"{fam_name} ID:{tag_id}")
+                for i, tid in enumerate(ids.flatten()):
+                    detected_info.append(f"{fam_name} ID:{tid}")
+                    cv2.aruco.drawDetectedMarkers(frame, [corners[i]], np.array([[tid]]))
 
-        cx_int = actual_w // 2
-        cy_int = actual_h // 2
+                    c = corners[i][0]
+                    s = 0.30 / 2.0
+                    obj_pts = np.array([[-s, s, 0], [s, s, 0], [s, -s, 0], [-s, -s, 0]], dtype=np.float64)
+                    _, rvec, tvec = cv2.solvePnP(obj_pts, c.astype(np.float64), camera_matrix, dist_coeffs)
 
-        # ── 1. 수조 중심 원점 (0, 0) 및 격자선 오버레이 ───────────
-        cv2.line(frame, (0, cy_int), (actual_w, cy_int), (80, 80, 80), 1, cv2.LINE_AA)
-        cv2.line(frame, (cx_int, 0), (cx_int, actual_h), (80, 80, 80), 1, cv2.LINE_AA)
+                    tx, ty, tz = float(tvec[0][0]), float(tvec[1][0]), float(tvec[2][0])
+                    x_odom = tx - origin_x_cam
+                    y_odom = -(ty - origin_y_cam)
 
-        cv2.circle(frame, (cx_int, cy_int), 18, (0, 255, 255), 2, cv2.LINE_AA)
-        cv2.circle(frame, (cx_int, cy_int), 4, (0, 255, 255), -1)
-        cv2.drawMarker(frame, (cx_int, cy_int), (0, 255, 255), cv2.MARKER_CROSS, 32, 2)
+                    u_center = int(c[:, 0].mean())
+                    v_center = int(c[:, 1].mean())
 
-        # ── 2. 좌표축 (+X, +Y) 화살표 ──────────────────────────
-        cv2.arrowedLine(frame, (cx_int, cy_int), (cx_int + 120, cy_int), (0, 0, 255), 3, tipLength=0.2)
-        cv2.putText(frame, "+X (Right)", (cx_int + 130, cy_int + 5),
+                    cv2.line(frame, (origin_u, origin_v), (u_center, v_center), (0, 255, 255), 2, cv2.LINE_AA)
+                    info_str = f"Pool [X:{x_odom:+.2f}m, Y:{y_odom:+.2f}m]"
+                    cv2.putText(frame, info_str, (u_center - 70, v_center - 15),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2, cv2.LINE_AA)
+
+        # ── 수조 좌하단 꼭짓점 원점 시각화 ──
+        uo = origin_u
+        vo = origin_v
+
+        cv2.circle(frame, (uo, vo), 20, (0, 215, 255), 2, cv2.LINE_AA)
+        cv2.circle(frame, (uo, vo), 6, (0, 215, 255), -1)
+        cv2.drawMarker(frame, (uo, vo), (0, 215, 255), cv2.MARKER_CROSS, 36, 2)
+
+        cv2.arrowedLine(frame, (uo, vo), (uo + 150, vo), (0, 0, 255), 3, tipLength=0.15)
+        cv2.putText(frame, "+X (Pool Right)", (uo + 160, vo + 5),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 255), 2, cv2.LINE_AA)
 
-        cv2.arrowedLine(frame, (cx_int, cy_int), (cx_int, cy_int - 120), (0, 255, 0), 3, tipLength=0.2)
-        cv2.putText(frame, "+Y (Up)", (cx_int - 25, cy_int - 130),
+        cv2.arrowedLine(frame, (uo, vo), (uo, vo - 150), (0, 255, 0), 3, tipLength=0.15)
+        cv2.putText(frame, "+Y (Pool Forward)", (uo - 20, vo - 160),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 0), 2, cv2.LINE_AA)
 
-        cv2.putText(frame, "Origin (0, 0) [Pool Center]", (cx_int + 10, cy_int + 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2, cv2.LINE_AA)
+        cv2.putText(frame, "Origin (0,0) [Pool Bottom-Left Corner]", (uo + 15, vo + 28),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 215, 255), 2, cv2.LINE_AA)
 
-        # OSD 정보 표시
+        cv2.putText(frame, "[TIP] Click anywhere on the pool corner to adjust Origin (0,0)",
+                    (20, actual_h - 15), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 200, 100), 1, cv2.LINE_AA)
+
         if detected_info:
-            text = f"Detected: {', '.join(detected_info)}"
-            cv2.putText(frame, text, (20, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 0), 2, cv2.LINE_AA)
+            cv2.putText(frame, f"Detected: {', '.join(detected_info)}",
+                        (20, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 0), 2, cv2.LINE_AA)
         else:
             cv2.putText(frame, "Searching for AprilTag / ArUco...",
                         (20, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2, cv2.LINE_AA)
 
-        cv2.putText(frame, f"Res: {actual_w}x{actual_h} | Press 'q' to exit",
-                    (20, actual_h - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1)
-
-        cv2.imshow("AprilTag Camera Test (HD 720p)", frame)
+        cv2.imshow(window_name, frame)
         key = cv2.waitKey(1) & 0xFF
         if key == ord('q') or key == 27:
             break
 
     cap.release()
     cv2.destroyAllWindows()
-    print("테스트 종료.")
 
 
 if __name__ == '__main__':
