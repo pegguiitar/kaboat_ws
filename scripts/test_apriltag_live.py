@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""카메라 연결 및 AprilTag/ArUco 실시간 검출 테스트 (Y축 1m 간격 클릭 캘리브레이션 지원).
+"""카메라 연결 및 AprilTag/ArUco 실시간 검출 테스트 (저장된 캘리브레이션 자동 로드 지원).
 
 특징:
-  1. 'Y' 키를 누르면 수조 좌측 모서리를 따라 1m 간격(0m, 1m, 2m, 3m, 4m, 5m)으로 직접 클릭하여 Y축 완벽 보정
-  2. 화면에 [Y=1.0m], [Y=2.0m] 등 뱃지와 1m 마커 실시간 렌더링
-  3. 곡면 역투영으로 보트의 정확한 X, Y 오도메트리 산출
+  1. config/pool_calibration.yaml 에서 좌측 6점(0~5m) 및 상단 11점(0~10m) 자동 로드
+  2. 1m x 1m 정밀 원근 격자망 렌더링 및 보트 실시간 위치/각도 표시
 """
 
 import math
+import os
 import sys
+import yaml
 import cv2
 import numpy as np
 
@@ -16,34 +17,50 @@ import numpy as np
 pool_size_x = 10.0
 pool_size_y = 5.0
 
-# ── Y축 1m 간격 제어점 목록 (0m ~ 5m) ─────────────────────────
+YAML_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    'src', 'kaboat_hardware', 'config', 'pool_calibration.yaml'
+)
+
+# 기본 제어점 목록
 y_control_pts = [
-    np.array([78.0, 645.0]),   # Y=0m (Origin)
+    np.array([78.0, 645.0]),   # Y=0m
     np.array([92.0, 530.0]),   # Y=1m
     np.array([110.0, 415.0]),  # Y=2m
     np.array([135.0, 300.0]),  # Y=3m
     np.array([162.0, 185.0]),  # Y=4m
-    np.array([195.0, 78.0])    # Y=5m (Top-Left)
+    np.array([195.0, 78.0])    # Y=5m
 ]
+top_x_control_pts = [
+    np.array([195.0 + i * (1175.0 - 195.0) / 10.0, 78.0 + i * (95.0 - 78.0) / 10.0])
+    for i in range(11)
+]
+
+if os.path.exists(YAML_PATH):
+    try:
+        with open(YAML_PATH, 'r') as f:
+            data = yaml.safe_load(f)
+            if 'y_control_pts' in data:
+                y_control_pts = [np.array(p, dtype=np.float64) for p in data['y_control_pts']]
+            if 'top_x_control_pts' in data:
+                top_x_control_pts = [np.array(p, dtype=np.float64) for p in data['top_x_control_pts']]
+        print(f"✅ 캘리브레이션 파일 로드 완료: {YAML_PATH}")
+    except Exception as e:
+        print("캘리브레이션 로드 실패:", e)
 
 P0 = y_control_pts[0].copy()
 P3 = y_control_pts[-1].copy()
-P2 = np.array([1175.0, 95.0], dtype=np.float64)
-P1 = np.array([1310.0, 675.0], dtype=np.float64)
-
+P2 = top_x_control_pts[-1].copy()
+vec_left = P0 - P3
+P1 = np.array([P2[0] - vec_left[0] * 1.08, P0[1] + 30.0], dtype=np.float64)
 M_bot = np.array([640.0, 716.0], dtype=np.float64)
-M_top = np.array([640.0, 68.0], dtype=np.float64)
-
-calib_y_mode = False
-calib_y_step = 0
-calib_y_temp = []
 
 
 def quad_bezier(A, M, B, t):
     return (1.0 - t)**2 * A + 2.0 * (1.0 - t) * t * M + t**2 * B
 
 
-def get_left_curve_pt(v_norm):
+def get_left_pt(v_norm):
     idx_float = v_norm * (len(y_control_pts) - 1)
     i0 = int(math.floor(idx_float))
     i1 = min(i0 + 1, len(y_control_pts) - 1)
@@ -51,10 +68,18 @@ def get_left_curve_pt(v_norm):
     return (1.0 - t) * y_control_pts[i0] + t * y_control_pts[i1]
 
 
+def get_top_pt(u_norm):
+    idx_float = u_norm * (len(top_x_control_pts) - 1)
+    i0 = int(math.floor(idx_float))
+    i1 = min(i0 + 1, len(top_x_control_pts) - 1)
+    t = idx_float - i0
+    return (1.0 - t) * top_x_control_pts[i0] + t * top_x_control_pts[i1]
+
+
 def coons_patch(u, v):
     c_bot = quad_bezier(P0, M_bot, P1, u)
-    c_top = quad_bezier(P3, M_top, P2, u)
-    c_left = get_left_curve_pt(v)
+    c_top = get_top_pt(u)
+    c_left = get_left_pt(v)
     c_right = (1.0 - v) * P1 + v * P2
     corner_blend = (1.0 - u) * (1.0 - v) * P0 + u * (1.0 - v) * P1 + (1.0 - u) * v * P3 + u * v * P2
     return (1.0 - v) * c_bot + v * c_top + (1.0 - u) * c_left + u * c_right - corner_blend
@@ -78,24 +103,6 @@ def pixel_to_pool_metric(target_px):
         u = np.clip(u, -0.3, 1.3)
         v = np.clip(v, -0.3, 1.3)
     return float(u * pool_size_x), float(v * pool_size_y)
-
-
-def on_mouse_click(event, x, y, flags, param):
-    global calib_y_mode, calib_y_step, calib_y_temp, y_control_pts, P0, P3
-    if event == cv2.EVENT_LBUTTONDOWN and calib_y_mode:
-        pt = np.array([float(x), float(y)], dtype=np.float64)
-        calib_y_temp.append(pt)
-        print(f"📍 Y={calib_y_step}m Point set: ({x}, {y})")
-        calib_y_step += 1
-
-        if calib_y_step >= 6:
-            y_control_pts = [p.copy() for p in calib_y_temp]
-            P0 = y_control_pts[0].copy()
-            P3 = y_control_pts[-1].copy()
-            calib_y_mode = False
-            calib_y_step = 0
-            calib_y_temp = []
-            print("🎉 [Y-Axis 1m Calibration Completed!]")
 
 
 def get_detector_params():
@@ -125,7 +132,6 @@ def get_detector_params():
 
 
 def main():
-    global calib_y_mode, calib_y_step, calib_y_temp
     device_idx = int(sys.argv[1]) if len(sys.argv) > 1 else 2
     print(f"Opening camera /dev/video{device_idx}...")
 
@@ -137,9 +143,6 @@ def main():
     cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-
-    actual_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    actual_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
     dict_families = {}
     if hasattr(cv2.aruco, 'DICT_APRILTAG_36h11'):
@@ -153,13 +156,12 @@ def main():
 
     params = get_detector_params()
 
-    window_name = "AprilTag Camera Test (Press 'Y' for 1m Calibration)"
+    window_name = "AprilTag Camera Test (Calibrated Grid)"
     cv2.namedWindow(window_name)
-    cv2.setMouseCallback(window_name, on_mouse_click)
 
     print("\n=======================================================")
-    print(" AprilTag Live Test (Interactive 1m Step Calibration)")
-    print(" Press 'Y' on window to click: 0m -> 1m -> 2m -> 3m -> 4m -> 5m")
+    print(" AprilTag Live Test (Calibrated Grid Auto-Loaded)")
+    print(" Run 'python3 scripts/calibrate_pool_grid.py' to recalibrate.")
     print(" Press 'Q' on window to exit.")
     print("=======================================================\n")
 
@@ -217,13 +219,18 @@ def main():
             line_pts = np.array([coons_patch(t, v_norm) for t in t_samples], dtype=np.int32)
             cv2.polylines(frame, [line_pts], isClosed=False, color=(80, 150, 80), thickness=1, lineType=cv2.LINE_AA)
 
-        # ── Y축 1m 간격 제어점 마커 표시 ──
+        # ── 제어점 마커 표시 ──
         for m_idx, pt in enumerate(y_control_pts):
             p_int = pt.astype(int)
-            cv2.circle(frame, tuple(p_int), 6, (0, 255, 255), -1, cv2.LINE_AA)
-            cv2.circle(frame, tuple(p_int), 10, (0, 200, 255), 2, cv2.LINE_AA)
-            cv2.putText(frame, f"Y={m_idx}m", (p_int[0] + 12, p_int[1] + 5),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2, cv2.LINE_AA)
+            cv2.circle(frame, tuple(p_int), 5, (0, 255, 255), -1, cv2.LINE_AA)
+            cv2.putText(frame, f"Y={m_idx}m", (p_int[0] + 10, p_int[1] + 5),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 255), 1, cv2.LINE_AA)
+
+        for m_idx, pt in enumerate(top_x_control_pts):
+            p_int = pt.astype(int)
+            cv2.circle(frame, tuple(p_int), 5, (0, 255, 100), -1, cv2.LINE_AA)
+            cv2.putText(frame, f"X={m_idx}m", (p_int[0] - 12, p_int[1] - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 100), 1, cv2.LINE_AA)
 
         p0 = P0.astype(int)
         pt_x_arrow = coons_patch(0.20, 0.0).astype(int)
@@ -236,13 +243,8 @@ def main():
         cv2.putText(frame, "+Y Axis (0->5m)", (pt_y_arrow[0] - 25, pt_y_arrow[1] - 15),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2, cv2.LINE_AA)
 
-        if calib_y_mode:
-            calib_str = f"[Y-Axis Calib] Click on left wall: Y = {calib_y_step}.0m point"
-            cv2.putText(frame, calib_str, (20, actual_h - 20),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2, cv2.LINE_AA)
-        else:
-            cv2.putText(frame, "[Y] Key: 1m Step Calib (0m->5m) | [Q] Key: Quit",
-                        (20, actual_h - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 200, 100), 1, cv2.LINE_AA)
+        cv2.putText(frame, "Loaded from pool_calibration.yaml | Run scripts/calibrate_pool_grid.py to recalibrate",
+                    (20, 700), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 200, 100), 1, cv2.LINE_AA)
 
         if detected_info:
             cv2.putText(frame, f"Detected: {', '.join(detected_info)}",
@@ -253,11 +255,6 @@ def main():
 
         cv2.imshow(window_name, frame)
         key = cv2.waitKey(1) & 0xFF
-        if key == ord('y') or key == ord('Y'):
-            calib_y_mode = True
-            calib_y_step = 0
-            calib_y_temp = []
-            print("📐 [Y-Axis 1m Calibration] Click 'Y=0m -> 1m -> 2m -> 3m -> 4m -> 5m' along the left wall.")
         if key == ord('q') or key == 27:
             break
 

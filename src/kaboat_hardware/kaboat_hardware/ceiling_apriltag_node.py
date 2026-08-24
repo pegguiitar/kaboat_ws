@@ -1,14 +1,15 @@
-"""ceiling_apriltag_node — Y축 1m 간격 인터랙티브 클릭 캘리브레이션 지원 AprilTag 추적기.
+"""ceiling_apriltag_node — 실내 수조 정밀 캘리브레이션(좌측 6점 + 상단 11점) 기반 AprilTag 추적기.
 
 특징:
-  1. 'Y' 키를 누르면 수조 좌측 모서리를 따라 1m 간격(0m, 1m, 2m, 3m, 4m, 5m)으로 직접 클릭하여 Y축 완벽 보정
-  2. 클릭한 각 1m 지점에 선명한 마커와 [Y=1.0m], [Y=2.0m] 등 뱃지 표시
-  3. 클릭된 1m 지점들을 잇는 스플라인 곡면 격자망 생성
-  4. 2D Newton-Raphson 역투영으로 보트의 정확한 X, Y 오도메트리 산출
+  1. config/pool_calibration.yaml 에서 좌측 6점(0~5m) 및 상단 11점(0~10m)을 자동 로드
+  2. 수조 좌측 및 상단 벽면의 1m 실측 간격을 완벽하게 반영한 Coons Patch 곡면 서피스 모델
+  3. 화면 밖으로 잘린 우하단 꼭짓점(P1: 10m, 0m) 자동 외삽/보간
+  4. 2D Newton-Raphson 역투영으로 보트의 정확한 X(0~10m), Y(0~5m), Yaw 오도메트리 산출
 """
 
 import math
 import os
+import yaml
 import cv2
 import numpy as np
 import rclpy
@@ -16,6 +17,7 @@ from rclpy.node import Node
 from geometry_msgs.msg import TransformStamped, PoseStamped
 from sensor_msgs.msg import Image, CameraInfo
 from tf2_ros import TransformBroadcaster
+from ament_index_python.packages import get_package_share_directory
 
 
 def quad_bezier(A, M, B, t):
@@ -112,33 +114,22 @@ class CeilingAprilTagNode(Node):
         self.pool_size_x = float(self.get_parameter('pool_size_x').value)
         self.pool_size_y = float(self.get_parameter('pool_size_y').value)
 
-        # ── Y축 1m 간격 제어점 목록 (0m ~ 5m) ─────────────────────────
-        # 사용자가 'Y' 키를 누르면 0m부터 5m까지 6개 점을 순서대로 클릭하여 갱신 가능
+        # 기본 제어점 초기화
         self.y_control_pts = [
-            np.array([78.0, 645.0]),   # Y=0m (Origin)
+            np.array([78.0, 645.0]),   # Y=0m
             np.array([92.0, 530.0]),   # Y=1m
             np.array([110.0, 415.0]),  # Y=2m
             np.array([135.0, 300.0]),  # Y=3m
             np.array([162.0, 185.0]),  # Y=4m
-            np.array([195.0, 78.0])    # Y=5m (Top-Left)
+            np.array([195.0, 78.0])    # Y=5m
+        ]
+        self.top_x_control_pts = [
+            np.array([195.0 + i * (1175.0 - 195.0) / 10.0, 78.0 + i * (95.0 - 78.0) / 10.0])
+            for i in range(11)
         ]
 
-        # 4 꼭짓점 및 곡면 제어점
-        self.P0 = self.y_control_pts[0].copy()
-        self.P3 = self.y_control_pts[-1].copy()
-        self.P2 = np.array([1175.0, 95.0], dtype=np.float64)      # 우상단
-        self.P1 = np.array([1310.0, 675.0], dtype=np.float64)     # 우하단 [외삽]
-
-        self.M_bot = np.array([640.0, 716.0], dtype=np.float64)
-        self.M_top = np.array([640.0, 68.0], dtype=np.float64)
-
-        # 캘리브레이션 상태
-        self.calib_y_mode = False
-        self.calib_y_step = 0
-        self.calib_y_temp = []
-
-        self.calib_4pt_mode = False
-        self.calib_4pt_step = 0
+        self.calib_file = self._find_calibration_file()
+        self._load_calibration()
 
         # 카메라 매트릭스
         self.fx = float(self.get_parameter('fx').value)
@@ -183,33 +174,72 @@ class CeilingAprilTagNode(Node):
         self.img_pub = self.create_publisher(Image, '/ceiling_cam/image_raw', 10)
         self.info_pub = self.create_publisher(CameraInfo, '/ceiling_cam/camera_info', 10)
 
-        self.window_name = "Ceiling AprilTag Tracker (Press 'Y' for 1m Calibration)"
+        self.window_name = "Ceiling AprilTag Tracker"
         self.window_initialized = False
 
         self.create_timer(1.0 / 30.0, self._process_frame)
         self.get_logger().info(
-            f"ceiling_apriltag_node 시작 — Y축 1m 스텝 보정 지원 ({self.pool_size_x}x{self.pool_size_y}m)")
+            f"ceiling_apriltag_node 시작 — 수조 캘리브레이션 적용됨 ({self.pool_size_x}x{self.pool_size_y}m)")
 
-    def _get_left_curve_pt(self, v_norm):
-        """Y축 정규화 비율 v_norm (0.0=0m, 1.0=5m)에 해당하는 좌측 벽면 픽셀 보간."""
+    def _find_calibration_file(self):
+        # 1) 소스 디렉토리
+        ws_path = os.path.join(os.path.expanduser('~'), 'Desktop', '2026KABOAT_REAL',
+                               'src', 'kaboat_hardware', 'config', 'pool_calibration.yaml')
+        if os.path.exists(ws_path):
+            return ws_path
+        # 2) share 디렉토리
+        try:
+            share_dir = get_package_share_directory('kaboat_hardware')
+            share_path = os.path.join(share_dir, 'config', 'pool_calibration.yaml')
+            if os.path.exists(share_path):
+                return share_path
+        except Exception:
+            pass
+        return ws_path
+
+    def _load_calibration(self):
+        if os.path.exists(self.calib_file):
+            try:
+                with open(self.calib_file, 'r') as f:
+                    data = yaml.safe_load(f)
+                    if 'y_control_pts' in data:
+                        self.y_control_pts = [np.array(p, dtype=np.float64) for p in data['y_control_pts']]
+                    if 'top_x_control_pts' in data:
+                        self.top_x_control_pts = [np.array(p, dtype=np.float64) for p in data['top_x_control_pts']]
+                self.get_logger().info(f"✅ 수조 캘리브레이션 로드 성공: {self.calib_file}")
+            except Exception as e:
+                self.get_logger().warn(f"캘리브레이션 파일 로드 오류: {e}")
+
+        self.P0 = self.y_control_pts[0].copy()
+        self.P3 = self.y_control_pts[-1].copy()
+        self.P2 = self.top_x_control_pts[-1].copy()
+        vec_left = self.P0 - self.P3
+        self.P1 = np.array([self.P2[0] - vec_left[0] * 1.08, self.P0[1] + 30.0], dtype=np.float64)
+        self.M_bot = np.array([640.0, 716.0], dtype=np.float64)
+
+    def _get_left_pt(self, v_norm):
         idx_float = v_norm * (len(self.y_control_pts) - 1)
         i0 = int(math.floor(idx_float))
         i1 = min(i0 + 1, len(self.y_control_pts) - 1)
         t = idx_float - i0
         return (1.0 - t) * self.y_control_pts[i0] + t * self.y_control_pts[i1]
 
-    def _coons_patch(self, u, v):
-        """수조 2D 곡면 매핑: (u in [0,1], v in [0,1]) -> 화면 픽셀 (px, py)."""
-        c_bot = quad_bezier(self.P0, self.M_bot, self.P1, u)
-        c_top = quad_bezier(self.P3, self.M_top, self.P2, u)
-        c_left = self._get_left_curve_pt(v)
-        c_right = (1.0 - v) * self.P1 + v * self.P2
+    def _get_top_pt(self, u_norm):
+        idx_float = u_norm * (len(self.top_x_control_pts) - 1)
+        i0 = int(math.floor(idx_float))
+        i1 = min(i0 + 1, len(self.top_x_control_pts) - 1)
+        t = idx_float - i0
+        return (1.0 - t) * self.top_x_control_pts[i0] + t * self.top_x_control_pts[i1]
 
+    def _coons_patch(self, u, v):
+        c_bot = quad_bezier(self.P0, self.M_bot, self.P1, u)
+        c_top = self._get_top_pt(u)
+        c_left = self._get_left_pt(v)
+        c_right = (1.0 - v) * self.P1 + v * self.P2
         corner_blend = (1.0 - u) * (1.0 - v) * self.P0 + u * (1.0 - v) * self.P1 + (1.0 - u) * v * self.P3 + u * v * self.P2
         return (1.0 - v) * c_bot + v * c_top + (1.0 - u) * c_left + u * c_right - corner_blend
 
     def _pixel_to_pool_metric(self, target_px):
-        """2D Newton-Raphson 역투영: 픽셀 -> 수조 실제 X(0~10m), Y(0~5m) [m]."""
         u = 0.5
         v = 0.5
         eps = 1e-4
@@ -228,42 +258,6 @@ class CeilingAprilTagNode(Node):
             v = np.clip(v, -0.3, 1.3)
 
         return float(u * self.pool_size_x), float(v * self.pool_size_y)
-
-    def _on_mouse_click(self, event, x, y, flags, param):
-        if event == cv2.EVENT_LBUTTONDOWN:
-            pt = np.array([float(x), float(y)], dtype=np.float64)
-
-            # ── 1. Y축 1m 간격 클릭 캘리브레이션 ──
-            if self.calib_y_mode:
-                self.calib_y_temp.append(pt)
-                curr_m = self.calib_y_step
-                self.get_logger().info(f"📍 Y={curr_m}m 지점 등록: ({x}, {y})")
-                self.calib_y_step += 1
-
-                if self.calib_y_step >= 6:  # 0m, 1m, 2m, 3m, 4m, 5m (총 6점)
-                    self.y_control_pts = [p.copy() for p in self.calib_y_temp]
-                    self.P0 = self.y_control_pts[0].copy()
-                    self.P3 = self.y_control_pts[-1].copy()
-                    self.calib_y_mode = False
-                    self.calib_y_step = 0
-                    self.calib_y_temp = []
-                    self.get_logger().info("🎉 [Y축 1m 캘리브레이션 완료!] 좌측 모서리 1m 간격이 정확히 갱신되었습니다.")
-
-            # ── 2. 4점 캘리브레이션 ──
-            elif self.calib_4pt_mode:
-                if self.calib_4pt_step == 0:
-                    self.P0 = pt
-                    self.calib_4pt_step += 1
-                elif self.calib_4pt_step == 1:
-                    self.M_bot = pt
-                    self.calib_4pt_step += 1
-                elif self.calib_4pt_step == 2:
-                    self.P2 = pt
-                    self.calib_4pt_step += 1
-                elif self.calib_4pt_step == 3:
-                    self.P3 = pt
-                    self.calib_4pt_mode = False
-                    self.calib_4pt_step = 0
 
     def _process_frame(self):
         if not self.cap.isOpened():
@@ -357,7 +351,6 @@ class CeilingAprilTagNode(Node):
         if self.show_gui:
             if not self.window_initialized:
                 cv2.namedWindow(self.window_name)
-                cv2.setMouseCallback(self.window_name, self._on_mouse_click)
                 self.window_initialized = True
 
             # ── 1. 수조 4변 곡면 테두리 렌더링 ─────────────────────
@@ -386,12 +379,18 @@ class CeilingAprilTagNode(Node):
             # ── 3. Y축 1m 간격 제어점 마커 표시 ────────────────────
             for m_idx, pt in enumerate(self.y_control_pts):
                 p_int = pt.astype(int)
-                cv2.circle(frame, tuple(p_int), 6, (0, 255, 255), -1, cv2.LINE_AA)
-                cv2.circle(frame, tuple(p_int), 10, (0, 200, 255), 2, cv2.LINE_AA)
-                cv2.putText(frame, f"Y={m_idx}m", (p_int[0] + 12, p_int[1] + 5),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2, cv2.LINE_AA)
+                cv2.circle(frame, tuple(p_int), 5, (0, 255, 255), -1, cv2.LINE_AA)
+                cv2.putText(frame, f"Y={m_idx}m", (p_int[0] + 10, p_int[1] + 5),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 255), 1, cv2.LINE_AA)
 
-            # ── 4. 좌표축 화살표 ─────────────────────────────────
+            # ── 4. 상단 X축 1m 간격 제어점 마커 표시 ───────────────
+            for m_idx, pt in enumerate(self.top_x_control_pts):
+                p_int = pt.astype(int)
+                cv2.circle(frame, tuple(p_int), 5, (0, 255, 100), -1, cv2.LINE_AA)
+                cv2.putText(frame, f"X={m_idx}m", (p_int[0] - 12, p_int[1] - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 100), 1, cv2.LINE_AA)
+
+            # ── 5. 좌표축 화살표 ─────────────────────────────────
             p0 = self.P0.astype(int)
             pt_x_arrow = self._coons_patch(0.20, 0.0).astype(int)
             cv2.arrowedLine(frame, tuple(p0), tuple(pt_x_arrow), (0, 0, 255), 3, tipLength=0.2)
@@ -403,17 +402,9 @@ class CeilingAprilTagNode(Node):
             cv2.putText(frame, "+Y Axis (0->5m)", (pt_y_arrow[0] - 25, pt_y_arrow[1] - 15),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2, cv2.LINE_AA)
 
-            # ── 5. OSD 안내 및 캘리브레이션 가이드 ────────────────
-            if self.calib_y_mode:
-                calib_str = f"[Y-Axis Calib] Click on left wall: Y = {self.calib_y_step}.0m point"
-                cv2.putText(frame, calib_str, (20, self.height - 20),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2, cv2.LINE_AA)
-            elif self.calib_4pt_mode:
-                cv2.putText(frame, f"[4-Point Calib] Click: Step {self.calib_4pt_step+1}/4",
-                            (20, self.height - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2, cv2.LINE_AA)
-            else:
-                cv2.putText(frame, "[Y] Key: 1m Step Calib (0m->5m) | [C] Key: 4-Corner | [Q] Key: Quit",
-                            (20, self.height - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 200, 100), 1, cv2.LINE_AA)
+            # ── 6. OSD 안내 ─────────────────────────────────────
+            cv2.putText(frame, "Loaded from pool_calibration.yaml | Run scripts/calibrate_pool_grid.py to calibrate",
+                        (20, self.height - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 200, 100), 1, cv2.LINE_AA)
 
             if detected_info:
                 cv2.putText(frame, f"Detected: {', '.join(detected_info)}",
@@ -423,15 +414,7 @@ class CeilingAprilTagNode(Node):
                             (20, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2, cv2.LINE_AA)
 
             cv2.imshow(self.window_name, frame)
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord('y') or key == ord('Y'):
-                self.calib_y_mode = True
-                self.calib_y_step = 0
-                self.calib_y_temp = []
-                self.get_logger().info("📐 [Y축 1m 캘리브레이션 시작] 좌측 벽면을 따라 'Y=0m -> 1m -> 2m -> 3m -> 4m -> 5m' 순서로 클릭해 주세요.")
-            elif key == ord('c') or key == ord('C'):
-                self.calib_4pt_mode = True
-                self.calib_4pt_step = 0
+            cv2.waitKey(1)
 
     def destroy_node(self):
         if self.cap and self.cap.isOpened():
