@@ -1,10 +1,10 @@
-"""ceiling_apriltag_node — 실내 수조 정밀 캘리브레이션(좌측 6점 + 상단 11점) 기반 AprilTag 추적기.
+"""ceiling_apriltag_node — 수조 4면 전체 1m 실측 캘리브레이션 기반 AprilTag 추적기.
 
 특징:
-  1. config/pool_calibration.yaml 에서 좌측 6점(0~5m) 및 상단 11점(0~10m)을 자동 로드
-  2. 수조 좌측 및 상단 벽면의 1m 실측 간격을 완벽하게 반영한 Coons Patch 곡면 서피스 모델
-  3. 화면 밖으로 잘린 우하단 꼭짓점(P1: 10m, 0m) 자동 외삽/보간
-  4. 2D Newton-Raphson 역투영으로 보트의 정확한 X(0~10m), Y(0~5m), Yaw 오도메트리 산출
+  1. config/pool_calibration.yaml 에서 4개 변(하단 11점, 우측 6점, 상단 11점, 좌측 6점) 자동 로드
+  2. 4면 전체 1m 실측 간격을 완벽히 반영한 Coons Patch 곡면 서피스 좌표계 생성
+  3. 2D Newton-Raphson 역투영으로 보트의 정확한 X(0~10m), Y(0~5m), Yaw 오도메트리 산출
+  4. TF(ceiling_camera -> tag36h11:1) 및 PoseStamped(/detections) 실시간 발행
 """
 
 import math
@@ -18,11 +18,6 @@ from geometry_msgs.msg import TransformStamped, PoseStamped
 from sensor_msgs.msg import Image, CameraInfo
 from tf2_ros import TransformBroadcaster
 from ament_index_python.packages import get_package_share_directory
-
-
-def quad_bezier(A, M, B, t):
-    """2차 베지어 곡선 보간."""
-    return (1.0 - t)**2 * A + 2.0 * (1.0 - t) * t * M + t**2 * B
 
 
 def rot_matrix_to_quaternion(R):
@@ -114,19 +109,11 @@ class CeilingAprilTagNode(Node):
         self.pool_size_x = float(self.get_parameter('pool_size_x').value)
         self.pool_size_y = float(self.get_parameter('pool_size_y').value)
 
-        # 기본 제어점 초기화
-        self.y_control_pts = [
-            np.array([78.0, 645.0]),   # Y=0m
-            np.array([92.0, 530.0]),   # Y=1m
-            np.array([110.0, 415.0]),  # Y=2m
-            np.array([135.0, 300.0]),  # Y=3m
-            np.array([162.0, 185.0]),  # Y=4m
-            np.array([195.0, 78.0])    # Y=5m
-        ]
-        self.top_x_control_pts = [
-            np.array([195.0 + i * (1175.0 - 195.0) / 10.0, 78.0 + i * (95.0 - 78.0) / 10.0])
-            for i in range(11)
-        ]
+        # 4개 변 기본 제어점 초기화
+        self.bottom_x_pts = [[56.0 + i * (1246.0 - 56.0) / 10.0, 624.0] for i in range(11)]
+        self.right_y_pts = [[1246.0, 624.0 - i * (624.0 - 121.0) / 5.0] for i in range(6)]
+        self.top_x_pts = [[255.0 + i * (1246.0 - 255.0) / 10.0, 96.0 + i * (121.0 - 96.0) / 10.0] for i in range(11)]
+        self.left_y_pts = [[56.0 + i * (255.0 - 56.0) / 5.0, 624.0 - i * (624.0 - 96.0) / 5.0] for i in range(6)]
 
         self.calib_file = self._find_calibration_file()
         self._load_calibration()
@@ -174,20 +161,18 @@ class CeilingAprilTagNode(Node):
         self.img_pub = self.create_publisher(Image, '/ceiling_cam/image_raw', 10)
         self.info_pub = self.create_publisher(CameraInfo, '/ceiling_cam/camera_info', 10)
 
-        self.window_name = "Ceiling AprilTag Tracker"
+        self.window_name = "Ceiling AprilTag Tracker (4-Edge Calibrated)"
         self.window_initialized = False
 
         self.create_timer(1.0 / 30.0, self._process_frame)
         self.get_logger().info(
-            f"ceiling_apriltag_node 시작 — 수조 캘리브레이션 적용됨 ({self.pool_size_x}x{self.pool_size_y}m)")
+            f"ceiling_apriltag_node 시작 — 수조 4면 전체 1m 실측 좌표계 적용됨 ({self.pool_size_x}x{self.pool_size_y}m)")
 
     def _find_calibration_file(self):
-        # 1) 소스 디렉토리
         ws_path = os.path.join(os.path.expanduser('~'), 'Desktop', '2026KABOAT_REAL',
                                'src', 'kaboat_hardware', 'config', 'pool_calibration.yaml')
         if os.path.exists(ws_path):
             return ws_path
-        # 2) share 디렉토리
         try:
             share_dir = get_package_share_directory('kaboat_hardware')
             share_path = os.path.join(share_dir, 'config', 'pool_calibration.yaml')
@@ -201,42 +186,38 @@ class CeilingAprilTagNode(Node):
         if os.path.exists(self.calib_file):
             try:
                 with open(self.calib_file, 'r') as f:
-                    data = yaml.safe_load(f)
-                    if 'y_control_pts' in data:
-                        self.y_control_pts = [np.array(p, dtype=np.float64) for p in data['y_control_pts']]
-                    if 'top_x_control_pts' in data:
-                        self.top_x_control_pts = [np.array(p, dtype=np.float64) for p in data['top_x_control_pts']]
-                self.get_logger().info(f"✅ 수조 캘리브레이션 로드 성공: {self.calib_file}")
+                    d = yaml.safe_load(f)
+                    if 'bottom_x_pts' in d:
+                        self.bottom_x_pts = d['bottom_x_pts']
+                    if 'right_y_pts' in d:
+                        self.right_y_pts = d['right_y_pts']
+                    if 'top_x_pts' in d:
+                        self.top_x_pts = d['top_x_pts']
+                    if 'left_y_pts' in d:
+                        self.left_y_pts = d['left_y_pts']
+                self.get_logger().info(f"✅ 수조 4면 캘리브레이션 로드 완료: {self.calib_file}")
             except Exception as e:
                 self.get_logger().warn(f"캘리브레이션 파일 로드 오류: {e}")
 
-        self.P0 = self.y_control_pts[0].copy()
-        self.P3 = self.y_control_pts[-1].copy()
-        self.P2 = self.top_x_control_pts[-1].copy()
-        vec_left = self.P0 - self.P3
-        self.P1 = np.array([self.P2[0] - vec_left[0] * 1.08, self.P0[1] + 30.0], dtype=np.float64)
-        self.M_bot = np.array([640.0, 716.0], dtype=np.float64)
-
-    def _get_left_pt(self, v_norm):
-        idx_float = v_norm * (len(self.y_control_pts) - 1)
+    def _get_curve_pt(self, norm_val, pts_list):
+        idx_float = norm_val * (len(pts_list) - 1)
         i0 = int(math.floor(idx_float))
-        i1 = min(i0 + 1, len(self.y_control_pts) - 1)
+        i1 = min(i0 + 1, len(pts_list) - 1)
         t = idx_float - i0
-        return (1.0 - t) * self.y_control_pts[i0] + t * self.y_control_pts[i1]
-
-    def _get_top_pt(self, u_norm):
-        idx_float = u_norm * (len(self.top_x_control_pts) - 1)
-        i0 = int(math.floor(idx_float))
-        i1 = min(i0 + 1, len(self.top_x_control_pts) - 1)
-        t = idx_float - i0
-        return (1.0 - t) * self.top_x_control_pts[i0] + t * self.top_x_control_pts[i1]
+        return (1.0 - t) * np.array(pts_list[i0], dtype=np.float64) + t * np.array(pts_list[i1], dtype=np.float64)
 
     def _coons_patch(self, u, v):
-        c_bot = quad_bezier(self.P0, self.M_bot, self.P1, u)
-        c_top = self._get_top_pt(u)
-        c_left = self._get_left_pt(v)
-        c_right = (1.0 - v) * self.P1 + v * self.P2
-        corner_blend = (1.0 - u) * (1.0 - v) * self.P0 + u * (1.0 - v) * self.P1 + (1.0 - u) * v * self.P3 + u * v * self.P2
+        c_bot = self._get_curve_pt(u, self.bottom_x_pts)
+        c_top = self._get_curve_pt(u, self.top_x_pts)
+        c_left = self._get_curve_pt(v, self.left_y_pts)
+        c_right = self._get_curve_pt(v, self.right_y_pts)
+
+        P0 = np.array(self.bottom_x_pts[0], dtype=np.float64)
+        P1 = np.array(self.bottom_x_pts[-1], dtype=np.float64)
+        P3 = np.array(self.top_x_pts[0], dtype=np.float64)
+        P2 = np.array(self.top_x_pts[-1], dtype=np.float64)
+
+        corner_blend = (1.0 - u) * (1.0 - v) * P0 + u * (1.0 - v) * P1 + (1.0 - u) * v * P3 + u * v * P2
         return (1.0 - v) * c_bot + v * c_top + (1.0 - u) * c_left + u * c_right - corner_blend
 
     def _pixel_to_pool_metric(self, target_px):
@@ -340,8 +321,8 @@ class CeilingAprilTagNode(Node):
                             throttle_duration_sec=1.0)
 
                         # 원점 -> 보트 연결선
-                        p0_int = self.P0.astype(int)
-                        cv2.line(frame, (p0_int[0], p0_int[1]), (int(u_center), int(v_center)), (0, 255, 255), 2, cv2.LINE_AA)
+                        p0_int = tuple(np.array(self.bottom_x_pts[0], dtype=int))
+                        cv2.line(frame, p0_int, (int(u_center), int(v_center)), (0, 255, 255), 2, cv2.LINE_AA)
 
                         # 보트 위 수조 좌표 표시
                         info_str = f"Pool [X:{x_pool:.2f}m, Y:{y_pool:.2f}m] Yaw:{yaw_deg:+.1f}deg"
@@ -376,34 +357,25 @@ class CeilingAprilTagNode(Node):
                 line_pts = np.array([self._coons_patch(t, v_norm) for t in t_samples], dtype=np.int32)
                 cv2.polylines(frame, [line_pts], isClosed=False, color=(80, 150, 80), thickness=1, lineType=cv2.LINE_AA)
 
-            # ── 3. Y축 1m 간격 제어점 마커 표시 ────────────────────
-            for m_idx, pt in enumerate(self.y_control_pts):
-                p_int = pt.astype(int)
-                cv2.circle(frame, tuple(p_int), 5, (0, 255, 255), -1, cv2.LINE_AA)
-                cv2.putText(frame, f"Y={m_idx}m", (p_int[0] + 10, p_int[1] + 5),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 255), 1, cv2.LINE_AA)
+            # ── 3. 원점 및 축 화살표 ──────────────────────────────
+            p0 = tuple(np.array(self.bottom_x_pts[0], dtype=int))
+            cv2.circle(frame, p0, 16, (0, 215, 255), 2, cv2.LINE_AA)
+            cv2.circle(frame, p0, 5, (0, 215, 255), -1)
+            cv2.putText(frame, "Origin (0,0)", (p0[0] - 20, p0[1] + 30),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 215, 255), 2, cv2.LINE_AA)
 
-            # ── 4. 상단 X축 1m 간격 제어점 마커 표시 ───────────────
-            for m_idx, pt in enumerate(self.top_x_control_pts):
-                p_int = pt.astype(int)
-                cv2.circle(frame, tuple(p_int), 5, (0, 255, 100), -1, cv2.LINE_AA)
-                cv2.putText(frame, f"X={m_idx}m", (p_int[0] - 12, p_int[1] - 10),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 100), 1, cv2.LINE_AA)
+            pt_x_arrow = tuple(self._coons_patch(0.20, 0.0).astype(int))
+            cv2.arrowedLine(frame, p0, pt_x_arrow, (0, 0, 255), 3, tipLength=0.2)
+            cv2.putText(frame, "+X (0->10m)", (pt_x_arrow[0] + 10, pt_x_arrow[1] + 5),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 255), 2, cv2.LINE_AA)
 
-            # ── 5. 좌표축 화살표 ─────────────────────────────────
-            p0 = self.P0.astype(int)
-            pt_x_arrow = self._coons_patch(0.20, 0.0).astype(int)
-            cv2.arrowedLine(frame, tuple(p0), tuple(pt_x_arrow), (0, 0, 255), 3, tipLength=0.2)
-            cv2.putText(frame, "+X Axis (0->10m)", (pt_x_arrow[0] + 10, pt_x_arrow[1] + 5),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2, cv2.LINE_AA)
+            pt_y_arrow = tuple(self._coons_patch(0.0, 0.25).astype(int))
+            cv2.arrowedLine(frame, p0, pt_y_arrow, (0, 255, 0), 3, tipLength=0.2)
+            cv2.putText(frame, "+Y (0->5m)", (pt_y_arrow[0] - 30, pt_y_arrow[1] - 15),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 0), 2, cv2.LINE_AA)
 
-            pt_y_arrow = self.y_control_pts[1].astype(int)
-            cv2.arrowedLine(frame, tuple(p0), tuple(pt_y_arrow), (0, 255, 0), 3, tipLength=0.2)
-            cv2.putText(frame, "+Y Axis (0->5m)", (pt_y_arrow[0] - 25, pt_y_arrow[1] - 15),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2, cv2.LINE_AA)
-
-            # ── 6. OSD 안내 ─────────────────────────────────────
-            cv2.putText(frame, "Loaded from pool_calibration.yaml | Run scripts/calibrate_pool_grid.py to calibrate",
+            # ── 4. OSD 안내 ─────────────────────────────────────
+            cv2.putText(frame, "4-Edge 1m Grid Applied | Run 'python3 scripts/calibrate_pool_grid.py' to recalibrate",
                         (20, self.height - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 200, 100), 1, cv2.LINE_AA)
 
             if detected_info:

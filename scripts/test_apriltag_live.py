@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""카메라 연결 및 AprilTag/ArUco 실시간 검출 테스트 (저장된 캘리브레이션 자동 로드 지원).
+"""카메라 연결 및 AprilTag/ArUco 실시간 검출 테스트 (수조 4면 전체 1m 실측 격자 로드).
 
 특징:
-  1. config/pool_calibration.yaml 에서 좌측 6점(0~5m) 및 상단 11점(0~10m) 자동 로드
+  1. config/pool_calibration.yaml 에서 4개 변 1m 실측 점 자동 로드
   2. 1m x 1m 정밀 원근 격자망 렌더링 및 보트 실시간 위치/각도 표시
 """
 
@@ -13,7 +13,6 @@ import yaml
 import cv2
 import numpy as np
 
-# 수조 크기 [m]
 pool_size_x = 10.0
 pool_size_y = 5.0
 
@@ -22,65 +21,48 @@ YAML_PATH = os.path.join(
     'src', 'kaboat_hardware', 'config', 'pool_calibration.yaml'
 )
 
-# 기본 제어점 목록
-y_control_pts = [
-    np.array([78.0, 645.0]),   # Y=0m
-    np.array([92.0, 530.0]),   # Y=1m
-    np.array([110.0, 415.0]),  # Y=2m
-    np.array([135.0, 300.0]),  # Y=3m
-    np.array([162.0, 185.0]),  # Y=4m
-    np.array([195.0, 78.0])    # Y=5m
-]
-top_x_control_pts = [
-    np.array([195.0 + i * (1175.0 - 195.0) / 10.0, 78.0 + i * (95.0 - 78.0) / 10.0])
-    for i in range(11)
-]
+# 4개 변 기본값
+bottom_x_pts = [[56.0 + i * (1246.0 - 56.0) / 10.0, 624.0] for i in range(11)]
+right_y_pts = [[1246.0, 624.0 - i * (624.0 - 121.0) / 5.0] for i in range(6)]
+top_x_pts = [[255.0 + i * (1246.0 - 255.0) / 10.0, 96.0 + i * (121.0 - 96.0) / 10.0] for i in range(11)]
+left_y_pts = [[56.0 + i * (255.0 - 56.0) / 5.0, 624.0 - i * (624.0 - 96.0) / 5.0] for i in range(6)]
 
 if os.path.exists(YAML_PATH):
     try:
         with open(YAML_PATH, 'r') as f:
-            data = yaml.safe_load(f)
-            if 'y_control_pts' in data:
-                y_control_pts = [np.array(p, dtype=np.float64) for p in data['y_control_pts']]
-            if 'top_x_control_pts' in data:
-                top_x_control_pts = [np.array(p, dtype=np.float64) for p in data['top_x_control_pts']]
-        print(f"✅ 캘리브레이션 파일 로드 완료: {YAML_PATH}")
+            d = yaml.safe_load(f)
+            if 'bottom_x_pts' in d:
+                bottom_x_pts = d['bottom_x_pts']
+            if 'right_y_pts' in d:
+                right_y_pts = d['right_y_pts']
+            if 'top_x_pts' in d:
+                top_x_pts = d['top_x_pts']
+            if 'left_y_pts' in d:
+                left_y_pts = d['left_y_pts']
+        print(f"✅ 4면 캘리브레이션 파일 로드 완료: {YAML_PATH}")
     except Exception as e:
         print("캘리브레이션 로드 실패:", e)
 
-P0 = y_control_pts[0].copy()
-P3 = y_control_pts[-1].copy()
-P2 = top_x_control_pts[-1].copy()
-vec_left = P0 - P3
-P1 = np.array([P2[0] - vec_left[0] * 1.08, P0[1] + 30.0], dtype=np.float64)
-M_bot = np.array([640.0, 716.0], dtype=np.float64)
 
-
-def quad_bezier(A, M, B, t):
-    return (1.0 - t)**2 * A + 2.0 * (1.0 - t) * t * M + t**2 * B
-
-
-def get_left_pt(v_norm):
-    idx_float = v_norm * (len(y_control_pts) - 1)
+def get_curve_pt(norm_val, pts_list):
+    idx_float = norm_val * (len(pts_list) - 1)
     i0 = int(math.floor(idx_float))
-    i1 = min(i0 + 1, len(y_control_pts) - 1)
+    i1 = min(i0 + 1, len(pts_list) - 1)
     t = idx_float - i0
-    return (1.0 - t) * y_control_pts[i0] + t * y_control_pts[i1]
-
-
-def get_top_pt(u_norm):
-    idx_float = u_norm * (len(top_x_control_pts) - 1)
-    i0 = int(math.floor(idx_float))
-    i1 = min(i0 + 1, len(top_x_control_pts) - 1)
-    t = idx_float - i0
-    return (1.0 - t) * top_x_control_pts[i0] + t * top_x_control_pts[i1]
+    return (1.0 - t) * np.array(pts_list[i0], dtype=np.float64) + t * np.array(pts_list[i1], dtype=np.float64)
 
 
 def coons_patch(u, v):
-    c_bot = quad_bezier(P0, M_bot, P1, u)
-    c_top = get_top_pt(u)
-    c_left = get_left_pt(v)
-    c_right = (1.0 - v) * P1 + v * P2
+    c_bot = get_curve_pt(u, bottom_x_pts)
+    c_top = get_curve_pt(u, top_x_pts)
+    c_left = get_curve_pt(v, left_y_pts)
+    c_right = get_curve_pt(v, right_y_pts)
+
+    P0 = np.array(bottom_x_pts[0], dtype=np.float64)
+    P1 = np.array(bottom_x_pts[-1], dtype=np.float64)
+    P3 = np.array(top_x_pts[0], dtype=np.float64)
+    P2 = np.array(top_x_pts[-1], dtype=np.float64)
+
     corner_blend = (1.0 - u) * (1.0 - v) * P0 + u * (1.0 - v) * P1 + (1.0 - u) * v * P3 + u * v * P2
     return (1.0 - v) * c_bot + v * c_top + (1.0 - u) * c_left + u * c_right - corner_blend
 
@@ -133,11 +115,11 @@ def get_detector_params():
 
 def main():
     device_idx = int(sys.argv[1]) if len(sys.argv) > 1 else 2
-    print(f"Opening camera /dev/video{device_idx}...")
+    print(f"카메라 /dev/video{device_idx} 연결 중...")
 
     cap = cv2.VideoCapture(device_idx)
     if not cap.isOpened():
-        print(f"Error: Could not open /dev/video{device_idx}")
+        print(f"오류: /dev/video{device_idx} 를 열 수 없습니다.")
         sys.exit(1)
 
     cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
@@ -156,11 +138,11 @@ def main():
 
     params = get_detector_params()
 
-    window_name = "AprilTag Camera Test (Calibrated Grid)"
+    window_name = "AprilTag Camera Test (4-Edge Calibrated Grid)"
     cv2.namedWindow(window_name)
 
     print("\n=======================================================")
-    print(" AprilTag Live Test (Calibrated Grid Auto-Loaded)")
+    print(" AprilTag Live Test (4-Edge Calibrated Grid)")
     print(" Run 'python3 scripts/calibrate_pool_grid.py' to recalibrate.")
     print(" Press 'Q' on window to exit.")
     print("=======================================================\n")
@@ -191,8 +173,8 @@ def main():
                     x_fwd, y_fwd = pixel_to_pool_metric(np.array([u_fwd, v_fwd]))
                     yaw_deg = math.degrees(math.atan2(y_fwd - y_pool, x_fwd - x_pool))
 
-                    p0_int = P0.astype(int)
-                    cv2.line(frame, (p0_int[0], p0_int[1]), (int(u_center), int(v_center)), (0, 255, 255), 2, cv2.LINE_AA)
+                    p0_int = tuple(np.array(bottom_x_pts[0], dtype=int))
+                    cv2.line(frame, p0_int, (int(u_center), int(v_center)), (0, 255, 255), 2, cv2.LINE_AA)
                     info_str = f"Pool [X:{x_pool:.2f}m, Y:{y_pool:.2f}m] Yaw:{yaw_deg:+.1f}deg"
                     cv2.putText(frame, info_str, (int(u_center) - 80, int(v_center) - 15),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 255, 0), 2, cv2.LINE_AA)
@@ -219,31 +201,22 @@ def main():
             line_pts = np.array([coons_patch(t, v_norm) for t in t_samples], dtype=np.int32)
             cv2.polylines(frame, [line_pts], isClosed=False, color=(80, 150, 80), thickness=1, lineType=cv2.LINE_AA)
 
-        # ── 제어점 마커 표시 ──
-        for m_idx, pt in enumerate(y_control_pts):
-            p_int = pt.astype(int)
-            cv2.circle(frame, tuple(p_int), 5, (0, 255, 255), -1, cv2.LINE_AA)
-            cv2.putText(frame, f"Y={m_idx}m", (p_int[0] + 10, p_int[1] + 5),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 255), 1, cv2.LINE_AA)
+        p0 = tuple(np.array(bottom_x_pts[0], dtype=int))
+        cv2.circle(frame, p0, 16, (0, 215, 255), 2, cv2.LINE_AA)
+        cv2.putText(frame, "Origin (0,0)", (p0[0] - 20, p0[1] + 30),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 215, 255), 2, cv2.LINE_AA)
 
-        for m_idx, pt in enumerate(top_x_control_pts):
-            p_int = pt.astype(int)
-            cv2.circle(frame, tuple(p_int), 5, (0, 255, 100), -1, cv2.LINE_AA)
-            cv2.putText(frame, f"X={m_idx}m", (p_int[0] - 12, p_int[1] - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 100), 1, cv2.LINE_AA)
+        pt_x_arrow = tuple(coons_patch(0.20, 0.0).astype(int))
+        cv2.arrowedLine(frame, p0, pt_x_arrow, (0, 0, 255), 3, tipLength=0.2)
+        cv2.putText(frame, "+X (0->10m)", (pt_x_arrow[0] + 10, pt_x_arrow[1] + 5),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 255), 2, cv2.LINE_AA)
 
-        p0 = P0.astype(int)
-        pt_x_arrow = coons_patch(0.20, 0.0).astype(int)
-        cv2.arrowedLine(frame, tuple(p0), tuple(pt_x_arrow), (0, 0, 255), 3, tipLength=0.2)
-        cv2.putText(frame, "+X Axis (0->10m)", (pt_x_arrow[0] + 10, pt_x_arrow[1] + 5),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2, cv2.LINE_AA)
+        pt_y_arrow = tuple(coons_patch(0.0, 0.25).astype(int))
+        cv2.arrowedLine(frame, p0, pt_y_arrow, (0, 255, 0), 3, tipLength=0.2)
+        cv2.putText(frame, "+Y (0->5m)", (pt_y_arrow[0] - 30, pt_y_arrow[1] - 15),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 0), 2, cv2.LINE_AA)
 
-        pt_y_arrow = y_control_pts[1].astype(int)
-        cv2.arrowedLine(frame, tuple(p0), tuple(pt_y_arrow), (0, 255, 0), 3, tipLength=0.2)
-        cv2.putText(frame, "+Y Axis (0->5m)", (pt_y_arrow[0] - 25, pt_y_arrow[1] - 15),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2, cv2.LINE_AA)
-
-        cv2.putText(frame, "Loaded from pool_calibration.yaml | Run scripts/calibrate_pool_grid.py to recalibrate",
+        cv2.putText(frame, "4-Edge 1m Grid Applied | Run 'python3 scripts/calibrate_pool_grid.py' to recalibrate",
                     (20, 700), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 200, 100), 1, cv2.LINE_AA)
 
         if detected_info:
