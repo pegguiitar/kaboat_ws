@@ -32,11 +32,11 @@ Visualization Manager:
       Name: "수조 기준 그리드 (1m)"
       Normal Cell Count: 0
       Offset:
-        X: 5.0
-        Y: 2.5
+        X: 2.5
+        Y: 5.0
         Z: 0.0
       Plane: XY
-      Plane Cell Count: 12
+      Plane Cell Count: 14
       Reference Frame: odom
       Value: true
     - Class: rviz_default_plugins/MarkerArray
@@ -50,7 +50,7 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /lidar_tracker/markers
       Value: true
-    - Alpha: 0.5
+    - Alpha: 0.45
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
         Max Value: 10
@@ -169,9 +169,10 @@ Visualization Manager:
   Value: true
   Views:
     Current:
+      Angle: 0
       Class: rviz_default_plugins/TopDownOrtho
       Name: TopDownOrtho
-      Scale: 50
+      Scale: 55
       Target Frame: odom
-      X: 5.0
-      Y: 2.5
+      X: 2.5
+      Y: 5.0
