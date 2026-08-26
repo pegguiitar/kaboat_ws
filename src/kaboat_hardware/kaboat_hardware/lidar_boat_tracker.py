@@ -1,13 +1,11 @@
-"""lidar_boat_tracker — 실내 수조 고정 2D 라이다 기반 순수 배 (X, Y) 좌표 추적기.
+"""lidar_boat_tracker — 실내 수조 고정 2D 라이다 기반 배 (X, Y) 좌표 추적기 (Y축 정방향 적용).
 
 배치 및 좌표계 정의:
   - 수조: 좌하단 원점 (X=0m, Y=0m), 가로 폭 X: 10m (0~10m), 세로 폭 Y: 5m (0~5m)
   - 라이다 설치 위치: 수조 하단 변(10m) 정중앙 (X=5.0m, Y=0.0m)
-  - ydlidar_launch_view 화면 기준:
-      * 라이다 원점 (0,0) 기준 위쪽 50개 셀 (전방 0~5m, 좌우 폭 10m) = 수조 영역
-      * laser_frame -> 수조 절대 좌표:
-          X_pool = 5.0 - y_l  (0m ~ 10m)
-          Y_pool = 0.0 - x_l  (0m ~ 5m)
+  - 좌표 변환 (Y축 방향 일치):
+      X_pool = 5.0 - y_l  (0m ~ 10m)
+      Y_pool = 0.0 + x_l  (0m ~ 5m)
 
 출력 정보:
   - 배의 수조 절대 위치 (X, Y) [m] (중앙값 클러스터링 + EMA 노이즈 필터)
@@ -15,7 +13,7 @@
   - /boat_position (geometry_msgs/msg/PointStamped on 'odom') -> 순수 X, Y 좌표 포인트
   - /odom (nav_msgs/msg/Odometry on 'odom') -> X, Y 위치 및 이동속도
   - /tf ('odom' -> 'base_link', 'odom' -> 'laser_frame')
-  - /lidar_tracker/filtered_scan (sensor_msgs/msg/LaserScan) -> 50개 셀 내부 필터링 스캔
+  - /lidar_tracker/filtered_scan (sensor_msgs/msg/LaserScan) -> 필터링 스캔
   - /lidar_tracker/markers (visualization_msgs/msg/MarkerArray) -> RViz 시각화
 """
 
@@ -103,7 +101,7 @@ class LidarBoatTracker(Node):
             LaserScan, '/scan', self._on_scan, qos_profile_sensor_data)
 
         self.get_logger().info(
-            f"🚀 [lidar_boat_tracker] 50개 셀 수조 영역 필터링 시작!\n"
+            f"🚀 [lidar_boat_tracker] 시작 (Y축 방향 반전 적용 완료)!\n"
             f"   - 수조 크기: {self.pool_size_x}m (가로 X) x {self.pool_size_y}m (세로 Y)\n"
             f"   - 라이다 위치: (X={self.lidar_x}m, Y={self.lidar_y}m)\n"
             f"   - 유효 수조 ROI: X=[{self.wall_margin}m ~ {self.pool_size_x - self.wall_margin}m], "
@@ -131,16 +129,11 @@ class LidarBoatTracker(Node):
         x_l = r_valid * np.cos(a_valid)
         y_l = r_valid * np.sin(a_valid)
 
-        # 3. ⭐ ydlidar_launch_view 화면 기준 50개 셀 수조 변환 ⭐
-        # 라이다 원점 기준 위쪽 50개 셀:
-        #   - 위쪽 (깊이 0~5m): -x_l
-        #   - 좌측: +y_l, 우측: -y_l
-        #   - X_pool = 5.0 - y_l (0m ~ 10m)
-        #   - Y_pool = 0.0 - x_l (0m ~ 5m)
+        # 3. ⭐ Y축 방향 반전 적용: Y_pool = lidar_y + x_l ⭐
         x_pool = self.lidar_x - y_l
-        y_pool = self.lidar_y - x_l
+        y_pool = self.lidar_y + x_l
 
-        # 4. [ROI 필터]: 수조 50개 셀 내부 영역(벽면 및 외부 hit 제외) 판정
+        # 4. [ROI 필터]: 수조 내부 영역(벽면 및 외부 hit 제외) 판정
         min_x = self.wall_margin
         max_x = self.pool_size_x - self.wall_margin
         min_y = self.wall_margin
@@ -313,8 +306,7 @@ class LidarBoatTracker(Node):
         tf_lidar.transform.translation.x = self.lidar_x
         tf_lidar.transform.translation.y = self.lidar_y
         tf_lidar.transform.translation.z = 0.0
-        # laser_frame의 -x가 odom의 +y, +y가 odom의 -x에 대응 (-90도 회전)
-        tf_lidar.transform.rotation = yaw_to_quaternion(-math.pi / 2.0)
+        tf_lidar.transform.rotation = yaw_to_quaternion(math.pi / 2.0)
         self.tf_broadcaster.sendTransform(tf_lidar)
 
         # 터미널 로깅 (1초 주기)
