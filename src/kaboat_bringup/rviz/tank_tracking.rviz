@@ -1,0 +1,93 @@
+Panels:
+  - Class: rviz_common/Displays
+    Help Height: 0
+    Name: Displays
+    Property Tree Widget:
+      Expanded:
+        - /Global Options1
+        - / 수조 기준 그리드 (1m)1
+        - / 보트 실시간 위치 (/detections)1
+        - / TF 좌표계1
+      Splitter Ratio: 0.5
+    Tree Height: 480
+  - Class: rviz_common/Views
+    Expanded:
+      - /Current View1
+    Name: Views
+    Splitter Ratio: 0.5
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Alpha: 0.6
+      Cell Size: 1
+      Class: rviz_default_plugins/Grid
+      Color: 80; 160; 255
+      Enabled: true
+      Line Style:
+        Line Width: 0.03
+        Value: Lines
+      Name: "수조 기준 그리드 (1m)"
+      Normal Cell Count: 0
+      Offset:
+        X: 5.0
+        Y: 2.5
+        Z: 0.0
+      Plane: XY
+      Plane Cell Count: 12
+      Reference Frame: odom
+      Value: true
+    - Class: rviz_default_plugins/TF
+      Enabled: true
+      Frame Timeout: 15
+      Marker Alpha: 1
+      Name: "TF 좌표계"
+      Show Arrows: true
+      Show Axes: true
+      Show Names: true
+      Tree:
+        {}
+      Update Interval: 0
+      Value: true
+    - Alpha: 1.0
+      Axes Length: 0.8
+      Axes Radius: 0.05
+      Class: rviz_default_plugins/Pose
+      Color: 255; 85; 0
+      Enabled: true
+      Head Length: 0.3
+      Head Radius: 0.15
+      Name: "보트 실시간 위치 (/detections)"
+      Shaft Length: 0.7
+      Shaft Radius: 0.08
+      Shape: Arrow
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /detections
+      Value: true
+  Enabled: true
+  Global Options:
+    Background Color: 30; 30; 35
+    Fixed Frame: odom
+    Frame Rate: 30
+  Name: root
+  Tools:
+    - Class: rviz_default_plugins/Interact
+      Hide Inactive Objects: true
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+  Transformation:
+    Current:
+      Class: rviz_default_plugins/TF
+  Value: true
+  Views:
+    Current:
+      Class: rviz_default_plugins/TopDownOrtho
+      Name: TopDownOrtho
+      Scale: 50
+      Target Frame: odom
+      X: 5.0
+      Y: 2.5
