@@ -1,21 +1,15 @@
-"""lidar_boat_tracker — 실내 수조 고정 2D 라이다 기반 배 위치/방향 추적기.
+"""lidar_boat_tracker — 실내 수조 고정 2D 라이다 기반 배 위치/방향 추적기 (중앙값 + EMA 노이즈 필터링).
 
 배치 조건:
   - 수조 좌하단 원점 (X=0m, Y=0m) 기준, (X=5.0m, Y=0.0m) 지점에 2D 라이다 설치
   - 수조 크기: 가로 10.0m x 세로 5.0m
   - 라이다는 전방(+Y 수조 내부)을 향해 스캔
 
-동작 파이프라인:
-  1. /scan 수신 후 각도·거리 (r, theta) -> 라이다 로컬 좌표 (x, y) 변환
-  2. 라이다 설치 위치(X=5, Y=0, Yaw=+90 deg)를 적용해 수조 절대 좌표 (X_pool, Y_pool) 계산
-  3. [ROI 필터]: 수조 내부(X: 0.15m~9.85m, Y: 0.15m~4.85m)를 벗어난 모든 hit(벽면, 바닥, 사람) 완전 제거
-  4. [클러스터링]: 수조 내부에 남은 점들을 유클리디안 거리(0.2m)로 군집화하여 배 상단 돌출 구조물(기둥) 검출
-  5. [위치/속도/자세 추정]: 중심점 (X, Y) 및 시간차(dt) 속도 (vx, vy), 선수각(Yaw) 추정
-  6. [토픽 발행]:
-     - /detections (geometry_msgs/msg/PoseStamped on 'odom') -> 젯슨 수신용
-     - /odom (nav_msgs/msg/Odometry on 'odom')
-     - /tf ('odom' -> 'base_link', 'odom' -> 'laser_frame')
-     - /lidar_tracker/markers (visualization_msgs/msg/MarkerArray) -> RViz 시각화
+핵심 노이즈 필터링:
+  1. [ROI 필터]: 수조 내부(0.18m 마진) 외의 벽면/외부 hit 100% 제거
+  2. [클러스터 중앙값(Median)]: 기둥 표면에 여러 점이 찍혔을 때 평균 대신 중앙값(Median)을 취해 외곽 이상치(Outlier) 제거
+  3. [위치 EMA 필터]: X_filt = alpha * X_meas + (1 - alpha) * X_filt 로 라이다 센서 지터(Jitter) 완벽 억제
+  4. [속도/선수각 EMA 필터]: 순간 미분 노이즈를 완화하여 매끄러운 진행 방향(Yaw) 출력
 """
 
 import math
@@ -46,17 +40,19 @@ class LidarBoatTracker(Node):
         super().__init__('lidar_boat_tracker')
 
         # ── 파라미터 선언 ──────────────────────────────────────────
-        self.declare_parameter('lidar_pos_x', 5.0)       # 수조 원점 기준 라이다 X 위치 [m]
-        self.declare_parameter('lidar_pos_y', 0.0)       # 수조 원점 기준 라이다 Y 위치 [m]
-        self.declare_parameter('lidar_yaw_deg', 90.0)    # 라이다가 바라보는 방향 (+Y 수조 안쪽 = 90도)
-        self.declare_parameter('pool_size_x', 10.0)      # 수조 가로 길이 [m]
-        self.declare_parameter('pool_size_y', 5.0)       # 수조 세로 길이 [m]
-        self.declare_parameter('wall_margin', 0.18)      # 벽면 제거 마진 [m] (벽면 및 벽 인접 노이즈 제거)
-        self.declare_parameter('cluster_dist_tol', 0.25) # 클러스터링 거리 허용오차 [m]
-        self.declare_parameter('min_cluster_pts', 2)     # 기둥 인식 최소 포인트 수
-        self.declare_parameter('max_cluster_pts', 80)    # 기둥 인식 최대 포인트 수
-        self.declare_parameter('min_target_diameter', 0.02) # 타겟 기둥 최소 직경 [m]
-        self.declare_parameter('max_target_diameter', 0.45) # 타겟 기둥 최대 직경 [m]
+        self.declare_parameter('lidar_pos_x', 5.0)          # 수조 원점 기준 라이다 X 위치 [m]
+        self.declare_parameter('lidar_pos_y', 0.0)          # 수조 원점 기준 라이다 Y 위치 [m]
+        self.declare_parameter('lidar_yaw_deg', 90.0)       # 라이다 방향 (+Y 수조 안쪽 = 90도)
+        self.declare_parameter('pool_size_x', 10.0)         # 수조 가로 길이 [m]
+        self.declare_parameter('pool_size_y', 5.0)          # 수조 세로 길이 [m]
+        self.declare_parameter('wall_margin', 0.18)         # 수조 벽면 제거 마진 [m]
+        self.declare_parameter('cluster_dist_tol', 0.25)    # 클러스터링 거리 허용오차 [m]
+        self.declare_parameter('min_cluster_pts', 2)        # 기둥 인식 최소 포인트 수
+        self.declare_parameter('max_cluster_pts', 80)       # 기둥 인식 최대 포인트 수
+        self.declare_parameter('min_target_diameter', 0.02) # 기둥 최소 직경 [m]
+        self.declare_parameter('max_target_diameter', 0.45) # 기둥 최대 직경 [m]
+        self.declare_parameter('pos_ema_alpha', 0.45)       # 위치 EMA 필터 계수 (0~1, 작을수록 부드러움)
+        self.declare_parameter('vel_ema_alpha', 0.30)       # 속도 EMA 필터 계수 (0~1)
         self.declare_parameter('odom_frame', 'odom')
         self.declare_parameter('base_frame', 'base_link')
         self.declare_parameter('laser_frame', 'laser_frame')
@@ -73,14 +69,17 @@ class LidarBoatTracker(Node):
         self.max_pts = int(self.get_parameter('max_cluster_pts').value)
         self.min_diam = float(self.get_parameter('min_target_diameter').value)
         self.max_diam = float(self.get_parameter('max_target_diameter').value)
+        self.pos_alpha = float(self.get_parameter('pos_ema_alpha').value)
+        self.vel_alpha = float(self.get_parameter('vel_ema_alpha').value)
         self.odom_frame = str(self.get_parameter('odom_frame').value)
         self.base_frame = str(self.get_parameter('base_frame').value)
         self.laser_frame = str(self.get_parameter('laser_frame').value)
 
-        # ── 상태 추적 변수 ─────────────────────────────────────────
-        self.last_pos = None          # (X, Y)
+        # ── EMA 필터 상태 변수 ─────────────────────────────────────
+        self.filtered_pos = None      # np.array([X_filt, Y_filt])
+        self.last_meas_pos = None     # np.array([X_meas, Y_meas])
         self.last_time = None         # Time
-        self.last_yaw = 0.0           # rad
+        self.filtered_yaw = 0.0       # rad
         self.vx = 0.0                 # m/s
         self.vy = 0.0                 # m/s
         self.target_lost_count = 0
@@ -88,7 +87,7 @@ class LidarBoatTracker(Node):
         # ── ROS 2 통신 ────────────────────────────────────────────
         self.tf_broadcaster = TransformBroadcaster(self)
 
-        # 젯슨 및 타 노드 연동 표준 토픽
+        # 젯슨 수신 표준 토픽
         self.pose_pub = self.create_publisher(PoseStamped, '/detections', 10)
         self.odom_pub = self.create_publisher(Odometry, '/odom', 10)
         self.filtered_scan_pub = self.create_publisher(LaserScan, '/lidar_tracker/filtered_scan', 10)
@@ -99,11 +98,10 @@ class LidarBoatTracker(Node):
             LaserScan, '/scan', self._on_scan, qos_profile_sensor_data)
 
         self.get_logger().info(
-            f"🚀 [lidar_boat_tracker] 시작 완료!\n"
+            f"🚀 [lidar_boat_tracker] 노이즈 필터링(중앙값 + EMA) 활성화!\n"
             f"   - 수조 크기: {self.pool_size_x}m x {self.pool_size_y}m (원점: 좌하단)\n"
             f"   - 라이다 위치: (X={self.lidar_x}m, Y={self.lidar_y}m, Yaw={math.degrees(self.lidar_yaw):.1f}°)\n"
-            f"   - 유효 수조 내부 ROI: X=[{self.wall_margin}m ~ {self.pool_size_x - self.wall_margin}m], "
-            f"Y=[{self.wall_margin}m ~ {self.pool_size_y - self.wall_margin}m]"
+            f"   - 위치 EMA Alpha: {self.pos_alpha} | 속도 EMA Alpha: {self.vel_alpha}"
         )
 
     def _on_scan(self, msg: LaserScan):
@@ -114,7 +112,7 @@ class LidarBoatTracker(Node):
 
         angles = msg.angle_min + np.arange(n, dtype=np.float32) * msg.angle_increment
 
-        # 1. 유효 거리 필터 (0.1m ~ 15m)
+        # 1. 유효 거리 필터 (0.08m ~ 15m)
         valid_mask = (ranges > 0.08) & (ranges < 15.0) & np.isfinite(ranges)
         r_valid = ranges[valid_mask]
         a_valid = angles[valid_mask]
@@ -124,12 +122,10 @@ class LidarBoatTracker(Node):
             return
 
         # 2. 라이다 로컬 2D 좌표 (x_l, y_l)
-        # 라이다 전방이 0도 기준 (x_l: 전방, y_l: 좌측)
         x_l = r_valid * np.cos(a_valid)
         y_l = r_valid * np.sin(a_valid)
 
         # 3. 수조 절대 좌표계 (X_pool, Y_pool) 변환
-        # 라이다 위치 (lidar_x, lidar_y) 및 방향 lidar_yaw 회전 적용
         cos_y = math.cos(self.lidar_yaw)
         sin_y = math.sin(self.lidar_yaw)
         x_pool = self.lidar_x + (x_l * cos_y - y_l * sin_y)
@@ -142,10 +138,9 @@ class LidarBoatTracker(Node):
         max_y = self.pool_size_y - self.wall_margin
 
         roi_mask = (x_pool >= min_x) & (x_pool <= max_x) & (y_pool >= min_y) & (y_pool <= max_y)
-
         pts_roi = np.column_stack([x_pool[roi_mask], y_pool[roi_mask]])
 
-        # 필터링된 LaserScan 디버그 발행
+        # 디버그용 필터링 스캔 발행
         filtered_ranges = np.full_like(ranges, np.inf)
         valid_indices = np.where(valid_mask)[0][roi_mask]
         filtered_ranges[valid_indices] = ranges[valid_indices]
@@ -161,7 +156,7 @@ class LidarBoatTracker(Node):
         # 5. 유클리디안 클러스터링 (수조 내부 장애물/기둥 분리)
         clusters = self._euclidean_clustering(pts_roi, self.cluster_tol)
 
-        # 6. 배 돌출 구조물(기둥) 규격에 맞는 최적 클러스터 선정
+        # 6. 배 돌출 구조물(기둥) 규격에 맞는 최적 클러스터 선정 + [중앙값(Median) 추출]
         best_target = None
         min_dist_to_last = float('inf')
 
@@ -175,16 +170,17 @@ class LidarBoatTracker(Node):
             if diam < self.min_diam or diam > self.max_diam:
                 continue
 
-            centroid = np.mean(c_pts, axis=0)
+            # ⭐ 여러 점이 찍혔을 때 이상치(Outlier)를 잡기 위해 중앙값(Median) 사용 ⭐
+            median_center = np.median(c_pts, axis=0)
 
             # 이전 추적 위치가 있으면 가장 가까운 클러스터 우선 선택
-            if self.last_pos is not None:
-                d = np.linalg.norm(centroid - self.last_pos)
+            if self.filtered_pos is not None:
+                d = np.linalg.norm(median_center - self.filtered_pos)
                 if d < min_dist_to_last:
                     min_dist_to_last = d
-                    best_target = (centroid, diam, count)
+                    best_target = (median_center, diam, count)
             else:
-                best_target = (centroid, diam, count)
+                best_target = (median_center, diam, count)
                 break
 
         if best_target is None:
@@ -192,38 +188,50 @@ class LidarBoatTracker(Node):
             self._publish_markers(msg.header.stamp, None)
             return
 
-        # 7. 목표물 위치 및 속도/자세 업데이트
-        curr_pos = best_target[0]
+        # 7. ⭐ [위치 및 속도/자세 EMA 필터 적용] ⭐
+        raw_meas_pos = best_target[0]
         curr_time = self.get_clock().now()
 
-        target_x = float(curr_pos[0])
-        target_y = float(curr_pos[1])
-
-        if self.last_pos is not None and self.last_time is not None:
-            dt = (curr_time - self.last_time).nanoseconds * 1e-9
-            if dt > 0.001:
-                inst_vx = (target_x - self.last_pos[0]) / dt
-                inst_vy = (target_y - self.last_pos[1]) / dt
-
-                # 저역통과 필터 (EMA)
-                alpha_v = 0.4
-                self.vx = alpha_v * inst_vx + (1.0 - alpha_v) * self.vx
-                self.vy = alpha_v * inst_vy + (1.0 - alpha_v) * self.vy
-
-                speed = math.hypot(self.vx, self.vy)
-                if speed > 0.05:  # 유의미하게 움직일 때 선수각 갱신
-                    self.last_yaw = math.atan2(self.vy, self.vx)
-        else:
+        if self.filtered_pos is None:
+            # 첫 측정값 초기화
+            self.filtered_pos = raw_meas_pos.copy()
+            self.last_meas_pos = raw_meas_pos.copy()
+            self.last_time = curr_time
             self.vx = 0.0
             self.vy = 0.0
+        else:
+            # 1) 위치 EMA 필터: X_filt = alpha * X_meas + (1 - alpha) * X_prev
+            self.filtered_pos = (self.pos_alpha * raw_meas_pos +
+                                 (1.0 - self.pos_alpha) * self.filtered_pos)
 
-        self.last_pos = np.array([target_x, target_y])
-        self.last_time = curr_time
+            # 2) 속도 및 선수각 계산
+            dt = (curr_time - self.last_time).nanoseconds * 1e-9
+            if dt > 0.001:
+                inst_vx = (self.filtered_pos[0] - self.last_meas_pos[0]) / dt
+                inst_vy = (self.filtered_pos[1] - self.last_meas_pos[1]) / dt
+
+                # 속도 EMA 필터
+                self.vx = self.vel_alpha * inst_vx + (1.0 - self.vel_alpha) * self.vx
+                self.vy = self.vel_alpha * inst_vy + (1.0 - self.vel_alpha) * self.vy
+
+                speed = math.hypot(self.vx, self.vy)
+                if speed > 0.04:  # 4cm/s 이상 이동 시 선수각 매끄럽게 갱신
+                    target_yaw = math.atan2(self.vy, self.vx)
+                    # 각도 차이 보정 (-pi ~ +pi)
+                    dyaw = math.atan2(math.sin(target_yaw - self.filtered_yaw),
+                                      math.cos(target_yaw - self.filtered_yaw))
+                    self.filtered_yaw += 0.35 * dyaw
+
+            self.last_meas_pos = self.filtered_pos.copy()
+            self.last_time = curr_time
+
         self.target_lost_count = 0
+        tx = float(self.filtered_pos[0])
+        ty = float(self.filtered_pos[1])
 
         # 8. ROS 2 토픽 발행
-        self._publish_outputs(msg.header.stamp, target_x, target_y, self.last_yaw, self.vx, self.vy)
-        self._publish_markers(msg.header.stamp, (target_x, target_y, self.last_yaw))
+        self._publish_outputs(msg.header.stamp, tx, ty, self.filtered_yaw, self.vx, self.vy)
+        self._publish_markers(msg.header.stamp, (tx, ty, self.filtered_yaw))
 
     def _euclidean_clustering(self, points, tol):
         """연속된 인접 점들을 유클리디안 거리로 군집화."""
