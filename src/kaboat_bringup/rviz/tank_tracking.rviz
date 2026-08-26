@@ -5,9 +5,11 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Global Options1
-        - / 수조 기준 그리드 (1m)1
-        - / 보트 실시간 위치 (/detections)1
-        - / TF 좌표계1
+        - /수조 기준 그리드 (1m)1
+        - /수조 테두리 및 마커1
+        - /필터링된 라이다 스캔 (/lidar_tracker/filtered_scan)1
+        - /보트 실시간 위치 (/detections)1
+        - /TF 좌표계1
       Splitter Ratio: 0.5
     Tree Height: 480
   - Class: rviz_common/Views
@@ -36,17 +38,51 @@ Visualization Manager:
       Plane Cell Count: 12
       Reference Frame: odom
       Value: true
-    - Class: rviz_default_plugins/TF
+    - Class: rviz_default_plugins/MarkerArray
       Enabled: true
-      Frame Timeout: 15
-      Marker Alpha: 1
-      Name: "TF 좌표계"
-      Show Arrows: true
-      Show Axes: true
-      Show Names: true
-      Tree:
-        {}
-      Update Interval: 0
+      Name: "수조 테두리 및 마커"
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /lidar_tracker/markers
+      Value: true
+    - Alpha: 1.0
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz_default_plugins/LaserScan
+      Color: 0; 255; 100
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 4096
+      Min Color: 0; 0; 0
+      Min Intensity: 0
+      Name: "필터링된 라이다 스캔 (/lidar_tracker/filtered_scan)"
+      Position Transformer: XYZ
+      Queue Size: 10
+      Selectable: true
+      Size (Pixels): 5
+      Size (m): 0.06
+      Style: Points
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /lidar_tracker/filtered_scan
+      Use Fixed Frame: true
+      Use rainbow: false
       Value: true
     - Alpha: 1.0
       Axes Length: 0.8
@@ -67,6 +103,18 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /detections
+      Value: true
+    - Class: rviz_default_plugins/TF
+      Enabled: true
+      Frame Timeout: 15
+      Marker Alpha: 1
+      Name: "TF 좌표계"
+      Show Arrows: true
+      Show Axes: true
+      Show Names: true
+      Tree:
+        {}
+      Update Interval: 0
       Value: true
   Enabled: true
   Global Options:
