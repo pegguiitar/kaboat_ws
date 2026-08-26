@@ -34,7 +34,7 @@ class LidarBoatTracker(Node):
         # ── 파라미터 선언 ──────────────────────────────────────────
         self.declare_parameter('lidar_pos_x', 5.0)          # 수조 원점 기준 라이다 X 위치 [m]
         self.declare_parameter('lidar_pos_y', 0.0)          # 수조 원점 기준 라이다 Y 위치 [m]
-        self.declare_parameter('lidar_yaw_deg', -90.0)      # 라이다 방향 (+Y 수조 안쪽 = -90도)
+        self.declare_parameter('lidar_yaw_deg', 90.0)       # 라이다 방향 (+Y 수조 안쪽 = 90도)
         self.declare_parameter('pool_size_x', 10.0)         # 수조 가로 길이 [m]
         self.declare_parameter('pool_size_y', 5.0)          # 수조 세로 길이 [m]
         self.declare_parameter('wall_margin', 0.18)         # 수조 벽면 제거 마진 [m]
