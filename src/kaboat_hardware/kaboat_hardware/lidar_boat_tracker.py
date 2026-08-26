@@ -1,15 +1,17 @@
-"""lidar_boat_tracker — 실내 수조 고정 2D 라이다 기반 배 위치/방향 추적기 (중앙값 + EMA 노이즈 필터링).
+"""lidar_boat_tracker — 실내 수조 고정 2D 라이다 기반 순수 배 (X, Y) 좌표 추적기.
 
 배치 조건:
   - 수조 좌하단 원점 (X=0m, Y=0m) 기준, (X=5.0m, Y=0.0m) 지점에 2D 라이다 설치
   - 수조 크기: 가로 10.0m x 세로 5.0m
   - 라이다는 전방(+Y 수조 내부)을 향해 스캔
 
-핵심 노이즈 필터링:
-  1. [ROI 필터]: 수조 내부(0.18m 마진) 외의 벽면/외부 hit 100% 제거
-  2. [클러스터 중앙값(Median)]: 기둥 표면에 여러 점이 찍혔을 때 평균 대신 중앙값(Median)을 취해 외곽 이상치(Outlier) 제거
-  3. [위치 EMA 필터]: X_filt = alpha * X_meas + (1 - alpha) * X_filt 로 라이다 센서 지터(Jitter) 완벽 억제
-  4. [속도/선수각 EMA 필터]: 순간 미분 노이즈를 완화하여 매끄러운 진행 방향(Yaw) 출력
+출력 정보:
+  - 배의 수조 절대 위치 (X, Y) [m] (중앙값 클러스터링 + EMA 필터 적용)
+  - /detections (geometry_msgs/msg/PoseStamped on 'odom') -> X, Y 위치 순수 전달
+  - /boat_position (geometry_msgs/msg/PointStamped on 'odom') -> 순수 X, Y 좌표 포인트
+  - /odom (nav_msgs/msg/Odometry on 'odom') -> X, Y 위치 및 이동속도
+  - /tf ('odom' -> 'base_link', 'odom' -> 'laser_frame')
+  - /lidar_tracker/markers (visualization_msgs/msg/MarkerArray) -> RViz 시각화
 """
 
 import math
@@ -19,20 +21,10 @@ from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 
 from sensor_msgs.msg import LaserScan
-from geometry_msgs.msg import PoseStamped, TransformStamped, Quaternion
+from geometry_msgs.msg import PoseStamped, PointStamped, TransformStamped, Quaternion
 from nav_msgs.msg import Odometry
 from visualization_msgs.msg import Marker, MarkerArray
 from tf2_ros import TransformBroadcaster
-
-
-def yaw_to_quaternion(yaw_rad):
-    """Yaw(rad) 회전각을 쿼터니언 메시지로 변환."""
-    q = Quaternion()
-    q.x = 0.0
-    q.y = 0.0
-    q.z = math.sin(yaw_rad / 2.0)
-    q.w = math.cos(yaw_rad / 2.0)
-    return q
 
 
 class LidarBoatTracker(Node):
@@ -51,7 +43,7 @@ class LidarBoatTracker(Node):
         self.declare_parameter('max_cluster_pts', 80)       # 기둥 인식 최대 포인트 수
         self.declare_parameter('min_target_diameter', 0.02) # 기둥 최소 직경 [m]
         self.declare_parameter('max_target_diameter', 0.45) # 기둥 최대 직경 [m]
-        self.declare_parameter('pos_ema_alpha', 0.45)       # 위치 EMA 필터 계수 (0~1, 작을수록 부드러움)
+        self.declare_parameter('pos_ema_alpha', 0.45)       # 위치 EMA 필터 계수 (0~1)
         self.declare_parameter('vel_ema_alpha', 0.30)       # 속도 EMA 필터 계수 (0~1)
         self.declare_parameter('odom_frame', 'odom')
         self.declare_parameter('base_frame', 'base_link')
@@ -79,7 +71,6 @@ class LidarBoatTracker(Node):
         self.filtered_pos = None      # np.array([X_filt, Y_filt])
         self.last_meas_pos = None     # np.array([X_meas, Y_meas])
         self.last_time = None         # Time
-        self.filtered_yaw = 0.0       # rad
         self.vx = 0.0                 # m/s
         self.vy = 0.0                 # m/s
         self.target_lost_count = 0
@@ -87,8 +78,9 @@ class LidarBoatTracker(Node):
         # ── ROS 2 통신 ────────────────────────────────────────────
         self.tf_broadcaster = TransformBroadcaster(self)
 
-        # 젯슨 수신 표준 토픽
+        # 젯슨 수신 표준 토픽 (배의 순수 X, Y 좌표 전달)
         self.pose_pub = self.create_publisher(PoseStamped, '/detections', 10)
+        self.point_pub = self.create_publisher(PointStamped, '/boat_position', 10)
         self.odom_pub = self.create_publisher(Odometry, '/odom', 10)
         self.filtered_scan_pub = self.create_publisher(LaserScan, '/lidar_tracker/filtered_scan', 10)
         self.marker_pub = self.create_publisher(MarkerArray, '/lidar_tracker/markers', 10)
@@ -98,10 +90,10 @@ class LidarBoatTracker(Node):
             LaserScan, '/scan', self._on_scan, qos_profile_sensor_data)
 
         self.get_logger().info(
-            f"🚀 [lidar_boat_tracker] 노이즈 필터링(중앙값 + EMA) 활성화!\n"
-            f"   - 수조 크기: {self.pool_size_x}m x {self.pool_size_y}m (원점: 좌하단)\n"
-            f"   - 라이다 위치: (X={self.lidar_x}m, Y={self.lidar_y}m, Yaw={math.degrees(self.lidar_yaw):.1f}°)\n"
-            f"   - 위치 EMA Alpha: {self.pos_alpha} | 속도 EMA Alpha: {self.vel_alpha}"
+            f"🚀 [lidar_boat_tracker] 배 (X, Y) 순수 좌표 추적기 시작 완료!\n"
+            f"   - 수조 크기: {self.pool_size_x}m x {self.pool_size_y}m (원점: 좌하단 0,0)\n"
+            f"   - 라이다 위치: (X={self.lidar_x}m, Y={self.lidar_y}m)\n"
+            f"   - 발행 토픽: /detections (PoseStamped), /boat_position (PointStamped), /odom"
         )
 
     def _on_scan(self, msg: LaserScan):
@@ -170,7 +162,7 @@ class LidarBoatTracker(Node):
             if diam < self.min_diam or diam > self.max_diam:
                 continue
 
-            # ⭐ 여러 점이 찍혔을 때 이상치(Outlier)를 잡기 위해 중앙값(Median) 사용 ⭐
+            # ⭐ 다중 점 중앙값(Median) 계산 ⭐
             median_center = np.median(c_pts, axis=0)
 
             # 이전 추적 위치가 있으면 가장 가까운 클러스터 우선 선택
@@ -188,12 +180,11 @@ class LidarBoatTracker(Node):
             self._publish_markers(msg.header.stamp, None)
             return
 
-        # 7. ⭐ [위치 및 속도/자세 EMA 필터 적용] ⭐
+        # 7. ⭐ [위치 EMA 필터 적용] ⭐
         raw_meas_pos = best_target[0]
         curr_time = self.get_clock().now()
 
         if self.filtered_pos is None:
-            # 첫 측정값 초기화
             self.filtered_pos = raw_meas_pos.copy()
             self.last_meas_pos = raw_meas_pos.copy()
             self.last_time = curr_time
@@ -204,23 +195,14 @@ class LidarBoatTracker(Node):
             self.filtered_pos = (self.pos_alpha * raw_meas_pos +
                                  (1.0 - self.pos_alpha) * self.filtered_pos)
 
-            # 2) 속도 및 선수각 계산
+            # 2) 속도 계산
             dt = (curr_time - self.last_time).nanoseconds * 1e-9
             if dt > 0.001:
                 inst_vx = (self.filtered_pos[0] - self.last_meas_pos[0]) / dt
                 inst_vy = (self.filtered_pos[1] - self.last_meas_pos[1]) / dt
 
-                # 속도 EMA 필터
                 self.vx = self.vel_alpha * inst_vx + (1.0 - self.vel_alpha) * self.vx
                 self.vy = self.vel_alpha * inst_vy + (1.0 - self.vel_alpha) * self.vy
-
-                speed = math.hypot(self.vx, self.vy)
-                if speed > 0.04:  # 4cm/s 이상 이동 시 선수각 매끄럽게 갱신
-                    target_yaw = math.atan2(self.vy, self.vx)
-                    # 각도 차이 보정 (-pi ~ +pi)
-                    dyaw = math.atan2(math.sin(target_yaw - self.filtered_yaw),
-                                      math.cos(target_yaw - self.filtered_yaw))
-                    self.filtered_yaw += 0.35 * dyaw
 
             self.last_meas_pos = self.filtered_pos.copy()
             self.last_time = curr_time
@@ -229,12 +211,11 @@ class LidarBoatTracker(Node):
         tx = float(self.filtered_pos[0])
         ty = float(self.filtered_pos[1])
 
-        # 8. ROS 2 토픽 발행
-        self._publish_outputs(msg.header.stamp, tx, ty, self.filtered_yaw, self.vx, self.vy)
-        self._publish_markers(msg.header.stamp, (tx, ty, self.filtered_yaw))
+        # 8. ROS 2 토픽 발행 (순수 X, Y 좌표 발행)
+        self._publish_outputs(msg.header.stamp, tx, ty, self.vx, self.vy)
+        self._publish_markers(msg.header.stamp, (tx, ty))
 
     def _euclidean_clustering(self, points, tol):
-        """연속된 인접 점들을 유클리디안 거리로 군집화."""
         clusters = []
         if len(points) == 0:
             return clusters
@@ -253,26 +234,36 @@ class LidarBoatTracker(Node):
 
     def _handle_target_lost(self, stamp):
         self.target_lost_count += 1
-        if self.target_lost_count > 15:  # 0.5초 이상 미검출 시
+        if self.target_lost_count > 15:
             self.vx = 0.0
             self.vy = 0.0
             if self.target_lost_count == 16:
                 self.get_logger().warn("⚠️ [lidar_boat_tracker] 수조 내부에서 배 구조물 미검출 (Searching...)")
 
-    def _publish_outputs(self, stamp, x, y, yaw, vx, vy):
-        q = yaw_to_quaternion(yaw)
-
-        # 1. PoseStamped (/detections) 발행
+    def _publish_outputs(self, stamp, x, y, vx, vy):
+        # 1. PoseStamped (/detections) 발행 (Orientation은 항등 쿼터니언)
         pose_msg = PoseStamped()
         pose_msg.header.stamp = stamp
         pose_msg.header.frame_id = self.odom_frame
         pose_msg.pose.position.x = x
         pose_msg.pose.position.y = y
         pose_msg.pose.position.z = 0.0
-        pose_msg.pose.orientation = q
+        pose_msg.pose.orientation.w = 1.0
+        pose_msg.pose.orientation.x = 0.0
+        pose_msg.pose.orientation.y = 0.0
+        pose_msg.pose.orientation.z = 0.0
         self.pose_pub.publish(pose_msg)
 
-        # 2. Odometry (/odom) 발행
+        # 2. PointStamped (/boat_position) 순수 X,Y 좌표 발행
+        point_msg = PointStamped()
+        point_msg.header.stamp = stamp
+        point_msg.header.frame_id = self.odom_frame
+        point_msg.point.x = x
+        point_msg.point.y = y
+        point_msg.point.z = 0.0
+        self.point_pub.publish(point_msg)
+
+        # 3. Odometry (/odom) 발행
         odom_msg = Odometry()
         odom_msg.header.stamp = stamp
         odom_msg.header.frame_id = self.odom_frame
@@ -280,13 +271,13 @@ class LidarBoatTracker(Node):
         odom_msg.pose.pose.position.x = x
         odom_msg.pose.pose.position.y = y
         odom_msg.pose.pose.position.z = 0.0
-        odom_msg.pose.pose.orientation = q
+        odom_msg.pose.pose.orientation.w = 1.0
         odom_msg.twist.twist.linear.x = vx
         odom_msg.twist.twist.linear.y = vy
         odom_msg.twist.twist.linear.z = 0.0
         self.odom_pub.publish(odom_msg)
 
-        # 3. TF 발행 (odom -> base_link)
+        # 4. TF 발행 (odom -> base_link)
         tf_boat = TransformStamped()
         tf_boat.header.stamp = stamp
         tf_boat.header.frame_id = self.odom_frame
@@ -294,11 +285,10 @@ class LidarBoatTracker(Node):
         tf_boat.transform.translation.x = x
         tf_boat.transform.translation.y = y
         tf_boat.transform.translation.z = 0.0
-        tf_boat.transform.rotation = q
+        tf_boat.transform.rotation.w = 1.0
         self.tf_broadcaster.sendTransform(tf_boat)
 
-        # TF 발행 (odom -> laser_frame: 고정 라이다 위치)
-        q_lidar = yaw_to_quaternion(self.lidar_yaw)
+        # 5. TF 발행 (odom -> laser_frame: 고정 라이다 위치 5,0)
         tf_lidar = TransformStamped()
         tf_lidar.header.stamp = stamp
         tf_lidar.header.frame_id = self.odom_frame
@@ -306,20 +296,20 @@ class LidarBoatTracker(Node):
         tf_lidar.transform.translation.x = self.lidar_x
         tf_lidar.transform.translation.y = self.lidar_y
         tf_lidar.transform.translation.z = 0.0
-        tf_lidar.transform.rotation = q_lidar
+        tf_lidar.transform.rotation.w = 1.0
         self.tf_broadcaster.sendTransform(tf_lidar)
 
         # 터미널 로깅 (1초 주기)
         speed = math.hypot(vx, vy)
         self.get_logger().info(
-            f"🎯 [LiDAR Tracker] 배 위치:[X:{x:.2f}m, Y:{y:.2f}m] | 선수각:{math.degrees(yaw):+.1f}° | 속도:{speed:.2f}m/s",
+            f"📍 [LiDAR Tracker] 배 위치 -> X: {x:.3f} m,  Y: {y:.3f} m  (속도: {speed:.2f} m/s)",
             throttle_duration_sec=1.0)
 
-    def _publish_markers(self, stamp, target_info):
-        """RViz에서 수조 테두리 및 배 위치를 선명하게 보여주는 마커 발행."""
+    def _publish_markers(self, stamp, target_pos):
+        """RViz 시각화 마커 발행."""
         ma = MarkerArray()
 
-        # 1. 수조 4면 테두리 사각형 (10m x 5m)
+        # 1. 수조 4면 테두리 (10m x 5m)
         m_pool = Marker()
         m_pool.header.stamp = stamp
         m_pool.header.frame_id = self.odom_frame
@@ -343,7 +333,7 @@ class LidarBoatTracker(Node):
         m_pool.points = pts
         ma.markers.append(m_pool)
 
-        # 2. 라이다 설치 위치 마커 (5m, 0m)
+        # 2. 라이다 고정 설치 위치 마커 (5, 0)
         m_lidar = Marker()
         m_lidar.header.stamp = stamp
         m_lidar.header.frame_id = self.odom_frame
@@ -363,28 +353,46 @@ class LidarBoatTracker(Node):
         m_lidar.color.a = 1.0
         ma.markers.append(m_lidar)
 
-        # 3. 배 위치 실시간 마커
-        if target_info is not None:
-            tx, ty, tyaw = target_info
+        # 3. 배 위치 실시간 마커 (선명한 원형 실린더/구)
+        if target_pos is not None:
+            tx, ty = target_pos
             m_boat = Marker()
             m_boat.header.stamp = stamp
             m_boat.header.frame_id = self.odom_frame
             m_boat.ns = "boat_target"
             m_boat.id = 2
-            m_boat.type = Marker.ARROW
+            m_boat.type = Marker.CYLINDER
             m_boat.action = Marker.ADD
             m_boat.pose.position.x = tx
             m_boat.pose.position.y = ty
-            m_boat.pose.position.z = 0.05
-            m_boat.pose.orientation = yaw_to_quaternion(tyaw)
-            m_boat.scale.x = 0.7   # 화살표 길이
-            m_boat.scale.y = 0.15  # 화살표 폭
-            m_boat.scale.z = 0.15  # 화살표 높이
+            m_boat.pose.position.z = 0.15
+            m_boat.scale.x = 0.35  # 기둥 지름
+            m_boat.scale.y = 0.35
+            m_boat.scale.z = 0.30  # 기둥 높이
             m_boat.color.r = 1.0
             m_boat.color.g = 0.55
             m_boat.color.b = 0.0
             m_boat.color.a = 1.0
             ma.markers.append(m_boat)
+
+            # 배 위치 텍스트 표시
+            m_text = Marker()
+            m_text.header.stamp = stamp
+            m_text.header.frame_id = self.odom_frame
+            m_text.ns = "boat_label"
+            m_text.id = 3
+            m_text.type = Marker.TEXT_VIEW_FACING
+            m_text.action = Marker.ADD
+            m_text.pose.position.x = tx
+            m_text.pose.position.y = ty + 0.35
+            m_text.pose.position.z = 0.4
+            m_text.text = f"Boat [X:{tx:.2f}m, Y:{ty:.2f}m]"
+            m_text.scale.z = 0.25
+            m_text.color.r = 1.0
+            m_text.color.g = 1.0
+            m_text.color.b = 0.0
+            m_text.color.a = 1.0
+            ma.markers.append(m_text)
 
         self.marker_pub.publish(ma)
 
