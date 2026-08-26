@@ -1,16 +1,21 @@
 """lidar_boat_tracker — 실내 수조 고정 2D 라이다 기반 순수 배 (X, Y) 좌표 추적기.
 
-배치 조건:
-  - 수조 좌하단 원점 (X=0m, Y=0m) 기준, (X=5.0m, Y=0.0m) 지점에 2D 라이다 설치
-  - 수조 크기: 가로 10.0m x 세로 5.0m
-  - 라이다는 전방(+Y 수조 내부)을 향해 스캔
+배치 및 좌표계 정의:
+  - 수조: 좌하단 원점 (X=0m, Y=0m), 가로 폭 X: 10m (0~10m), 세로 폭 Y: 5m (0~5m)
+  - 라이다 설치 위치: 수조 하단 변(10m) 정중앙 (X=5.0m, Y=0.0m)
+  - ydlidar_launch_view 화면 기준:
+      * 라이다 원점 (0,0) 기준 위쪽 50개 셀 (전방 0~5m, 좌우 폭 10m) = 수조 영역
+      * laser_frame -> 수조 절대 좌표:
+          X_pool = 5.0 - y_l  (0m ~ 10m)
+          Y_pool = 0.0 - x_l  (0m ~ 5m)
 
 출력 정보:
-  - 배의 수조 절대 위치 (X, Y) [m] (중앙값 클러스터링 + EMA 필터 적용)
-  - /detections (geometry_msgs/msg/PoseStamped on 'odom') -> X, Y 위치 순수 전달
+  - 배의 수조 절대 위치 (X, Y) [m] (중앙값 클러스터링 + EMA 노이즈 필터)
+  - /detections (geometry_msgs/msg/PoseStamped on 'odom') -> X, Y 위치 전달
   - /boat_position (geometry_msgs/msg/PointStamped on 'odom') -> 순수 X, Y 좌표 포인트
   - /odom (nav_msgs/msg/Odometry on 'odom') -> X, Y 위치 및 이동속도
   - /tf ('odom' -> 'base_link', 'odom' -> 'laser_frame')
+  - /lidar_tracker/filtered_scan (sensor_msgs/msg/LaserScan) -> 50개 셀 내부 필터링 스캔
   - /lidar_tracker/markers (visualization_msgs/msg/MarkerArray) -> RViz 시각화
 """
 
@@ -27,6 +32,16 @@ from visualization_msgs.msg import Marker, MarkerArray
 from tf2_ros import TransformBroadcaster
 
 
+def yaw_to_quaternion(yaw_rad):
+    """Yaw(rad) 회전각을 쿼터니언 메시지로 변환."""
+    q = Quaternion()
+    q.x = 0.0
+    q.y = 0.0
+    q.z = math.sin(yaw_rad / 2.0)
+    q.w = math.cos(yaw_rad / 2.0)
+    return q
+
+
 class LidarBoatTracker(Node):
     def __init__(self):
         super().__init__('lidar_boat_tracker')
@@ -34,9 +49,8 @@ class LidarBoatTracker(Node):
         # ── 파라미터 선언 ──────────────────────────────────────────
         self.declare_parameter('lidar_pos_x', 5.0)          # 수조 원점(좌하단) 기준 라이다 X 위치 [m] (하단 변 중앙)
         self.declare_parameter('lidar_pos_y', 0.0)          # 수조 원점(좌하단) 기준 라이다 Y 위치 [m] (하단 벽)
-        self.declare_parameter('lidar_yaw_deg', 90.0)       # 라이다 방향 (+Y 수조 위쪽 = 90도)
-        self.declare_parameter('pool_size_x', 10.0)         # 수조 가로 길이 [m] (오른쪽: +X)
-        self.declare_parameter('pool_size_y', 5.0)          # 수조 세로 폭 [m] (위쪽 주황색 화살표 방향: +Y)
+        self.declare_parameter('pool_size_x', 10.0)         # 수조 가로 길이 [m] (오른쪽: +X, 0~10m)
+        self.declare_parameter('pool_size_y', 5.0)          # 수조 세로 폭 [m] (위쪽: +Y, 0~5m)
         self.declare_parameter('wall_margin', 0.18)         # 수조 벽면 제거 마진 [m]
         self.declare_parameter('cluster_dist_tol', 0.25)    # 클러스터링 거리 허용오차 [m]
         self.declare_parameter('min_cluster_pts', 2)        # 기둥 인식 최소 포인트 수
@@ -52,7 +66,6 @@ class LidarBoatTracker(Node):
         # 파라미터 로드
         self.lidar_x = float(self.get_parameter('lidar_pos_x').value)
         self.lidar_y = float(self.get_parameter('lidar_pos_y').value)
-        self.lidar_yaw = math.radians(float(self.get_parameter('lidar_yaw_deg').value))
         self.pool_size_x = float(self.get_parameter('pool_size_x').value)
         self.pool_size_y = float(self.get_parameter('pool_size_y').value)
         self.wall_margin = float(self.get_parameter('wall_margin').value)
@@ -90,10 +103,11 @@ class LidarBoatTracker(Node):
             LaserScan, '/scan', self._on_scan, qos_profile_sensor_data)
 
         self.get_logger().info(
-            f"🚀 [lidar_boat_tracker] 배 (X, Y) 순수 좌표 추적기 시작 완료!\n"
-            f"   - 수조 크기: {self.pool_size_x}m x {self.pool_size_y}m (원점: 좌하단 0,0)\n"
+            f"🚀 [lidar_boat_tracker] 50개 셀 수조 영역 필터링 시작!\n"
+            f"   - 수조 크기: {self.pool_size_x}m (가로 X) x {self.pool_size_y}m (세로 Y)\n"
             f"   - 라이다 위치: (X={self.lidar_x}m, Y={self.lidar_y}m)\n"
-            f"   - 발행 토픽: /detections (PoseStamped), /boat_position (PointStamped), /odom"
+            f"   - 유효 수조 ROI: X=[{self.wall_margin}m ~ {self.pool_size_x - self.wall_margin}m], "
+            f"Y=[{self.wall_margin}m ~ {self.pool_size_y - self.wall_margin}m]"
         )
 
     def _on_scan(self, msg: LaserScan):
@@ -117,13 +131,16 @@ class LidarBoatTracker(Node):
         x_l = r_valid * np.cos(a_valid)
         y_l = r_valid * np.sin(a_valid)
 
-        # 3. 수조 절대 좌표계 (X_pool, Y_pool) 변환
-        cos_y = math.cos(self.lidar_yaw)
-        sin_y = math.sin(self.lidar_yaw)
-        x_pool = self.lidar_x + (x_l * cos_y - y_l * sin_y)
-        y_pool = self.lidar_y + (x_l * sin_y + y_l * cos_y)
+        # 3. ⭐ ydlidar_launch_view 화면 기준 50개 셀 수조 변환 ⭐
+        # 라이다 원점 기준 위쪽 50개 셀:
+        #   - 위쪽 (깊이 0~5m): -x_l
+        #   - 좌측: +y_l, 우측: -y_l
+        #   - X_pool = 5.0 - y_l (0m ~ 10m)
+        #   - Y_pool = 0.0 - x_l (0m ~ 5m)
+        x_pool = self.lidar_x - y_l
+        y_pool = self.lidar_y - x_l
 
-        # 4. [ROI 필터]: 수조 내부 영역(벽면 및 외부 hit 제외) 판정
+        # 4. [ROI 필터]: 수조 50개 셀 내부 영역(벽면 및 외부 hit 제외) 판정
         min_x = self.wall_margin
         max_x = self.pool_size_x - self.wall_margin
         min_y = self.wall_margin
@@ -296,7 +313,8 @@ class LidarBoatTracker(Node):
         tf_lidar.transform.translation.x = self.lidar_x
         tf_lidar.transform.translation.y = self.lidar_y
         tf_lidar.transform.translation.z = 0.0
-        tf_lidar.transform.rotation.w = 1.0
+        # laser_frame의 -x가 odom의 +y, +y가 odom의 -x에 대응 (-90도 회전)
+        tf_lidar.transform.rotation = yaw_to_quaternion(-math.pi / 2.0)
         self.tf_broadcaster.sendTransform(tf_lidar)
 
         # 터미널 로깅 (1초 주기)
