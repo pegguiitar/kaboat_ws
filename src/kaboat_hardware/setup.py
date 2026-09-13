@@ -32,6 +32,7 @@ setup(
             'thruster_driver = kaboat_hardware.thruster_driver:main',
             'ceiling_apriltag_node = kaboat_hardware.ceiling_apriltag_node:main',
             'lidar_boat_tracker = kaboat_hardware.lidar_boat_tracker:main',
+            'indoor_lidar_odom = kaboat_hardware.indoor_lidar_odom:main',
         ],
     },
 )

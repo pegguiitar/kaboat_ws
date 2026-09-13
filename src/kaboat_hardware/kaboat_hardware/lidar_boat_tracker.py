@@ -60,6 +60,8 @@ class LidarBoatTracker(Node):
         self.declare_parameter('odom_frame', 'odom')
         self.declare_parameter('base_frame', 'base_link')
         self.declare_parameter('laser_frame', 'laser_frame')
+        self.declare_parameter('publish_odom', False)       # 실내 GPS 역할이므로 odom 발행은 기본 비활성
+        self.declare_parameter('publish_tf', False)         # odom->base_link TF 발행은 기본 비활성
 
         # 파라미터 로드
         self.lidar_x = float(self.get_parameter('lidar_pos_x').value)
@@ -77,6 +79,8 @@ class LidarBoatTracker(Node):
         self.odom_frame = str(self.get_parameter('odom_frame').value)
         self.base_frame = str(self.get_parameter('base_frame').value)
         self.laser_frame = str(self.get_parameter('laser_frame').value)
+        self.publish_odom = bool(self.get_parameter('publish_odom').value)
+        self.publish_tf = bool(self.get_parameter('publish_tf').value)
 
         # ── EMA 필터 상태 변수 ─────────────────────────────────────
         self.filtered_pos = None      # np.array([X_filt, Y_filt])
@@ -273,30 +277,32 @@ class LidarBoatTracker(Node):
         point_msg.point.z = 0.0
         self.point_pub.publish(point_msg)
 
-        # 3. Odometry (/odom) 발행
-        odom_msg = Odometry()
-        odom_msg.header.stamp = stamp
-        odom_msg.header.frame_id = self.odom_frame
-        odom_msg.child_frame_id = self.base_frame
-        odom_msg.pose.pose.position.x = x
-        odom_msg.pose.pose.position.y = y
-        odom_msg.pose.pose.position.z = 0.0
-        odom_msg.pose.pose.orientation.w = 1.0
-        odom_msg.twist.twist.linear.x = vx
-        odom_msg.twist.twist.linear.y = vy
-        odom_msg.twist.twist.linear.z = 0.0
-        self.odom_pub.publish(odom_msg)
+        # 3. Odometry (/odom) 발행 (기본값 False: 배 내부 indoor_lidar_odom과 충돌 방지)
+        if self.publish_odom:
+            odom_msg = Odometry()
+            odom_msg.header.stamp = stamp
+            odom_msg.header.frame_id = self.odom_frame
+            odom_msg.child_frame_id = self.base_frame
+            odom_msg.pose.pose.position.x = x
+            odom_msg.pose.pose.position.y = y
+            odom_msg.pose.pose.position.z = 0.0
+            odom_msg.pose.pose.orientation.w = 1.0
+            odom_msg.twist.twist.linear.x = vx
+            odom_msg.twist.twist.linear.y = vy
+            odom_msg.twist.twist.linear.z = 0.0
+            self.odom_pub.publish(odom_msg)
 
-        # 4. TF 발행 (odom -> base_link)
-        tf_boat = TransformStamped()
-        tf_boat.header.stamp = stamp
-        tf_boat.header.frame_id = self.odom_frame
-        tf_boat.child_frame_id = self.base_frame
-        tf_boat.transform.translation.x = x
-        tf_boat.transform.translation.y = y
-        tf_boat.transform.translation.z = 0.0
-        tf_boat.transform.rotation.w = 1.0
-        self.tf_broadcaster.sendTransform(tf_boat)
+        # 4. TF 발행 (odom -> base_link, 기본값 False)
+        if self.publish_tf:
+            tf_boat = TransformStamped()
+            tf_boat.header.stamp = stamp
+            tf_boat.header.frame_id = self.odom_frame
+            tf_boat.child_frame_id = self.base_frame
+            tf_boat.transform.translation.x = x
+            tf_boat.transform.translation.y = y
+            tf_boat.transform.translation.z = 0.0
+            tf_boat.transform.rotation.w = 1.0
+            self.tf_broadcaster.sendTransform(tf_boat)
 
         # 5. TF 발행 (odom -> laser_frame: 고정 라이다 위치 5,0)
         tf_lidar = TransformStamped()
@@ -312,7 +318,7 @@ class LidarBoatTracker(Node):
         # 터미널 로깅 (1초 주기)
         speed = math.hypot(vx, vy)
         self.get_logger().info(
-            f"📍 [LiDAR Tracker] 배 위치 -> X: {x:.3f} m,  Y: {y:.3f} m  (속도: {speed:.2f} m/s)",
+            f"📍 [LiDAR Tracker (실내 GPS)] 배 위치 -> X: {x:.3f} m,  Y: {y:.3f} m  (속도: {speed:.2f} m/s)",
             throttle_duration_sec=1.0)
 
     def _publish_markers(self, stamp, target_pos):

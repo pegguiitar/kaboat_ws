@@ -24,7 +24,10 @@ lidar_boat_tracker:
     pos_ema_alpha: 0.45       # 위치 EMA 계수 (작을수록 부드러움)
     vel_ema_alpha: 0.30       # 속도 EMA 계수
 
-    # ── 좌표계 프레임 ───────────────────────────────────────────
+    # ── 좌표계 프레임 및 발행 옵션 ───────────────────────────────
     odom_frame: "odom"
     base_frame: "base_link"
     laser_frame: "laser_frame"
+    publish_odom: false       # 실내 GPS 역할이므로 odom 발행 비활성 (배 내부 indoor_lidar_odom 사용)
+    publish_tf: false         # odom->base_link TF 발행 비활성
+
