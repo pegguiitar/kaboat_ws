@@ -78,7 +78,12 @@ class ThrusterDriver(Node):
         # 백엔드 초기화
         self.backend: BaseThrusterBackend = self._init_backend(hw_type)
         if not self.backend.open():
-            self.get_logger().error(f"하드웨어 백엔드 '{hw_type}' 초기화 실패! 중립 PWM 유지.")
+            self.get_logger().error(f"하드웨어 백엔드 '{hw_type}' 초기화 실패! (포트 탐색 재시도 중...)")
+        else:
+            port_name = getattr(self.backend, 'port', hw_type)
+            self.get_logger().info(f"✅ [thruster_driver] 하드웨어 백엔드 '{hw_type}' 연결 성공! (포트: {port_name})")
+
+        self._last_reconnect_time = 0.0
 
         # 상태 변수
         self.last_cmd_time: float = 0.0
@@ -139,6 +144,14 @@ class ThrusterDriver(Node):
 
     def _control_loop(self):
         now = time.monotonic()
+
+        # 백엔드 미연결 시 2초 주기로 재연결 시도
+        if not getattr(self.backend, 'is_open', True):
+            if (now - self._last_reconnect_time) > 2.0:
+                self._last_reconnect_time = now
+                if self.backend.open():
+                    port_name = getattr(self.backend, 'port', 'N/A')
+                    self.get_logger().info(f"✅ [thruster_driver] 하드웨어 백엔드 재연결 성공! (포트: {port_name})")
 
         # 1. E-Stop 상태 확인
         if self.emergency_stopped:

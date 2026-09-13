@@ -180,16 +180,48 @@ class SerialBackend(BaseThrusterBackend):
         self.port = port
         self.baudrate = baudrate
         self.timeout = timeout
-        self.serial = None
+    @property
+    def is_open(self) -> bool:
+        return self.serial is not None and self.serial.is_open
 
     def open(self) -> bool:
+        import glob
+        import os
         try:
             import serial
-            self.serial = serial.Serial(self.port, self.baudrate, timeout=self.timeout)
-            return True
-        except Exception:
-            self.serial = None
+        except ImportError:
             return False
+
+        # 후보 포트 목록 (지정 포트 -> by-id CP210x -> ttyUSB* -> ttyACM*)
+        candidate_ports = []
+        if self.port:
+            candidate_ports.append(self.port)
+
+        for p in glob.glob('/dev/serial/by-id/*CP210*') + glob.glob('/dev/serial/by-id/*UART*'):
+            if p not in candidate_ports:
+                candidate_ports.append(p)
+
+        for p in sorted(glob.glob('/dev/ttyUSB*')):
+            if p not in candidate_ports:
+                candidate_ports.append(p)
+
+        for p in sorted(glob.glob('/dev/ttyACM*')):
+            if 'microstrain' not in p and p not in candidate_ports:
+                candidate_ports.append(p)
+
+        for port in candidate_ports:
+            if not os.path.exists(port):
+                continue
+            try:
+                s = serial.Serial(port, self.baudrate, timeout=self.timeout)
+                self.serial = s
+                self.port = port
+                return True
+            except Exception:
+                continue
+
+        self.serial = None
+        return False
 
     def send_pwm(self, left_pwm: int, right_pwm: int) -> bool:
         if self.serial is None or not self.serial.is_open:
