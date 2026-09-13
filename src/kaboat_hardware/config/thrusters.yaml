@@ -4,7 +4,7 @@ thruster_driver:
   ros__parameters:
     # ── 하드웨어 통신 백엔드 ───────────────────────────
     # 'dummy'   : 하드웨어 미연결 벤치 테스트 (기본값)
-    # 'serial'  : 아두이노/MCU USB 시리얼 연결 (<PWM_L,PWM_R>\n 형식)
+    # 'serial'  : 아두이노/ESP32 USB 시리얼 연결 (고정 8자리 정수 LLLLRRRR\n 형식)
     # 'pca9685' : Jetson I2C 버스 직결 PCA9685 16채널 PWM 모듈
     hardware_type: "dummy"
     port: "/dev/ttyUSB0"

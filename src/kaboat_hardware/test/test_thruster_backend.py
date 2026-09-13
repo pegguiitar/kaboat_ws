@@ -115,6 +115,29 @@ class TestThrusterBackend(unittest.TestCase):
         dummy.close()
         self.assertFalse(dummy.is_open)
 
+    def test_serial_backend_protocol_formatting(self):
+        """SerialBackend가 아두이노/ESP32 규격(8자리 LLLLRRRR\\n)으로 정확히 인코딩하는지 검증."""
+        from unittest.mock import MagicMock
+        from kaboat_hardware.thruster_backend import SerialBackend
+
+        backend = SerialBackend(port='/dev/test_port')
+        mock_ser = MagicMock()
+        mock_ser.is_open = True
+        backend.serial = mock_ser
+
+        # 1. 일반 PWM 전송
+        self.assertTrue(backend.send_pwm(1650, 1420))
+        mock_ser.write.assert_called_with(b"16501420\n")
+
+        # 2. 범위 초과 시 1000~2000 클램핑 검증
+        self.assertTrue(backend.send_pwm(900, 2150))
+        mock_ser.write.assert_called_with(b"10002000\n")
+
+        # 3. 종료 시 중립 15001500 전송 검증
+        backend.close()
+        mock_ser.write.assert_called_with(b"15001500\n")
+        self.assertIsNone(backend.serial)
+
 
 if __name__ == '__main__':
     unittest.main()

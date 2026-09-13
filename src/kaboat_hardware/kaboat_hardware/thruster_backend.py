@@ -168,10 +168,12 @@ class DummyBackend(BaseThrusterBackend):
 
 
 class SerialBackend(BaseThrusterBackend):
-    """아두이노/MCU와 시리얼 통신을 수행하는 백엔드.
+    """아두이노/ESP32와 시리얼 통신을 수행하는 백엔드.
 
     프로토콜 형식:
-      텍스트 형식: `<PWM_L,PWM_R>\n` (예: `<1650,1520>\n`)
+      고정 8자리 정수 + 줄바꿈: `LLLLRRRR\n` (예: `16501520\n`)
+      - 앞 4자리: 좌측 스러스터 [1000~2000 µs]
+      - 뒤 4자리: 우측 스러스터 [1000~2000 µs]
     """
 
     def __init__(self, port: str = '/dev/ttyUSB0', baudrate: int = 115200, timeout: float = 0.1):
@@ -193,7 +195,10 @@ class SerialBackend(BaseThrusterBackend):
         if self.serial is None or not self.serial.is_open:
             return False
         try:
-            msg = f"<{left_pwm},{right_pwm}>\n".encode('ascii')
+            # 1000~2000 µs 범위 안전 클램핑 및 8자리(4자리+4자리) 전송
+            l_val = max(1000, min(2000, int(left_pwm)))
+            r_val = max(1000, min(2000, int(right_pwm)))
+            msg = f"{l_val:04d}{r_val:04d}\n".encode('ascii')
             self.serial.write(msg)
             return True
         except Exception:
@@ -202,8 +207,8 @@ class SerialBackend(BaseThrusterBackend):
     def close(self):
         if self.serial and self.serial.is_open:
             try:
-                # 종료 시 중립 PWM 전송
-                self.serial.write(b"<1500,1500>\n")
+                # 종료 시 중립 PWM(15001500) 전송
+                self.serial.write(b"15001500\n")
                 self.serial.close()
             except Exception:
                 pass

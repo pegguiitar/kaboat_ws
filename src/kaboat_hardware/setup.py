@@ -33,6 +33,8 @@ setup(
             'ceiling_apriltag_node = kaboat_hardware.ceiling_apriltag_node:main',
             'lidar_boat_tracker = kaboat_hardware.lidar_boat_tracker:main',
             'indoor_lidar_odom = kaboat_hardware.indoor_lidar_odom:main',
+            'straight_line_test = kaboat_hardware.straight_line_test:main',
+            'bspline_track_test = kaboat_hardware.bspline_track_test:main',
         ],
     },
 )
