@@ -87,8 +87,8 @@ def generate_launch_description():
             'tank_config_file', default_value=default_config,
             description='indoor_lidar_odom 파라미터 (수조 실측 설정값)'),
         DeclareLaunchArgument(
-            'imu_yaw_offset_deg', default_value='118.80',
-            description='수조 +X축(0도) 기준 IMU 설치 편차 각도 [deg] (-X 방향 정렬 시 118.80도 보정)'),
+            'imu_yaw_offset_deg', default_value='20.60',
+            description='수조 +X축(0도) 기준 IMU 설치 편차 각도 [deg] (-X 방향 정렬 시 20.60도 보정)'),
 
         LogInfo(msg='[INDOOR TANK] 실내 수조 모드: 외부 라이다(/boat_position, 실내 GPS) + 선체 GQ7 IMU(/imu/data) → /odom 융합 + 모터 드라이버 실행.'),
 
