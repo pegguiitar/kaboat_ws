@@ -156,7 +156,13 @@ class IndoorLidarOdom(Node):
 
         # 1. 위치 신호 유효성 검사
         if self.last_pos_stamp is None:
-            return  # 아직 첫 위치 수신 전
+            # 외부 라이다 첫 위치 수신 전이라도, 선체 IMU가 연결되어 있다면
+            # 캘리브레이션 및 자세 확인을 위해 기본 위치(0, 0)와 함께 /odom을 발행한다.
+            if self.imu_stamp is not None and (now_sec - self.imu_stamp) <= self.imu_timeout:
+                stamp_msg = self.get_clock().now().to_msg()
+                odom_msg = self._build_odometry(stamp_msg, 0.0, 0.0, self.imu_yaw, 0.0, 0.0, self.imu_yaw_rate)
+                self.odom_pub.publish(odom_msg)
+            return
 
         pos_age = now_sec - self.last_pos_stamp
         if pos_age > self.pos_timeout:
