@@ -47,6 +47,6 @@ sensor_health_monitor:
 
 indoor_lidar_odom:
   ros__parameters:
-    imu_yaw_offset_deg: 20.60
+    imu_yaw_offset_deg: 47.72
     yaw_rate_sign: 1.0
 
