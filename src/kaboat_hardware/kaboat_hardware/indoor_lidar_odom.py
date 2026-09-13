@@ -68,7 +68,7 @@ class IndoorLidarOdom(Node):
         self.declare_parameter('publish_rate', 30.0)        # /odom 발행 주기 [Hz]
 
         # ── IMU 보정 파라미터 ─────────────────────────────
-        self.declare_parameter('imu_yaw_offset_deg', 0.0)   # 수조 +X축 기준 IMU 초기 편차 각도 [deg]
+        self.declare_parameter('imu_yaw_offset_deg', 106.14)  # 수조 +X축 기준 IMU 설치 편차 각도 [deg] (-X 정렬 시 106.14° 보정)
         self.declare_parameter('yaw_rate_sign', 1.0)        # 반시계(좌회전) 양수 부호 보정 (+1.0 또는 -1.0)
         self.declare_parameter('gyro_bias_z', 0.0)          # 자이로 Z축 정지 바이어스 [rad/s]
 

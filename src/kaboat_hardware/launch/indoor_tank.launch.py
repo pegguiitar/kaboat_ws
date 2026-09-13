@@ -36,7 +36,8 @@ def generate_launch_description():
     default_config = os.path.join(hardware_share, 'config', 'indoor_tank.yaml')
     sensors_config = os.path.join(hardware_share, 'config', 'sensors.yaml')
 
-    config_file = LaunchConfiguration('config_file')
+    tank_config_file = LaunchConfiguration('tank_config_file')
+    imu_yaw_offset_deg = LaunchConfiguration('imu_yaw_offset_deg')
     enable_thrusters = LaunchConfiguration('enable_thrusters')
     thruster_hw = LaunchConfiguration('thruster_hardware_type')
     thruster_port = LaunchConfiguration('thruster_port')
@@ -83,8 +84,11 @@ def generate_launch_description():
             'thruster_port', default_value='/dev/ttyUSB0',
             description='스러스터 시리얼 포트 경로 (기본값: /dev/ttyUSB0)'),
         DeclareLaunchArgument(
-            'config_file', default_value=default_config,
+            'tank_config_file', default_value=default_config,
             description='indoor_lidar_odom 파라미터 (수조 실측 설정값)'),
+        DeclareLaunchArgument(
+            'imu_yaw_offset_deg', default_value='106.14',
+            description='수조 +X축(0도) 기준 IMU 설치 편차 각도 [deg] (-X 방향 정렬 시 106.14도 보정)'),
 
         LogInfo(msg='[INDOOR TANK] 실내 수조 모드: 외부 라이다(/boat_position, 실내 GPS) + 선체 GQ7 IMU(/imu/data) → /odom 융합 + 모터 드라이버 실행.'),
 
@@ -97,6 +101,12 @@ def generate_launch_description():
             executable='indoor_lidar_odom',
             name='indoor_lidar_odom',
             output='screen',
-            parameters=[config_file, {'use_sim_time': False}],
+            parameters=[
+                tank_config_file,
+                {
+                    'use_sim_time': False,
+                    'imu_yaw_offset_deg': imu_yaw_offset_deg,
+                }
+            ],
         ),
     ])
