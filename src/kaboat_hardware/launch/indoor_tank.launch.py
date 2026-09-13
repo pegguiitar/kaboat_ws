@@ -25,6 +25,7 @@ from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument, IncludeLaunchDescription, LogInfo)
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
@@ -36,6 +37,9 @@ def generate_launch_description():
     sensors_config = os.path.join(hardware_share, 'config', 'sensors.yaml')
 
     config_file = LaunchConfiguration('config_file')
+    enable_thrusters = LaunchConfiguration('enable_thrusters')
+    thruster_hw = LaunchConfiguration('thruster_hardware_type')
+    thruster_port = LaunchConfiguration('thruster_port')
 
     # 배 센서 드라이버 (GQ7 IMU 등) 실행
     sensors = IncludeLaunchDescription(
@@ -51,6 +55,17 @@ def generate_launch_description():
         }.items(),
     )
 
+    # 모터 드라이버 실행 (기본값 serial)
+    thrusters = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(hardware_share, 'launch', 'thrusters.launch.py')),
+        launch_arguments={
+            'hardware_type': thruster_hw,
+            'port': thruster_port,
+        }.items(),
+        condition=IfCondition(enable_thrusters),
+    )
+
     return LaunchDescription([
         DeclareLaunchArgument(
             'enable_d455', default_value='false',
@@ -59,13 +74,22 @@ def generate_launch_description():
             'enable_gq7', default_value='true',
             description='GQ7 드라이버 — 실내에서는 IMU(/imu/data)만 사용'),
         DeclareLaunchArgument(
+            'enable_thrusters', default_value='true',
+            description='스러스터 드라이버 동시 실행 여부 (기본값: true)'),
+        DeclareLaunchArgument(
+            'thruster_hardware_type', default_value='serial',
+            description="스러스터 하드웨어 타입 ('serial' | 'dummy' | 'pca9685')"),
+        DeclareLaunchArgument(
+            'thruster_port', default_value='/dev/ttyUSB0',
+            description='스러스터 시리얼 포트 경로 (기본값: /dev/ttyUSB0)'),
+        DeclareLaunchArgument(
             'config_file', default_value=default_config,
             description='indoor_lidar_odom 파라미터 (수조 실측 설정값)'),
 
-        LogInfo(msg='[INDOOR TANK] 실내 수조 모드: 외부 라이다(/boat_position, 실내 GPS) + 선체 GQ7 IMU(/imu/data) → /odom 융합. '
-                    'GQ7 EKF remap은 꺼져 있습니다.'),
+        LogInfo(msg='[INDOOR TANK] 실내 수조 모드: 외부 라이다(/boat_position, 실내 GPS) + 선체 GQ7 IMU(/imu/data) → /odom 융합 + 모터 드라이버 실행.'),
 
         sensors,
+        thrusters,
 
         # 실내 오도메트리 융합 노드 (외부 라이다 위치 + 선체 IMU)
         Node(
