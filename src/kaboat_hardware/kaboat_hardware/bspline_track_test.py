@@ -347,8 +347,13 @@ class BSplineTrackTest(Node):
 
     def _send_stop(self):
         """정지 명령 송출."""
-        stop_cmd = Twist()
-        self.cmd_pub.publish(stop_cmd)
+        if not rclpy.ok():
+            return
+        try:
+            stop_cmd = Twist()
+            self.cmd_pub.publish(stop_cmd)
+        except Exception:
+            pass
 
     def _publish_rviz_vis(self):
         """RViz 시각화: B-Spline Path 및 제어점/타겟 MarkerArray 발행."""

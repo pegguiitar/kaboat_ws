@@ -264,9 +264,14 @@ class StraightLineTest(Node):
         )
 
     def _send_stop(self):
-        """정지 명령 발행."""
-        stop_cmd = Twist()
-        self.cmd_pub.publish(stop_cmd)
+        """정지 명령(/cmd_vel = 0) 송출."""
+        if not rclpy.ok():
+            return
+        try:
+            stop_cmd = Twist()
+            self.cmd_pub.publish(stop_cmd)
+        except Exception:
+            pass
 
     def _publish_path_markers(self):
         """RViz 시각화용 목표 직선 경로 및 시작/도착점 마커."""

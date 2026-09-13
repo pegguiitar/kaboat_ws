@@ -74,8 +74,8 @@ def generate_launch_description():
             'enable_gq7', default_value='true',
             description='GQ7 드라이버 — 실내에서는 IMU(/imu/data)만 사용'),
         DeclareLaunchArgument(
-            'enable_thrusters', default_value='true',
-            description='스러스터 드라이버 동시 실행 여부 (기본값: true)'),
+            'enable_thrusters', default_value='false',
+            description='스러스터 드라이버 동시 실행 여부 (기본값: false, 별도 실행 권장)'),
         DeclareLaunchArgument(
             'thruster_hardware_type', default_value='serial',
             description="스러스터 하드웨어 타입 ('serial' | 'dummy' | 'pca9685')"),
