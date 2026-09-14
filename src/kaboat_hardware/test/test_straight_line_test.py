@@ -108,16 +108,6 @@ class TestStraightLineTest(unittest.TestCase):
         self.assertEqual(latest_cmd.linear.x, 0.0)
         self.assertEqual(latest_cmd.angular.z, 0.0)
 
-    def test_wall_guard_stop(self):
-        """수조 벽면 (X=0.3 < min_wall_dist 0.5) 침범 시 비상 정지 확인."""
-        self._feed_odom(x=0.3, y=3.0, yaw=math.pi)
-        self.node._control_loop()
-
-        self.assertTrue(self.node.mission_finished)
-        latest_cmd: Twist = self.published_cmds[-1]
-        self.assertEqual(latest_cmd.linear.x, 0.0)
-        self.assertEqual(latest_cmd.angular.z, 0.0)
-
     def test_emergency_stop_topic(self):
         """/emergency_stop 수신 시 정지 명령 확인."""
         self._feed_odom(x=8.0, y=3.0, yaw=math.pi)

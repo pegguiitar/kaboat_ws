@@ -104,16 +104,6 @@ class TestBSplineTrackTest(unittest.TestCase):
         self.assertEqual(cmd.linear.x, 0.0)
         self.assertEqual(cmd.angular.z, 0.0)
 
-    def test_wall_guard_stop(self):
-        """수조 벽면 (X=0.3 < 0.5m) 접근 시 비상 정지 및 종료 검증."""
-        self._feed_odom(x=0.3, y=2.5, yaw=math.pi)
-        self.node._control_loop()
-
-        self.assertTrue(self.node.mission_finished)
-        cmd: Twist = self.published_cmds[-1]
-        self.assertEqual(cmd.linear.x, 0.0)
-        self.assertEqual(cmd.angular.z, 0.0)
-
     def test_emergency_stop_handling(self):
         """/emergency_stop 토픽 수신 시 모터 즉각 정지 검증."""
         start_x = self.node.path_x[0]

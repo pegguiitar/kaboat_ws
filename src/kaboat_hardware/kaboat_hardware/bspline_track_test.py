@@ -126,7 +126,6 @@ class BSplineTrackTest(Node):
 
         # ── 안전 파라미터 ─────────────────────────────────
         self.declare_parameter('odom_timeout_sec', 0.5) # /odom 타임아웃 [s]
-        self.declare_parameter('min_wall_dist', 0.5)    # 수조 벽면 비상 정지 거리 [m]
         self.declare_parameter('wait_for_start', True)  # 외부 시작 신호(/start_mission) 대기 여부
 
         # 파라미터 취득
@@ -144,7 +143,6 @@ class BSplineTrackTest(Node):
         self.kd_yaw = float(self.get_parameter('kd_yaw').value)
         self.curvature_slowdown = float(self.get_parameter('curvature_slowdown').value)
         self.odom_timeout = float(self.get_parameter('odom_timeout_sec').value)
-        self.min_wall_dist = float(self.get_parameter('min_wall_dist').value)
         self.wait_for_start = bool(self.get_parameter('wait_for_start').value)
 
         if len(cps_x) != len(cps_y):
@@ -263,15 +261,6 @@ class BSplineTrackTest(Node):
                 f"노트북에서 출발 명령 대기: ros2 topic pub --once /start_mission std_msgs/msg/Bool \"{{data: true}}\"",
                 throttle_duration_sec=3.0
             )
-            return
-
-        # 4. 수조 벽면 안전 경계 검사 (10m x 5m 수조)
-        if (x < self.min_wall_dist or x > (10.0 - self.min_wall_dist) or
-                y < self.min_wall_dist or y > (5.0 - self.min_wall_dist)):
-            self.get_logger().error(
-                f"🛑 [벽면 가드 발동] 배가 수조 안전 경계({self.min_wall_dist}m)에 근접 (X={x:.2f}, Y={y:.2f}) — 비상 정지!")
-            self._send_stop()
-            self.mission_finished = True
             return
 
         # 4. 곡선 위 최근접 진행 인덱스 탐색 (역행 방지: progress_idx 전방 윈도우 탐색)

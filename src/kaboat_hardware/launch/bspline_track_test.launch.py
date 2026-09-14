@@ -43,9 +43,6 @@ def generate_launch_description():
     odom_timeout_arg = DeclareLaunchArgument(
         'odom_timeout_sec', default_value='0.5',
         description='오도메트리 미수신 시 안전 정지 타임아웃 [초]')
-    min_wall_dist_arg = DeclareLaunchArgument(
-        'min_wall_dist', default_value='0.5',
-        description='수조 벽면 비상 정지 안전 거리 [m]')
     wait_for_start_arg = DeclareLaunchArgument(
         'wait_for_start', default_value='true',
         description='외부 시작 신호(/start_mission) 대기 여부 (기본값 true: 대기 후 출발)')
@@ -65,7 +62,6 @@ def generate_launch_description():
             'kd_yaw': LaunchConfiguration('kd_yaw'),
             'curvature_slowdown': LaunchConfiguration('curvature_slowdown'),
             'odom_timeout_sec': LaunchConfiguration('odom_timeout_sec'),
-            'min_wall_dist': LaunchConfiguration('min_wall_dist'),
             'wait_for_start': LaunchConfiguration('wait_for_start'),
             'use_sim_time': False,
         }],
@@ -81,7 +77,6 @@ def generate_launch_description():
         kd_yaw_arg,
         curvature_slowdown_arg,
         odom_timeout_arg,
-        min_wall_dist_arg,
         wait_for_start_arg,
         LogInfo(msg='[BSplineTrackTest] 실내 수조 B-Spline 곡선 추종 테스트 시작 중...'),
         node,
