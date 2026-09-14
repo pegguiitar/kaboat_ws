@@ -50,3 +50,4 @@ station_keeping_test:
     hold_duration_sec: 0.0    # [s] 목표 유지 시간 (0.0: 무한 유지)
     pos_deadband: 0.15        # [m] 위치 불감대 반경 (15cm)
     yaw_deadband_deg: 8.0     # [deg] 헤딩 불감대 각도 (8°)
+

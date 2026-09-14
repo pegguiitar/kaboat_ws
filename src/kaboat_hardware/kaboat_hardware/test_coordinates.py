@@ -129,3 +129,4 @@ def get_bspline_control_points_xy() -> Tuple[List[float], List[float]]:
     xs = [float(p[0]) for p in cps]
     ys = [float(p[1]) for p in cps]
     return xs, ys
+
