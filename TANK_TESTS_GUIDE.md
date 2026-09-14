@@ -61,11 +61,63 @@ ros2 topic pub --once /start_mission std_msgs/msg/Bool "{data: false}"
 ros2 topic pub --once /emergency_stop std_msgs/msg/Bool "{data: true}"
 ```
 
+## 4. 테스트 좌표 및 웨이포인트 간편 수정 📍
+
+테스트 경로와 좌표를 변경하고 싶을 때는 번거롭게 노드 소스 코드를 찾을 필요 없이, **전용 좌표 설정 파일**에서 즉시 수정할 수 있습니다:
+
+* **Python 파일 (추천):** [`src/kaboat_hardware/kaboat_hardware/test_coordinates.py`](file:///home/jiwoo/Desktop/2026KABOAT_REAL/src/kaboat_hardware/kaboat_hardware/test_coordinates.py)
+* **YAML 파일:** [`src/kaboat_hardware/config/test_coordinates.yaml`](file:///home/jiwoo/Desktop/2026KABOAT_REAL/src/kaboat_hardware/config/test_coordinates.yaml)
+
+> 💡 **재빌드 불필요**: `colcon build --symlink-install`로 설정되어 있으므로, 파일을 저장하면 **재빌드 없이 즉시 다음 실행에 반영**됩니다!
+
+### 수조 좌표계 다이어그램 (10m $\times$ 5m)
+```text
+      Y = 5.0m ┌────────────────────────────────────────────────────────────┐
+               │                                                            │
+               │                   (5.0, 2.5) [수조 정중앙]                 │
+               │                                                            │
+      Y = 0.0m └────────────────────────────────────────────────────────────┘
+               X = 0.0m                                            X = 10.0m
+```
+
+### `test_coordinates.py` 편집 예시
+```python
+# 1. 직진 주행: 출발지와 목표지점 X, Y 수정
+STRAIGHT_LINE = {
+    'start_x': 9.0, 'start_y': 3.0,
+    'goal_x':  1.0, 'goal_y':  3.0,
+}
+
+# 2. B-Spline 곡선: 경유하고 싶은 (X, Y) 점들을 순서대로 나열
+BSPLINE_TRACK = {
+    'control_points': [
+        (8.5, 2.0),
+        (7.0, 3.5),
+        (5.0, 1.5),
+        (3.0, 3.5),
+        (1.5, 2.5),
+    ],
+}
+# (미리 준비된 's_curve', 'u_turn', 'diagonal', 'perimeter' 프리셋도 활용 가능)
+
+# 3. 원형 선회: 중심점 및 반경
+CIRCLE_DRIVE = {
+    'center_x': 5.0, 'center_y': 2.5,
+    'radius': 1.2, 'direction': 'ccw', 'target_laps': 2.0,
+}
+
+# 4. 정점 유지 (DP): 목표 유지 위치 및 선수각
+STATION_KEEPING = {
+    'target_x': 5.0, 'target_y': 2.5,
+    'target_yaw_deg': 180.0,
+}
+```
+
 ---
 
-## 4. 파라미터 통합 설정 (`tank_tests.yaml`)
+## 5. 파라미터 상세 설정 (`tank_tests.yaml`)
 
-모든 테스트의 속도, 게인, 목표 좌표는 [`src/kaboat_hardware/config/tank_tests.yaml`](file:///home/jiwoo/Desktop/2026KABOAT_REAL/src/kaboat_hardware/config/tank_tests.yaml) 파일 한 곳에서 편리하게 수정할 수 있습니다.
+속도, 게인, 타임아웃 등 종합 주행 파라미터는 [`src/kaboat_hardware/config/tank_tests.yaml`](file:///home/jiwoo/Desktop/2026KABOAT_REAL/src/kaboat_hardware/config/tank_tests.yaml)에서 세부 조정할 수 있습니다.
 
 ### 주요 파라미터 튜닝 포인트
 * **기본 전진 출력 (`cruise_speed`)**: 기본값 `0.12` (12% 출력). 수조 크기에 맞추어 안전한 저속으로 설정됨.
@@ -79,7 +131,7 @@ ros2 topic pub --once /emergency_stop std_msgs/msg/Bool "{data: true}"
 
 ---
 
-## 5. RViz 시각화 모니터링 토픽
+## 6. RViz 시각화 모니터링 토픽
 
 각 테스트 실행 시 RViz2에서 `MarkerArray` 디스플레이를 추가하고 아래 토픽을 구독하면 목표 궤적이 3D 화면에 표시됩니다:
 
@@ -87,3 +139,4 @@ ros2 topic pub --once /emergency_stop std_msgs/msg/Bool "{data: true}"
 * **B-Spline**: `/bspline_track/markers` (스플라인 곡선 경로 스트립, 제어점)
 * **원형 선회**: `/circle_drive/markers` (원형 궤적 링, 중심점 구)
 * **정점 유지**: `/station_keeping/markers` (목표점 구, 허용 불감대 링, 목표 방위 화살표)
+

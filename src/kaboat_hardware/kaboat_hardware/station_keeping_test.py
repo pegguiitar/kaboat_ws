@@ -24,6 +24,8 @@ from std_msgs.msg import Bool
 from std_srvs.srv import Trigger
 from visualization_msgs.msg import Marker, MarkerArray
 
+from kaboat_hardware.test_coordinates import STATION_KEEPING
+
 
 def normalize_angle(angle_rad: float) -> float:
     """각도를 [-pi, pi] 범위로 정규화."""
@@ -55,15 +57,15 @@ class StationKeepingTest(Node):
     def __init__(self):
         super().__init__('station_keeping_test')
 
-        # ── 목표 위치 및 방위 파라미터 ───────────────────────
-        self.declare_parameter('target_x', 5.0)          # 목표 X 위치 [m] (수조 중앙)
-        self.declare_parameter('target_y', 2.5)          # 목표 Y 위치 [m] (수조 중앙)
-        self.declare_parameter('target_yaw_deg', 180.0)  # 목표 선수각 [deg] (-999.0: 위치만 유지)
-        self.declare_parameter('hold_duration_sec', 0.0) # 유지 시간 [s] (0.0: 무한 유지)
+        # ── 목표 위치 및 방위 파라미터 (test_coordinates.py 기본값 참조) ──
+        self.declare_parameter('target_x', float(STATION_KEEPING['target_x']))
+        self.declare_parameter('target_y', float(STATION_KEEPING['target_y']))
+        self.declare_parameter('target_yaw_deg', float(STATION_KEEPING['target_yaw_deg']))
+        self.declare_parameter('hold_duration_sec', float(STATION_KEEPING.get('hold_duration_sec', 0.0)))
+        self.declare_parameter('pos_deadband', float(STATION_KEEPING.get('pos_deadband', 0.15)))
+        self.declare_parameter('yaw_deadband_deg', float(STATION_KEEPING.get('yaw_deadband_deg', 8.0)))
 
         # ── 제어 및 불감대(Deadband) 파라미터 ────────────────
-        self.declare_parameter('pos_deadband', 0.15)     # 위치 유지 허용 불감대 반경 [m] (15cm)
-        self.declare_parameter('yaw_deadband_deg', 8.0)  # 헤딩 유지 허용 불감대 각도 [deg] (8°)
         self.declare_parameter('max_fwd_speed', 0.12)    # 최대 전진 출력 비 (12%)
         self.declare_parameter('max_rev_speed', 0.08)    # 최대 후진 출력 비 (8%)
         self.declare_parameter('max_angular', 0.35)      # 최대 회전 출력 비 (35%)
@@ -390,3 +392,4 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
+

@@ -5,20 +5,22 @@ from launch.actions import DeclareLaunchArgument, LogInfo
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
+from kaboat_hardware.test_coordinates import STATION_KEEPING
+
 
 def generate_launch_description():
     target_x_arg = DeclareLaunchArgument(
-        'target_x', default_value='5.0', description='목표 X 좌표 [m] (수조 중앙)')
+        'target_x', default_value=str(STATION_KEEPING['target_x']), description='목표 X 좌표 [m] (수조 중앙)')
     target_y_arg = DeclareLaunchArgument(
-        'target_y', default_value='2.5', description='목표 Y 좌표 [m] (수조 중앙)')
+        'target_y', default_value=str(STATION_KEEPING['target_y']), description='목표 Y 좌표 [m] (수조 중앙)')
     target_yaw_deg_arg = DeclareLaunchArgument(
-        'target_yaw_deg', default_value='180.0', description='목표 선수각 [deg] (-999: 위치만 유지)')
+        'target_yaw_deg', default_value=str(STATION_KEEPING['target_yaw_deg']), description='목표 선수각 [deg] (-999: 위치만 유지)')
     hold_duration_arg = DeclareLaunchArgument(
-        'hold_duration_sec', default_value='0.0', description='유지 시간 [초] (0.0: 무한 유지)')
+        'hold_duration_sec', default_value=str(STATION_KEEPING.get('hold_duration_sec', 0.0)), description='유지 시간 [초] (0.0: 무한 유지)')
     pos_deadband_arg = DeclareLaunchArgument(
-        'pos_deadband', default_value='0.15', description='위치 불감대 허용 반경 [m]')
+        'pos_deadband', default_value=str(STATION_KEEPING.get('pos_deadband', 0.15)), description='위치 불감대 허용 반경 [m]')
     yaw_deadband_deg_arg = DeclareLaunchArgument(
-        'yaw_deadband_deg', default_value='8.0', description='헤딩 불감대 허용 각도 [deg]')
+        'yaw_deadband_deg', default_value=str(STATION_KEEPING.get('yaw_deadband_deg', 8.0)), description='헤딩 불감대 허용 각도 [deg]')
     max_fwd_speed_arg = DeclareLaunchArgument(
         'max_fwd_speed', default_value='0.12', description='최대 전진 출력 비')
     max_rev_speed_arg = DeclareLaunchArgument(
@@ -79,3 +81,4 @@ def generate_launch_description():
         LogInfo(msg='[StationKeepingTest] 실내 수조 웨이포인트 정점 유지(DP) 테스트 노드 시작 중...'),
         node,
     ])
+

@@ -13,17 +13,19 @@ from launch.actions import DeclareLaunchArgument, LogInfo
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
+from kaboat_hardware.test_coordinates import STRAIGHT_LINE
+
 
 def generate_launch_description():
-    # 런치 인자 선언
+    # 런치 인자 선언 (test_coordinates.py 기본값 참조)
     start_x_arg = DeclareLaunchArgument(
-        'start_x', default_value='9.0', description='시작점 X 좌표 [m]')
+        'start_x', default_value=str(STRAIGHT_LINE['start_x']), description='시작점 X 좌표 [m]')
     start_y_arg = DeclareLaunchArgument(
-        'start_y', default_value='3.0', description='시작점 Y 좌표 [m]')
+        'start_y', default_value=str(STRAIGHT_LINE['start_y']), description='시작점 Y 좌표 [m]')
     goal_x_arg = DeclareLaunchArgument(
-        'goal_x', default_value='1.0', description='목표점 X 좌표 [m]')
+        'goal_x', default_value=str(STRAIGHT_LINE['goal_x']), description='목표점 X 좌표 [m]')
     goal_y_arg = DeclareLaunchArgument(
-        'goal_y', default_value='3.0', description='목표점 Y 좌표 [m]')
+        'goal_y', default_value=str(STRAIGHT_LINE['goal_y']), description='목표점 Y 좌표 [m]')
 
     cruise_speed_arg = DeclareLaunchArgument(
         'cruise_speed', default_value='0.12',

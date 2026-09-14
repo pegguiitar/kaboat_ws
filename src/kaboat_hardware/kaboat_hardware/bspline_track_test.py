@@ -26,6 +26,8 @@ from std_msgs.msg import Bool
 from std_srvs.srv import Trigger
 from visualization_msgs.msg import Marker, MarkerArray
 
+from kaboat_hardware.test_coordinates import BSPLINE_TRACK, get_bspline_control_points_xy
+
 
 def normalize_angle(angle: float) -> float:
     """각도를 [-pi, pi] 범위로 정규화."""
@@ -103,16 +105,15 @@ class BSplineTrackTest(Node):
     def __init__(self):
         super().__init__('bspline_track_test')
 
-        # ── 경로 파라미터 ──────────────────────────────────
-        # 기본 경로: 수조(10m x 5m) 안전 내부 S자 슬라럼 코스
-        # (8.5, 2.0) -> (7.0, 3.5) -> (5.0, 1.5) -> (3.0, 3.5) -> (1.5, 2.5)
-        default_cps_x = [8.5, 7.0, 5.0, 3.0, 1.5]
-        default_cps_y = [2.0, 3.5, 1.5, 3.5, 2.5]
+        # ── 경로 파라미터 (test_coordinates.py 기본값 참조) ──
+        default_cps_x, default_cps_y = get_bspline_control_points_xy()
+        default_degree = int(BSPLINE_TRACK.get('spline_degree', 3))
+        default_spacing = float(BSPLINE_TRACK.get('sample_spacing', 0.05))
 
         self.declare_parameter('control_points_x', default_cps_x)
         self.declare_parameter('control_points_y', default_cps_y)
-        self.declare_parameter('spline_degree', 3)
-        self.declare_parameter('sample_spacing', 0.05)
+        self.declare_parameter('spline_degree', default_degree)
+        self.declare_parameter('sample_spacing', default_spacing)
 
         # ── 주행 및 제어 파라미터 ─────────────────────────
         self.declare_parameter('cruise_speed', 0.12)    # 전진 기본 출력 비율 (12%)

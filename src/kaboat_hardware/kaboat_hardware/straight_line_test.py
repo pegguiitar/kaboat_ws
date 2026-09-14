@@ -32,6 +32,8 @@ from std_msgs.msg import Bool
 from std_srvs.srv import Trigger
 from visualization_msgs.msg import Marker, MarkerArray
 
+from kaboat_hardware.test_coordinates import STRAIGHT_LINE
+
 
 def yaw_from_quaternion(q) -> float:
     return math.atan2(2.0 * (q.w * q.z + q.x * q.y),
@@ -50,11 +52,11 @@ class StraightLineTest(Node):
     def __init__(self):
         super().__init__('straight_line_test')
 
-        # ── 경로 좌표 파라미터 ─────────────────────────────
-        self.declare_parameter('start_x', 9.0)          # 시작점 X [m]
-        self.declare_parameter('start_y', 3.0)          # 시작점 Y [m]
-        self.declare_parameter('goal_x', 1.0)           # 목표점 X [m]
-        self.declare_parameter('goal_y', 3.0)           # 목표점 Y [m]
+        # ── 경로 좌표 파라미터 (test_coordinates.py 기본값 참조) ──
+        self.declare_parameter('start_x', float(STRAIGHT_LINE['start_x']))
+        self.declare_parameter('start_y', float(STRAIGHT_LINE['start_y']))
+        self.declare_parameter('goal_x', float(STRAIGHT_LINE['goal_x']))
+        self.declare_parameter('goal_y', float(STRAIGHT_LINE['goal_y']))
 
         # ── 주행 및 제어 파라미터 ─────────────────────────
         self.declare_parameter('cruise_speed', 0.12)    # 전진 출력 비율 (0.0 ~ 1.0, 기본 12%)

@@ -23,6 +23,8 @@ from std_msgs.msg import Bool
 from std_srvs.srv import Trigger
 from visualization_msgs.msg import Marker, MarkerArray
 
+from kaboat_hardware.test_coordinates import CIRCLE_DRIVE
+
 
 def normalize_angle(angle_rad: float) -> float:
     """각도를 [-pi, pi] 범위로 정규화."""
@@ -54,12 +56,12 @@ class CircleDriveTest(Node):
     def __init__(self):
         super().__init__('circle_drive_test')
 
-        # ── 주행 및 궤도 파라미터 ─────────────────────────
-        self.declare_parameter('center_x', 5.0)          # 원 중심 X [m] (수조 중앙)
-        self.declare_parameter('center_y', 2.5)          # 원 중심 Y [m] (수조 중앙)
-        self.declare_parameter('radius', 1.2)            # 선회 반경 [m]
-        self.declare_parameter('direction', 'ccw')       # 'ccw' (반시계) 또는 'cw' (시계)
-        self.declare_parameter('target_laps', 2.0)       # 목표 바퀴 수 (0: 무한 주행)
+        # ── 주행 및 궤도 파라미터 (test_coordinates.py 기본값 참조) ──
+        self.declare_parameter('center_x', float(CIRCLE_DRIVE['center_x']))
+        self.declare_parameter('center_y', float(CIRCLE_DRIVE['center_y']))
+        self.declare_parameter('radius', float(CIRCLE_DRIVE['radius']))
+        self.declare_parameter('direction', str(CIRCLE_DRIVE.get('direction', 'ccw')))
+        self.declare_parameter('target_laps', float(CIRCLE_DRIVE.get('target_laps', 2.0)))
 
         # ── 제어 및 출력 파라미터 ─────────────────────────
         self.declare_parameter('cruise_speed', 0.12)     # 기본 전진 출력 비 (0.0 ~ 1.0, 12%)
@@ -336,3 +338,4 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
+

@@ -5,18 +5,20 @@ from launch.actions import DeclareLaunchArgument, LogInfo
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
+from kaboat_hardware.test_coordinates import CIRCLE_DRIVE
+
 
 def generate_launch_description():
     center_x_arg = DeclareLaunchArgument(
-        'center_x', default_value='5.0', description='원 중심 X 좌표 [m] (수조 중앙)')
+        'center_x', default_value=str(CIRCLE_DRIVE['center_x']), description='원 중심 X 좌표 [m] (수조 중앙)')
     center_y_arg = DeclareLaunchArgument(
-        'center_y', default_value='2.5', description='원 중심 Y 좌표 [m] (수조 중앙)')
+        'center_y', default_value=str(CIRCLE_DRIVE['center_y']), description='원 중심 Y 좌표 [m] (수조 중앙)')
     radius_arg = DeclareLaunchArgument(
-        'radius', default_value='1.2', description='선회 원 반경 [m]')
+        'radius', default_value=str(CIRCLE_DRIVE['radius']), description='선회 원 반경 [m]')
     direction_arg = DeclareLaunchArgument(
-        'direction', default_value='ccw', description='선회 방향 (ccw: 반시계, cw: 시계)')
+        'direction', default_value=str(CIRCLE_DRIVE['direction']), description='선회 방향 (ccw: 반시계, cw: 시계)')
     target_laps_arg = DeclareLaunchArgument(
-        'target_laps', default_value='2.0', description='목표 바퀴 수 (0.0: 무한 회전)')
+        'target_laps', default_value=str(CIRCLE_DRIVE['target_laps']), description='목표 바퀴 수 (0.0: 무한 회전)')
     cruise_speed_arg = DeclareLaunchArgument(
         'cruise_speed', default_value='0.12', description='순항 전진 출력 비 (0.0 ~ 1.0)')
     max_angular_arg = DeclareLaunchArgument(
@@ -71,3 +73,4 @@ def generate_launch_description():
         LogInfo(msg='[CircleDriveTest] 실내 수조 원형 선회 주행 테스트 노드 시작 중...'),
         node,
     ])
+
