@@ -1,0 +1,70 @@
+# tank_tests.yaml — 실내 수조(10m x 5m) 4대 자율운항 테스트 통합 설정
+
+# ── 1. 직선 주행 테스트 (Straight Line Test) ─────────────────────────
+straight_line_test:
+  ros__parameters:
+    start_x: 9.0              # [m] 출발 기준점 X
+    start_y: 3.0              # [m] 출발 기준점 Y
+    goal_x: 1.0               # [m] 목표 종점 X
+    goal_y: 3.0               # [m] 목표 종점 Y
+    cruise_speed: 0.12        # 기본 전진 출력 비 (12%)
+    max_angular: 0.35         # 최대 회전 출력 비 (35%)
+    lookahead_dist: 1.5       # [m] 전방 주시 거리
+    goal_tolerance: 0.35      # [m] 도착 판정 반경
+    slow_radius: 1.2          # [m] 종점 접근 감속 반경
+    kp_yaw: 0.35              # 헤딩 P 게인
+    kd_yaw: 0.12              # 요레이트 D 게인
+    odom_timeout_sec: 0.5     # [s] /odom 수신 타임아웃
+    wait_for_start: true      # 외부 /start_mission 신호 대기
+
+# ── 2. B-Spline 곡선 추종 테스트 (BSpline Track Test) ─────────────────
+bspline_track_test:
+  ros__parameters:
+    control_points_x: [8.5, 7.0, 5.0, 3.0, 1.5]
+    control_points_y: [2.0, 3.5, 1.5, 3.5, 2.5]
+    spline_degree: 3          # B-spline 차수 (Cubic)
+    sample_spacing: 0.05      # [m] 곡선 보간 샘플 간격 (5cm)
+    cruise_speed: 0.12        # 기본 전진 출력 비 (12%)
+    max_angular: 0.35         # 최대 회전 출력 비 (35%)
+    lookahead_dist: 1.2       # [m] Pure Pursuit 전방 주시 거리
+    goal_tolerance: 0.40      # [m] 도착 판정 반경
+    slow_radius: 1.5          # [m] 종점 감속 반경
+    kp_yaw: 0.38              # 헤딩 P 게인
+    kd_yaw: 0.14              # 요레이트 D 게인
+    curvature_slowdown: 0.25  # 곡률 기반 자동 감속 가중치
+    odom_timeout_sec: 0.5     # [s] /odom 타임아웃
+    wait_for_start: true      # 외부 시작 신호 대기
+
+# ── 3. 원형 선회 주행 테스트 (Circle Drive Test) ──────────────────────
+circle_drive_test:
+  ros__parameters:
+    center_x: 5.0             # [m] 원 중심 X (수조 중앙)
+    center_y: 2.5             # [m] 원 중심 Y (수조 중앙)
+    radius: 1.2               # [m] 선회 반경 (1.2m, 2.4m 직경)
+    direction: "ccw"          # "ccw"(반시계) 또는 "cw"(시계)
+    target_laps: 2.0          # 목표 완주 바퀴 수 (0.0: 무한 회전)
+    cruise_speed: 0.12        # 기본 순항 전진 출력 비 (12%)
+    max_angular: 0.35         # 최대 회전 출력 비 (35%)
+    kp_yaw: 0.40              # 헤딩 P 게인
+    kd_yaw: 0.12              # 요레이트 D 게인
+    k_converge: 1.5           # 원 궤도 수렴 게인
+    odom_timeout_sec: 0.5     # [s] /odom 타임아웃
+    wait_for_start: true      # 외부 시작 신호 대기
+
+# ── 4. 웨이포인트 정점 유지 테스트 (Station Keeping Test) ──────────────
+station_keeping_test:
+  ros__parameters:
+    target_x: 5.0             # [m] 목표 유지 위치 X (수조 중앙)
+    target_y: 2.5             # [m] 목표 유지 위치 Y (수조 중앙)
+    target_yaw_deg: 180.0     # [deg] 목표 선수각 (-999.0: 위치만 유지)
+    hold_duration_sec: 0.0    # [s] 목표 유지 시간 (0.0: 무한 정점 유지)
+    pos_deadband: 0.15        # [m] 위치 불감대 반경 (15cm)
+    yaw_deadband_deg: 8.0     # [deg] 헤딩 불감대 각도 (8°)
+    max_fwd_speed: 0.12       # 최대 전진 출력 비 (12%)
+    max_rev_speed: 0.08       # 최대 후진 출력 비 (8%)
+    max_angular: 0.35         # 최대 회전 출력 비 (35%)
+    kp_pos: 0.25              # 위치 복귀 P 게인
+    kp_yaw: 0.40              # 헤딩 복귀 P 게인
+    kd_yaw: 0.12              # 요레이트 감쇠 D 게인
+    odom_timeout_sec: 0.5     # [s] /odom 타임아웃
+    wait_for_start: true      # 외부 시작 신호 대기

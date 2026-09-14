@@ -32,6 +32,8 @@ setup(
             'indoor_lidar_odom = kaboat_hardware.indoor_lidar_odom:main',
             'straight_line_test = kaboat_hardware.straight_line_test:main',
             'bspline_track_test = kaboat_hardware.bspline_track_test:main',
+            'circle_drive_test = kaboat_hardware.circle_drive_test:main',
+            'station_keeping_test = kaboat_hardware.station_keeping_test:main',
         ],
     },
 )
