@@ -26,11 +26,8 @@ setup(
         'console_scripts': [
             'sensor_health_monitor = kaboat_hardware.sensor_health_monitor:main',
             'odom_tf_broadcaster = kaboat_hardware.odom_tf_broadcaster:main',
-            'apriltag_odom = kaboat_hardware.apriltag_odom:main',
-            'ceiling_apriltag_status = kaboat_hardware.ceiling_apriltag_status:main',
             'imu_dead_reckoning_odom = kaboat_hardware.imu_dead_reckoning_odom:main',
             'thruster_driver = kaboat_hardware.thruster_driver:main',
-            'ceiling_apriltag_node = kaboat_hardware.ceiling_apriltag_node:main',
             'lidar_boat_tracker = kaboat_hardware.lidar_boat_tracker:main',
             'indoor_lidar_odom = kaboat_hardware.indoor_lidar_odom:main',
             'straight_line_test = kaboat_hardware.straight_line_test:main',

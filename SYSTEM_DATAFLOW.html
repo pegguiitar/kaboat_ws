@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>KABOAT 시스템 데이터 흐름도</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({ startOnLoad: true, theme: 'dark' });
+  </script>
+  <style>
+    body {
+      background-color: #1e1e24;
+      color: #e0e0e0;
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      padding: 30px;
+      margin: 0;
+    }
+    h1 {
+      color: #61afef;
+      border-bottom: 2px solid #3e4451;
+      padding-bottom: 10px;
+    }
+    .container {
+      background-color: #282c34;
+      border-radius: 8px;
+      padding: 25px;
+      margin-bottom: 30px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+    }
+    th, td {
+      border: 1px solid #3e4451;
+      padding: 10px 14px;
+      text-align: left;
+    }
+    th {
+      background-color: #21252b;
+      color: #98c379;
+    }
+    tr:nth-child(even) {
+      background-color: #2c313a;
+    }
+    code {
+      background-color: #1e1e24;
+      color: #e5c07b;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: monospace;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>🚤 KABOAT 전체 시스템 데이터 흐름도 (Data Flow Architecture)</h1>
+  <p>실내 수조(10m x 5m) 자율운항 테스트 환경에서의 전체 데이터 파이프라인 및 노드 간 통신 구조입니다.</p>
+
+  <div class="container">
+    <h2>🗺️ 시스템 아키텍처 다이어그램</h2>
+    <div class="mermaid">
+    flowchart TD
+        subgraph LAPTOP ["💻 [수조 외벽] 노트북 계층"]
+            LidarHW["📡 YDLIDAR TG-50 라이다"] -->|"시리얼 512000bps"| Driver["ydlidar_ros2_driver_node"]
+            Driver -->|"/scan (10Hz LaserScan)"| Tracker["lidar_boat_tracker<br/>• 10m x 5m ROI 필터<br/>• 클러스터링 & Median 추출<br/>• EMA 위치 필터 (α=0.45)"]
+            Tracker -->|"/lidar_tracker/markers"| Rviz["🖥️ RViz2 시각화 모니터링"]
+        end
+
+        Tracker ==>|"🌐 Wi-Fi DDS 무선 네트워크<br/>/boat_position (PointStamped, 10Hz)<br/>배의 절대 2D 좌표 (X, Y)"| OdomFusion
+        UserCmd["👤 조종자 터미널 (노트북)"] -.->|"/start_mission (Bool)<br/>/emergency_stop (Empty)"| AutonomyNodes
+
+        subgraph JETSON ["🚤 [배 내부] 젯슨(Jetson) 자율운항 계층"]
+            subgraph SENSORS ["1. 실내 오도메트리 융합부 (indoor_tank.launch)"]
+                IMU_HW["🧭 선체 탑재 GQ7 IMU"] -->|"/imu/data (50Hz Imu)<br/>선수각 Yaw, 자이로 각속도 ωz"| OdomFusion
+                OdomFusion["indoor_lidar_odom<br/>• 위치: 라이다 실측 X, Y<br/>• 자세: IMU 쿼터니언 Yaw<br/>• 속도: 위치 미분 추정<br/>• 1.0s 라이다 두절 시 안전 차단"]
+            end
+
+            OdomFusion ==>|"/odom (20Hz Odometry)<br/>+ TF (odom -> base_link)"| AutonomyNodes
+
+            subgraph CONTROL ["2. 자율운항 및 경로추종 제어부"]
+                MissionMgr["mission_manager<br/>/mission/state, /mission/goal"] --> AutonomyNodes
+                subgraph AutonomyNodes ["주행 제어 노드 (Behaviors / Tests)"]
+                    StraightNode["straight_line_test<br/>(직선 8m LOS 주행)"]
+                    BsplineNode["bspline_track_test<br/>(S자 B-Spline 추종)"]
+                    AvoidNode["avoid_fsm<br/>(장애물 회피 FSM)"]
+                    StationNode["station_keeper<br/>(지정좌표 위치유지)"]
+                end
+                AutonomyNodes -->|"/cmd/* (Twist)"| CmdMux["cmd_mux<br/>(우선순위 멀티플렉서)"]
+            end
+
+            CmdMux ==>|"/cmd_vel (10~20Hz Twist)<br/>linear.x 전진, angular.z 회전"| ThrusterNode
+
+            subgraph ACTUATION ["3. 추진 구동부 (thrusters.launch)"]
+                ThrusterNode["thruster_driver<br/>• 좌/우 모터 차동 분배<br/>• 슬루레이트 2.0/s<br/>• 중립 불감대 (1475~1525μs)<br/>• 300ms 무신호 워치독"]
+                ThrusterNode -->|"시리얼 통신 (115200bps)<br/>포맷: LLLLRRRR\n (예: 15001500\n)"| ESP32["🎛️ ESP32 모터 제어 보드"]
+                ESP32 -->|"50Hz RC PWM 신호 (1100~1900μs)"| ESC["좌 / 우 ESC 변속기"]
+                ESC --> Motors["🌊 좌/우 브러시리스 스러스터 모터"]
+            end
+        end
+    </div>
+  </div>
+
+  <div class="container">
+    <h2>📋 노드별 토픽 계약 규격표</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>노드명 (Node)</th>
+          <th>구독 토픽 (Subscription)</th>
+          <th>발행 토픽 (Publication)</th>
+          <th>설명</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><b>ydlidar_ros2_driver_node</b></td>
+          <td>-</td>
+          <td><code>/scan</code> (LaserScan)</td>
+          <td>TG-50 라이다 360° 원본 스캔 데이터 발행 (10Hz)</td>
+        </tr>
+        <tr>
+          <td><b>lidar_boat_tracker</b></td>
+          <td><code>/scan</code></td>
+          <td><b><code>/boat_position</code></b> (PointStamped)<br><code>/lidar_tracker/markers</code> (MarkerArray)</td>
+          <td>수조 10m x 5m ROI 필터링 후 배의 2D 위치 발행 (10Hz)</td>
+        </tr>
+        <tr>
+          <td><b>indoor_lidar_odom</b></td>
+          <td><code>/boat_position</code><br><code>/imu/data</code></td>
+          <td><b><code>/odom</code></b> (Odometry)<br><code>/tf</code> (odom -> base_link)</td>
+          <td>라이다 절대 위치와 IMU 선수각/자이로를 융합하여 최종 오도메트리 생성 (20Hz)</td>
+        </tr>
+        <tr>
+          <td><b>straight_line_test</b></td>
+          <td><code>/odom</code><br><code>/start_mission</code></td>
+          <td><code>/cmd/straight</code> 또는 <code>/cmd_vel</code> (Twist)</td>
+          <td>(9.0, 3.0) -> (1.0, 3.0) 8m 구간 직선 LOS 추종</td>
+        </tr>
+        <tr>
+          <td><b>bspline_track_test</b></td>
+          <td><code>/odom</code><br><code>/start_mission</code></td>
+          <td><code>/cmd/bspline</code> 또는 <code>/cmd_vel</code> (Twist)</td>
+          <td>수조 내부 S자 B-Spline 곡선 생성 및 Lookahead 추종</td>
+        </tr>
+        <tr>
+          <td><b>cmd_mux</b></td>
+          <td><code>/cmd/*</code><br><code>/mission/state</code></td>
+          <td><b><code>/cmd_vel</code></b> (Twist)</td>
+          <td>현재 활성화된 미션의 속도 명령만 선택하여 최종 단일 명령으로 출력</td>
+        </tr>
+        <tr>
+          <td><b>thruster_driver</b></td>
+          <td><code>/cmd_vel</code></td>
+          <td>ESP32 시리얼 스트림</td>
+          <td>속도 명령을 좌/우 차동 모터 PWM 값(<code>LLLLRRRR\n</code>)으로 변환하여 ESP32로 전송</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</body>
+</html>
+

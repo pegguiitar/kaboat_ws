@@ -10,8 +10,6 @@
   <buildtool_depend>ament_python</buildtool_depend>
 
   <exec_depend>kaboat_bringup</exec_depend>
-  <exec_depend>apriltag_msgs</exec_depend>
-  <exec_depend>apriltag_ros</exec_depend>
   <exec_depend>camera_calibration</exec_depend>
   <exec_depend>camera_ros</exec_depend>
   <exec_depend>diagnostic_msgs</exec_depend>

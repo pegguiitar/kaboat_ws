@@ -27,7 +27,7 @@ from sensor_msgs.msg import LaserScan
 from geometry_msgs.msg import PoseStamped, PointStamped, TransformStamped, Quaternion
 from nav_msgs.msg import Odometry
 from visualization_msgs.msg import Marker, MarkerArray
-from tf2_ros import TransformBroadcaster
+from tf2_ros import TransformBroadcaster, StaticTransformBroadcaster
 
 
 def yaw_to_quaternion(yaw_rad):
@@ -92,6 +92,8 @@ class LidarBoatTracker(Node):
 
         # ── ROS 2 통신 ────────────────────────────────────────────
         self.tf_broadcaster = TransformBroadcaster(self)
+        self.static_tf_broadcaster = StaticTransformBroadcaster(self)
+        self._broadcast_static_tf()
 
         # 젯슨 수신 표준 토픽 (배의 순수 X, Y 좌표 전달)
         self.pose_pub = self.create_publisher(PoseStamped, '/detections', 10)
@@ -304,22 +306,23 @@ class LidarBoatTracker(Node):
             tf_boat.transform.rotation.w = 1.0
             self.tf_broadcaster.sendTransform(tf_boat)
 
-        # 5. TF 발행 (odom -> laser_frame: 고정 라이다 위치 5,0)
+        # 터미널 로깅 (1초 주기)
+        speed = math.hypot(vx, vy)
+        self.get_logger().info(
+            f"📍 [LiDAR Tracker (실내 GPS)] 배 위치 -> X: {x:.3f} m,  Y: {y:.3f} m  (속도: {speed:.2f} m/s)",
+            throttle_duration_sec=1.0)
+
+    def _broadcast_static_tf(self):
+        """고정 라이다의 위치 및 방향 (odom -> laser_frame)을 정적 TF로 발행."""
         tf_lidar = TransformStamped()
-        tf_lidar.header.stamp = stamp
+        tf_lidar.header.stamp = self.get_clock().now().to_msg()
         tf_lidar.header.frame_id = self.odom_frame
         tf_lidar.child_frame_id = self.laser_frame
         tf_lidar.transform.translation.x = self.lidar_x
         tf_lidar.transform.translation.y = self.lidar_y
         tf_lidar.transform.translation.z = 0.0
         tf_lidar.transform.rotation = yaw_to_quaternion(math.pi / 2.0)
-        self.tf_broadcaster.sendTransform(tf_lidar)
-
-        # 터미널 로깅 (1초 주기)
-        speed = math.hypot(vx, vy)
-        self.get_logger().info(
-            f"📍 [LiDAR Tracker (실내 GPS)] 배 위치 -> X: {x:.3f} m,  Y: {y:.3f} m  (속도: {speed:.2f} m/s)",
-            throttle_duration_sec=1.0)
+        self.static_tf_broadcaster.sendTransform(tf_lidar)
 
     def _publish_markers(self, stamp, target_pos):
         """RViz 시각화 마커 발행."""
