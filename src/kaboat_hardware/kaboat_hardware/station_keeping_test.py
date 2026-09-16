@@ -68,10 +68,10 @@ class StationKeepingTest(Node):
         # ── 제어 및 불감대(Deadband) 파라미터 ────────────────
         self.declare_parameter('max_fwd_speed', 0.12)    # 최대 전진 출력 비 (12%)
         self.declare_parameter('max_rev_speed', 0.08)    # 최대 후진 출력 비 (8%)
-        self.declare_parameter('max_angular', 0.35)      # 최대 회전 출력 비 (35%)
+        self.declare_parameter('max_angular', 0.80)      # 최대 회전 출력 비 (80%)
         self.declare_parameter('kp_pos', 0.25)           # 위치 오차 비례(P) 게인
-        self.declare_parameter('kp_yaw', 0.40)           # 헤딩 오차 비례(P) 게인
-        self.declare_parameter('kd_yaw', 0.12)           # 요레이트 감쇠(D) 게인
+        self.declare_parameter('kp_yaw', 1.0)            # 헤딩 오차 비례(P) 게인
+        self.declare_parameter('kd_yaw', 0.15)           # 요레이트 감쇠(D) 게인
 
         # ── 안전 파라미터 ─────────────────────────────────
         self.declare_parameter('odom_timeout_sec', 0.5)  # /odom 타임아웃 [s]

@@ -8,12 +8,12 @@ straight_line_test:
     goal_x: 1.0               # [m] 목표 종점 X
     goal_y: 3.0               # [m] 목표 종점 Y
     cruise_speed: 0.12        # 기본 전진 출력 비 (12%)
-    max_angular: 0.35         # 최대 회전 출력 비 (35%)
+    max_angular: 0.80         # 최대 회전 출력 비 (80%)
     lookahead_dist: 1.5       # [m] 전방 주시 거리
     goal_tolerance: 0.35      # [m] 도착 판정 반경
     slow_radius: 1.2          # [m] 종점 접근 감속 반경
-    kp_yaw: 0.35              # 헤딩 P 게인
-    kd_yaw: 0.12              # 요레이트 D 게인
+    kp_yaw: 1.0               # 헤딩 P 게인
+    kd_yaw: 0.15              # 요레이트 D 게인
     odom_timeout_sec: 0.5     # [s] /odom 수신 타임아웃
     wait_for_start: true      # 외부 /start_mission 신호 대기
 
@@ -25,12 +25,12 @@ bspline_track_test:
     spline_degree: 3          # B-spline 차수 (Cubic)
     sample_spacing: 0.05      # [m] 곡선 보간 샘플 간격 (5cm)
     cruise_speed: 0.12        # 기본 전진 출력 비 (12%)
-    max_angular: 0.35         # 최대 회전 출력 비 (35%)
+    max_angular: 0.80         # 최대 회전 출력 비 (80%)
     lookahead_dist: 1.2       # [m] Pure Pursuit 전방 주시 거리
     goal_tolerance: 0.40      # [m] 도착 판정 반경
     slow_radius: 1.5          # [m] 종점 감속 반경
-    kp_yaw: 0.38              # 헤딩 P 게인
-    kd_yaw: 0.14              # 요레이트 D 게인
+    kp_yaw: 1.0               # 헤딩 P 게인
+    kd_yaw: 0.15              # 요레이트 D 게인
     curvature_slowdown: 0.25  # 곡률 기반 자동 감속 가중치
     odom_timeout_sec: 0.5     # [s] /odom 타임아웃
     wait_for_start: true      # 외부 시작 신호 대기
@@ -44,9 +44,9 @@ circle_drive_test:
     direction: "ccw"          # "ccw"(반시계) 또는 "cw"(시계)
     target_laps: 2.0          # 목표 완주 바퀴 수 (0.0: 무한 회전)
     cruise_speed: 0.12        # 기본 순항 전진 출력 비 (12%)
-    max_angular: 0.35         # 최대 회전 출력 비 (35%)
-    kp_yaw: 0.40              # 헤딩 P 게인
-    kd_yaw: 0.12              # 요레이트 D 게인
+    max_angular: 0.80         # 최대 회전 출력 비 (80%)
+    kp_yaw: 1.0               # 헤딩 P 게인
+    kd_yaw: 0.15              # 요레이트 D 게인
     k_converge: 1.5           # 원 궤도 수렴 게인
     odom_timeout_sec: 0.5     # [s] /odom 타임아웃
     wait_for_start: true      # 외부 시작 신호 대기
@@ -62,9 +62,9 @@ station_keeping_test:
     yaw_deadband_deg: 8.0     # [deg] 헤딩 불감대 각도 (8°)
     max_fwd_speed: 0.12       # 최대 전진 출력 비 (12%)
     max_rev_speed: 0.08       # 최대 후진 출력 비 (8%)
-    max_angular: 0.35         # 최대 회전 출력 비 (35%)
+    max_angular: 0.80         # 최대 회전 출력 비 (80%)
     kp_pos: 0.25              # 위치 복귀 P 게인
-    kp_yaw: 0.40              # 헤딩 복귀 P 게인
-    kd_yaw: 0.12              # 요레이트 감쇠 D 게인
+    kp_yaw: 1.0               # 헤딩 복귀 P 게인
+    kd_yaw: 0.15              # 요레이트 감쇠 D 게인
     odom_timeout_sec: 0.5     # [s] /odom 타임아웃
     wait_for_start: true      # 외부 시작 신호 대기

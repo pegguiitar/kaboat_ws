@@ -22,8 +22,8 @@ def generate_launch_description():
         'cruise_speed', default_value='0.12',
         description='직진 순항 모터 출력 비율 (0.0 ~ 1.0, 기본 0.12 = 12%)')
     max_angular_arg = DeclareLaunchArgument(
-        'max_angular', default_value='0.25',
-        description='최대 회전 모터 출력 비율 (0.0 ~ 1.0, 기본 0.25 = 25%)')
+        'max_angular', default_value='0.80',
+        description='최대 회전 모터 출력 비율 (0.0 ~ 1.0, 기본 0.80 = 80%)')
     lookahead_dist_arg = DeclareLaunchArgument(
         'lookahead_dist', default_value='1.2',
         description='Lookahead 전방 주시 거리 [m]')
@@ -34,9 +34,9 @@ def generate_launch_description():
         'slow_radius', default_value='1.5',
         description='종점 접근 감속 시작 반경 [m]')
     kp_yaw_arg = DeclareLaunchArgument(
-        'kp_yaw', default_value='0.38', description='헤딩 비례 게인 P')
+        'kp_yaw', default_value='1.0', description='헤딩 비례 게인 P')
     kd_yaw_arg = DeclareLaunchArgument(
-        'kd_yaw', default_value='0.14', description='요레이트 감쇠 게인 D')
+        'kd_yaw', default_value='0.15', description='요레이트 감쇠 게인 D')
     curvature_slowdown_arg = DeclareLaunchArgument(
         'curvature_slowdown', default_value='0.25',
         description='곡률 기반 자동 감속 가중치')

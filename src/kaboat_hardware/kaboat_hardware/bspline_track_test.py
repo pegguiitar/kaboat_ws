@@ -117,12 +117,12 @@ class BSplineTrackTest(Node):
 
         # ── 주행 및 제어 파라미터 ─────────────────────────
         self.declare_parameter('cruise_speed', 0.12)    # 전진 기본 출력 비율 (12%)
-        self.declare_parameter('max_angular', 0.25)     # 최대 회전 출력 비율 (25%)
+        self.declare_parameter('max_angular', 0.80)     # 최대 회전 출력 비율 (80%)
         self.declare_parameter('lookahead_dist', 1.2)   # Lookahead 전방 주시 거리 [m]
         self.declare_parameter('goal_tolerance', 0.40)  # 도착 판정 반경 [m]
         self.declare_parameter('slow_radius', 1.5)      # 종점 접근 감속 시작 반경 [m]
-        self.declare_parameter('kp_yaw', 0.38)          # 헤딩 비례 게인 P
-        self.declare_parameter('kd_yaw', 0.14)          # 요레이트 감쇠 게인 D
+        self.declare_parameter('kp_yaw', 1.0)           # 헤딩 비례 게인 P
+        self.declare_parameter('kd_yaw', 0.15)          # 요레이트 감쇠 게인 D
         self.declare_parameter('curvature_slowdown', 0.25)  # 곡률 기반 감속 가중치
 
         # ── 안전 파라미터 ─────────────────────────────────

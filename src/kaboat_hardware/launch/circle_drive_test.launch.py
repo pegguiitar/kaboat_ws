@@ -22,11 +22,11 @@ def generate_launch_description():
     cruise_speed_arg = DeclareLaunchArgument(
         'cruise_speed', default_value='0.12', description='순항 전진 출력 비 (0.0 ~ 1.0)')
     max_angular_arg = DeclareLaunchArgument(
-        'max_angular', default_value='0.35', description='최대 회전 출력 비 (0.0 ~ 1.0)')
+        'max_angular', default_value='0.80', description='최대 회전 출력 비 (0.0 ~ 1.0)')
     kp_yaw_arg = DeclareLaunchArgument(
-        'kp_yaw', default_value='0.40', description='헤딩 P 게인')
+        'kp_yaw', default_value='1.0', description='헤딩 P 게인')
     kd_yaw_arg = DeclareLaunchArgument(
-        'kd_yaw', default_value='0.12', description='요레이트 D 게인')
+        'kd_yaw', default_value='0.15', description='요레이트 D 게인')
     k_converge_arg = DeclareLaunchArgument(
         'k_converge', default_value='1.5', description='원 궤도 진입 수렴 게인')
     odom_timeout_arg = DeclareLaunchArgument(

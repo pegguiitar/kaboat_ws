@@ -31,8 +31,8 @@ def generate_launch_description():
         'cruise_speed', default_value='0.12',
         description='직진 순항 모터 출력 비율 (0.0 ~ 1.0, 기본 0.12 = 12%)')
     max_angular_arg = DeclareLaunchArgument(
-        'max_angular', default_value='0.25',
-        description='최대 회전 모터 출력 비율 (0.0 ~ 1.0, 기본 0.25 = 25%)')
+        'max_angular', default_value='0.80',
+        description='최대 회전 모터 출력 비율 (0.0 ~ 1.0, 기본 0.80 = 80%)')
     lookahead_dist_arg = DeclareLaunchArgument(
         'lookahead_dist', default_value='1.2',
         description='LOS 경로 추종 전방 주시 거리 [m]')
@@ -43,9 +43,9 @@ def generate_launch_description():
         'slow_radius', default_value='1.5',
         description='목표점 접근 감속 반경 [m]')
     kp_yaw_arg = DeclareLaunchArgument(
-        'kp_yaw', default_value='0.35', description='헤딩 비례 게인 P')
+        'kp_yaw', default_value='1.0', description='헤딩 비례 게인 P')
     kd_yaw_arg = DeclareLaunchArgument(
-        'kd_yaw', default_value='0.12', description='요레이트 미분(감쇠) 게인 D')
+        'kd_yaw', default_value='0.15', description='요레이트 미분(감쇠) 게인 D')
     odom_timeout_arg = DeclareLaunchArgument(
         'odom_timeout_sec', default_value='0.5',
         description='오도메트리 미수신 시 안전 정지 타임아웃 [초]')

@@ -118,10 +118,25 @@ class TestCircleDriveTest(unittest.TestCase):
         self.published_cmds.clear()
         self.node._control_loop()
 
-        self.assertGreater(len(self.published_cmds), 0)
-        latest_cmd: Twist = self.published_cmds[-1]
-        self.assertEqual(latest_cmd.linear.x, 0.0)
-        self.assertEqual(latest_cmd.angular.z, 0.0)
+    def test_vector_field_convergence(self):
+        """원 바깥에서는 안쪽으로, 원 안쪽에서는 바깥쪽으로 수렴각이 계산되는지 검증."""
+        self.node.started = True
+
+        # 1. 원 바깥 (x=8.0, y=2.5) -> 중심(5.0, 2.5) 동쪽 3m 지점 (반경 1.2m 바깥)
+        # CCW 기준 접선은 북쪽(+Y, 90도). 중심(서쪽, 180도)으로 수렴하려면 90도보다 큰 각(서북쪽)이어야 함.
+        self._feed_odom(x=8.0, y=2.5, yaw=math.pi / 2.0)
+        self.node._control_loop()
+        cmd_outside: Twist = self.published_cmds[-1]
+        # 헤딩이 90도일 때 desired_heading > 90도이므로 좌회전(angular.z > 0) 명령이어야 함
+        self.assertGreater(cmd_outside.angular.z, 0.0)
+
+        # 2. 원 안쪽 (x=5.5, y=2.5) -> 중심(5.0, 2.5) 동쪽 0.5m 지점 (반경 1.2m 안쪽)
+        # 궤도를 넓혀 나가려면 90도보다 작은 각(동북쪽)이어야 함 -> 우회전(angular.z < 0) 명령이어야 함
+        self.published_cmds.clear()
+        self._feed_odom(x=5.5, y=2.5, yaw=math.pi / 2.0)
+        self.node._control_loop()
+        cmd_inside: Twist = self.published_cmds[-1]
+        self.assertLess(cmd_inside.angular.z, 0.0)
 
 
 if __name__ == '__main__':

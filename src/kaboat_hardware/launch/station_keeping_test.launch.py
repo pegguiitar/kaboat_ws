@@ -26,13 +26,13 @@ def generate_launch_description():
     max_rev_speed_arg = DeclareLaunchArgument(
         'max_rev_speed', default_value='0.08', description='최대 후진 출력 비')
     max_angular_arg = DeclareLaunchArgument(
-        'max_angular', default_value='0.35', description='최대 회전 출력 비')
+        'max_angular', default_value='0.80', description='최대 회전 출력 비')
     kp_pos_arg = DeclareLaunchArgument(
         'kp_pos', default_value='0.25', description='위치 오차 P 게인')
     kp_yaw_arg = DeclareLaunchArgument(
-        'kp_yaw', default_value='0.40', description='헤딩 오차 P 게인')
+        'kp_yaw', default_value='1.0', description='헤딩 오차 P 게인')
     kd_yaw_arg = DeclareLaunchArgument(
-        'kd_yaw', default_value='0.12', description='요레이트 D 게인')
+        'kd_yaw', default_value='0.15', description='요레이트 D 게인')
     odom_timeout_arg = DeclareLaunchArgument(
         'odom_timeout_sec', default_value='0.5', description='오도메트리 미수신 안전 정지 타임아웃 [초]')
     wait_for_start_arg = DeclareLaunchArgument(

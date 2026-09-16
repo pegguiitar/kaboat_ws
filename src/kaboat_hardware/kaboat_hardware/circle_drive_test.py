@@ -65,9 +65,9 @@ class CircleDriveTest(Node):
 
         # ── 제어 및 출력 파라미터 ─────────────────────────
         self.declare_parameter('cruise_speed', 0.12)     # 기본 전진 출력 비 (0.0 ~ 1.0, 12%)
-        self.declare_parameter('max_angular', 0.35)      # 최대 회전 출력 비 (0.0 ~ 1.0, 35%)
-        self.declare_parameter('kp_yaw', 0.40)           # 헤딩 비례(P) 게인
-        self.declare_parameter('kd_yaw', 0.12)           # 요레이트 감쇠(D) 게인
+        self.declare_parameter('max_angular', 0.80)      # 최대 회전 출력 비 (0.0 ~ 1.0, 80%)
+        self.declare_parameter('kp_yaw', 1.0)            # 헤딩 비례(P) 게인
+        self.declare_parameter('kd_yaw', 0.15)           # 요레이트 감쇠(D) 게인
         self.declare_parameter('k_converge', 1.5)        # 궤도 진입 수렴 게인
 
         # ── 안전 파라미터 ─────────────────────────────────
@@ -231,8 +231,8 @@ class CircleDriveTest(Node):
         tangent_angle = current_polar_angle + self.dir_sign * (math.pi / 2.0)
 
         # 원 궤도로 진입하기 위한 수렴 보정각 (atan 기반 부드러운 수렴)
-        # 원 바깥이면 원 중심 방향으로 선회, 원 안쪽이면 바깥 방향으로 선회
-        converge_angle = -self.dir_sign * math.atan2(self.k_converge * radial_error, self.radius)
+        # 원 바깥이면 원 중심 방향(수렴)으로 선회, 원 안쪽이면 바깥 방향(확장)으로 선회
+        converge_angle = self.dir_sign * math.atan2(self.k_converge * radial_error, self.radius)
         # 보정각 최대 +/- 60도 제한
         converge_angle = max(-math.pi / 3.0, min(math.pi / 3.0, converge_angle))
 
@@ -330,7 +330,10 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
     finally:
-        node._send_stop()
+        try:
+            node._send_stop()
+        except Exception:
+            pass
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()
