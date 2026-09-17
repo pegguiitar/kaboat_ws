@@ -11,6 +11,11 @@ Panels:
         - /필터링된 라이다 스캔 (/lidar_tracker/filtered_scan)1
         - /보트 실시간 위치 (/detections)1
         - /TF 좌표계1
+        - /직선 주행 테스트 마커 (/straight_drive/markers)1
+        - /B-Spline 곡선 테스트 마커 (/bspline_test/markers)1
+        - /B-Spline 목표 경로 (/bspline_test/path)1
+        - /원형 선회 테스트 마커 (/circle_drive/markers)1
+        - /정점 유지 테스트 마커 (/station_keeping/markers)1
       Splitter Ratio: 0.5
     Tree Height: 480
   - Class: rviz_common/Views
@@ -151,6 +156,77 @@ Visualization Manager:
       Tree:
         {}
       Update Interval: 0
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: "직선 주행 테스트 마커 (/straight_drive/markers)"
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /straight_drive/markers
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: "B-Spline 곡선 테스트 마커 (/bspline_test/markers)"
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /bspline_test/markers
+      Value: true
+    - Alpha: 0.9
+      Buffer Length: 1
+      Class: rviz_default_plugins/Path
+      Color: 0; 220; 255
+      Enabled: true
+      Head Diameter: 0.3
+      Head Length: 0.2
+      Length: 0.3
+      Line Style: Lines
+      Line Width: 0.05
+      Name: "B-Spline 목표 경로 (/bspline_test/path)"
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Pose Style: None
+      Radius: 0.03
+      Shaft Diameter: 0.1
+      Shaft Length: 0.1
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /bspline_test/path
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: "원형 선회 테스트 마커 (/circle_drive/markers)"
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /circle_drive/markers
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: "정점 유지 테스트 마커 (/station_keeping/markers)"
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /station_keeping/markers
       Value: true
   Enabled: true
   Global Options:

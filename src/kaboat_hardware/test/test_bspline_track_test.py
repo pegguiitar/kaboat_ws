@@ -1,8 +1,14 @@
 """test_bspline_track_test.py — B-Spline 곡선 경로 생성 및 추종 노드 단위 테스트."""
 
 import math
+import sys
 import unittest
 import numpy as np
+
+for p in ("/opt/ros/humble/lib/python3.10/site-packages", "/opt/ros/humble/local/lib/python3.10/dist-packages"):
+    if p not in sys.path:
+        sys.path.append(p)
+
 import rclpy
 from geometry_msgs.msg import Quaternion, Twist
 from nav_msgs.msg import Odometry
@@ -163,6 +169,80 @@ class TestBSplineTrackTest(unittest.TestCase):
         result = self.node._on_start_service(req, resp)
         self.assertTrue(result.success)
         self.assertTrue(self.node.started)
+
+    def test_trajectory_recording_lifecycle(self):
+        """B-spline 주행 전, 주행 중, 완료 후 실제 궤적 기록 생명주기 검증."""
+        start_x = self.node.path_x[0]
+        start_y = self.node.path_y[0]
+
+        # 1. 시작 전 (started=False)
+        self.node.started = False
+        self._feed_odom(x=start_x, y=start_y, yaw=0.0)
+        self.assertEqual(len(self.node.trajectory_history), 0)
+
+        # 2. 시작 (started=True)
+        self.node.started = True
+        self._feed_odom(x=start_x, y=start_y, yaw=0.0)
+        self.assertEqual(len(self.node.trajectory_history), 1)
+
+        # 3. 거리 다운샘플링 (<5cm)
+        self._feed_odom(x=start_x + 0.02, y=start_y, yaw=0.0)
+        self.assertEqual(len(self.node.trajectory_history), 1)
+
+        # 4. 충분한 거리 이동 (>=5cm)
+        self._feed_odom(x=start_x + 0.10, y=start_y, yaw=0.0)
+        self.assertEqual(len(self.node.trajectory_history), 2)
+
+        # 5. 미션 완료 (mission_finished=True)
+        self.node.mission_finished = True
+        self._feed_odom(x=start_x + 0.30, y=start_y, yaw=0.0)
+        self.assertEqual(len(self.node.trajectory_history), 2)
+
+    def test_rviz_vis_markers_include_goal_tolerance_and_trail(self):
+        """RViz 시각화 발행 시 B-spline Path, 제어점, 허용오차 링, 실제 궤적이 발행되는지 검증."""
+        published_marker_arrays = []
+        published_paths = []
+        self.node.marker_pub.publish = lambda ma: published_marker_arrays.append(ma)
+        self.node.path_pub.publish = lambda p: published_paths.append(p)
+
+        self.node.trajectory_history.add_point(8.5, 2.0)
+        self.node.trajectory_history.add_point(7.0, 3.5)
+
+        self.node._publish_rviz_vis()
+
+        self.assertGreater(len(published_paths), 0)
+        self.assertGreater(len(published_marker_arrays), 0)
+
+        path_msg = published_paths[-1]
+        self.assertEqual(path_msg.header.frame_id, "odom")
+        self.assertGreater(len(path_msg.poses), 0)
+
+        ma = published_marker_arrays[-1]
+        namespaces = {m.ns: m for m in ma.markers}
+        self.assertIn("bspline_control_points", namespaces)
+        self.assertIn("goal_tolerance", namespaces)
+        self.assertIn("actual_trajectory", namespaces)
+
+        # 허용오차 링
+        tol_marker = namespaces["goal_tolerance"]
+        self.assertEqual(tol_marker.id, 0)
+        self.assertEqual(tol_marker.header.frame_id, "odom")
+        self.assertGreater(len(tol_marker.points), 10)
+
+        # 실제 궤적
+        trail_marker = namespaces["actual_trajectory"]
+        self.assertEqual(trail_marker.id, 0)
+        self.assertEqual(trail_marker.header.frame_id, "odom")
+        self.assertEqual(len(trail_marker.points), 2)
+
+        # 미션 완료 후에도 궤적이 유지되는지 확인
+        self.node.mission_finished = True
+        published_marker_arrays.clear()
+        self.node._publish_rviz_vis()
+        ma_after = published_marker_arrays[-1]
+        ns_after = {m.ns: m for m in ma_after.markers}
+        self.assertIn("actual_trajectory", ns_after)
+        self.assertEqual(len(ns_after["actual_trajectory"].points), 2)
 
 
 if __name__ == '__main__':

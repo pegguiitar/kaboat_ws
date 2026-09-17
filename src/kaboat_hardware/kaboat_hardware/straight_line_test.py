@@ -33,6 +33,11 @@ from std_srvs.srv import Trigger
 from visualization_msgs.msg import Marker, MarkerArray
 
 from kaboat_hardware.test_coordinates import STRAIGHT_LINE
+from kaboat_hardware.trajectory_visualization import (
+    BoundedTrajectoryHistory,
+    create_trail_marker,
+    create_goal_tolerance_marker,
+)
 
 
 def yaw_from_quaternion(q) -> float:
@@ -119,6 +124,7 @@ class StraightLineTest(Node):
         self.boundary_stopped = False
         self.mission_finished = False
         self.stop_cmd_sent = False
+        self.trajectory_history = BoundedTrajectoryHistory()
 
         # 통신 인터페이스
         self.cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
@@ -179,6 +185,9 @@ class StraightLineTest(Node):
         self.current_yaw = yaw_from_quaternion(msg.pose.pose.orientation)
         self.current_yaw_rate = msg.twist.twist.angular.z
         self.last_odom_time = time.monotonic()
+
+        if self.started and not self.mission_finished:
+            self.trajectory_history.add_point(self.current_x, self.current_y)
 
     def _on_estop(self, msg: Bool):
         if msg.data and not self.emergency_stopped:
@@ -383,6 +392,28 @@ class StraightLineTest(Node):
         m_goal.color.b = 0.1
         m_goal.color.a = 0.8
         ma.markers.append(m_goal)
+
+        # 4. 목표 도달 허용오차 링 마커 (노란색 원)
+        m_goal_tol = create_goal_tolerance_marker(
+            center_x=self.goal_x,
+            center_y=self.goal_y,
+            radius=self.goal_tol,
+            frame_id="odom",
+            stamp=now,
+            ns="goal_tolerance",
+            marker_id=0,
+        )
+        ma.markers.append(m_goal_tol)
+
+        # 5. 실제 주행 궤적 마커 (오렌지색 LINE_STRIP)
+        m_trail = create_trail_marker(
+            points=self.trajectory_history.points,
+            frame_id="odom",
+            stamp=now,
+            ns="actual_trajectory",
+            marker_id=0,
+        )
+        ma.markers.append(m_trail)
 
         self.marker_pub.publish(ma)
 

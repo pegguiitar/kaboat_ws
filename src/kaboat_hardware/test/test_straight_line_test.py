@@ -1,7 +1,13 @@
 """test_straight_line_test.py — straight_line_test 노드 단위 테스트."""
 
 import math
+import sys
 import unittest
+
+for p in ("/opt/ros/humble/lib/python3.10/site-packages", "/opt/ros/humble/local/lib/python3.10/dist-packages"):
+    if p not in sys.path:
+        sys.path.append(p)
+
 import rclpy
 from geometry_msgs.msg import Quaternion, Twist
 from nav_msgs.msg import Odometry
@@ -182,6 +188,83 @@ class TestStraightLineTest(unittest.TestCase):
         result = self.node._on_start_service(req, resp)
         self.assertTrue(result.success)
         self.assertTrue(self.node.started)
+
+    def test_trajectory_recording_lifecycle(self):
+        """출발 전, 주행 중, 일시 정지, 완료 후 실제 궤적 기록 생명주기 검증."""
+        # 1. 시작 전 (started=False): 기록되지 않음
+        self.node.started = False
+        self._feed_odom(x=8.0, y=3.0, yaw=math.pi)
+        self.assertEqual(len(self.node.trajectory_history), 0)
+
+        # 2. 시작 (started=True): 첫 유효 점 기록
+        self.node.started = True
+        self._feed_odom(x=8.0, y=3.0, yaw=math.pi)
+        self.assertEqual(len(self.node.trajectory_history), 1)
+        self.assertAlmostEqual(self.node.trajectory_history[0][0], 8.0)
+
+        # 3. 거리 다운샘플링: 미세 이동(<5cm) 무시
+        self._feed_odom(x=8.02, y=3.0, yaw=math.pi)
+        self.assertEqual(len(self.node.trajectory_history), 1)
+
+        # 4. 충분한 이동(>=5cm) 시 추가 기록
+        self._feed_odom(x=7.90, y=3.0, yaw=math.pi)
+        self.assertEqual(len(self.node.trajectory_history), 2)
+
+        # 5. 일시 정지 (started=False): 기록 중단
+        self.node.started = False
+        self._feed_odom(x=7.50, y=3.0, yaw=math.pi)
+        self.assertEqual(len(self.node.trajectory_history), 2)
+
+        # 6. 재개 (started=True): 기록 재개
+        self.node.started = True
+        self._feed_odom(x=7.50, y=3.0, yaw=math.pi)
+        self.assertEqual(len(self.node.trajectory_history), 3)
+
+        # 7. 미션 완료 (mission_finished=True): 기록 중단
+        self.node.mission_finished = True
+        self._feed_odom(x=6.0, y=3.0, yaw=math.pi)
+        self.assertEqual(len(self.node.trajectory_history), 3)
+
+    def test_path_markers_include_goal_tolerance_and_actual_trajectory(self):
+        """MarkerArray에 목표선, 시작점, 도착점, 허용오차 링, 실제 주행 궤적이 모두 포함되는지 검증."""
+        published_marker_arrays = []
+        self.node.marker_pub.publish = lambda ma: published_marker_arrays.append(ma)
+
+        # 궤적에 점 2개 추가
+        self.node.trajectory_history.add_point(8.0, 3.0)
+        self.node.trajectory_history.add_point(7.0, 3.0)
+
+        self.node._publish_path_markers()
+        self.assertGreater(len(published_marker_arrays), 0)
+        ma = published_marker_arrays[-1]
+
+        namespaces = {m.ns: m for m in ma.markers}
+        self.assertIn("test_path", namespaces)
+        self.assertIn("test_start", namespaces)
+        self.assertIn("test_goal", namespaces)
+        self.assertIn("goal_tolerance", namespaces)
+        self.assertIn("actual_trajectory", namespaces)
+
+        # 허용오차 링 검증
+        tol_marker = namespaces["goal_tolerance"]
+        self.assertEqual(tol_marker.id, 0)
+        self.assertEqual(tol_marker.header.frame_id, "odom")
+        self.assertGreater(len(tol_marker.points), 10)
+
+        # 실제 주행 궤적 검증
+        trail_marker = namespaces["actual_trajectory"]
+        self.assertEqual(trail_marker.id, 0)
+        self.assertEqual(trail_marker.header.frame_id, "odom")
+        self.assertEqual(len(trail_marker.points), 2)
+
+        # 미션 완료 후에도 궤적 마커가 계속 유지되어 발행되는지 확인
+        self.node.mission_finished = True
+        published_marker_arrays.clear()
+        self.node._publish_path_markers()
+        ma_after = published_marker_arrays[-1]
+        ns_after = {m.ns: m for m in ma_after.markers}
+        self.assertIn("actual_trajectory", ns_after)
+        self.assertEqual(len(ns_after["actual_trajectory"].points), 2)
 
 
 if __name__ == '__main__':

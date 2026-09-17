@@ -27,6 +27,11 @@ from std_srvs.srv import Trigger
 from visualization_msgs.msg import Marker, MarkerArray
 
 from kaboat_hardware.test_coordinates import BSPLINE_TRACK, get_bspline_control_points_xy
+from kaboat_hardware.trajectory_visualization import (
+    BoundedTrajectoryHistory,
+    create_trail_marker,
+    create_goal_tolerance_marker,
+)
 
 
 def normalize_angle(angle: float) -> float:
@@ -169,6 +174,7 @@ class BSplineTrackTest(Node):
         self.emergency_stopped: bool = False
         self.mission_finished: bool = False
         self.stop_cmd_sent: bool = False
+        self.trajectory_history = BoundedTrajectoryHistory()
 
         # 통신 인터페이스
         self.cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
@@ -220,6 +226,9 @@ class BSplineTrackTest(Node):
         self.current_yaw = yaw_from_quaternion(msg.pose.pose.orientation)
         self.current_yaw_rate = msg.twist.twist.angular.z
         self.last_odom_time = time.monotonic()
+
+        if self.started and not self.mission_finished:
+            self.trajectory_history.add_point(self.current_x, self.current_y)
 
     def _on_estop(self, msg: Bool):
         if msg.data and not self.emergency_stopped:
@@ -416,6 +425,30 @@ class BSplineTrackTest(Node):
             m_target.color.b = 1.0
             m_target.color.a = 0.9
             ma.markers.append(m_target)
+
+        # 3. 목표 종점 허용오차 링 마커 (노란색 원)
+        goal_x = float(self.path_x[-1])
+        goal_y = float(self.path_y[-1])
+        m_goal_tol = create_goal_tolerance_marker(
+            center_x=goal_x,
+            center_y=goal_y,
+            radius=self.goal_tol,
+            frame_id="odom",
+            stamp=now,
+            ns="goal_tolerance",
+            marker_id=0,
+        )
+        ma.markers.append(m_goal_tol)
+
+        # 4. 실제 주행 궤적 마커 (오렌지색 LINE_STRIP)
+        m_trail = create_trail_marker(
+            points=self.trajectory_history.points,
+            frame_id="odom",
+            stamp=now,
+            ns="actual_trajectory",
+            marker_id=0,
+        )
+        ma.markers.append(m_trail)
 
         self.marker_pub.publish(ma)
 

@@ -24,6 +24,10 @@ from std_srvs.srv import Trigger
 from visualization_msgs.msg import Marker, MarkerArray
 
 from kaboat_hardware.test_coordinates import CIRCLE_DRIVE
+from kaboat_hardware.trajectory_visualization import (
+    BoundedTrajectoryHistory,
+    create_trail_marker,
+)
 
 
 def normalize_angle(angle_rad: float) -> float:
@@ -105,6 +109,7 @@ class CircleDriveTest(Node):
         self.mission_finished = False
         self.emergency_stopped = False
         self.stop_cmd_sent = False
+        self.trajectory_history = BoundedTrajectoryHistory()
 
         # 통신 인터페이스
         self.cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
@@ -156,6 +161,9 @@ class CircleDriveTest(Node):
         self.current_yaw = yaw_from_quaternion(msg.pose.pose.orientation)
         self.current_yaw_rate = msg.twist.twist.angular.z
         self.last_odom_time = time.monotonic()
+
+        if self.started and not self.mission_finished:
+            self.trajectory_history.add_point(self.current_x, self.current_y)
 
     def _on_estop(self, msg: Bool):
         if msg.data and not self.emergency_stopped:
@@ -318,6 +326,16 @@ class CircleDriveTest(Node):
         center_marker.color.b = 0.0
         center_marker.color.a = 0.9
         ma.markers.append(center_marker)
+
+        # 3. 실제 주행 궤적 마커 (오렌지색 LINE_STRIP)
+        trail_marker = create_trail_marker(
+            points=self.trajectory_history.points,
+            frame_id='odom',
+            stamp=stamp,
+            ns='actual_trajectory',
+            marker_id=0,
+        )
+        ma.markers.append(trail_marker)
 
         self.marker_pub.publish(ma)
 

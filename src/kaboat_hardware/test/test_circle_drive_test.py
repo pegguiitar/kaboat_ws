@@ -1,6 +1,11 @@
 import math
+import sys
 import time
 import unittest
+
+for p in ("/opt/ros/humble/lib/python3.10/site-packages", "/opt/ros/humble/local/lib/python3.10/dist-packages"):
+    if p not in sys.path:
+        sys.path.append(p)
 
 import rclpy
 from geometry_msgs.msg import Twist, Quaternion
@@ -137,6 +142,71 @@ class TestCircleDriveTest(unittest.TestCase):
         self.node._control_loop()
         cmd_inside: Twist = self.published_cmds[-1]
         self.assertLess(cmd_inside.angular.z, 0.0)
+
+    def test_trajectory_recording_lifecycle(self):
+        """원형 주행 전, 주행 중, 완료 후 실제 궤적 기록 생명주기 검증."""
+        # 1. 시작 전 (started=False)
+        self.node.started = False
+        self._feed_odom(x=5.0, y=1.3, yaw=0.0)
+        self.assertEqual(len(self.node.trajectory_history), 0)
+
+        # 2. 시작 (started=True)
+        self.node.started = True
+        self._feed_odom(x=5.0, y=1.3, yaw=0.0)
+        self.assertEqual(len(self.node.trajectory_history), 1)
+
+        # 3. 거리 다운샘플링 (<5cm)
+        self._feed_odom(x=5.02, y=1.3, yaw=0.0)
+        self.assertEqual(len(self.node.trajectory_history), 1)
+
+        # 4. 충분한 거리 이동 (>=5cm)
+        self._feed_odom(x=5.10, y=1.3, yaw=0.0)
+        self.assertEqual(len(self.node.trajectory_history), 2)
+
+        # 5. 미션 완료 (mission_finished=True)
+        self.node.mission_finished = True
+        self._feed_odom(x=5.30, y=1.3, yaw=0.0)
+        self.assertEqual(len(self.node.trajectory_history), 2)
+
+    def test_markers_include_orbit_center_and_trail(self):
+        """MarkerArray에 목표 궤도(orbit), 중심점(center), 실제 궤적(actual_trajectory)이 포함되는지 검증."""
+        published_marker_arrays = []
+        self.node.marker_pub.publish = lambda ma: published_marker_arrays.append(ma)
+
+        self.node.trajectory_history.add_point(5.0, 1.3)
+        self.node.trajectory_history.add_point(5.5, 1.5)
+
+        self.node._publish_markers()
+
+        self.assertGreater(len(published_marker_arrays), 0)
+        ma = published_marker_arrays[-1]
+        namespaces = {m.ns: m for m in ma.markers}
+
+        self.assertIn("orbit", namespaces)
+        self.assertIn("center", namespaces)
+        self.assertIn("actual_trajectory", namespaces)
+
+        orbit_marker = namespaces["orbit"]
+        self.assertEqual(orbit_marker.id, 0)
+        self.assertEqual(orbit_marker.header.frame_id, "odom")
+
+        center_marker = namespaces["center"]
+        self.assertEqual(center_marker.id, 1)
+        self.assertEqual(center_marker.header.frame_id, "odom")
+
+        trail_marker = namespaces["actual_trajectory"]
+        self.assertEqual(trail_marker.id, 0)
+        self.assertEqual(trail_marker.header.frame_id, "odom")
+        self.assertEqual(len(trail_marker.points), 2)
+
+        # 미션 완료 후에도 마커 유지 확인
+        self.node.mission_finished = True
+        published_marker_arrays.clear()
+        self.node._publish_markers()
+        ma_after = published_marker_arrays[-1]
+        ns_after = {m.ns: m for m in ma_after.markers}
+        self.assertIn("actual_trajectory", ns_after)
+        self.assertEqual(len(ns_after["actual_trajectory"].points), 2)
 
 
 if __name__ == '__main__':

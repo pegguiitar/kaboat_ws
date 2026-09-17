@@ -1,5 +1,10 @@
 import math
+import sys
 import unittest
+
+for p in ("/opt/ros/humble/lib/python3.10/site-packages", "/opt/ros/humble/local/lib/python3.10/dist-packages"):
+    if p not in sys.path:
+        sys.path.append(p)
 
 import rclpy
 from geometry_msgs.msg import Twist
@@ -156,6 +161,77 @@ class TestStationKeepingTest(unittest.TestCase):
         latest_cmd: Twist = self.published_cmds[-1]
         self.assertEqual(latest_cmd.linear.x, 0.0)
         self.assertEqual(latest_cmd.angular.z, 0.0)
+
+    def test_trajectory_recording_lifecycle(self):
+        """정점 유지 전, 유지 중, 완료 후 실제 궤적 기록 생명주기 검증."""
+        # 1. 시작 전 (started=False)
+        self.node.started = False
+        self._feed_odom(x=4.0, y=2.5, yaw=0.0)
+        self.assertEqual(len(self.node.trajectory_history), 0)
+
+        # 2. 시작 (started=True)
+        self.node.started = True
+        self._feed_odom(x=4.0, y=2.5, yaw=0.0)
+        self.assertEqual(len(self.node.trajectory_history), 1)
+
+        # 3. 거리 다운샘플링 (<5cm)
+        self._feed_odom(x=4.02, y=2.5, yaw=0.0)
+        self.assertEqual(len(self.node.trajectory_history), 1)
+
+        # 4. 충분한 거리 이동 (>=5cm)
+        self._feed_odom(x=4.10, y=2.5, yaw=0.0)
+        self.assertEqual(len(self.node.trajectory_history), 2)
+
+        # 5. 미션 완료 (mission_finished=True)
+        self.node.mission_finished = True
+        self._feed_odom(x=4.30, y=2.5, yaw=0.0)
+        self.assertEqual(len(self.node.trajectory_history), 2)
+
+    def test_markers_include_waypoint_deadband_heading_and_trail(self):
+        """MarkerArray에 목표점(waypoint), 불감대(deadband), 헤딩 화살표(heading), 실제 궤적(actual_trajectory)이 포함되는지 검증."""
+        published_marker_arrays = []
+        self.node.marker_pub.publish = lambda ma: published_marker_arrays.append(ma)
+
+        self.node.trajectory_history.add_point(4.0, 2.5)
+        self.node.trajectory_history.add_point(4.5, 2.5)
+
+        self.node._publish_markers()
+
+        self.assertGreater(len(published_marker_arrays), 0)
+        ma = published_marker_arrays[-1]
+        namespaces = {m.ns: m for m in ma.markers}
+
+        self.assertIn("waypoint", namespaces)
+        self.assertIn("deadband", namespaces)
+        self.assertIn("heading", namespaces)
+        self.assertIn("actual_trajectory", namespaces)
+
+        wp_marker = namespaces["waypoint"]
+        self.assertEqual(wp_marker.id, 0)
+        self.assertEqual(wp_marker.header.frame_id, "odom")
+
+        deadband_marker = namespaces["deadband"]
+        self.assertEqual(deadband_marker.id, 1)
+        self.assertEqual(deadband_marker.header.frame_id, "odom")
+        self.assertGreater(len(deadband_marker.points), 10)
+
+        heading_marker = namespaces["heading"]
+        self.assertEqual(heading_marker.id, 2)
+        self.assertEqual(heading_marker.header.frame_id, "odom")
+
+        trail_marker = namespaces["actual_trajectory"]
+        self.assertEqual(trail_marker.id, 0)
+        self.assertEqual(trail_marker.header.frame_id, "odom")
+        self.assertEqual(len(trail_marker.points), 2)
+
+        # 미션 완료 후에도 마커 유지 확인
+        self.node.mission_finished = True
+        published_marker_arrays.clear()
+        self.node._publish_markers()
+        ma_after = published_marker_arrays[-1]
+        ns_after = {m.ns: m for m in ma_after.markers}
+        self.assertIn("actual_trajectory", ns_after)
+        self.assertEqual(len(ns_after["actual_trajectory"].points), 2)
 
 
 if __name__ == '__main__':
