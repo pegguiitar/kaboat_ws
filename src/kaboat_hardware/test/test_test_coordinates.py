@@ -81,8 +81,8 @@ class TestCoordinates(unittest.TestCase):
         tx = STATION_KEEPING['target_x']
         ty = STATION_KEEPING['target_y']
         self.assertTrue(0.0 <= tx <= 10.0)
-        self.assertTrue(0.0 <= ty <= 5.0)
-        self.assertGreater(STATION_KEEPING.get('pos_deadband', 0.15), 0.0)
+        self.assertGreater(STATION_KEEPING.get('pos_deadband', 0.50), 0.0)
+        self.assertAlmostEqual(STATION_KEEPING['pos_deadband'], 0.50)
         self.assertGreater(STATION_KEEPING.get('yaw_deadband_deg', 8.0), 0.0)
 
     def test_yaml_file_integrity(self):

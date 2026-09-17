@@ -115,7 +115,7 @@ STATION_KEEPING = {
     'target_y': 2.5,         # [m] 목표 유지 위치 Y 좌표 (수조 중앙)
     'target_yaw_deg': 180.0, # [deg] 목표 선수각 (180.0°: -X방향, -999.0이면 헤딩 무관 위치만 유지)
     'hold_duration_sec': 0.0,# [s] 목표 정점 유지 시간 (0.0: 무한 유지)
-    'pos_deadband': 0.15,    # [m] 위치 유지 허용 불감대 반경 (15cm)
+    'pos_deadband': 0.50,    # [m] 위치 유지 허용 불감대 반경 (0.5m / 50cm)
     'yaw_deadband_deg': 8.0, # [deg] 헤딩 유지 허용 불감대 각도 (8°)
 }
 

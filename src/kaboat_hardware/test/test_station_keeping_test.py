@@ -71,7 +71,7 @@ class TestStationKeepingTest(unittest.TestCase):
         self.assertGreater(latest_cmd.linear.x, 0.0)
 
     def test_deadband_idle(self):
-        """목표점 불감대(15cm, 8°) 안착 시 모터 완전 정지(휴지) 검증."""
+        """목표점 불감대(50cm, 8°) 안착 시 모터 완전 정지(휴지) 검증."""
         self.node.started = True
         self.node.target_x = 5.0
         self.node.target_y = 2.5
@@ -86,6 +86,41 @@ class TestStationKeepingTest(unittest.TestCase):
         latest_cmd: Twist = self.published_cmds[-1]
         self.assertEqual(latest_cmd.linear.x, 0.0)
         self.assertEqual(latest_cmd.angular.z, 0.0)
+
+    def test_deadband_idle_within_0_5m(self):
+        """목표점 반경 0.5m 이내(예: 40cm 이격) 진입 시 정점 안착(출력 0) 성공 판정 검증."""
+        self.node.started = True
+        self.node.target_x = 5.0
+        self.node.target_y = 2.5
+        self.node.target_yaw = math.pi  # 180도
+
+        self.published_cmds.clear()
+        # 오차: 위치 40cm (과거 15cm 기준에서는 이탈이었으나 50cm 기준에서는 불감대 안착), 각도 일치
+        self._feed_odom(x=5.40, y=2.5, yaw=math.pi)
+        self.node._control_loop()
+
+        self.assertGreater(len(self.published_cmds), 0)
+        latest_cmd: Twist = self.published_cmds[-1]
+        self.assertEqual(latest_cmd.linear.x, 0.0)
+        self.assertEqual(latest_cmd.angular.z, 0.0)
+
+    def test_reverse_on_slight_overshoot(self):
+        """목표점 통과 후 0.65m 이격(후방 영역) 시 180도 선회 대신 후진 복귀 명령 검증."""
+        self.node.started = True
+        self.node.target_x = 5.0
+        self.node.target_y = 2.5
+        self.node.target_yaw = math.pi  # 180도
+
+        self.published_cmds.clear()
+        # 목표(5.0, 2.5)를 지나쳐 (4.35, 2.5)에 위치하고 선수각 180도(서쪽) 유지 중
+        # 목표점은 동쪽(+X)에 있으므로 후방 영역(rel_bearing ~ 180도), 이격거리 0.65m < 0.80m
+        self._feed_odom(x=4.35, y=2.5, yaw=math.pi)
+        self.node._control_loop()
+
+        self.assertGreater(len(self.published_cmds), 0)
+        latest_cmd: Twist = self.published_cmds[-1]
+        # 후진 명령(-linear.x)이 발행되어야 함
+        self.assertLess(latest_cmd.linear.x, 0.0)
 
     def test_heading_correction_in_pos_deadband(self):
         """위치는 불감대 안이지만 각도가 틀어졌을 때 제자리 회전 제어 검증."""

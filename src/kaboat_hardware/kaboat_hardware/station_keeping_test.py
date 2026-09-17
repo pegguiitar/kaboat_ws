@@ -62,7 +62,7 @@ class StationKeepingTest(Node):
         self.declare_parameter('target_y', float(STATION_KEEPING['target_y']))
         self.declare_parameter('target_yaw_deg', float(STATION_KEEPING['target_yaw_deg']))
         self.declare_parameter('hold_duration_sec', float(STATION_KEEPING.get('hold_duration_sec', 0.0)))
-        self.declare_parameter('pos_deadband', float(STATION_KEEPING.get('pos_deadband', 0.15)))
+        self.declare_parameter('pos_deadband', float(STATION_KEEPING.get('pos_deadband', 0.50)))
         self.declare_parameter('yaw_deadband_deg', float(STATION_KEEPING.get('yaw_deadband_deg', 8.0)))
 
         # ── 제어 및 불감대(Deadband) 파라미터 ────────────────
@@ -262,9 +262,9 @@ class StationKeepingTest(Node):
                 raw_angular = self.kp_yaw * rel_bearing - self.kd_yaw * self.current_yaw_rate
                 angular_cmd = max(-self.max_angular, min(self.max_angular, raw_angular))
             else:
-                # 후방 영역: 근거리(35cm 이내)면 후진, 원거리면 선회 후 전진
+                # 후방 영역: 불감대 인근 오버슈트 시 후진, 원거리면 선회 후 전진
                 rev_bearing = normalize_angle(rel_bearing - math.pi)
-                if dist_err < 0.35:
+                if dist_err < (self.pos_deadband + 0.30):
                     desired_speed = min(self.max_rev_speed, max(0.04, self.kp_pos * dist_err))
                     linear_cmd = -desired_speed * max(0.0, math.cos(rev_bearing))
 

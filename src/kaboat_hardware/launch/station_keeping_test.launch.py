@@ -18,7 +18,7 @@ def generate_launch_description():
     hold_duration_arg = DeclareLaunchArgument(
         'hold_duration_sec', default_value=str(STATION_KEEPING.get('hold_duration_sec', 0.0)), description='유지 시간 [초] (0.0: 무한 유지)')
     pos_deadband_arg = DeclareLaunchArgument(
-        'pos_deadband', default_value=str(STATION_KEEPING.get('pos_deadband', 0.15)), description='위치 불감대 허용 반경 [m]')
+        'pos_deadband', default_value=str(STATION_KEEPING.get('pos_deadband', 0.50)), description='위치 불감대 허용 반경 [m]')
     yaw_deadband_deg_arg = DeclareLaunchArgument(
         'yaw_deadband_deg', default_value=str(STATION_KEEPING.get('yaw_deadband_deg', 8.0)), description='헤딩 불감대 허용 각도 [deg]')
     max_fwd_speed_arg = DeclareLaunchArgument(
