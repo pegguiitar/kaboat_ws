@@ -11,6 +11,8 @@ import rclpy
 from geometry_msgs.msg import Twist, Quaternion
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Bool
+from std_srvs.srv import Trigger
+from visualization_msgs.msg import Marker
 
 from kaboat_hardware.circle_drive_test import (
     CircleDriveTest, normalize_angle, yaw_to_quaternion
@@ -198,6 +200,14 @@ class TestCircleDriveTest(unittest.TestCase):
         self.assertEqual(trail_marker.id, 0)
         self.assertEqual(trail_marker.header.frame_id, "odom")
         self.assertEqual(len(trail_marker.points), 2)
+        self.assertEqual(trail_marker.lifetime.sec, 1)
+        self.assertEqual(trail_marker.lifetime.nanosec, 0)
+
+        # 목표 시각화 마커 수명 무한(0) 유지 검증
+        self.assertEqual(orbit_marker.lifetime.sec, 0)
+        self.assertEqual(orbit_marker.lifetime.nanosec, 0)
+        self.assertEqual(center_marker.lifetime.sec, 0)
+        self.assertEqual(center_marker.lifetime.nanosec, 0)
 
         # 미션 완료 후에도 마커 유지 확인
         self.node.mission_finished = True
@@ -207,6 +217,97 @@ class TestCircleDriveTest(unittest.TestCase):
         ns_after = {m.ns: m for m in ma_after.markers}
         self.assertIn("actual_trajectory", ns_after)
         self.assertEqual(len(ns_after["actual_trajectory"].points), 2)
+        self.assertEqual(ns_after["actual_trajectory"].lifetime.sec, 1)
+        self.assertEqual(ns_after["actual_trajectory"].lifetime.nanosec, 0)
+
+    def test_clear_trajectory_service_registered(self):
+        """노드에 /clear_trajectory 서비스가 등록되어 있는지 검증."""
+        service_names = [s.srv_name for s in self.node.services]
+        self.assertIn('/clear_trajectory', service_names)
+
+    def test_clear_trajectory_clears_populated_trail_and_response_content(self):
+        """/clear_trajectory 호출 시 기록된 궤적이 비워지고 올바른 응답을 반환하는지 검증."""
+        self.node.trajectory_history.add_point(5.0, 1.3)
+        self.node.trajectory_history.add_point(5.5, 1.5)
+        self.assertEqual(len(self.node.trajectory_history), 2)
+
+        req = Trigger.Request()
+        resp = Trigger.Response()
+        result = self.node._on_clear_trajectory(req, resp)
+
+        self.assertTrue(result.success)
+        self.assertGreater(len(result.message), 0)
+        self.assertEqual(len(self.node.trajectory_history), 0)
+        self.assertTrue(self.node.trajectory_history.is_empty())
+
+    def test_clear_trajectory_immediate_empty_marker_and_preserves_target_markers(self):
+        """/clear_trajectory 호출 즉시 빈 actual_trajectory 마커와 보존된 목표 마커들이 발행되는지 검증."""
+        published_marker_arrays = []
+        self.node.marker_pub.publish = lambda ma: published_marker_arrays.append(ma)
+
+        self.node.trajectory_history.add_point(5.0, 1.3)
+        self.node.trajectory_history.add_point(5.5, 1.5)
+
+        req = Trigger.Request()
+        resp = Trigger.Response()
+        self.node._on_clear_trajectory(req, resp)
+
+        self.assertEqual(len(published_marker_arrays), 1)
+        ma = published_marker_arrays[0]
+        namespaces = {m.ns: m for m in ma.markers}
+
+        self.assertIn("actual_trajectory", namespaces)
+        self.assertEqual(len(namespaces["actual_trajectory"].points), 0)
+
+        # 원형 궤도 및 중심점 마커 보존 확인
+        self.assertIn("orbit", namespaces)
+        self.assertIn("center", namespaces)
+
+    def test_clear_trajectory_preserves_mission_and_control_state_and_no_cmd_vel(self):
+        """/clear_trajectory 호출 시 원형 주행 랩 수 및 제어 상태가 보존되고 cmd_vel이 발행되지 않는지 검증."""
+        self.node.started = True
+        self.node.mission_finished = False
+        self.node.emergency_stopped = False
+        self.node.current_laps = 1.5
+        self.node.accumulated_angle = 3.0 * math.pi
+        self.node.last_polar_angle = 0.5
+
+        self.published_cmds.clear()
+        req = Trigger.Request()
+        resp = Trigger.Response()
+        self.node._on_clear_trajectory(req, resp)
+
+        self.assertTrue(self.node.started)
+        self.assertFalse(self.node.mission_finished)
+        self.assertFalse(self.node.emergency_stopped)
+        self.assertAlmostEqual(self.node.current_laps, 1.5)
+        self.assertAlmostEqual(self.node.accumulated_angle, 3.0 * math.pi)
+        self.assertAlmostEqual(self.node.last_polar_angle, 0.5)
+        self.assertEqual(len(self.published_cmds), 0)
+
+    def test_clear_trajectory_records_new_trail_on_next_odom(self):
+        """원형 주행 미션 활성 상태에서 궤적 초기화 후 다음 오도메트리가 새로운 궤적의 첫 점으로 기록되는지 검증."""
+        self.node.started = True
+        self.node.mission_finished = False
+
+        self._feed_odom(x=5.0, y=1.3, yaw=0.0)
+        self._feed_odom(x=5.1, y=1.3, yaw=0.0)
+        self.assertEqual(len(self.node.trajectory_history), 2)
+
+        # 궤적 초기화
+        req = Trigger.Request()
+        resp = Trigger.Response()
+        self.node._on_clear_trajectory(req, resp)
+        self.assertEqual(len(self.node.trajectory_history), 0)
+
+        # 초기화 직후 동일 위치라도 첫 점은 즉시 새 궤적의 시작점으로 기록되어야 함
+        self._feed_odom(x=5.1, y=1.3, yaw=0.0)
+        self.assertEqual(len(self.node.trajectory_history), 1)
+        self.assertAlmostEqual(self.node.trajectory_history[0][0], 5.1)
+
+        # 이후 거리 판정 기준 충족 시 추가 기록
+        self._feed_odom(x=5.2, y=1.3, yaw=0.0)
+        self.assertEqual(len(self.node.trajectory_history), 2)
 
 
 if __name__ == '__main__':

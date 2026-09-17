@@ -134,6 +134,7 @@ class StraightLineTest(Node):
         self.create_subscription(Bool, '/emergency_stop', self._on_estop, 10)
         self.create_subscription(Bool, '/start_mission', self._on_start_mission, 10)
         self.create_service(Trigger, '/start_test', self._on_start_service)
+        self.create_service(Trigger, '/clear_trajectory', self._on_clear_trajectory)
 
         # 20Hz 제어 루프
         self.create_timer(0.05, self._control_loop)
@@ -177,6 +178,14 @@ class StraightLineTest(Node):
         self.started = True
         response.success = True
         response.message = "Straight line test started successfully!"
+        return response
+
+    def _on_clear_trajectory(self, request, response):
+        self.trajectory_history.clear()
+        self._publish_path_markers()
+        self.get_logger().info("🧹 [직선 주행 궤적 초기화] /clear_trajectory 호출됨 — 주행 궤적 이력을 초기화하고 마커를 갱신했습니다.")
+        response.success = True
+        response.message = "Trajectory history cleared and markers updated successfully."
         return response
 
     def _on_odom(self, msg: Odometry):
@@ -413,6 +422,8 @@ class StraightLineTest(Node):
             ns="actual_trajectory",
             marker_id=0,
         )
+        m_trail.lifetime.sec = 1
+        m_trail.lifetime.nanosec = 0
         ma.markers.append(m_trail)
 
         self.marker_pub.publish(ma)
