@@ -22,11 +22,11 @@ def generate_launch_description():
     yaw_deadband_deg_arg = DeclareLaunchArgument(
         'yaw_deadband_deg', default_value=str(STATION_KEEPING.get('yaw_deadband_deg', 8.0)), description='헤딩 불감대 허용 각도 [deg]')
     max_fwd_speed_arg = DeclareLaunchArgument(
-        'max_fwd_speed', default_value='0.12', description='최대 전진 출력 비')
+        'max_fwd_speed', default_value='0.50', description='최대 전진 출력 비 (기본 50%)')
     max_rev_speed_arg = DeclareLaunchArgument(
         'max_rev_speed', default_value='0.08', description='최대 후진 출력 비')
     max_angular_arg = DeclareLaunchArgument(
-        'max_angular', default_value='0.80', description='최대 회전 출력 비')
+        'max_angular', default_value='0.60', description='최대 회전 출력 비 (기본 60%)')
     kp_pos_arg = DeclareLaunchArgument(
         'kp_pos', default_value='0.25', description='위치 오차 P 게인')
     kp_yaw_arg = DeclareLaunchArgument(

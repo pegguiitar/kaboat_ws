@@ -10,11 +10,12 @@
   twist.linear.x/y    ← 라이다 위치 미분 (body frame 전진/횡방향 속도, pose_velocity)
 
 안전 기능:
-  외부 라이다 위치 신호가 pos_timeout_sec 이상 끊기면 /odom 발행을 즉시 중단합니다.
-  /odom이 끊기면 cmd_mux와 thruster_driver의 300ms 워치독이 발동하여 모터를 즉각 정지시킵니다.
+  외부 라이다 또는 IMU 신호가 각 timeout 이상 끊기면 /odom 발행을 즉시 중단합니다.
+  하위 제어 노드는 자체 odom freshness watchdog으로 이를 감지해 정지해야 합니다.
 """
 
 import math
+import time
 from typing import Optional
 
 import rclpy
@@ -103,15 +104,19 @@ class IndoorLidarOdom(Node):
 
         # 상태 변수
         self.last_pos_stamp: Optional[float] = None
+        self.last_pos_receive_time: Optional[float] = None
         self.last_pos_x: float = 0.0
         self.last_pos_y: float = 0.0
+        self._position_seq: int = 0
 
         self.imu_stamp: Optional[float] = None
+        self.last_imu_receive_time: Optional[float] = None
         self.imu_yaw: float = 0.0
         self.imu_yaw_rate: float = 0.0
 
         self._pos_ok: bool = False
-        self._last_published_stamp = None
+        self._imu_ok: bool = False
+        self._last_published_position_seq: int = -1
 
         # 통신 인터페이스
         self.tf_broadcaster = TransformBroadcaster(self)
@@ -138,7 +143,13 @@ class IndoorLidarOdom(Node):
         """외부 라이다(실내 GPS)로부터 배 위치 수신."""
         self.last_pos_x = msg.point.x
         self.last_pos_y = msg.point.y
-        self.last_pos_stamp = _stamp_sec(msg.header.stamp)
+        source_stamp = _stamp_sec(msg.header.stamp)
+        receive_time = time.monotonic()
+        # 속도 미분에는 검출 시각을 쓰되, 드라이버가 0 stamp를 보내는 경우에만
+        # 수신 시각으로 폴백한다. timeout 판정에는 아래 수신 시각을 별도로 쓴다.
+        self.last_pos_stamp = source_stamp if source_stamp > 0.0 else receive_time
+        self.last_pos_receive_time = receive_time
+        self._position_seq += 1
 
     def _on_imu(self, msg: Imu):
         """선체 GQ7 IMU로부터 자세 및 각속도 수신."""
@@ -150,52 +161,60 @@ class IndoorLidarOdom(Node):
 
         self.imu_yaw_rate = (self.yaw_rate_sign * msg.angular_velocity.z) - self.gyro_bias_z
         self.imu_stamp = _stamp_sec(msg.header.stamp)
+        self.last_imu_receive_time = time.monotonic()
 
     def _tick(self):
-        now_sec = self.get_clock().now().nanoseconds * 1e-9
+        now_monotonic = time.monotonic()
 
         # 1. 위치 신호 유효성 검사
-        if self.last_pos_stamp is None:
-            # 외부 라이다 첫 위치 수신 전이라도, 선체 IMU가 연결되어 있다면
-            # 캘리브레이션 및 자세 확인을 위해 기본 위치(0, 0)와 함께 /odom을 발행한다.
-            if self.imu_stamp is not None and (now_sec - self.imu_stamp) <= self.imu_timeout:
-                stamp_msg = self.get_clock().now().to_msg()
-                odom_msg = self._build_odometry(stamp_msg, 0.0, 0.0, self.imu_yaw, 0.0, 0.0, self.imu_yaw_rate)
-                self.odom_pub.publish(odom_msg)
+        if self.last_pos_receive_time is None:
+            # 실제 위치를 받기 전에 (0, 0) 가짜 odom을 내보내면 제어기가 이를
+            # 유효 위치로 오인할 수 있다. 첫 LiDAR 위치까지는 발행하지 않는다.
             return
 
-        pos_age = now_sec - self.last_pos_stamp
+        pos_age = now_monotonic - self.last_pos_receive_time
         if pos_age > self.pos_timeout:
             if self._pos_ok:
                 self.get_logger().warn(
                     f"⚠️ [indoor_lidar_odom] 외부 라이다 위치 신호 유실 ({pos_age:.2f}s 전) — /odom 발행 중단 (워치독 정지)",
                     throttle_duration_sec=2.0)
                 self._pos_ok = False
+                self.estimator.reset()
             return
 
-        if not self._pos_ok:
-            self._pos_ok = True
-            self.estimator.reset()
-            self.get_logger().info("✅ [indoor_lidar_odom] 외부 라이다 위치 정상 수신 — /odom 발행 재개")
+        # 2. IMU도 fresh해야 유효한 pose를 만들 수 있다. 이전 yaw를 계속 쓰면
+        # 제어기는 센서 유실을 알 수 없으므로, IMU timeout 시에도 odom을 멈춘다.
+        if self.last_imu_receive_time is None:
+            return
+        imu_age = now_monotonic - self.last_imu_receive_time
+        if imu_age > self.imu_timeout:
+            if self._imu_ok:
+                self.get_logger().warn(
+                    f"⚠️ [indoor_lidar_odom] 선체 IMU 신호 유실 ({imu_age:.2f}s 전) "
+                    "— /odom 발행 중단",
+                    throttle_duration_sec=2.0)
+                self._imu_ok = False
+                self.estimator.reset()
+            return
 
-        # 2. 동일 스탬프 중복 발행 방지
-        if self._last_published_stamp is not None and self.last_pos_stamp <= self._last_published_stamp:
+        if not self._pos_ok or not self._imu_ok:
+            self._pos_ok = True
+            self._imu_ok = True
+            self.estimator.reset()
+            self.get_logger().info(
+                "✅ [indoor_lidar_odom] LiDAR 위치와 IMU 모두 정상 — /odom 발행 재개")
+
+        # 3. 새 위치 표본마다 odom을 한 번만 발행한다. source stamp가 같거나 0이어도
+        # 콜백 순번으로 구분하므로 드라이버 timestamp 품질에 안전하게 대응한다.
+        if self._last_published_position_seq == self._position_seq:
             return
 
         x = self.last_pos_x
         y = self.last_pos_y
         stamp_sec = self.last_pos_stamp
 
-        # 3. IMU 상태 확인 (유실 시 경고 및 이전 각도 유지)
-        if self.imu_stamp is None or (now_sec - self.imu_stamp) > self.imu_timeout:
-            self.get_logger().warn(
-                f"⚠️ [indoor_lidar_odom] 선체 IMU ({self.imu_topic}) 미수신/타임아웃 — 이전 Yaw 유지",
-                throttle_duration_sec=3.0)
-            yaw = self.imu_yaw
-            yaw_rate = 0.0
-        else:
-            yaw = self.imu_yaw
-            yaw_rate = self.imu_yaw_rate
+        yaw = self.imu_yaw
+        yaw_rate = self.imu_yaw_rate
 
         # 4. 위치 미분 기반 선속도 (body frame) 추정
         vx_body, vy_body, _ = self.estimator.update(stamp_sec, x, y, yaw)
@@ -217,7 +236,7 @@ class IndoorLidarOdom(Node):
             tf_msg.transform.rotation = _quat_from_yaw(yaw)
             self.tf_broadcaster.sendTransform(tf_msg)
 
-        self._last_published_stamp = stamp_sec
+        self._last_published_position_seq = self._position_seq
 
     def _build_odometry(self, stamp_msg, x, y, yaw, vx, vy, yaw_rate) -> Odometry:
         msg = Odometry()
@@ -262,4 +281,3 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
-

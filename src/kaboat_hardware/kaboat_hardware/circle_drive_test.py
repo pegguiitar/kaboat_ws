@@ -64,8 +64,8 @@ class CircleDriveTest(Node):
         self.declare_parameter('target_laps', float(CIRCLE_DRIVE.get('target_laps', 2.0)))
 
         # ── 제어 및 출력 파라미터 ─────────────────────────
-        self.declare_parameter('cruise_speed', 0.12)     # 기본 전진 출력 비 (0.0 ~ 1.0, 12%)
-        self.declare_parameter('max_angular', 0.80)      # 최대 회전 출력 비 (0.0 ~ 1.0, 80%)
+        self.declare_parameter('cruise_speed', 0.50)     # 기본 전진 출력 비 (0.0 ~ 1.0, 50%)
+        self.declare_parameter('max_angular', 0.60)      # 최대 회전 출력 비 (0.0 ~ 1.0, 60%)
         self.declare_parameter('kp_yaw', 1.0)            # 헤딩 비례(P) 게인
         self.declare_parameter('kd_yaw', 0.15)           # 요레이트 감쇠(D) 게인
         self.declare_parameter('k_converge', 1.5)        # 궤도 진입 수렴 게인

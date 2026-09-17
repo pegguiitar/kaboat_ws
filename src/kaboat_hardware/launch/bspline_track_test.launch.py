@@ -19,11 +19,11 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     cruise_speed_arg = DeclareLaunchArgument(
-        'cruise_speed', default_value='0.12',
-        description='직진 순항 모터 출력 비율 (0.0 ~ 1.0, 기본 0.12 = 12%)')
+        'cruise_speed', default_value='0.50',
+        description='직진 순항 모터 출력 비율 (0.0 ~ 1.0, 기본 0.50 = 50%)')
     max_angular_arg = DeclareLaunchArgument(
-        'max_angular', default_value='0.80',
-        description='최대 회전 모터 출력 비율 (0.0 ~ 1.0, 기본 0.80 = 80%)')
+        'max_angular', default_value='0.60',
+        description='최대 회전 모터 출력 비율 (0.0 ~ 1.0, 기본 0.60 = 60%)')
     lookahead_dist_arg = DeclareLaunchArgument(
         'lookahead_dist', default_value='1.2',
         description='Lookahead 전방 주시 거리 [m]')

@@ -123,6 +123,27 @@ class TestStraightLineTest(unittest.TestCase):
         self.assertEqual(latest_cmd.linear.x, 0.0)
         self.assertEqual(latest_cmd.angular.z, 0.0)
 
+    def test_wall_guard_latches_stop(self):
+        """벽면 안전 영역 밖에서는 정지하고 위치가 돌아와도 자동 재출발하지 않아야 한다."""
+        self._feed_odom(x=9.7, y=3.0, yaw=math.pi)
+        self.node._control_loop()
+
+        self.assertTrue(self.node.boundary_stopped)
+        self.assertEqual(self.published_cmds[-1].linear.x, 0.0)
+        self.assertEqual(self.published_cmds[-1].angular.z, 0.0)
+
+        self._feed_odom(x=8.0, y=3.0, yaw=math.pi)
+        self.node._control_loop()
+        self.assertEqual(self.published_cmds[-1].linear.x, 0.0)
+        self.assertEqual(self.published_cmds[-1].angular.z, 0.0)
+
+    def test_wall_guard_boundary_is_allowed(self):
+        """정확히 wall_margin 경계에 있는 위치는 안전 영역에 포함한다."""
+        self._feed_odom(x=9.5, y=3.0, yaw=math.pi)
+        self.node._control_loop()
+        self.assertFalse(self.node.boundary_stopped)
+        self.assertGreater(self.published_cmds[-1].linear.x, 0.0)
+
     def test_start_mission_topic_and_pause(self):
         """/start_mission 토픽을 통한 출발 신호 인가 및 일시 정지 검증."""
         self.node.started = False
@@ -165,4 +186,3 @@ class TestStraightLineTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-

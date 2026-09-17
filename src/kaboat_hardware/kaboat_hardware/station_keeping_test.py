@@ -66,9 +66,9 @@ class StationKeepingTest(Node):
         self.declare_parameter('yaw_deadband_deg', float(STATION_KEEPING.get('yaw_deadband_deg', 8.0)))
 
         # ── 제어 및 불감대(Deadband) 파라미터 ────────────────
-        self.declare_parameter('max_fwd_speed', 0.12)    # 최대 전진 출력 비 (12%)
+        self.declare_parameter('max_fwd_speed', 0.50)    # 최대 전진 출력 비 (50%)
         self.declare_parameter('max_rev_speed', 0.08)    # 최대 후진 출력 비 (8%)
-        self.declare_parameter('max_angular', 0.80)      # 최대 회전 출력 비 (80%)
+        self.declare_parameter('max_angular', 0.60)      # 최대 회전 출력 비 (60%)
         self.declare_parameter('kp_pos', 0.25)           # 위치 오차 비례(P) 게인
         self.declare_parameter('kp_yaw', 1.0)            # 헤딩 오차 비례(P) 게인
         self.declare_parameter('kd_yaw', 0.15)           # 요레이트 감쇠(D) 게인

@@ -9,6 +9,8 @@ thruster_driver:
     hardware_type: "dummy"
     port: "/dev/ttyUSB0"
     baudrate: 115200
+    # false: 지정 port만 사용. LiDAR/GQ7 오선택 방지를 위해 실물에서는 false 유지.
+    allow_port_scan: false
 
     # PCA9685 I2C 설정 (hardware_type == 'pca9685' 일 때 사용)
     i2c_bus: 1
@@ -32,9 +34,12 @@ thruster_driver:
     # 2.0 = 0% 에서 100% 출력까지 최소 0.5초 소요
     max_slew_rate: 2.0
 
+    # linear/angular 믹싱 후 좌/우 스러스터 각각의 최종 절대 출력 상한.
+    # 기존 실측 동작 보존을 위해 1.0이며, 저출력 bring-up 시 0.2 등으로 제한 가능.
+    max_output_ratio: 1.0
+
     # ── 타이밍 및 안전 워치독 ──────────────────────────
     update_rate_hz: 50.0        # ESC PWM 신호 주기 (50Hz)
     timeout_sec: 0.3            # /cmd_vel 수신 중단 시 중립 전환 시간 [s]
     enable_rc_override: true    # RC 조종기 입력 시 자동 오버라이드 활성화
     rc_timeout_sec: 0.5         # RC 조종 신호 유효 판정 시간 [s]
-

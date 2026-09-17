@@ -20,9 +20,9 @@ def generate_launch_description():
     target_laps_arg = DeclareLaunchArgument(
         'target_laps', default_value=str(CIRCLE_DRIVE['target_laps']), description='목표 바퀴 수 (0.0: 무한 회전)')
     cruise_speed_arg = DeclareLaunchArgument(
-        'cruise_speed', default_value='0.12', description='순항 전진 출력 비 (0.0 ~ 1.0)')
+        'cruise_speed', default_value='0.50', description='순항 전진 출력 비 (0.0 ~ 1.0, 기본 50%)')
     max_angular_arg = DeclareLaunchArgument(
-        'max_angular', default_value='0.80', description='최대 회전 출력 비 (0.0 ~ 1.0)')
+        'max_angular', default_value='0.60', description='최대 회전 출력 비 (0.0 ~ 1.0, 기본 60%)')
     kp_yaw_arg = DeclareLaunchArgument(
         'kp_yaw', default_value='1.0', description='헤딩 P 게인')
     kd_yaw_arg = DeclareLaunchArgument(

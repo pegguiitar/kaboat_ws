@@ -105,6 +105,15 @@ class TestThrusterBackend(unittest.TestCase):
         self.assertAlmostEqual(r_rat, 1.0, places=4)
         self.assertEqual(r_pwm, 1900)
 
+    def test_thruster_mixer_final_output_limit(self):
+        """linear/angular 합이 커도 설정한 최종 좌우 출력 상한을 넘지 않아야 한다."""
+        cfg = ThrusterConfig(max_output_ratio=0.2, max_slew_rate=10.0)
+        mixer = ThrusterMixer(cfg)
+        _, _, left, right = mixer.mix(
+            linear_x=0.12, angular_z=0.80, now=0.0)
+        self.assertAlmostEqual(left, -0.2, places=4)
+        self.assertAlmostEqual(right, 0.2, places=4)
+
     def test_dummy_backend(self):
         """더미 백엔드가 에러 없이 PWM을 수신하고 저장해야 한다."""
         dummy = DummyBackend()
@@ -138,7 +147,13 @@ class TestThrusterBackend(unittest.TestCase):
         mock_ser.write.assert_called_with(b"15001500\n")
         self.assertIsNone(backend.serial)
 
+    def test_pca9685_send_fails_when_not_open(self):
+        """I2C 버스가 열리지 않은 상태를 전송 성공으로 보고하면 안 된다."""
+        from kaboat_hardware.thruster_backend import PCA9685Backend
+        backend = PCA9685Backend()
+        self.assertFalse(backend.is_open)
+        self.assertFalse(backend.send_pwm(1500, 1500))
+
 
 if __name__ == '__main__':
     unittest.main()
-

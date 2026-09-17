@@ -28,11 +28,11 @@ def generate_launch_description():
         'goal_y', default_value=str(STRAIGHT_LINE['goal_y']), description='목표점 Y 좌표 [m]')
 
     cruise_speed_arg = DeclareLaunchArgument(
-        'cruise_speed', default_value='0.12',
-        description='직진 순항 모터 출력 비율 (0.0 ~ 1.0, 기본 0.12 = 12%)')
+        'cruise_speed', default_value='0.50',
+        description='직진 순항 모터 출력 비율 (0.0 ~ 1.0, 기본 0.50 = 50%)')
     max_angular_arg = DeclareLaunchArgument(
-        'max_angular', default_value='0.80',
-        description='최대 회전 모터 출력 비율 (0.0 ~ 1.0, 기본 0.80 = 80%)')
+        'max_angular', default_value='0.60',
+        description='최대 회전 모터 출력 비율 (0.0 ~ 1.0, 기본 0.60 = 60%)')
     lookahead_dist_arg = DeclareLaunchArgument(
         'lookahead_dist', default_value='1.2',
         description='LOS 경로 추종 전방 주시 거리 [m]')
@@ -52,6 +52,12 @@ def generate_launch_description():
     wait_for_start_arg = DeclareLaunchArgument(
         'wait_for_start', default_value='true',
         description='외부 시작 신호(/start_mission) 대기 여부 (기본값 true: 대기 후 출발)')
+    enable_wall_guard_arg = DeclareLaunchArgument(
+        'enable_wall_guard', default_value='true',
+        description='수조 벽면 0.5m 안전 가드 활성화 여부')
+    wall_margin_arg = DeclareLaunchArgument(
+        'wall_margin', default_value='0.5',
+        description='수조 벽면으로부터 유지할 최소 거리 [m]')
 
     node = Node(
         package='kaboat_hardware',
@@ -72,6 +78,8 @@ def generate_launch_description():
             'kd_yaw': LaunchConfiguration('kd_yaw'),
             'odom_timeout_sec': LaunchConfiguration('odom_timeout_sec'),
             'wait_for_start': LaunchConfiguration('wait_for_start'),
+            'enable_wall_guard': LaunchConfiguration('enable_wall_guard'),
+            'wall_margin': LaunchConfiguration('wall_margin'),
             'use_sim_time': False,
         }],
     )
@@ -90,7 +98,8 @@ def generate_launch_description():
         kd_yaw_arg,
         odom_timeout_arg,
         wait_for_start_arg,
+        enable_wall_guard_arg,
+        wall_margin_arg,
         LogInfo(msg='[StraightLineTest] 수조 직선 주행 테스트 노드 시작 중...'),
         node,
     ])
-

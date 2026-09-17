@@ -10,8 +10,8 @@ indoor_lidar_odom:
 
     # ── 타이밍 및 타임아웃 ─────────────────────────────
     publish_rate: 30.0                # /odom 발행 주기 [Hz]
-    pos_timeout_sec: 1.0              # 라이다 위치 수신 타임아웃 [s] (초과 시 /odom 중단 -> 워치독 정지)
-    imu_timeout_sec: 0.5              # IMU 수신 타임아웃
+    pos_timeout_sec: 1.0              # 라이다 위치 수신 타임아웃 [s] (초과 시 /odom 중단)
+    imu_timeout_sec: 0.5              # IMU 수신 타임아웃 [s] (초과 시 /odom 중단)
 
     # ── 자세 및 헤딩 보정 ─────────────────────────────
     imu_yaw_offset_deg: -51.27          # 수조 +X축(0도) 기준 IMU 설치 편차 [deg] (배가 +X를 볼 때 odom 0° 정렬 보정)

@@ -15,7 +15,7 @@
   - 수조 벽면 가드: X < 0.5m, X > 9.5m, Y < 0.5m, Y > 4.5m 벗어날 시 비상 정지
   - 오도메트리 워치독: /odom 수신이 0.5초 이상 끊기면 즉각 정지 명령 송출
   - 비상 정지 토픽 연동: /emergency_stop 수신 시 즉각 모터 정지
-  - 안전 저속 기본값: cruise_speed = 0.12 (최대 추력의 약 12%)
+  - 안전 기본값: cruise_speed = 0.50 (최대 추력의 약 50%)
 """
 
 import math
@@ -59,8 +59,8 @@ class StraightLineTest(Node):
         self.declare_parameter('goal_y', float(STRAIGHT_LINE['goal_y']))
 
         # ── 주행 및 제어 파라미터 ─────────────────────────
-        self.declare_parameter('cruise_speed', 0.12)    # 전진 출력 비율 (0.0 ~ 1.0, 기본 12%)
-        self.declare_parameter('max_angular', 0.80)     # 최대 회전 출력 비율 (80%)
+        self.declare_parameter('cruise_speed', 0.50)    # 전진 출력 비율 (0.0 ~ 1.0, 기본 50%)
+        self.declare_parameter('max_angular', 0.60)     # 최대 회전 출력 비율 (60%)
         self.declare_parameter('lookahead_dist', 1.2)   # LOS 경로 추종 전방 주시 거리 [m]
         self.declare_parameter('goal_tolerance', 0.35)  # 도착 판정 반경 [m]
         self.declare_parameter('slow_radius', 1.5)      # 목표점 접근 감속 반경 [m]
@@ -70,6 +70,12 @@ class StraightLineTest(Node):
         # ── 안전 파라미터 ─────────────────────────────────
         self.declare_parameter('odom_timeout_sec', 0.5) # /odom 타임아웃 [s]
         self.declare_parameter('wait_for_start', True)  # 외부 시작 신호(/start_mission) 대기 여부
+        self.declare_parameter('enable_wall_guard', True)
+        self.declare_parameter('pool_min_x', 0.0)
+        self.declare_parameter('pool_max_x', 10.0)
+        self.declare_parameter('pool_min_y', 0.0)
+        self.declare_parameter('pool_max_y', 5.0)
+        self.declare_parameter('wall_margin', 0.5)
 
         # 파라미터 로드
         self.start_x = float(self.get_parameter('start_x').value)
@@ -86,6 +92,20 @@ class StraightLineTest(Node):
         self.kd_yaw = float(self.get_parameter('kd_yaw').value)
         self.odom_timeout = float(self.get_parameter('odom_timeout_sec').value)
         self.wait_for_start = bool(self.get_parameter('wait_for_start').value)
+        self.enable_wall_guard = bool(self.get_parameter('enable_wall_guard').value)
+        self.pool_min_x = float(self.get_parameter('pool_min_x').value)
+        self.pool_max_x = float(self.get_parameter('pool_max_x').value)
+        self.pool_min_y = float(self.get_parameter('pool_min_y').value)
+        self.pool_max_y = float(self.get_parameter('pool_max_y').value)
+        self.wall_margin = float(self.get_parameter('wall_margin').value)
+
+        if (self.pool_max_x <= self.pool_min_x
+                or self.pool_max_y <= self.pool_min_y
+                or self.wall_margin < 0.0
+                or 2.0 * self.wall_margin >= min(
+                    self.pool_max_x - self.pool_min_x,
+                    self.pool_max_y - self.pool_min_y)):
+            raise ValueError('수조 경계 또는 wall_margin 파라미터가 유효하지 않습니다')
 
         # 상태 변수
         self.current_x: Optional[float] = None
@@ -96,6 +116,7 @@ class StraightLineTest(Node):
 
         self.started = not self.wait_for_start
         self.emergency_stopped = False
+        self.boundary_stopped = False
         self.mission_finished = False
         self.stop_cmd_sent = False
 
@@ -127,6 +148,11 @@ class StraightLineTest(Node):
 
     def _on_start_mission(self, msg: Bool):
         if msg.data:
+            if self.boundary_stopped:
+                self.get_logger().error(
+                    "🛑 벽면 가드가 래치된 상태입니다. 위치를 안전 영역으로 옮긴 뒤 "
+                    "테스트 노드를 재시작하세요.")
+                return
             if not self.started:
                 self.get_logger().info("🚀 [출발 신호 수신] /start_mission(True) 수신 — 직선 주행을 시작합니다!")
                 self.started = True
@@ -137,6 +163,10 @@ class StraightLineTest(Node):
                 self._send_stop()
 
     def _on_start_service(self, request, response):
+        if self.boundary_stopped:
+            response.success = False
+            response.message = 'Wall guard is latched; move the boat and restart the node.'
+            return response
         self.get_logger().info("🚀 [출발 서비스 호출] /start_test 호출됨 — 직선 주행을 시작합니다!")
         self.started = True
         response.success = True
@@ -182,7 +212,25 @@ class StraightLineTest(Node):
 
         x, y, yaw = self.current_x, self.current_y, self.current_yaw
 
-        # 3. 외부 시작 신호 대기 확인
+        # 3. 수조 벽면 가드. 한 번 침범하면 위치 노이즈로 자동 재출발하지 않도록
+        # 래치하고, 안전 영역으로 옮긴 뒤 노드를 재시작해야 해제되게 한다.
+        if self.enable_wall_guard and self._outside_safe_area(x, y):
+            if not self.boundary_stopped:
+                self.boundary_stopped = True
+                self.get_logger().error(
+                    f"🛑 [벽면 가드] 위치 ({x:.2f}, {y:.2f})m가 안전 영역 "
+                    f"X=[{self.pool_min_x + self.wall_margin:.2f}, "
+                    f"{self.pool_max_x - self.wall_margin:.2f}], "
+                    f"Y=[{self.pool_min_y + self.wall_margin:.2f}, "
+                    f"{self.pool_max_y - self.wall_margin:.2f}]m 밖입니다. 정지 상태를 래치합니다.")
+            self._send_stop()
+            return
+
+        if self.boundary_stopped:
+            self._send_stop()
+            return
+
+        # 4. 외부 시작 신호 대기 확인
         if not self.started:
             self._send_stop()
             dist_to_start = math.hypot(self.start_x - x, self.start_y - y)
@@ -193,7 +241,7 @@ class StraightLineTest(Node):
             )
             return
 
-        # 4. 목표점 도달 검사
+        # 5. 목표점 도달 검사
         dist_to_goal = math.hypot(self.goal_x - x, self.goal_y - y)
         if dist_to_goal <= self.goal_tol or (x <= self.goal_x and abs(y - self.goal_y) <= 0.6):
             self.get_logger().info(
@@ -202,7 +250,7 @@ class StraightLineTest(Node):
             self.mission_finished = True
             return
 
-        # 5. Line of Sight (LOS) 경로 가이던스 계산
+        # 6. Line of Sight (LOS) 경로 가이던스 계산
         # 직선 벡터 A -> B
         dx_line = self.goal_x - self.start_x  # -8.0
         dy_line = self.goal_y - self.start_y  # 0.0
@@ -223,12 +271,12 @@ class StraightLineTest(Node):
         correction_angle = math.atan2(-cross_track_error, self.lookahead)
         desired_yaw = normalize_angle(path_heading + correction_angle)
 
-        # 6. P-D 조향 제어기
+        # 7. P-D 조향 제어기
         heading_error = normalize_angle(desired_yaw - yaw)
         angular_cmd = (self.kp_yaw * heading_error) - (self.kd_yaw * self.current_yaw_rate)
         angular_cmd = max(-self.max_angular, min(self.max_angular, angular_cmd))
 
-        # 7. 전진 속도 계산 (감속 로직)
+        # 8. 전진 속도 계산 (감속 로직)
         speed = self.cruise_speed
         # 헤딩 오차가 크면 회전 우선 감속
         if abs(heading_error) > math.radians(40):
@@ -241,7 +289,7 @@ class StraightLineTest(Node):
             slowdown = max(0.35, dist_to_goal / self.slow_radius)
             speed *= slowdown
 
-        # 8. 모터 명령 발행 (/cmd_vel)
+        # 9. 모터 명령 발행 (/cmd_vel)
         cmd = Twist()
         cmd.linear.x = float(speed)
         cmd.angular.z = float(angular_cmd)
@@ -263,6 +311,15 @@ class StraightLineTest(Node):
             self.cmd_pub.publish(stop_cmd)
         except Exception:
             pass
+
+    def _outside_safe_area(self, x: float, y: float) -> bool:
+        """설정된 수조 경계에서 wall_margin만큼 떨어진 안전 영역 밖인지 반환."""
+        return (
+            x < self.pool_min_x + self.wall_margin
+            or x > self.pool_max_x - self.wall_margin
+            or y < self.pool_min_y + self.wall_margin
+            or y > self.pool_max_y - self.wall_margin
+        )
 
     def _publish_path_markers(self):
         """RViz 시각화용 목표 직선 경로 및 시작/도착점 마커."""
@@ -346,4 +403,3 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
-

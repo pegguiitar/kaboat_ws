@@ -31,6 +31,7 @@ class ThrusterDriver(Node):
         self.declare_parameter('hardware_type', 'dummy')  # 'dummy' | 'serial' | 'pca9685'
         self.declare_parameter('port', '/dev/ttyUSB0')
         self.declare_parameter('baudrate', 115200)
+        self.declare_parameter('allow_port_scan', False)
         self.declare_parameter('i2c_bus', 1)
         self.declare_parameter('pca9685_address', 0x40)
         self.declare_parameter('left_channel', 0)
@@ -46,6 +47,7 @@ class ThrusterDriver(Node):
         self.declare_parameter('invert_left', False)
         self.declare_parameter('invert_right', False)
         self.declare_parameter('max_slew_rate', 2.0)
+        self.declare_parameter('max_output_ratio', 1.0)
 
         # ── 안전 및 워치독 파라미터 ─────────────────────
         self.declare_parameter('update_rate_hz', 50.0)    # ESC 신호 갱신 주기 [Hz]
@@ -56,6 +58,7 @@ class ThrusterDriver(Node):
         hw_type = str(self.get_parameter('hardware_type').value).lower()
         self.port = str(self.get_parameter('port').value)
         self.baudrate = int(self.get_parameter('baudrate').value)
+        self.allow_port_scan = bool(self.get_parameter('allow_port_scan').value)
         self.timeout_sec = float(self.get_parameter('timeout_sec').value)
         self.update_rate_hz = float(self.get_parameter('update_rate_hz').value)
         self.enable_rc = bool(self.get_parameter('enable_rc_override').value)
@@ -72,7 +75,10 @@ class ThrusterDriver(Node):
             invert_left=bool(self.get_parameter('invert_left').value),
             invert_right=bool(self.get_parameter('invert_right').value),
             max_slew_rate=float(self.get_parameter('max_slew_rate').value),
+            max_output_ratio=float(self.get_parameter('max_output_ratio').value),
         )
+        if not 0.0 <= self.config.max_output_ratio <= 1.0:
+            raise ValueError('max_output_ratio는 0.0~1.0 범위여야 합니다')
         self.mixer = ThrusterMixer(self.config)
 
         # 백엔드 초기화
@@ -94,6 +100,8 @@ class ThrusterDriver(Node):
         self.active_mode = 'idle'   # 'auto', 'rc_override', 'estop', 'timeout', 'idle'
         self.last_left_pwm = self.config.neutral_pwm
         self.last_right_pwm = self.config.neutral_pwm
+        self.last_send_ok = False
+        self.send_fail_count = 0
 
         # 구독자
         self.create_subscription(Twist, '/cmd_vel', self._on_cmd_vel, 10)
@@ -116,7 +124,11 @@ class ThrusterDriver(Node):
 
     def _init_backend(self, hw_type: str) -> BaseThrusterBackend:
         if hw_type == 'serial':
-            return SerialBackend(port=self.port, baudrate=self.baudrate)
+            return SerialBackend(
+                port=self.port,
+                baudrate=self.baudrate,
+                allow_port_scan=self.allow_port_scan,
+            )
         elif hw_type == 'pca9685':
             i2c_bus = int(self.get_parameter('i2c_bus').value)
             addr = int(self.get_parameter('pca9685_address').value)
@@ -173,12 +185,20 @@ class ThrusterDriver(Node):
             self.active_mode = 'timeout'
             target_linear = 0.0
             target_angular = 0.0
+            # watchdog 정지는 가속도 제한 대상이 아니다. 마지막 명령에서 서서히
+            # 내려오지 않고 즉시 중립을 계산하도록 limiter 상태를 초기화한다.
+            self.mixer.reset()
 
         # 차동 믹싱 및 슬루 레이트 제한 적용
         left_pwm, right_pwm, _, _ = self.mixer.mix(target_linear, target_angular, now)
 
         # 하드웨어 백엔드로 PWM 전송
-        self.backend.send_pwm(left_pwm, right_pwm)
+        self.last_send_ok = self.backend.send_pwm(left_pwm, right_pwm)
+        if not self.last_send_ok:
+            self.send_fail_count += 1
+            self.get_logger().error(
+                '스러스터 PWM 전송 실패 — 백엔드 연결을 확인하세요.',
+                throttle_duration_sec=2.0)
         self.last_left_pwm = left_pwm
         self.last_right_pwm = right_pwm
 
@@ -190,7 +210,11 @@ class ThrusterDriver(Node):
         status.name = 'Thruster System'
         status.hardware_id = 'kaboat_thrusters'
 
-        if self.emergency_stopped:
+        backend_open = bool(getattr(self.backend, 'is_open', False))
+        if not backend_open or not self.last_send_ok:
+            status.level = DiagnosticStatus.ERROR
+            status.message = 'Thruster Backend Disconnected or Write Failed'
+        elif self.emergency_stopped:
             status.level = DiagnosticStatus.ERROR
             status.message = 'Emergency Stop Active'
         elif self.active_mode == 'timeout':
@@ -207,6 +231,9 @@ class ThrusterDriver(Node):
             KeyValue(key='mode', value=self.active_mode),
             KeyValue(key='left_pwm', value=str(self.last_left_pwm)),
             KeyValue(key='right_pwm', value=str(self.last_right_pwm)),
+            KeyValue(key='backend_open', value=str(backend_open)),
+            KeyValue(key='last_send_ok', value=str(self.last_send_ok)),
+            KeyValue(key='send_fail_count', value=str(self.send_fail_count)),
             KeyValue(key='linear_cmd', value=f"{self.current_cmd.linear.x:.3f}"),
             KeyValue(key='angular_cmd', value=f"{self.current_cmd.angular.z:.3f}"),
         ]
@@ -239,4 +266,3 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
-

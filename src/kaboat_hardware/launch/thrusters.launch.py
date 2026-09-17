@@ -25,6 +25,12 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'port', default_value='/dev/ttyUSB0',
             description='아두이노/ESP32 시리얼 포트 경로 (기본값: /dev/ttyUSB0)'),
+        DeclareLaunchArgument(
+            'allow_port_scan', default_value='false',
+            description='지정 포트 실패 시 다른 USB serial 포트 자동 탐색 여부'),
+        DeclareLaunchArgument(
+            'max_output_ratio', default_value='1.0',
+            description='믹싱 후 좌/우 스러스터 최종 절대 출력 상한 [0.0~1.0]'),
 
         Node(
             package='kaboat_hardware',
@@ -36,6 +42,8 @@ def generate_launch_description():
                 {
                     'hardware_type': hardware_type,
                     'port': LaunchConfiguration('port'),
+                    'allow_port_scan': LaunchConfiguration('allow_port_scan'),
+                    'max_output_ratio': LaunchConfiguration('max_output_ratio'),
                     'use_sim_time': False,
                 }
             ],

@@ -26,6 +26,7 @@ class ThrusterConfig:
 
     reverse_scale: float = 0.8     # 후진 추력 효율 감쇠 보정 계수
     max_slew_rate: float = 2.0     # [초당 최대 변화율] 1.0/s 이면 0->1까지 1초 소요
+    max_output_ratio: float = 1.0  # 최종 좌/우 출력 절대 상한 [0, 1]
 
 
 def clamp(val: float, min_val: float, max_val: float) -> float:
@@ -118,9 +119,11 @@ class ThrusterMixer:
         raw_left *= self.config.left_trim
         raw_right *= self.config.right_trim
 
-        # 포화 클램프
-        clamped_left = clamp(raw_left, -1.0, 1.0)
-        clamped_right = clamp(raw_right, -1.0, 1.0)
+        # 최종 출력 상한. linear/angular 각각의 상한과 별개로 실제 좌/우
+        # 스러스터 명령을 제한하므로 수조 시험 중 안전 컷으로 사용할 수 있다.
+        output_limit = clamp(self.config.max_output_ratio, 0.0, 1.0)
+        clamped_left = clamp(raw_left, -output_limit, output_limit)
+        clamped_right = clamp(raw_right, -output_limit, output_limit)
 
         # 슬루 레이트 제한
         limited_left = self.left_limiter.update(clamped_left, now)
@@ -176,10 +179,14 @@ class SerialBackend(BaseThrusterBackend):
       - 뒤 4자리: 우측 스러스터 [1000~2000 µs]
     """
 
-    def __init__(self, port: str = '/dev/ttyUSB0', baudrate: int = 115200, timeout: float = 0.1):
+    def __init__(self, port: str = '/dev/ttyUSB0', baudrate: int = 115200,
+                 timeout: float = 0.1, allow_port_scan: bool = False):
         self.port = port
         self.baudrate = baudrate
         self.timeout = timeout
+        self.allow_port_scan = allow_port_scan
+        self.serial = None
+
     @property
     def is_open(self) -> bool:
         return self.serial is not None and self.serial.is_open
@@ -192,22 +199,25 @@ class SerialBackend(BaseThrusterBackend):
         except ImportError:
             return False
 
-        # 후보 포트 목록 (지정 포트 -> by-id CP210x -> ttyUSB* -> ttyACM*)
+        # 기본은 지정 포트만 사용한다. LiDAR/GQ7도 USB serial 장치이므로 무차별
+        # 자동 탐색은 잘못된 장치에 PWM 문자열을 쓰는 위험이 있다.
         candidate_ports = []
         if self.port:
             candidate_ports.append(self.port)
 
-        for p in glob.glob('/dev/serial/by-id/*CP210*') + glob.glob('/dev/serial/by-id/*UART*'):
-            if p not in candidate_ports:
-                candidate_ports.append(p)
+        if self.allow_port_scan:
+            for p in (glob.glob('/dev/serial/by-id/*CP210*')
+                      + glob.glob('/dev/serial/by-id/*UART*')):
+                if p not in candidate_ports:
+                    candidate_ports.append(p)
 
-        for p in sorted(glob.glob('/dev/ttyUSB*')):
-            if p not in candidate_ports:
-                candidate_ports.append(p)
+            for p in sorted(glob.glob('/dev/ttyUSB*')):
+                if p not in candidate_ports:
+                    candidate_ports.append(p)
 
-        for p in sorted(glob.glob('/dev/ttyACM*')):
-            if 'microstrain' not in p and p not in candidate_ports:
-                candidate_ports.append(p)
+            for p in sorted(glob.glob('/dev/ttyACM*')):
+                if p not in candidate_ports:
+                    candidate_ports.append(p)
 
         for port in candidate_ports:
             if not os.path.exists(port):
@@ -234,6 +244,11 @@ class SerialBackend(BaseThrusterBackend):
             self.serial.write(msg)
             return True
         except Exception:
+            try:
+                self.serial.close()
+            except Exception:
+                pass
+            self.serial = None
             return False
 
     def close(self):
@@ -259,6 +274,10 @@ class PCA9685Backend(BaseThrusterBackend):
         self.right_channel = right_channel
         self.pwm_freq = pwm_freq
         self.bus = None
+
+    @property
+    def is_open(self) -> bool:
+        return self.bus is not None
 
     def open(self) -> bool:
         try:
@@ -291,11 +310,18 @@ class PCA9685Backend(BaseThrusterBackend):
         self.bus.write_i2c_block_data(self.address, reg_base, data)
 
     def send_pwm(self, left_pwm: int, right_pwm: int) -> bool:
+        if self.bus is None:
+            return False
         try:
             self._set_channel_pwm_us(self.left_channel, left_pwm)
             self._set_channel_pwm_us(self.right_channel, right_pwm)
             return True
         except Exception:
+            try:
+                self.bus.close()
+            except Exception:
+                pass
+            self.bus = None
             return False
 
     def close(self):
@@ -306,4 +332,5 @@ class PCA9685Backend(BaseThrusterBackend):
                 self.bus.close()
         except Exception:
             pass
-
+        finally:
+            self.bus = None

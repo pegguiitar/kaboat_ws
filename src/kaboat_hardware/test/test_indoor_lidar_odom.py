@@ -1,8 +1,13 @@
 import math
-import pytest
-from geometry_msgs.msg import Quaternion
+import time
+import unittest
+
+import rclpy
+from geometry_msgs.msg import PointStamped, Quaternion
+from sensor_msgs.msg import Imu
+
 from kaboat_hardware.indoor_lidar_odom import (
-    _yaw_from_quat, _quat_from_yaw, normalize_angle
+    IndoorLidarOdom, _yaw_from_quat, _quat_from_yaw, normalize_angle
 )
 
 
@@ -46,4 +51,69 @@ def test_resume_behavior():
         vx_rec, vy_rec, _ = est.update(4.0 + i * 0.1, 4.0 + i * 0.1, 0.0, 0.0)
     assert math.isclose(vx_rec, 1.0, abs_tol=0.1)
 
+
+class TestIndoorLidarOdomSafety(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        if not rclpy.ok():
+            rclpy.init()
+
+    @classmethod
+    def tearDownClass(cls):
+        if rclpy.ok():
+            rclpy.shutdown()
+
+    def setUp(self):
+        self.node = IndoorLidarOdom()
+        self.published = []
+        self.node.odom_pub.publish = lambda msg: self.published.append(msg)
+        self.node.publish_tf = False
+
+    def tearDown(self):
+        self.node.destroy_node()
+
+    @staticmethod
+    def _imu(stamp_sec=1):
+        msg = Imu()
+        msg.header.stamp.sec = stamp_sec
+        msg.orientation.w = 1.0
+        return msg
+
+    @staticmethod
+    def _position(x=5.0, y=2.5, stamp_sec=1):
+        msg = PointStamped()
+        msg.header.stamp.sec = stamp_sec
+        msg.point.x = x
+        msg.point.y = y
+        return msg
+
+    def test_does_not_publish_fake_origin_before_position(self):
+        self.node._on_imu(self._imu())
+        self.node._tick()
+        self.assertEqual(self.published, [])
+
+    def test_publishes_only_when_position_and_imu_are_fresh(self):
+        self.node._on_imu(self._imu())
+        self.node._on_position(self._position())
+        self.node._tick()
+        self.assertEqual(len(self.published), 1)
+        self.assertAlmostEqual(self.published[0].pose.pose.position.x, 5.0)
+        self.assertAlmostEqual(self.published[0].pose.pose.position.y, 2.5)
+
+    def test_stale_imu_stops_odom(self):
+        self.node._on_imu(self._imu())
+        self.node._on_position(self._position())
+        self.node._tick()
+        self.node._on_position(self._position(x=4.9, stamp_sec=2))
+        self.node.last_imu_receive_time = time.monotonic() - self.node.imu_timeout - 0.1
+        self.node._tick()
+        self.assertEqual(len(self.published), 1)
+
+    def test_stale_position_stops_odom(self):
+        self.node._on_imu(self._imu())
+        self.node._on_position(self._position())
+        self.node._tick()
+        self.node.last_pos_receive_time = time.monotonic() - self.node.pos_timeout - 0.1
+        self.node._tick()
+        self.assertEqual(len(self.published), 1)
 
