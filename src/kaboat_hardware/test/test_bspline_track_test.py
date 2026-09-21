@@ -4,6 +4,7 @@ import math
 import sys
 import unittest
 import numpy as np
+from scipy.interpolate import BSpline
 
 for p in ("/opt/ros/humble/lib/python3.10/site-packages", "/opt/ros/humble/local/lib/python3.10/dist-packages"):
     if p not in sys.path:
@@ -69,6 +70,73 @@ class TestBSplineTrackTest(unittest.TestCase):
         self.assertLess(np.max(xs), 9.5)
         self.assertGreater(np.min(ys), 0.5)
         self.assertLess(np.max(ys), 4.5)
+
+    def test_clamped_bspline_passes_only_endpoints(self):
+        """양 끝점은 통과하고 중간 제어점은 보간하지 않는지 검증."""
+        cps = np.asarray([
+            (0.0, 0.0),
+            (1.0, 3.0),
+            (2.0, -2.0),
+            (3.0, 2.0),
+            (4.0, -1.0),
+            (5.0, 0.0),
+        ])
+        xs, ys, _, _, _ = generate_bspline_path(cps.tolist(), spacing=0.005, degree=3)
+        samples = np.column_stack((xs, ys))
+
+        np.testing.assert_allclose(samples[0], cps[0], atol=1e-12)
+        np.testing.assert_allclose(samples[-1], cps[-1], atol=1e-12)
+
+        # 이 형상에서 각 중간 제어점은 clamped B-spline 곡선으로부터 충분히
+        # 떨어져 있다. 과거 splprep(s=0) 보간 구현이면 거리가 거의 0이 된다.
+        min_distances = [
+            float(np.min(np.linalg.norm(samples - control_point, axis=1)))
+            for control_point in cps[1:-1]
+        ]
+        self.assertTrue(all(distance > 0.1 for distance in min_distances), min_distances)
+
+    def test_six_point_cubic_matches_simulation_bspline(self):
+        """6개 제어점의 knot와 곡선이 시뮬레이션의 clamped cubic과 같은지 검증."""
+        cps = np.asarray([
+            (0.0, 0.0),
+            (1.0, 3.0),
+            (2.0, -2.0),
+            (3.0, 2.0),
+            (4.0, -1.0),
+            (5.0, 0.0),
+        ])
+        spacing = 0.037
+        xs, ys, _, _, _ = generate_bspline_path(cps.tolist(), spacing=spacing, degree=3)
+
+        sim_knots = np.asarray([0.0, 0.0, 0.0, 0.0, 1.0 / 3.0, 2.0 / 3.0,
+                                1.0, 1.0, 1.0, 1.0])
+        sim_spline = BSpline(sim_knots, cps, 3)
+        dense_u = np.linspace(0.0, 1.0, 1000)
+        dense_points = sim_spline(dense_u)
+        cumulative_length = np.concatenate((
+            [0.0],
+            np.cumsum(np.linalg.norm(np.diff(dense_points, axis=0), axis=1)),
+        ))
+        target_length = np.arange(0.0, cumulative_length[-1], spacing)
+        target_length = np.append(target_length, cumulative_length[-1])
+        sampled_u = np.interp(target_length, cumulative_length, dense_u)
+        expected_points = sim_spline(sampled_u)
+
+        np.testing.assert_allclose(np.column_stack((xs, ys)), expected_points, atol=1e-12)
+
+    def test_two_point_bspline_is_finite_straight_line(self):
+        """제어점 2개의 1차 spline은 유한한 직선이고 곡률이 0인지 검증."""
+        cps = [(1.0, 2.0), (4.0, 6.0)]
+        xs, ys, headings, curvatures, total_len = generate_bspline_path(
+            cps, spacing=0.2, degree=3)
+
+        np.testing.assert_allclose([xs[0], ys[0]], cps[0], atol=1e-12)
+        np.testing.assert_allclose([xs[-1], ys[-1]], cps[-1], atol=1e-12)
+        self.assertTrue(np.all(np.isfinite(xs)))
+        self.assertTrue(np.all(np.isfinite(ys)))
+        self.assertTrue(np.all(np.isfinite(headings)))
+        np.testing.assert_allclose(curvatures, 0.0, atol=1e-12)
+        self.assertAlmostEqual(total_len, 5.0, places=9)
 
     def test_bspline_few_points_exception(self):
         """제어점이 2개 미만일 때 예외 발생 검증."""
@@ -350,4 +418,3 @@ class TestBSplineTrackTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-

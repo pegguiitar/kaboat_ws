@@ -15,7 +15,7 @@ import time
 from typing import List, Optional, Tuple
 
 import numpy as np
-from scipy.interpolate import splprep, splev
+from scipy.interpolate import BSpline
 
 import rclpy
 from rclpy.node import Node
@@ -54,7 +54,11 @@ def generate_bspline_path(
     spacing: float = 0.05,
     degree: int = 3
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float]:
-    """제어점 목록으로부터 호길이 등간격 샘플링된 B-spline 곡선 경로를 생성.
+    """제어점 목록으로부터 호길이 등간격 샘플링된 clamped B-spline을 생성.
+
+    첫 점과 끝 점은 통과하지만, 중간 제어점은 곡선의 형상만 결정하며 반드시
+    통과하지 않는다. knot 구성은 시뮬레이션의 B-spline 플래너와 동일한
+    open-uniform(clamped) 방식이다.
 
     반환값:
       xs, ys: 샘플링된 곡선 좌표 [m]
@@ -66,15 +70,26 @@ def generate_bspline_path(
     if len(pts) < 2:
         raise ValueError("제어점은 최소 2개 이상이어야 합니다.")
 
-    xs_raw = pts[:, 0]
-    ys_raw = pts[:, 1]
-
     k = min(degree, len(pts) - 1)
-    tck, _ = splprep([xs_raw, ys_raw], s=0, k=k)
+    if k < 1:
+        raise ValueError("B-spline 차수는 1 이상이어야 합니다.")
+
+    # Open-uniform knot vector. 예: 제어점 6개, 3차이면
+    # [0, 0, 0, 0, 1/3, 2/3, 1, 1, 1, 1]로 시뮬레이션과 동일하다.
+    num_internal_knots = len(pts) - k - 1
+    internal_knots = np.linspace(0.0, 1.0, num_internal_knots + 2)[1:-1]
+    knots = np.concatenate((
+        np.zeros(k + 1, dtype=np.float64),
+        internal_knots,
+        np.ones(k + 1, dtype=np.float64),
+    ))
+    spline = BSpline(knots, pts, k, axis=0)
 
     # 1. 조밀한 u 평가로 호길이 누적 계산
     dense_u = np.linspace(0.0, 1.0, 1000)
-    dense_x, dense_y = splev(dense_u, tck)
+    dense_points = spline(dense_u)
+    dense_x = dense_points[:, 0]
+    dense_y = dense_points[:, 1]
     dx_dense = np.diff(dense_x)
     dy_dense = np.diff(dense_y)
     seg_lengths = np.hypot(dx_dense, dy_dense)
@@ -91,9 +106,22 @@ def generate_bspline_path(
 
     u_sampled = np.interp(target_s, cum_dist, dense_u)
 
-    xs, ys = splev(u_sampled, tck)
-    dx_du, dy_du = splev(u_sampled, tck, der=1)
-    d2x_du2, d2y_du2 = splev(u_sampled, tck, der=2)
+    sampled_points = spline(u_sampled)
+    xs = sampled_points[:, 0]
+    ys = sampled_points[:, 1]
+
+    first_derivative = spline(u_sampled, nu=1)
+    dx_du = first_derivative[:, 0]
+    dy_du = first_derivative[:, 1]
+    if k >= 2:
+        second_derivative = spline(u_sampled, nu=2)
+        d2x_du2 = second_derivative[:, 0]
+        d2y_du2 = second_derivative[:, 1]
+    else:
+        # 선형 B-spline의 2차 미분은 전체 구간에서 0이다. SciPy는 차수보다
+        # 높은 미분 요청을 거부하므로 명시적으로 0을 사용한다.
+        d2x_du2 = np.zeros_like(dx_du)
+        d2y_du2 = np.zeros_like(dy_du)
 
     headings = np.arctan2(dy_du, dx_du)
     # 곡률: kappa = (x' y'' - y' x'') / (x'^2 + y'^2)^(3/2)
@@ -480,4 +508,3 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
-
