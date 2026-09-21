@@ -17,7 +17,7 @@ source /opt/ros/humble/setup.bash
 source ~/kaboat_ws/install/setup.bash      # 실제 워크스페이스 경로로
 ```
 
-여러 PC(천장 카메라 PC ↔ Jetson)를 쓰면 양쪽이 같아야 한다:
+여러 PC(외부 LiDAR 노트북 ↔ Jetson)를 쓰면 양쪽이 같아야 한다:
 
 ```bash
 echo $ROS_DOMAIN_ID          # 두 기기가 같은 값이어야 서로 보인다
@@ -135,8 +135,8 @@ ros2 topic hz /scan
 | `ranges` 길이 | 2000 |
 | `angle_min` / `angle_max` | −3.14159 / +3.14159 |
 | `angle_increment` | ≈ 0.00314 (0.18°) |
-| `range_min` / `range_max` | 0.05 / 50.0 |
-| `frame_id` | `laser_link` |
+| `range_min` / `range_max` | 0.01 / 50.0 (`tg50.yaml`) |
+| `frame_id` | `laser_frame` |
 | 주파수 | 10 Hz (`min/max` 가 0.099~0.101 로 붙어야 정상) |
 
 ### 3.4 정상 신호의 특징
@@ -186,20 +186,28 @@ ros2 topic echo /imu/data --field angular_velocity.z
 
 부호가 반대면 `seek_goal()` 의 D항이 감쇠가 아니라 **발진 방향으로 작용**한다
 — SKELETON §6 에 기록된 전복 사고 2건 중 하나가 정확히 요 발진이다.
-반대면 `apriltag_odom` 의 `yaw_rate_sign: -1.0` 으로 뒤집는다.
+반대면 `indoor_lidar_odom` 의 `yaw_rate_sign: -1.0` 으로 뒤집는다 (src/kaboat_hardware/config/indoor_tank.yaml 참조).
 
 ### 4.3 바이어스 확인
 
 가만히 두고 `angular_velocity.z` 를 본다. **0.01 rad/s 이하면 무시해도 된다**
 (D항 기여가 `max_angular` 의 1.5% 수준). 크면 `gyro_bias_z` 에 넣어 뺀다.
 
-### 4.4 `orientation unavailable` WARN 은 실내에서 정상
+### 4.4 실내 주행 전 orientation 확인
 
-GQ7 은 자력계가 없고 절대 방위를 듀얼 안테나 GNSS 로 얻는다. **실내에서는
-orientation 이 없거나 못 믿는 게 정상**이고 `/diagnostics` 에 WARN 이 뜬다.
+GQ7의 GNSS fix가 실내에서 실패하는 것은 정상이다. 그러나 현재
+`indoor_lidar_odom`은 `/imu/data.orientation`에서 yaw를 읽으므로, 모터 주행에는
+유효한 쿼터니언과 회전에 따라 변하는 yaw가 필요하다. orientation이 0
+쿼터니언이거나 고정되어 있으면 위치 토픽이 정상이어도 주행하지 않는다.
 
-실내 수조 모드에서는 방위를 AprilTag 가 주므로 이 WARN 은 무시해도 된다.
-**IMU 에서 쓰는 건 `angular_velocity.z` 하나뿐이다.**
+```bash
+ros2 topic echo /imu/data --once --field orientation --qos-reliability best_effort
+```
+
+배를 손으로 반시계 방향으로 돌렸을 때 `/odom` yaw와
+`twist.twist.angular.z`가 모두 양의 방향으로 변하는지 확인한다. 수조 +X축과
+선수 방향이 맞지 않으면 `indoor_tank.yaml`의 `imu_yaw_offset_deg`를 실측값으로
+조정한다.
 
 ---
 
@@ -342,9 +350,10 @@ ros2 topic echo /tf_static --once
 ros2 run tf2_ros tf2_echo odom base_link
 ```
 
-TF 는 **센서 launch** 가 발행한다 — `real_sensors.launch.py` /
-`indoor_tank.launch.py` 의 `publish_tf:=true`(기본)가 `odom_tf_broadcaster` 를
-띄운다. RViz 는 시각화만 하므로 TF 를 만들지 않는다.
+실외에서는 `real_sensors.launch.py`의 `odom_tf_broadcaster`가 TF를 발행한다.
+실내에서는 `indoor_tank.launch.py`가 이 broadcaster를 끄고,
+`indoor_lidar_odom`이 `/odom`과 함께 `odom -> base_link` TF를 직접 발행한다.
+RViz는 시각화만 하므로 TF를 만들지 않는다.
 `Fixed Frame [odom] does not exist` 가 뜨면 센서 launch 가 안 떠 있거나
 `publish_tf` 가 꺼진 것이다.
 
@@ -353,9 +362,12 @@ TF 는 **센서 launch** 가 발행한다 — `real_sensors.launch.py` /
 ## 9. RViz 로 보기
 
 ```bash
-# 실물 — 센서 launch 가 TF 를 발행하므로 먼저 떠 있어야 한다
+# 실외 — 센서 launch가 TF를 발행하므로 먼저 떠 있어야 한다
 ros2 launch kaboat_hardware real_sensors.launch.py
 ros2 launch kaboat_bringup rviz.launch.py
+
+# 실내 수조 — 외부 LiDAR 노트북에서 추적기와 전용 RViz를 함께 실행
+ros2 launch kaboat_hardware lidar_boat_tracker.launch.py port:=/dev/ttyUSB0
 
 # sim (Gazebo 가 clock/TF 를 모두 준다)
 ros2 launch kaboat_bringup rviz.launch.py use_sim_time:=true
@@ -371,55 +383,68 @@ Map `/occupancy_grid` · LaserScan `/scan` · Odometry `/odom` 이 뜬다.
 
 ---
 
-## 10. 실내 수조 모드 (AprilTag)
+## 10. 실내 수조 모드 (외부 TG-50 라이다 + 선체 GQ7 IMU)
 
-GNSS 대신 천장 AprilTag + GQ7 자이로로 `/odom` 을 만든다.
-노트북 웹캠 설치·보정·Wi-Fi DDS 연결의 전체 절차는
-[`APRILTAG_WIFI_SETUP.md`](APRILTAG_WIFI_SETUP.md)를 따른다.
+실내에서는 GNSS 신호를 수신할 수 없으므로, 수조 외벽에 고정된 YDLIDAR TG-50 라이다가 배의 2D 위치(`/boat_position`, 실내 GPS 역할)를 추적하고, 선체에 탑재된 GQ7 IMU(`/imu/data`)와 결합하여 `indoor_lidar_odom` 노드가 최종 `/odom` 및 TF(`odom -> base_link`)를 생성합니다.
+
+### 10.1 실행 (2대 기기 분담)
 
 ```bash
-# 천장 카메라 노트북 (tag_size는 인쇄물 실측값으로 변경)
-ros2 launch kaboat_hardware ceiling_apriltag.launch.py \
-  tag_id:=0 tag_size:=0.162
+# 1. 수조 외벽 노트북 (외부 고정 TG-50 라이다 + 배 위치 추적기 + RViz2)
+ros2 launch kaboat_hardware lidar_boat_tracker.launch.py port:=/dev/ttyUSB0
 
-# 배 (Jetson)
-ros2 launch kaboat_hardware indoor_tank.launch.py
+# 2. 배 (Jetson — GQ7 드라이버 + indoor_lidar_odom 실행, 모터는 기본 비활성화)
+ros2 launch kaboat_hardware indoor_tank.launch.py enable_thrusters:=false
 ```
 
-### 확인
+### 10.2 토픽 확인 및 판정 기준
 
 ```bash
-ros2 run tf2_tools view_frames                    # 태그 TF 이름 확인 (tag36h11:0 등)
-ros2 topic echo /detections --once                # 태그가 보이는가
-ros2 topic hz /odom                               # ≈30 Hz
-ros2 topic echo /odom --once --field twist.twist  # angular.z 가 자이로 값인가
+# 외부 라이다 배 위치 (10 Hz PointStamped)
+ros2 topic hz /boat_position
+ros2 topic echo /boat_position --once
+
+# 선체 GQ7 IMU (50~100 Hz)
+ros2 topic hz /imu/data
+
+# indoor_lidar_odom 융합 오도메트리
+# 내부 검사 타이머는 30 Hz지만 새 /boat_position 표본마다 한 번만 발행하므로
+# 현재 외부 LiDAR가 10 Hz이면 실제 /odom도 대략 10 Hz이다.
+ros2 topic hz /odom
+ros2 topic echo /odom --once
+ros2 topic echo /odom --once --field twist.twist.angular.z
+
+# TF 변환 확인 (odom -> base_link)
+ros2 run tf2_ros tf2_echo odom base_link
 ```
 
 노드 로그로 상태를 읽는다:
 
 | 로그 | 뜻 |
 |---|---|
-| `태그 획득 — /odom 발행 시작` | 정상 |
-| `태그 TF 없음` | apriltag_ros 미실행 / `tag_frame` 이름 불일치 |
-| `태그 유실 — /odom 발행 중단` | 카메라가 태그를 놓침 (**의도된 안전 동작**) |
-| `IMU 각속도 없음/지연 — 태그 미분으로 폴백` | 자이로 끊김. 노이즈 증가 |
+| `[indoor_lidar_odom] 시작 (실내 GPS + 선체 IMU 융합)!` | 정상 시작 |
+| `외부 라이다 위치 신호 유실` | 라이다 위치 미수신(1.0s 초과)으로 `/odom` 발행 중단 (**의도된 안전 동작**) |
+| `선체 IMU 신호 유실` | IMU 미수신(0.5s 초과)으로 `/odom` 발행 중단 (**의도된 안전 동작**) |
 
-태그 유실 시 발행을 멈추는 것은 의도적이다 — 마지막 위치를 재발행하면 배가
-옛 좌표를 믿고 달린다. 끊으면 `cmd_mux` 의 300ms 워치독이 정지시킨다.
+위치나 IMU 신호가 끊겼을 때 `/odom` 발행을 멈추는 것은 의도된 안전
+메커니즘입니다. 마지막 위치를 계속 재발행하면 배가 옛 좌표를 믿을 수
+있으므로, 테스트 노드의 0.5초 odom 타임아웃이 먼저 0 명령을 내고 그 명령까지
+끊기면 `thruster_driver`의 300ms 워치독이 모터를 중립으로 복귀시킵니다.
 
 ### ⚠️ `/odom` 발행자 중복 주의
 
-`indoor_tank.launch.py` 는 GQ7 의 EKF→`/odom` remap 을 자동으로 끈다
-(`enable_odom_remap:=false`). `real_sensors.launch.py` 를 직접 쓸 때는 수동으로
-꺼야 한다 — 안 끄면 EKF 가 수렴하는 순간 발행자가 둘이 되어 두 좌표계가 섞인다.
+`indoor_tank.launch.py`는 GQ7의 EKF $\to$ `/odom` remap과 실외용 TF
+broadcaster를 자동으로 끕니다. 실내에서 `real_sensors.launch.py`를 별도로
+실행하지 말고 `indoor_tank.launch.py` 하나를 사용합니다. 수동 구성이 꼭
+필요하다면 `enable_odom_remap:=false publish_tf:=false`를 모두 지정합니다.
 
 ```bash
-ros2 topic info /odom --verbose | grep "Publisher count"   # 반드시 1
+ros2 topic info /odom --verbose | grep "Publisher count"   # 반드시 1이어야 함
 ```
 
 ---
 
-## 11. GPS/AprilTag 전 임시 IMU dead-reckoning 시험
+## 11. GPS/외부 라이다 전 임시 IMU dead-reckoning 시험
 
 TG-50과 GQ7을 손으로 같이 움직이며 `/occupancy_grid`가 이동·회전에 따라
 갱신되는지만 확인하는 **단기 시험 전용** 모드다. GQ7 자세로 중력을 제거한
@@ -455,7 +480,7 @@ ros2 service call /imu_dead_reckoning_odom/reset std_srvs/srv/Trigger '{}'
 드리프트는 줄지만, IMU만으로는 등속 이동과 정지를 구분할 수 없어 부드럽게
 운반하는 구간을 정지로 잘못 판단할 수 있다.
 
-시험이 끝나면 launch를 종료한다. 이후 AprilTag/GQ7 EKF `/odom`과 동시에
+시험이 끝나면 launch를 종료한다. 이후 `indoor_lidar_odom`의 `/odom`과 동시에
 실행하면 발행자가 둘이 되므로 다음 값은 반드시 `1`이어야 한다.
 
 ```bash
@@ -469,7 +494,7 @@ ros2 topic info /odom --verbose | grep "Publisher count"
 이전 프로세스가 남아 토픽이 꼬이는 경우가 흔하다.
 
 ```bash
-ps -ef | grep -E "ros2 launch|apriltag|microstrain|rviz2|parameter_bridge" | grep -v grep
+ps -ef | grep -E "ros2 launch|lidar_boat_tracker|indoor_tank|microstrain|rviz2|parameter_bridge" | grep -v grep
 
 ps -ef | grep -E "gz sim|ros2 launch|parameter_bridge|robot_state_publisher" \
   | grep -v grep | awk '{print $2}' | xargs -r kill -9
@@ -489,7 +514,7 @@ ps -ef | grep -E "gz sim|ros2 launch|parameter_bridge|robot_state_publisher" \
 | `/gps/fix` **배선** | ✅ 검증 가능 | 2 Hz + `status: -1` ← **정상 결과** |
 | `/gps/fix` **좌표** | ❌ | 실외 필요 |
 | `/odom` (GQ7 EKF) | ❌ | 실외 + 이동 필요 |
-| `/odom` (AprilTag) | ✅ | 30 Hz, §10 |
+| `/odom` (실내 라이다+IMU) | ✅ | 현재 약 10 Hz(`/boat_position` 표본률), §10 |
 
 ---
 
@@ -512,38 +537,40 @@ header:
   stamp:
     sec: 1786423041
     nanosec: 412773000
-  frame_id: laser_link
+  frame_id: laser_frame
 angle_min: -3.141592653589793
 angle_max: 3.141592653589793
 angle_increment: 0.0031415926535897933
 time_increment: 5.0e-05
 scan_time: 0.1
-range_min: 0.05
+range_min: 0.01
 range_max: 50.0
 ranges: '<sequence type: float, length: 2000>'
 intensities: '<sequence type: float, length: 2000>'
 ```
 
-거리 배열은 따로 본다 (`.inf` = 무반사, 정상):
+거리 배열은 따로 본다. 현재 `tg50.yaml`은 `invalid_range_is_inf: false`이므로
+무효 반환 표현은 실제 메시지에서 확인한다:
 
 ```bash
 ros2 topic echo /scan --once --field ranges | head -20
 ```
 
 ```
-- .inf
+- 0.0
 - 12.437000274658203
 - 12.402999877929688
 - 3.740999937057495
 - 3.7269999980926514
-- .inf
+- 0.0
 - 0.9210000038146973
 ```
 
 ## `/imu/data` — `sensor_msgs/msg/Imu`
 
-실내·정지 상태의 GQ7. **`orientation_covariance[0] = -1.0` 은 "orientation
-미제공" 규약**이고, GQ7 은 자력계가 없어 실내에서 이게 정상이다.
+실내·정지 상태의 GQ7 예시다. **`orientation_covariance[0] = -1.0`은
+orientation 미제공 규약이며, 이 상태에서는 현재 `indoor_lidar_odom`으로 모터
+주행하면 안 된다.** 유효한 쿼터니언과 회전에 따라 변하는 yaw를 먼저 확인한다.
 
 ```yaml
 header:
@@ -563,8 +590,8 @@ linear_acceleration:
 linear_acceleration_covariance: [0.0001, 0.0, ..., 0.0001]
 ```
 
-**스택이 쓰는 건 `angular_velocity.z` 하나뿐이다.** 정지 시 `|z| < 0.01`,
-반시계 회전 시 **양수**.
+`indoor_lidar_odom`은 orientation의 yaw와 `angular_velocity.z`를 모두 사용한다.
+정지 시 `|z| < 0.01`, 반시계 회전 시 yaw가 증가하고 각속도가 **양수**여야 한다.
 
 ## `/gps/fix` — `sensor_msgs/msg/NavSatFix`
 
@@ -602,7 +629,7 @@ position_covariance_type: 2                        # DIAGONAL_KNOWN
 
 ## `/odom` — `nav_msgs/msg/Odometry`
 
-AprilTag 소스 기준. 공분산이 36개라 보통 `--field` 로 나눠 본다.
+실내 라이다+IMU (`indoor_lidar_odom`) 소스 기준. 공분산이 36개라 보통 `--field` 로 나눠 본다.
 
 ```bash
 ros2 topic echo /odom --once --field pose.pose
@@ -750,7 +777,7 @@ status:
   - {key: messages, value: '187'}
   - {key: rate_hz, value: '9.94'}
   - {key: age_sec, value: '0.043'}
-  - {key: frame_id, value: laser_link}
+  - {key: frame_id, value: laser_frame}
   - {key: beams, value: '2000'}
   - {key: valid_ranges, value: '1362'}
 - level: "\x01"                                    # WARN

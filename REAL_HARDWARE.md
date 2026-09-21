@@ -4,7 +4,7 @@
 `real_sensors.launch.py`는 ESC/추력 노드를 실행하지 않는다.
 
 > 현장 점검 명령과 판정 기준은 **[SENSOR_CHECK.md](SENSOR_CHECK.md)** 에 모아뒀다.
-> 실내 수조(천장 AprilTag) 모드는 아래 §"실내 수조 시험" 참고.
+> 실내 수조(외부 TG-50 라이다 + 선체 GQ7 IMU) 모드는 아래 §"실내 수조 시험" 참고.
 
 ## 센서 토픽 계약
 
@@ -13,7 +13,7 @@
 | D455 RGB | `sensor_msgs/Image` | `/camera/color/image_raw` | `camera_color_optical_frame` |
 | D455 aligned depth | `sensor_msgs/Image` | `/camera/depth/image_raw` | `camera_color_optical_frame` |
 | D455 calibration | `sensor_msgs/CameraInfo` | `/camera/camera_info` | `camera_color_optical_frame` |
-| 2D LiDAR | `sensor_msgs/LaserScan` | `/scan` | `laser_link` |
+| 2D LiDAR | `sensor_msgs/LaserScan` | `/scan` | `laser_frame` |
 | GQ7 IMU | `sensor_msgs/Imu` | `/imu/data` | `imu_link` |
 | GQ7 GNSS 1 | `sensor_msgs/NavSatFix` | `/gps/fix` | `gnss_1_antenna_link` |
 | GQ7 GNSS 2 | `sensor_msgs/NavSatFix` | `/gps/fix_secondary` | `gnss_2_antenna_link` |
@@ -151,123 +151,77 @@ ros2 topic echo /odom --once
 - GNSS fix 상태와 좌표가 유효한지
 - GQ7 INS odometry의 위치/속도가 유한하고 child frame이 존재하는지
 
-## 실내 수조 시험 (천장 AprilTag)
+## 실내 수조 시험 (외부 TG-50 라이다 + 선체 GQ7 IMU)
 
-실내는 GNSS가 물리적으로 안 잡혀 GQ7 EKF `/odom`을 쓸 수 없다. 대신 천장에
-고정한 카메라로 배 위의 AprilTag를 추적해 `/odom`을 만든다.
-같은 Wi-Fi를 통한 노트북→Jetson 연결과 웹캠 보정 절차는
-[`APRILTAG_WIFI_SETUP.md`](APRILTAG_WIFI_SETUP.md)에 정리돼 있다.
+실내는 GNSS가 물리적으로 차단되어 GQ7의 RTK-GNSS + IMU EKF `/odom`을 사용할 수 없습니다.
+따라서 실내 수조(10m $\times$ 5m) 환경에서는 다음과 같이 2대 기기가 역할을 분담하여 위치 추적 및 오도메트리를 생성합니다:
 
-AprilTag 설치 전 TG-50와 Occupancy Grid 파이프라인만 짧게 시험할 때는 다음
-임시 IMU dead-reckoning launch를 쓴다. 가속도 이중 적분이라 빠르게 드리프트하며
-모터 주행용이 아니다. 시작 후 2초간 센서를 움직이지 말아야 한다.
+### 기기별 역할 분담 (Ownership)
 
-```bash
-ros2 launch kaboat_hardware imu_tg50_mapping.launch.py
-```
+* **수조 외벽 노트북**: 수조 벽에 고정 설치된 YDLIDAR TG-50 라이다(`ydlidar_ros2_driver_node`) 및 배 위치 추적기(`lidar_boat_tracker`)를 실행하여 실내 GPS 역할을 하는 배의 2D 절대 위치(`/boat_position`, 10 Hz)를 발행하고, RViz2 모니터링을 담당합니다.
+* **선체 젯슨 (Jetson)**: 배에 탑재된 GQ7 IMU 센서 드라이버(`microstrain_inertial_driver`)와 `indoor_lidar_odom` 노드를 실행하여 외부 라이다 위치와 선체 IMU 방위각을 융합해 `/odom` 및 TF(`odom -> base_link`)를 발행하고, `thruster_driver`와 선택된 수조 테스트 노드를 실행합니다. 검사 타이머는 30Hz지만 새 위치 표본마다 한 번만 발행하므로 현재 10Hz LiDAR 구성에서는 `/odom`도 약 10Hz입니다.
 
-세부 판정 및 리셋 명령은 [`SENSOR_CHECK.md`](SENSOR_CHECK.md)의
-`GPS/AprilTag 전 임시 IMU dead-reckoning 시험` 절을 따른다.
+포트 이름은 실행 전에 확인합니다. LiDAR launch는 `port`를 생략하면
+`/dev/ttyUSB*` 중 첫 장치를 기본값으로 고르지만, 여러 USB 장치가 있으면
+오선택할 수 있습니다. 스러스터의 대체 포트 탐색은 기본 비활성이므로 두 장치
+모두 확인한 포트, 가능하면 `/dev/serial/by-id/...`를 명시합니다.
 
 ```bash
-# 천장 카메라 노트북 — tag_size는 인쇄한 태그 실측값으로 변경
-ros2 launch kaboat_hardware ceiling_apriltag.launch.py \
-  tag_id:=0 tag_size:=0.162
+# 1. 수조 외벽 노트북 (외부 고정 라이다 드라이버 + 추적기 + RViz2)
+ls -l /dev/serial/by-id/ /dev/ttyUSB* 2>/dev/null
+ros2 launch kaboat_hardware lidar_boat_tracker.launch.py port:=/dev/ttyUSB0
 
-# 배 (Jetson)
-ros2 launch kaboat_hardware indoor_tank.launch.py
+# 2. 배 (Jetson — GQ7 드라이버 + indoor_lidar_odom 실행, 모터는 기본 비활성화)
+ros2 launch kaboat_hardware indoor_tank.launch.py enable_thrusters:=false
 ```
 
-필드별로 출처가 다르다 — 각 센서가 제일 잘하는 것만 취한다.
+필드별로 센서의 장점을 취하여 융합합니다:
 
 | `/odom` 필드 | 출처 | 이유 |
 |---|---|---|
-| `pose.position` / `orientation` | AprilTag | 절대 측정, 드리프트 없음 |
-| `twist.angular.z` | **GQ7 자이로** | 직접 측정. yaw 미분은 각도 오차 1°가 0.52 rad/s(=실측 ω_max)로 증폭돼 D항을 포화시킨다 |
-| `twist.linear.x/y` | AprilTag 위치 미분 | 가속도 적분은 자세 오차 1°만 있어도 10초에 1.7 m/s 발산 |
+| `pose.position` | **외부 TG-50 라이다** (`/boat_position`) | 10m $\times$ 5m 수조 외부 라이다 기반 절대 위치 추적 (실내 GPS 역할, 드리프트 없음) |
+| `pose.orientation` | **선체 GQ7 IMU** (`/imu/data`) | IMU 쿼터니언 기반 yaw 산출 후 수조 +X축 기준 설치 편차 각도(`imu_yaw_offset_deg: -51.27`) 보정 |
+| `twist.angular.z` | **GQ7 자이로** (`/imu/data`) | 직접 측정 (`yaw_rate_sign * angular_velocity.z - gyro_bias_z`) |
+| `twist.linear.x/y` | 위치 미분 추정 (`VelocityEstimator`) | 0.15초 윈도우 및 지수이동평균(EMA) 필터링으로 미분 노이즈 억제 |
 
 속도 노이즈는 5mm 검출 오차 기준 실측(`test_pose_velocity.py`)으로
 window 1프레임 0.205 m/s → window 0.15s 0.042 → +EMA **0.011 m/s**.
 
-`ceiling camera → tag` TF만 apriltag_ros가 발행하고, `odom → camera` 설치
-자세는 `apriltag_odom`이 정적 TF로 낸다 — tf2가 합성을 대신하므로 노드는
-행렬 계산을 하지 않는다.
+외부 라이다 추적 전 TG-50와 Occupancy Grid 파이프라인만 짧게 시험할 때는
+임시 IMU dead-reckoning launch(`imu_tg50_mapping.launch.py`)를 쓸 수 있으나, 가속도 이중 적분이라 빠르게 드리프트하며 모터 주행용이 아닙니다 (세부 절차는 [`SENSOR_CHECK.md`](SENSOR_CHECK.md) §11 참조).
 
-### 준비물
+### ⚠️ `/odom` 발행자 중복 주의
 
-- **카메라 캘리브레이션 필수** — pose는 `camera_info` 내부 파라미터로 계산된다.
-  `ros2 run camera_calibration cameracalibrator ...`
-- **왜곡 보정 이미지(`image_rect`)** — 광각 렌즈면 수조 가장자리 오차가 크다.
-- 태그 패밀리 `tag36h11`, 이미지에서 한 변 최소 40~60 px.
-  **인쇄물을 자로 재서 그 값을 `size`에 넣는다** (프린터 배율 오차가 거리
-  오차에 그대로 비례).
-
-### 외부 USB 웹캠(천장 카메라 PC) 빠른 시작
-
-레포에는 UVC 외부 웹캠 → 왜곡 보정 → AprilTag 검출을 한 번에 올리는 launch가
-있다. USB A 포트에 연결한 뒤 실제 장치 번호를 확인한다. 내장 웹캠이 있으면
-외부 카메라는 보통 `/dev/video2`부터 잡히지만, **반드시 아래 명령 결과를 쓴다.**
+`indoor_tank.launch.py`는 실내 모드에 맞춰 GQ7 EKF의 `/odom` remap과 실외용
+TF broadcaster를 자동으로 끕니다. 실내에서는 `real_sensors.launch.py`를 따로
+중복 실행하지 않습니다. 수동 구성이 꼭 필요하면
+`enable_odom_remap:=false publish_tf:=false`를 모두 지정해야 합니다.
 
 ```bash
-cd ~/kaboat_ws                 # 이 레포의 실제 경로로 바꾼다
-./scripts/install_apriltag_dependencies.sh
-source /opt/ros/humble/setup.bash
-colcon build --symlink-install --packages-select kaboat_hardware
-source install/setup.bash
-
-v4l2-ctl --list-devices
+ros2 topic info /odom --verbose | grep "Publisher count"   # 반드시 1이어야 함
 ```
-
-먼저 외부 카메라를 보정한다. 보정 중에는 체커보드를 여러 거리·각도에서 화면에
-채우고, 결과 yaml 파일을 보관한다.
-
-```bash
-ros2 run v4l2_camera v4l2_camera_node --ros-args \
-  -r __ns:=/ceiling_cam -p video_device:=/dev/video2
-ros2 run camera_calibration cameracalibrator --size 8x6 --square 0.024 \
-  image:=/ceiling_cam/image_raw camera:=/ceiling_cam
-```
-
-`--size`와 `--square`는 **사용한 체커보드의 내부 코너 수와 실제 한 칸 길이[m]**로
-바꾼다. 저장된 보정 yaml의 경로와 태그의 실제 검은 테두리 한 변[m]을
-`src/kaboat_hardware/config/ceiling_apriltag.yaml`의 `size`·`tag.sizes`에 같은
-값으로 반영한 뒤 다시 빌드한다.
-
-```bash
-ros2 launch kaboat_hardware ceiling_apriltag.launch.py \
-  video_device:=/dev/video2 \
-  camera_info_url:=file:///home/$USER/.ros/camera_info/ceiling.yaml
-```
-
-정상이라면 `/ceiling_cam/image_rect`, `/detections`, 그리고
-`ceiling camera optical frame → tag36h11:0` TF가 나온다. 이 PC와 배 Jetson은
-같은 네트워크·`ROS_DOMAIN_ID`여야 하며, 두 시스템의 시간이 동기화돼야 한다.
-
-### ⚠️ `/odom` 발행자 중복
-
-`indoor_tank.launch.py`는 GQ7의 EKF→`/odom` remap을 자동으로 끈다
-(`enable_odom_remap:=false`). `real_sensors.launch.py`를 직접 쓸 때는 수동으로
-꺼야 한다 — 안 끄면 EKF가 수렴하는 순간 발행자가 둘이 되어 두 좌표계가 섞인다.
-GNSS 미수렴 중에는 조용해서 드러나지 않으니 주의.
 
 ### ⚠️ 파라미터 스케일
 
-현재 값들은 실제 경기장(수십 m, 전속 1.48 m/s) 기준이라 실내 수조에서는
-전부 과대하다. `d_panic`(3.0m)·`escape_radius`(2.5m)·`lookahead`(2.0m)·
+현재 기본값들은 실제 경기장(수십 m, 전속 1.48 m/s) 기준이라 실내 수조에서는
+전부 과대합니다. `d_panic`(3.0m)·`escape_radius`(2.5m)·`lookahead`(2.0m)·
 `min_horizon`(3.0m)·`transition_radius`(2.0m)·occupancy_grid `size`(20m)와
-경기장 좌표 waypoint를 수조 실측값으로 재산출해야 한다. 목록은
-[`indoor_tank.yaml`](src/kaboat_hardware/config/indoor_tank.yaml) 하단에 있다.
+경기장 좌표 waypoint를 수조 실측값으로 재산출해야 합니다. 센서 융합 설정은
+[`indoor_tank.yaml`](src/kaboat_hardware/config/indoor_tank.yaml)에 적용됩니다.
+[`tank_tests.yaml`](src/kaboat_hardware/config/tank_tests.yaml)은 현재 launch가
+자동 로드하지 않는 참고용 파일이므로, 테스트 주행값은 실제 노드 기본값과
+launch 인자를 기준으로 확인합니다.
 
-또 **수조 벽이 LiDAR에 전부 장애물로 잡혀** 격자가 사방으로 막힌다. avoid
-플래너는 "전진 반평면에 답 없음" → ESCAPE(후진)로 갈 것이다. 회피 시험은
-이걸 감안해 파라미터를 잡은 뒤에 한다.
+또 **수조 벽이 LiDAR에 전부 장애물로 잡혀** 격자가 사방으로 막힙니다. avoid
+플래너는 "전진 반평면에 답 없음" → ESCAPE(후진)로 갈 것이므로, 수조 단독 테스트 노드(`tank_tests.launch.py`)를 통해 먼저 검증하는 것을 권장합니다.
 
 ---
 
 ## 실물 스러스터(모터/ESC) 제어 드라이버
 
 실물 모터 구동 노드는 `kaboat_hardware/thruster_driver`를 사용한다.
-`/cmd_vel`(`[-1.0, 1.0]`)을 구독하여 차동 구동 좌/우 PWM(1000~2000µs)을 생성하고 하드웨어로 전달한다.
+`/cmd_vel`(`[-1.0, 1.0]`)을 구독하여 현재 설정 기준 차동 구동 좌/우
+PWM(1100~1900µs, 중립 1500µs)을 생성하고 하드웨어로 전달한다.
 
 ### 1) 모터 드라이버 실행
 
@@ -275,17 +229,20 @@ GNSS 미수렴 중에는 조용해서 드러나지 않으니 주의.
 # 1-1. 하드웨어 미연결 벤치/더미 테스트
 ros2 launch kaboat_hardware thrusters.launch.py hardware_type:=dummy
 
-# 1-2. 아두이노/ESP32 USB 시리얼 연결 (<PWM_L,PWM_R>\n 형식)
-ros2 launch kaboat_hardware thrusters.launch.py hardware_type:=serial
+# 1-2. 아두이노/ESP32 USB 시리얼 연결 — 실제 포트를 명시
+ls -l /dev/serial/by-id/ /dev/ttyUSB* /dev/ttyACM* 2>/dev/null
+ros2 launch kaboat_hardware thrusters.launch.py \
+  hardware_type:=serial port:=/dev/ttyUSB0 allow_port_scan:=false
 
 # 1-3. Jetson I2C 버스 직결 PCA9685 16채널 PWM 모듈
 ros2 launch kaboat_hardware thrusters.launch.py hardware_type:=pca9685
 ```
 
 ### 2) 안전 기능 및 수동 조종 오버라이드
+
 - **300ms 워치독**: `/cmd_vel` 수신이 0.3초 이상 끊기면 자동으로 1500µs(중립/정지) 전송.
 - **RC Manual Override**: RC 수신기 수동 조종 토픽(`/rc/cmd_vel`) 수신 시 자율주행 명령을 즉시 무시하고 수동 조종 우선 적용.
-- **비상 정지(E-Stop)**: `/emergency_stop`(`std_msgs/Bool`, `data: true`) 수신 시 즉시 PWM 중립 차단.
+- **비상 정지(E-Stop)**: `/emergency_stop`(`std_msgs/msg/Bool`, `data: true`) 수신 시 즉시 PWM 중립 차단.
 - **가속도 제한(Slew Rate)**: `max_slew_rate`(기본 2.0/s)로 급가속에 의한 전압 강하 및 요 발진/전복 방지.
 - **불감대(Deadband)**: `deadband_us`(기본 ±25µs)로 ESC 불감대를 건너뛰어 저속 제어성 확보.
 
@@ -303,4 +260,3 @@ ros2 launch kaboat_hardware thrusters.launch.py hardware_type:=pca9685
 ros2 launch kaboat_bringup autonomy.launch.py \
   use_sim_time:=true use_sim_actuator:=true
 ```
-
