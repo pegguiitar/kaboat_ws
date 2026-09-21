@@ -16,6 +16,7 @@
 
 import math
 import time
+from collections import deque
 from typing import Optional
 
 import rclpy
@@ -25,6 +26,7 @@ from rclpy.qos import qos_profile_sensor_data
 from geometry_msgs.msg import PointStamped, TransformStamped, Quaternion
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Imu
+from std_srvs.srv import Trigger
 from tf2_ros import TransformBroadcaster
 
 from kaboat_hardware.pose_velocity import (
@@ -52,6 +54,26 @@ def _stamp_sec(stamp) -> float:
     return stamp.sec + stamp.nanosec * 1e-9
 
 
+def _circular_mean(angles) -> float:
+    """Return the mean of wrapped angles without a discontinuity at +/-pi."""
+    if not angles:
+        raise ValueError('at least one angle is required')
+    sin_sum = sum(math.sin(angle) for angle in angles)
+    cos_sum = sum(math.cos(angle) for angle in angles)
+    if math.hypot(sin_sum, cos_sum) < 1e-9:
+        raise ValueError('angles do not have a unique circular mean')
+    return math.atan2(sin_sum, cos_sum)
+
+
+def _calibration_offset(raw_yaws, target_yaw: float):
+    """Return (raw circular mean, offset, maximum deviation), all in radians."""
+    mean_yaw = _circular_mean(raw_yaws)
+    max_deviation = max(
+        abs(normalize_angle(raw_yaw - mean_yaw)) for raw_yaw in raw_yaws)
+    offset = normalize_angle(target_yaw - mean_yaw)
+    return mean_yaw, offset, max_deviation
+
+
 class IndoorLidarOdom(Node):
     def __init__(self):
         super().__init__('indoor_lidar_odom')
@@ -72,6 +94,15 @@ class IndoorLidarOdom(Node):
         self.declare_parameter('imu_yaw_offset_deg', -51.27)   # 수조 +X축 기준 IMU 설치 편차 각도 [deg] (+X 정렬 시 -51.27° 보정)
         self.declare_parameter('yaw_rate_sign', 1.0)        # 반시계(좌회전) 양수 부호 보정 (+1.0 또는 -1.0)
         self.declare_parameter('gyro_bias_z', 0.0)          # 자이로 Z축 정지 바이어스 [rad/s]
+
+        # ── 실험 시작 전 yaw 자동 정렬 ────────────────────
+        self.declare_parameter('require_yaw_calibration', False)
+        self.declare_parameter('calibration_target_yaw_deg', 180.0)  # 선체를 수조 -X로 놓았을 때의 odom yaw
+        self.declare_parameter('calibration_window_sec', 2.0)
+        self.declare_parameter('calibration_min_duration_sec', 1.5)
+        self.declare_parameter('calibration_min_samples', 30)
+        self.declare_parameter('calibration_max_yaw_rate', 0.05)     # 정지 판정 [rad/s]
+        self.declare_parameter('calibration_max_yaw_spread_deg', 2.0)
 
         # ── 속도 추정 필터 파라미터 (pose_velocity) ───────
         self.declare_parameter('vel_window_sec', 0.15)
@@ -95,6 +126,20 @@ class IndoorLidarOdom(Node):
         self.imu_yaw_offset_rad = math.radians(float(self.get_parameter('imu_yaw_offset_deg').value))
         self.yaw_rate_sign = float(self.get_parameter('yaw_rate_sign').value)
         self.gyro_bias_z = float(self.get_parameter('gyro_bias_z').value)
+        self.require_yaw_calibration = bool(
+            self.get_parameter('require_yaw_calibration').value)
+        self.calibration_target_yaw = math.radians(float(
+            self.get_parameter('calibration_target_yaw_deg').value))
+        self.calibration_window_sec = max(0.1, float(
+            self.get_parameter('calibration_window_sec').value))
+        self.calibration_min_duration_sec = max(0.0, float(
+            self.get_parameter('calibration_min_duration_sec').value))
+        self.calibration_min_samples = max(2, int(
+            self.get_parameter('calibration_min_samples').value))
+        self.calibration_max_yaw_rate = max(0.0, float(
+            self.get_parameter('calibration_max_yaw_rate').value))
+        self.calibration_max_yaw_spread = math.radians(max(0.0, float(
+            self.get_parameter('calibration_max_yaw_spread_deg').value)))
 
         self.estimator = VelocityEstimator(VelocityParams(
             window_sec=float(self.get_parameter('vel_window_sec').value),
@@ -111,8 +156,11 @@ class IndoorLidarOdom(Node):
 
         self.imu_stamp: Optional[float] = None
         self.last_imu_receive_time: Optional[float] = None
+        self.raw_imu_yaw: Optional[float] = None
         self.imu_yaw: float = 0.0
         self.imu_yaw_rate: float = 0.0
+        self._imu_yaw_samples = deque()  # (monotonic receive time, raw yaw, corrected yaw rate)
+        self.yaw_calibrated: bool = not self.require_yaw_calibration
 
         self._pos_ok: bool = False
         self._imu_ok: bool = False
@@ -121,6 +169,8 @@ class IndoorLidarOdom(Node):
         # 통신 인터페이스
         self.tf_broadcaster = TransformBroadcaster(self)
         self.odom_pub = self.create_publisher(Odometry, '/odom', 10)
+        self.create_service(
+            Trigger, '/calibrate_imu_yaw', self._on_calibrate_imu_yaw)
 
         # 구독자
         self.create_subscription(
@@ -136,6 +186,8 @@ class IndoorLidarOdom(Node):
             f"🚀 [indoor_lidar_odom] 시작 (실내 GPS + 선체 IMU 융합)!\n"
             f"   - 위치 소스 (실내 GPS): '{self.pos_topic}' (타임아웃: {self.pos_timeout}s)\n"
             f"   - 자세/각속도 소스: '{self.imu_topic}' (오프셋: {math.degrees(self.imu_yaw_offset_rad):.1f}°)\n"
+            f"   - 시작 전 yaw 보정 필수: {self.require_yaw_calibration} "
+            f"(보정 자세: {math.degrees(self.calibration_target_yaw):.1f}°)\n"
             f"   - 발행: /odom, TF: '{self.odom_frame}' -> '{self.base_frame}' ({self.publish_tf})"
         )
 
@@ -155,13 +207,100 @@ class IndoorLidarOdom(Node):
         """선체 GQ7 IMU로부터 자세 및 각속도 수신."""
         q = msg.orientation
         norm_sq = q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w
-        if norm_sq > 0.25:
-            raw_yaw = _yaw_from_quat(q)
-            self.imu_yaw = normalize_angle(raw_yaw + self.imu_yaw_offset_rad)
+        orientation_unavailable = msg.orientation_covariance[0] < 0.0
+        finite_orientation = all(math.isfinite(value) for value in (
+            q.x, q.y, q.z, q.w))
+        if orientation_unavailable or not finite_orientation or norm_sq <= 0.25:
+            self.get_logger().warn(
+                'IMU orientation이 유효하지 않아 /odom 자세 및 yaw 보정 표본에서 제외합니다.',
+                throttle_duration_sec=2.0)
+            return
 
-        self.imu_yaw_rate = (self.yaw_rate_sign * msg.angular_velocity.z) - self.gyro_bias_z
+        raw_yaw = _yaw_from_quat(q)
+        yaw_rate = (self.yaw_rate_sign * msg.angular_velocity.z) - self.gyro_bias_z
+        if not math.isfinite(raw_yaw) or not math.isfinite(yaw_rate):
+            return
+
+        receive_time = time.monotonic()
+        self.raw_imu_yaw = raw_yaw
+        self.imu_yaw = normalize_angle(raw_yaw + self.imu_yaw_offset_rad)
+        self.imu_yaw_rate = yaw_rate
         self.imu_stamp = _stamp_sec(msg.header.stamp)
-        self.last_imu_receive_time = time.monotonic()
+        self.last_imu_receive_time = receive_time
+
+        self._imu_yaw_samples.append((receive_time, raw_yaw, yaw_rate))
+        cutoff = receive_time - self.calibration_window_sec
+        while self._imu_yaw_samples and self._imu_yaw_samples[0][0] < cutoff:
+            self._imu_yaw_samples.popleft()
+
+    def _on_calibrate_imu_yaw(self, _request, response):
+        """현재 선체가 target yaw를 향한다고 가정하고 IMU yaw 오프셋을 맞춘다."""
+        now = time.monotonic()
+        if (self.last_imu_receive_time is None or
+                now - self.last_imu_receive_time > self.imu_timeout):
+            response.success = False
+            response.message = (
+                '최신 IMU orientation이 없습니다. /imu/data 연결과 GQ7 상태를 '
+                '확인하세요.')
+            return response
+
+        cutoff = now - self.calibration_window_sec
+        samples = [sample for sample in self._imu_yaw_samples if sample[0] >= cutoff]
+
+        if len(samples) < self.calibration_min_samples:
+            response.success = False
+            response.message = (
+                f'IMU 표본 수집 중: {len(samples)}/{self.calibration_min_samples}. '
+                '배를 -X 방향으로 고정하고 움직이지 마세요.')
+            return response
+
+        duration = samples[-1][0] - samples[0][0]
+        if duration < self.calibration_min_duration_sec:
+            response.success = False
+            response.message = (
+                f'정지 표본 시간 부족: {duration:.2f}/'
+                f'{self.calibration_min_duration_sec:.2f}s. 그대로 기다리세요.')
+            return response
+
+        max_yaw_rate = max(abs(sample[2]) for sample in samples)
+        if max_yaw_rate > self.calibration_max_yaw_rate:
+            response.success = False
+            response.message = (
+                f'선체 움직임 감지: 최대 yaw rate {max_yaw_rate:.3f} rad/s '
+                f'(허용 {self.calibration_max_yaw_rate:.3f}). 배를 고정하세요.')
+            return response
+
+        raw_yaws = [sample[1] for sample in samples]
+        try:
+            mean_yaw, offset, max_deviation = _calibration_offset(
+                raw_yaws, self.calibration_target_yaw)
+        except ValueError as exc:
+            response.success = False
+            response.message = f'IMU yaw 평균 계산 실패: {exc}'
+            return response
+
+        if max_deviation > self.calibration_max_yaw_spread:
+            response.success = False
+            response.message = (
+                f'IMU yaw 흔들림이 큼: {math.degrees(max_deviation):.2f}° '
+                f'(허용 {math.degrees(self.calibration_max_yaw_spread):.2f}°). '
+                '배를 고정하고 다시 기다리세요.')
+            return response
+
+        self.imu_yaw_offset_rad = offset
+        self.imu_yaw = normalize_angle(self.raw_imu_yaw + offset)
+        self.yaw_calibrated = True
+        self.estimator.reset()
+
+        corrected_yaw = normalize_angle(mean_yaw + offset)
+        response.success = True
+        response.message = (
+            f'yaw 보정 완료: raw 평균 {math.degrees(mean_yaw):.2f}°, '
+            f'offset {math.degrees(offset):.2f}°, '
+            f'odom yaw {math.degrees(corrected_yaw):.2f}° '
+            '(180°와 -180°는 같은 방향)')
+        self.get_logger().info(response.message)
+        return response
 
     def _tick(self):
         now_monotonic = time.monotonic()
@@ -195,6 +334,13 @@ class IndoorLidarOdom(Node):
                     throttle_duration_sec=2.0)
                 self._imu_ok = False
                 self.estimator.reset()
+            return
+
+        if not self.yaw_calibrated:
+            self.get_logger().warn(
+                'yaw 보정 전이므로 /odom 발행을 대기합니다. '
+                '`ros2 run kaboat_hardware calibrate_indoor_imu`를 실행하세요.',
+                throttle_duration_sec=5.0)
             return
 
         if not self._pos_ok or not self._imu_ok:

@@ -30,6 +30,7 @@ setup(
             'thruster_driver = kaboat_hardware.thruster_driver:main',
             'lidar_boat_tracker = kaboat_hardware.lidar_boat_tracker:main',
             'indoor_lidar_odom = kaboat_hardware.indoor_lidar_odom:main',
+            'calibrate_indoor_imu = kaboat_hardware.calibrate_indoor_imu:main',
             'straight_line_test = kaboat_hardware.straight_line_test:main',
             'bspline_track_test = kaboat_hardware.bspline_track_test:main',
             'circle_drive_test = kaboat_hardware.circle_drive_test:main',

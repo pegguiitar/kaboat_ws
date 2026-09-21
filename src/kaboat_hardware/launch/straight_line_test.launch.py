@@ -43,7 +43,7 @@ def generate_launch_description():
         'slow_radius', default_value='1.5',
         description='목표점 접근 감속 반경 [m]')
     kp_yaw_arg = DeclareLaunchArgument(
-        'kp_yaw', default_value='1.0', description='헤딩 비례 게인 P')
+        'kp_yaw', default_value='1.5', description='헤딩 비례 게인 P')
     kd_yaw_arg = DeclareLaunchArgument(
         'kd_yaw', default_value='0.15', description='요레이트 미분(감쇠) 게인 D')
     odom_timeout_arg = DeclareLaunchArgument(

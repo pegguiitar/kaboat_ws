@@ -12,7 +12,7 @@ straight_line_test:
     lookahead_dist: 1.5       # [m] 전방 주시 거리
     goal_tolerance: 0.35      # [m] 도착 판정 반경
     slow_radius: 1.2          # [m] 종점 접근 감속 반경
-    kp_yaw: 1.0               # 헤딩 P 게인
+    kp_yaw: 1.5               # 헤딩 P 게인
     kd_yaw: 0.15              # 요레이트 D 게인
     odom_timeout_sec: 0.5     # [s] /odom 수신 타임아웃
     wait_for_start: true      # 외부 /start_mission 신호 대기
@@ -24,12 +24,12 @@ bspline_track_test:
     control_points_y: [2.0, 3.5, 1.5, 3.5, 2.5]
     spline_degree: 3          # B-spline 차수 (Cubic)
     sample_spacing: 0.05      # [m] 곡선 보간 샘플 간격 (5cm)
-    cruise_speed: 0.50        # 기본 전진 출력 비 (50%)
+    cruise_speed: 0.30        # 기본 전진 출력 비 (30%)
     max_angular: 0.60         # 최대 회전 출력 비 (60%)
-    lookahead_dist: 1.2       # [m] Pure Pursuit 전방 주시 거리
+    lookahead_dist: 0.6       # [m] Pure Pursuit 전방 주시 거리
     goal_tolerance: 0.40      # [m] 도착 판정 반경
     slow_radius: 1.5          # [m] 종점 감속 반경
-    kp_yaw: 1.0               # 헤딩 P 게인
+    kp_yaw: 1.5               # 헤딩 P 게인
     kd_yaw: 0.15              # 요레이트 D 게인
     curvature_slowdown: 0.25  # 곡률 기반 자동 감속 가중치
     odom_timeout_sec: 0.5     # [s] /odom 타임아웃
@@ -45,7 +45,7 @@ circle_drive_test:
     target_laps: 2.0          # 목표 완주 바퀴 수 (0.0: 무한 회전)
     cruise_speed: 0.50        # 기본 순항 전진 출력 비 (50%)
     max_angular: 0.60         # 최대 회전 출력 비 (60%)
-    kp_yaw: 1.0               # 헤딩 P 게인
+    kp_yaw: 1.5               # 헤딩 P 게인
     kd_yaw: 0.15              # 요레이트 D 게인
     k_converge: 1.5           # 원 궤도 수렴 게인
     odom_timeout_sec: 0.5     # [s] /odom 타임아웃
@@ -64,7 +64,7 @@ station_keeping_test:
     max_rev_speed: 0.08       # 최대 후진 출력 비 (8%)
     max_angular: 0.60         # 최대 회전 출력 비 (60%)
     kp_pos: 0.25              # 위치 복귀 P 게인
-    kp_yaw: 1.0               # 헤딩 복귀 P 게인
+    kp_yaw: 1.5               # 헤딩 복귀 P 게인
     kd_yaw: 0.15              # 요레이트 감쇠 D 게인
     odom_timeout_sec: 0.5     # [s] /odom 타임아웃
     wait_for_start: true      # 외부 시작 신호 대기

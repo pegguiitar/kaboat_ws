@@ -30,7 +30,7 @@ def generate_launch_description():
     kp_pos_arg = DeclareLaunchArgument(
         'kp_pos', default_value='0.25', description='위치 오차 P 게인')
     kp_yaw_arg = DeclareLaunchArgument(
-        'kp_yaw', default_value='1.0', description='헤딩 오차 P 게인')
+        'kp_yaw', default_value='1.5', description='헤딩 오차 P 게인')
     kd_yaw_arg = DeclareLaunchArgument(
         'kd_yaw', default_value='0.15', description='요레이트 D 게인')
     odom_timeout_arg = DeclareLaunchArgument(
@@ -81,4 +81,3 @@ def generate_launch_description():
         LogInfo(msg='[StationKeepingTest] 실내 수조 웨이포인트 정점 유지(DP) 테스트 노드 시작 중...'),
         node,
     ])
-

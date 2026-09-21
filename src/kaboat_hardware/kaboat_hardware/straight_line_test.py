@@ -69,7 +69,7 @@ class StraightLineTest(Node):
         self.declare_parameter('lookahead_dist', 1.2)   # LOS 경로 추종 전방 주시 거리 [m]
         self.declare_parameter('goal_tolerance', 0.35)  # 도착 판정 반경 [m]
         self.declare_parameter('slow_radius', 1.5)      # 목표점 접근 감속 반경 [m]
-        self.declare_parameter('kp_yaw', 1.0)           # 헤딩 P 게인
+        self.declare_parameter('kp_yaw', 1.5)           # 헤딩 P 게인
         self.declare_parameter('kd_yaw', 0.15)          # 요레이트 D 게인 (감쇠)
 
         # ── 안전 파라미터 ─────────────────────────────────

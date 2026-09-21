@@ -1,16 +1,18 @@
 """tank_tests.launch.py — 실내 수조 4대 자율운항 테스트 통합 실행 런치.
 
-지원 테스트 모드 (test_type):
+지원 테스트 모드 (test):
   1) straight        : 1자 직진 주행 (9.0m -> 1.0m, 방위각 180도)
   2) bspline         : B-Spline 곡선 추종 (S자 궤적 선회)
   3) circle          : 원형 선회 주행 (수조 중앙 반경 1.2m 선회)
   4) station_keeping : 정해진 웨이포인트 정점 유지 (가상 앵커/DP)
 
 사용 예시:
-  ros2 launch kaboat_hardware tank_tests.launch.py test_type:=straight
-  ros2 launch kaboat_hardware tank_tests.launch.py test_type:=bspline
-  ros2 launch kaboat_hardware tank_tests.launch.py test_type:=circle
-  ros2 launch kaboat_hardware tank_tests.launch.py test_type:=station_keeping
+  ros2 launch kaboat_hardware tank_tests.launch.py test:=straight
+  ros2 launch kaboat_hardware tank_tests.launch.py test:=bspline
+  ros2 launch kaboat_hardware tank_tests.launch.py test:=circle
+  ros2 launch kaboat_hardware tank_tests.launch.py test:=station_keeping
+
+기존 test_type 인자도 하위 호환을 위해 계속 지원한다.
 """
 
 import os
@@ -26,12 +28,17 @@ def generate_launch_description():
     pkg_share = get_package_share_directory('kaboat_hardware')
     launch_dir = os.path.join(pkg_share, 'launch')
 
-    test_type = LaunchConfiguration('test_type')
+    test_type = LaunchConfiguration('test')
     wait_for_start = LaunchConfiguration('wait_for_start')
 
     test_type_arg = DeclareLaunchArgument(
         'test_type',
         default_value='straight',
+        description='[호환용] test 인자를 생략했을 때 사용할 수조 테스트 종류'
+    )
+    test_arg = DeclareLaunchArgument(
+        'test',
+        default_value=LaunchConfiguration('test_type'),
         description='실행할 수조 테스트 종류: straight | bspline | circle | station_keeping'
     )
     wait_for_start_arg = DeclareLaunchArgument(
@@ -70,6 +77,7 @@ def generate_launch_description():
 
     return LaunchDescription([
         test_type_arg,
+        test_arg,
         wait_for_start_arg,
         LogInfo(msg=['[TankTests] 수조 통합 테스트 실행: 모드 = ', test_type]),
         straight_launch,

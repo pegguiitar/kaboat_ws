@@ -24,7 +24,7 @@ def generate_launch_description():
     max_angular_arg = DeclareLaunchArgument(
         'max_angular', default_value='0.60', description='최대 회전 출력 비 (0.0 ~ 1.0, 기본 60%)')
     kp_yaw_arg = DeclareLaunchArgument(
-        'kp_yaw', default_value='1.0', description='헤딩 P 게인')
+        'kp_yaw', default_value='1.5', description='헤딩 P 게인')
     kd_yaw_arg = DeclareLaunchArgument(
         'kd_yaw', default_value='0.15', description='요레이트 D 게인')
     k_converge_arg = DeclareLaunchArgument(
@@ -73,4 +73,3 @@ def generate_launch_description():
         LogInfo(msg='[CircleDriveTest] 실내 수조 원형 선회 주행 테스트 노드 시작 중...'),
         node,
     ])
-

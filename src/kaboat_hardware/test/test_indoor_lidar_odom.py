@@ -5,9 +5,11 @@ import unittest
 import rclpy
 from geometry_msgs.msg import PointStamped, Quaternion
 from sensor_msgs.msg import Imu
+from std_srvs.srv import Trigger
 
 from kaboat_hardware.indoor_lidar_odom import (
-    IndoorLidarOdom, _yaw_from_quat, _quat_from_yaw, normalize_angle
+    IndoorLidarOdom, _calibration_offset, _yaw_from_quat, _quat_from_yaw,
+    normalize_angle
 )
 
 
@@ -24,6 +26,15 @@ def test_normalize_angle():
     assert math.isclose(abs(normalize_angle(3 * math.pi)), math.pi, abs_tol=1e-6)
     assert math.isclose(abs(normalize_angle(-3 * math.pi)), math.pi, abs_tol=1e-6)
     assert math.isclose(normalize_angle(math.radians(370)), math.radians(10), abs_tol=1e-6)
+
+
+def test_calibration_offset_handles_wraparound_and_targets_minus_x():
+    raw_yaws = [math.radians(179.0), math.radians(-179.5), math.radians(180.0)]
+    mean_yaw, offset, max_deviation = _calibration_offset(raw_yaws, math.pi)
+
+    corrected = normalize_angle(mean_yaw + offset)
+    assert math.isclose(abs(corrected), math.pi, abs_tol=1e-6)
+    assert max_deviation < math.radians(2.0)
 
 
 def test_resume_behavior():
@@ -117,3 +128,54 @@ class TestIndoorLidarOdomSafety(unittest.TestCase):
         self.node._tick()
         self.assertEqual(len(self.published), 1)
 
+    def test_invalid_orientation_is_not_marked_fresh(self):
+        msg = self._imu()
+        msg.orientation_covariance[0] = -1.0
+        self.node._on_imu(msg)
+        self.assertIsNone(self.node.last_imu_receive_time)
+
+    def test_calibration_sets_minus_x_heading(self):
+        now = time.monotonic()
+        raw_yaw = math.radians(37.0)
+        self.node._imu_yaw_samples.clear()
+        for index in range(self.node.calibration_min_samples):
+            stamp = now - self.node.calibration_min_duration_sec + (
+                index * self.node.calibration_min_duration_sec /
+                (self.node.calibration_min_samples - 1))
+            self.node._imu_yaw_samples.append((stamp, raw_yaw, 0.0))
+        self.node.raw_imu_yaw = raw_yaw
+        self.node.last_imu_receive_time = now
+
+        response = self.node._on_calibrate_imu_yaw(
+            Trigger.Request(), Trigger.Response())
+
+        self.assertTrue(response.success, response.message)
+        self.assertTrue(self.node.yaw_calibrated)
+        self.assertAlmostEqual(abs(self.node.imu_yaw), math.pi, places=6)
+
+    def test_calibration_rejects_motion(self):
+        now = time.monotonic()
+        self.node._imu_yaw_samples.clear()
+        self.node.last_imu_receive_time = now
+        for index in range(self.node.calibration_min_samples):
+            stamp = now - self.node.calibration_min_duration_sec + (
+                index * self.node.calibration_min_duration_sec /
+                (self.node.calibration_min_samples - 1))
+            self.node._imu_yaw_samples.append((stamp, 0.5, 0.2))
+
+        response = self.node._on_calibrate_imu_yaw(
+            Trigger.Request(), Trigger.Response())
+
+        self.assertFalse(response.success)
+        self.assertIn('움직임', response.message)
+
+    def test_calibration_rejects_stale_imu(self):
+        now = time.monotonic()
+        self.node.last_imu_receive_time = now - self.node.imu_timeout - 0.1
+        self.node._imu_yaw_samples.append((now - 0.1, 0.5, 0.0))
+
+        response = self.node._on_calibrate_imu_yaw(
+            Trigger.Request(), Trigger.Response())
+
+        self.assertFalse(response.success)
+        self.assertIn('최신 IMU', response.message)

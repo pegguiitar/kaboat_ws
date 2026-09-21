@@ -11,7 +11,7 @@
 
 ## 1. 4대 테스트 모드 개요
 
-| 모드 이름 | `test_type` | 주요 내용 | 적합한 검증 목적 |
+| 모드 이름 | `test` | 주요 내용 | 적합한 검증 목적 |
 | :--- | :--- | :--- | :--- |
 | **직진 주행** | `straight` | (9.0, 3.0)m $\rightarrow$ (1.0, 3.0)m 구간 8m 직진 주행 | 선체 직진성, 차동 추력 균형, 도착 제동 |
 | **B-Spline 곡선 추종** | `bspline` | 5개 제어점 기반 clamped B-spline 곡선 궤적(약 7.4m) 추종 | 선회 반응성, Pure Pursuit 경로 추종 안정성 |
@@ -86,6 +86,30 @@ ros2 launch kaboat_hardware lidar_boat_tracker.launch.py port:=/dev/ttyUSB0
 ros2 launch kaboat_hardware indoor_tank.launch.py enable_thrusters:=false
 ```
 
+### [Step 2-1] 매 실험 시작 전 IMU yaw 자동 보정
+
+`indoor_tank.launch.py`를 실행한 뒤, **선체에 고정된 IMU의 전방(+X 표시)을
+수조 -X 방향으로 정확히 맞추고 배를 움직이지 않은 상태**에서 젯슨의 새 터미널에
+다음 명령을 실행합니다.
+
+```bash
+# [선체 젯슨: 새 터미널]
+source /opt/ros/humble/setup.bash
+cd /path/to/2026KABOAT_REAL
+source install/setup.bash
+export ROS_DOMAIN_ID=42
+export ROS_LOCALHOST_ONLY=0
+
+ros2 run kaboat_hardware calibrate_indoor_imu
+```
+
+최근 약 2초의 IMU 자세를 원형 평균하여 현재 방향을 odom의 180°로 맞춥니다.
+배의 회전이나 자세 흔들림이 감지되면 적용하지 않고 안정될 때까지 자동으로
+재시도합니다. 성공 로그를 확인한 뒤에만 모터 드라이버와 테스트 노드를
+실행하십시오. 각도 표현 범위에 따라 확인 도구에는 `180°` 대신 `-180°`로
+나올 수 있으며 두 값은 동일한 방향입니다. `indoor_lidar_odom`을 다시
+시작했거나 GQ7 전원을 다시 켰다면 이 명령도 다시 실행해야 합니다.
+
 ### [Step 3] 센서 및 오도메트리 토픽 점검 (Topic Checks)
 
 모터를 켜기 전에 토픽 수신율과 데이터가 정상인지 노트북에서 확인합니다.
@@ -135,7 +159,7 @@ ros2 launch kaboat_hardware thrusters.launch.py \
 ```bash
 # ── [선체 젯슨: 터미널 3] B-Spline 곡선 추종 테스트 실행 ──
 ros2 launch kaboat_hardware bspline_track_test.launch.py \
-  cruise_speed:=0.50 \
+  cruise_speed:=0.30 \
   max_angular:=0.60 \
   wait_for_start:=true
 ```
@@ -187,20 +211,23 @@ ros2 service call /clear_trajectory std_srvs/srv/Trigger "{}"
 
 ## 3. 다른 테스트 모드 간편 실행 방법
 
-배(Jetson) 내부 터미널에서 **`tank_tests.launch.py`**의 `test_type` 인자를 변경하여 다른 테스트도 실행할 수 있습니다:
+배(Jetson) 내부 터미널에서 **`tank_tests.launch.py`**의 `test` 인자만 변경하여
+네 가지 테스트를 동일한 형식으로 실행할 수 있습니다. 이 통합 런치는 테스트
+노드만 선택하므로 센서, IMU yaw 보정, 스러스터 드라이버는 앞 단계의 절차대로
+미리 실행해야 합니다.
 
 ```bash
 # 1. 직진 주행 테스트
-ros2 launch kaboat_hardware tank_tests.launch.py test_type:=straight
+ros2 launch kaboat_hardware tank_tests.launch.py test:=straight
 
 # 2. B-Spline 곡선 추종 테스트
-ros2 launch kaboat_hardware tank_tests.launch.py test_type:=bspline
+ros2 launch kaboat_hardware tank_tests.launch.py test:=bspline
 
 # 3. 원형 선회 주행 테스트
-ros2 launch kaboat_hardware tank_tests.launch.py test_type:=circle
+ros2 launch kaboat_hardware tank_tests.launch.py test:=circle
 
 # 4. 웨이포인트 정점 유지 테스트
-ros2 launch kaboat_hardware tank_tests.launch.py test_type:=station_keeping
+ros2 launch kaboat_hardware tank_tests.launch.py test:=station_keeping
 ```
 
 > 💡 **개별 런치 파일로도 실행 가능**:
@@ -279,12 +306,12 @@ launch가 자동으로 로드하지 않습니다. 실행 시 노출된 launch �
 필요한 기본값을 각 테스트 노드/launch에서 변경해야 실제 동작에 반영됩니다.
 
 ### 주요 기본 파라미터 현황
-* **전진 기본 순항 출력 (`cruise_speed`)**: 기본값 `0.50` (50% 모터 출력 비율)
+* **전진 기본 순항 출력 (`cruise_speed`)**: B-Spline은 `0.30` (30%), 직진·원형 테스트는 `0.50` (50%)
 * **최대 회전 출력 (`max_angular`)**: 기본값 `0.60` (60% 모터 출력 비율)
-* **B-Spline Lookahead 거리 (`lookahead_dist`)**: 기본값 `1.2` (1.2m 전방 주시)
+* **B-Spline Lookahead 거리 (`lookahead_dist`)**: 기본값 `0.6` (0.6m 전방 주시)
 * **종점 도착 판정 반경 (`goal_tolerance`)**: 기본값 `0.40` (40cm 이내 도달 시 종료)
 * **종점 접근 감속 반경 (`slow_radius`)**: 기본값 `1.5` (1.5m 전방부터 점진적 감속)
-* **헤딩 P/D 제어 게인 (`kp_yaw`, `kd_yaw`)**: `kp_yaw: 1.0`, `kd_yaw: 0.15`
+* **헤딩 P/D 제어 게인 (`kp_yaw`, `kd_yaw`)**: `kp_yaw: 1.5`, `kd_yaw: 0.15`
 * **곡률 감속 가중치 (`curvature_slowdown`)**: `0.25` (급커브 구간 자동 감속)
 * **오도메트리 타임아웃 (`odom_timeout_sec`)**: `0.5` (0.5초 동안 /odom 미수신 시 안전 정지)
 * **외부 시작 신호 대기 (`wait_for_start`)**: `true` (기본값: 대기 모드 활성화)
