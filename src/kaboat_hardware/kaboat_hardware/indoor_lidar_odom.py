@@ -1,17 +1,8 @@
-"""indoor_lidar_odom — 외부 라이다(수조 GPS) + 선체 IMU 자이로/자세 → /odom (실내 수조 시험용).
+"""외부 LiDAR 절대 pose와 선체 IMU gyro를 융합해 실내 `/odom`을 발행한다.
 
-실외 GNSS/INS(GQ7 EKF) 대신 실내에서 `/odom`을 만드는 소스입니다.
-스택은 `/odom`의 데이터 내용만 소비하므로 실물 EKF 대신 갈아끼워 동작합니다.
-
-필드별 출처 — 각 센서의 강점 결합:
-  pose.position       ← 외부 고정 라이다 (/boat_position, 절대 위치 추적, 실내 GPS 역할)
-  pose.orientation    ← 선체 GQ7 IMU (/imu/data) + 수조 +X축 편차 보정
-  twist.angular.z     ← 선체 GQ7 IMU 자이로 (직접 측정, 지연 및 미분 노이즈 없음)
-  twist.linear.x/y    ← 라이다 위치 미분 (body frame 전진/횡방향 속도, pose_velocity)
-
-안전 기능:
-  외부 라이다 또는 IMU 신호가 각 timeout 이상 끊기면 /odom 발행을 즉시 중단합니다.
-  하위 제어 노드는 자체 odom freshness watchdog으로 이를 감지해 정지해야 합니다.
+LiDAR는 얇은 선수 봉/두꺼운 선미 봉으로부터 x, y, 절대 yaw를 제공한다.
+2상태 EKF는 IMU gyro-z로 yaw를 고속 예측하고 LiDAR yaw로 보정하면서 gyro
+bias까지 추정한다. GQ7 quaternion yaw는 절대 heading으로 사용하지 않는다.
 """
 
 import math
@@ -23,28 +14,26 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 
-from geometry_msgs.msg import PointStamped, TransformStamped, Quaternion
+from geometry_msgs.msg import PoseWithCovarianceStamped, Quaternion, TransformStamped
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Imu
 from std_srvs.srv import Trigger
 from tf2_ros import TransformBroadcaster
 
 from kaboat_hardware.pose_velocity import (
-    VelocityEstimator, VelocityParams, normalize_angle
+    VelocityEstimator, VelocityParams, normalize_angle,
 )
+from kaboat_hardware.yaw_bias_ekf import YawBiasEkf
 
 
 def _yaw_from_quat(q: Quaternion) -> float:
-    """쿼터니언 메시지에서 Yaw(rad) 추출."""
-    return math.atan2(2.0 * (q.w * q.z + q.x * q.y),
-                      1.0 - 2.0 * (q.y * q.y + q.z * q.z))
+    return math.atan2(
+        2.0 * (q.w * q.z + q.x * q.y),
+        1.0 - 2.0 * (q.y * q.y + q.z * q.z))
 
 
 def _quat_from_yaw(yaw: float) -> Quaternion:
-    """Yaw(rad) 각도를 Quaternion 메시지로 변환."""
     q = Quaternion()
-    q.x = 0.0
-    q.y = 0.0
     q.z = math.sin(yaw / 2.0)
     q.w = math.cos(yaw / 2.0)
     return q
@@ -54,361 +43,338 @@ def _stamp_sec(stamp) -> float:
     return stamp.sec + stamp.nanosec * 1e-9
 
 
-def _circular_mean(angles) -> float:
-    """Return the mean of wrapped angles without a discontinuity at +/-pi."""
-    if not angles:
-        raise ValueError('at least one angle is required')
-    sin_sum = sum(math.sin(angle) for angle in angles)
-    cos_sum = sum(math.cos(angle) for angle in angles)
-    if math.hypot(sin_sum, cos_sum) < 1e-9:
-        raise ValueError('angles do not have a unique circular mean')
-    return math.atan2(sin_sum, cos_sum)
-
-
-def _calibration_offset(raw_yaws, target_yaw: float):
-    """Return (raw circular mean, offset, maximum deviation), all in radians."""
-    mean_yaw = _circular_mean(raw_yaws)
-    max_deviation = max(
-        abs(normalize_angle(raw_yaw - mean_yaw)) for raw_yaw in raw_yaws)
-    offset = normalize_angle(target_yaw - mean_yaw)
-    return mean_yaw, offset, max_deviation
-
-
 class IndoorLidarOdom(Node):
     def __init__(self):
         super().__init__('indoor_lidar_odom')
 
-        # ── 프레임 및 토픽 파라미터 ───────────────────────
         self.declare_parameter('odom_frame', 'odom')
         self.declare_parameter('base_frame', 'base_link')
-        self.declare_parameter('pos_topic', '/boat_position')
+        self.declare_parameter('pose_topic', '/boat_pose')
         self.declare_parameter('imu_topic', '/imu/data')
         self.declare_parameter('publish_tf', True)
 
-        # ── 센서 타이밍 및 타임아웃 ───────────────────────
-        self.declare_parameter('pos_timeout_sec', 1.0)      # 라이다 위치 유실 판정 시간 [s] (일시 단절 허용)
-        self.declare_parameter('imu_timeout_sec', 0.5)      # IMU 타임아웃 [s]
-        self.declare_parameter('publish_rate', 30.0)        # /odom 발행 주기 [Hz]
+        self.declare_parameter('pos_timeout_sec', 1.0)
+        self.declare_parameter('imu_timeout_sec', 0.5)
+        self.declare_parameter('publish_rate', 30.0)
+        self.declare_parameter('yaw_rate_sign', 1.0)
+        self.declare_parameter('gyro_bias_z', 0.0)
 
-        # ── IMU 보정 파라미터 ─────────────────────────────
-        self.declare_parameter('imu_yaw_offset_deg', -51.27)   # 수조 +X축 기준 IMU 설치 편차 각도 [deg] (+X 정렬 시 -51.27° 보정)
-        self.declare_parameter('yaw_rate_sign', 1.0)        # 반시계(좌회전) 양수 부호 보정 (+1.0 또는 -1.0)
-        self.declare_parameter('gyro_bias_z', 0.0)          # 자이로 Z축 정지 바이어스 [rad/s]
+        # LiDAR yaw + gyro bias EKF
+        self.declare_parameter('gyro_noise_stddev', 0.01)
+        self.declare_parameter('gyro_bias_walk_stddev', 0.001)
+        self.declare_parameter('initial_gyro_bias_stddev', 0.05)
+        self.declare_parameter('max_gyro_bias_abs', 0.20)
+        self.declare_parameter('max_imu_predict_dt', 0.20)
+        self.declare_parameter('lidar_yaw_stddev_deg', 2.0)
+        self.declare_parameter('lidar_yaw_gate_deg', 45.0)
 
-        # ── 실험 시작 전 yaw 자동 정렬 ────────────────────
+        # 선택적 시작 정지 보정: 방향 정렬은 필요 없고 gyro bias만 초기화한다.
         self.declare_parameter('require_yaw_calibration', False)
-        self.declare_parameter('calibration_target_yaw_deg', 180.0)  # 선체를 수조 -X로 놓았을 때의 odom yaw
         self.declare_parameter('calibration_window_sec', 2.0)
         self.declare_parameter('calibration_min_duration_sec', 1.5)
         self.declare_parameter('calibration_min_samples', 30)
-        self.declare_parameter('calibration_max_yaw_rate', 0.05)     # 정지 판정 [rad/s]
-        self.declare_parameter('calibration_max_yaw_spread_deg', 2.0)
+        self.declare_parameter('calibration_max_rate_deviation', 0.02)
+        self.declare_parameter('calibration_max_abs_bias', 0.10)
 
-        # ── 속도 추정 필터 파라미터 (pose_velocity) ───────
         self.declare_parameter('vel_window_sec', 0.15)
         self.declare_parameter('vel_filter_tau', 0.15)
         self.declare_parameter('vel_max_speed', 3.0)
-
-        # ── 공분산 ─────────────────────────────────────────
-        self.declare_parameter('pose_stddev_xy', 0.02)
-        self.declare_parameter('pose_stddev_yaw', 0.02)
+        self.declare_parameter('pose_stddev_xy', 0.03)
         self.declare_parameter('twist_stddev', 0.05)
 
-        # 파라미터 로드
         self.odom_frame = str(self.get_parameter('odom_frame').value)
         self.base_frame = str(self.get_parameter('base_frame').value)
-        self.pos_topic = str(self.get_parameter('pos_topic').value)
+        self.pose_topic = str(self.get_parameter('pose_topic').value)
         self.imu_topic = str(self.get_parameter('imu_topic').value)
         self.publish_tf = bool(self.get_parameter('publish_tf').value)
-
         self.pos_timeout = float(self.get_parameter('pos_timeout_sec').value)
         self.imu_timeout = float(self.get_parameter('imu_timeout_sec').value)
-        self.imu_yaw_offset_rad = math.radians(float(self.get_parameter('imu_yaw_offset_deg').value))
         self.yaw_rate_sign = float(self.get_parameter('yaw_rate_sign').value)
-        self.gyro_bias_z = float(self.get_parameter('gyro_bias_z').value)
+        self.max_predict_dt = float(
+            self.get_parameter('max_imu_predict_dt').value)
+        self.default_lidar_yaw_variance = math.radians(float(
+            self.get_parameter('lidar_yaw_stddev_deg').value)) ** 2
+        self.lidar_yaw_gate = math.radians(float(
+            self.get_parameter('lidar_yaw_gate_deg').value))
+
+        initial_bias = float(self.get_parameter('gyro_bias_z').value)
+        self.yaw_filter = YawBiasEkf(
+            gyro_noise_stddev=float(
+                self.get_parameter('gyro_noise_stddev').value),
+            bias_walk_stddev=float(
+                self.get_parameter('gyro_bias_walk_stddev').value),
+            initial_bias=initial_bias,
+            initial_bias_stddev=float(
+                self.get_parameter('initial_gyro_bias_stddev').value),
+            max_bias_abs=float(
+                self.get_parameter('max_gyro_bias_abs').value))
+
         self.require_yaw_calibration = bool(
             self.get_parameter('require_yaw_calibration').value)
-        self.calibration_target_yaw = math.radians(float(
-            self.get_parameter('calibration_target_yaw_deg').value))
+        self.yaw_calibrated = not self.require_yaw_calibration
         self.calibration_window_sec = max(0.1, float(
             self.get_parameter('calibration_window_sec').value))
         self.calibration_min_duration_sec = max(0.0, float(
             self.get_parameter('calibration_min_duration_sec').value))
         self.calibration_min_samples = max(2, int(
             self.get_parameter('calibration_min_samples').value))
-        self.calibration_max_yaw_rate = max(0.0, float(
-            self.get_parameter('calibration_max_yaw_rate').value))
-        self.calibration_max_yaw_spread = math.radians(max(0.0, float(
-            self.get_parameter('calibration_max_yaw_spread_deg').value)))
+        self.calibration_max_rate_deviation = max(0.0, float(
+            self.get_parameter('calibration_max_rate_deviation').value))
+        self.calibration_max_abs_bias = max(0.0, float(
+            self.get_parameter('calibration_max_abs_bias').value))
 
         self.estimator = VelocityEstimator(VelocityParams(
             window_sec=float(self.get_parameter('vel_window_sec').value),
             filter_tau=float(self.get_parameter('vel_filter_tau').value),
-            max_speed=float(self.get_parameter('vel_max_speed').value),
-        ))
+            max_speed=float(self.get_parameter('vel_max_speed').value)))
 
-        # 상태 변수
-        self.last_pos_stamp: Optional[float] = None
-        self.last_pos_receive_time: Optional[float] = None
-        self.last_pos_x: float = 0.0
-        self.last_pos_y: float = 0.0
-        self._position_seq: int = 0
+        self.last_pose_stamp: Optional[float] = None
+        self.last_pose_receive_time: Optional[float] = None
+        self.last_pose_x = 0.0
+        self.last_pose_y = 0.0
+        self.last_lidar_yaw: Optional[float] = None
+        self.last_lidar_yaw_variance = self.default_lidar_yaw_variance
+        default_position_variance = float(
+            self.get_parameter('pose_stddev_xy').value) ** 2
+        self.position_variance_x = default_position_variance
+        self.position_variance_y = default_position_variance
+        self.vx_body = 0.0
+        self.vy_body = 0.0
 
-        self.imu_stamp: Optional[float] = None
         self.last_imu_receive_time: Optional[float] = None
-        self.raw_imu_yaw: Optional[float] = None
-        self.imu_yaw: float = 0.0
-        self.imu_yaw_rate: float = 0.0
-        self._imu_yaw_samples = deque()  # (monotonic receive time, raw yaw, corrected yaw rate)
-        self.yaw_calibrated: bool = not self.require_yaw_calibration
+        self.latest_raw_yaw_rate = 0.0
+        self._gyro_samples = deque()  # (monotonic receive time, signed raw gyro-z)
 
-        self._pos_ok: bool = False
-        self._imu_ok: bool = False
-        self._last_published_position_seq: int = -1
+        self._pose_ok = False
+        self._imu_ok = False
 
-        # 통신 인터페이스
         self.tf_broadcaster = TransformBroadcaster(self)
         self.odom_pub = self.create_publisher(Odometry, '/odom', 10)
         self.create_service(
             Trigger, '/calibrate_imu_yaw', self._on_calibrate_imu_yaw)
-
-        # 구독자
         self.create_subscription(
-            PointStamped, self.pos_topic, self._on_position, qos_profile_sensor_data)
+            PoseWithCovarianceStamped, self.pose_topic,
+            self._on_lidar_pose, qos_profile_sensor_data)
         self.create_subscription(
             Imu, self.imu_topic, self._on_imu, qos_profile_sensor_data)
 
-        # 주기 실행 (타이머)
-        rate = float(self.get_parameter('publish_rate').value)
-        self.create_timer(1.0 / rate, self._tick)
+        publish_rate = max(1.0, float(
+            self.get_parameter('publish_rate').value))
+        self.create_timer(1.0 / publish_rate, self._tick)
 
         self.get_logger().info(
-            f"🚀 [indoor_lidar_odom] 시작 (실내 GPS + 선체 IMU 융합)!\n"
-            f"   - 위치 소스 (실내 GPS): '{self.pos_topic}' (타임아웃: {self.pos_timeout}s)\n"
-            f"   - 자세/각속도 소스: '{self.imu_topic}' (오프셋: {math.degrees(self.imu_yaw_offset_rad):.1f}°)\n"
-            f"   - 시작 전 yaw 보정 필수: {self.require_yaw_calibration} "
-            f"(보정 자세: {math.degrees(self.calibration_target_yaw):.1f}°)\n"
-            f"   - 발행: /odom, TF: '{self.odom_frame}' -> '{self.base_frame}' ({self.publish_tf})"
-        )
+            '🚀 [indoor_lidar_odom] LiDAR yaw + IMU gyro EKF 시작\n'
+            f"   - LiDAR pose: '{self.pose_topic}'\n"
+            f"   - IMU gyro: '{self.imu_topic}'\n"
+            f'   - 초기 gyro bias: {initial_bias:.5f} rad/s\n'
+            f'   - 시작 정지 보정 필수: {self.require_yaw_calibration}\n'
+            f"   - 발행: /odom, TF '{self.odom_frame}' -> '{self.base_frame}'")
 
-    def _on_position(self, msg: PointStamped):
-        """외부 라이다(실내 GPS)로부터 배 위치 수신."""
-        self.last_pos_x = msg.point.x
-        self.last_pos_y = msg.point.y
-        source_stamp = _stamp_sec(msg.header.stamp)
-        receive_time = time.monotonic()
-        # 속도 미분에는 검출 시각을 쓰되, 드라이버가 0 stamp를 보내는 경우에만
-        # 수신 시각으로 폴백한다. timeout 판정에는 아래 수신 시각을 별도로 쓴다.
-        self.last_pos_stamp = source_stamp if source_stamp > 0.0 else receive_time
-        self.last_pos_receive_time = receive_time
-        self._position_seq += 1
-
-    def _on_imu(self, msg: Imu):
-        """선체 GQ7 IMU로부터 자세 및 각속도 수신."""
-        q = msg.orientation
+    def _on_lidar_pose(self, msg: PoseWithCovarianceStamped):
+        q = msg.pose.pose.orientation
+        values = (
+            msg.pose.pose.position.x, msg.pose.pose.position.y,
+            q.x, q.y, q.z, q.w)
         norm_sq = q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w
-        orientation_unavailable = msg.orientation_covariance[0] < 0.0
-        finite_orientation = all(math.isfinite(value) for value in (
-            q.x, q.y, q.z, q.w))
-        if orientation_unavailable or not finite_orientation or norm_sq <= 0.25:
+        if not all(math.isfinite(value) for value in values) or norm_sq <= 0.25:
             self.get_logger().warn(
-                'IMU orientation이 유효하지 않아 /odom 자세 및 yaw 보정 표본에서 제외합니다.',
+                '유효하지 않은 /boat_pose를 거부했습니다.',
                 throttle_duration_sec=2.0)
             return
 
-        raw_yaw = _yaw_from_quat(q)
-        yaw_rate = (self.yaw_rate_sign * msg.angular_velocity.z) - self.gyro_bias_z
-        if not math.isfinite(raw_yaw) or not math.isfinite(yaw_rate):
+        now = time.monotonic()
+        was_stale = (
+            self.last_pose_receive_time is None
+            or now - self.last_pose_receive_time > self.pos_timeout)
+        x = float(msg.pose.pose.position.x)
+        y = float(msg.pose.pose.position.y)
+        lidar_yaw = _yaw_from_quat(q)
+        yaw_variance = float(msg.pose.covariance[35])
+        if not math.isfinite(yaw_variance) or yaw_variance <= 0.0:
+            yaw_variance = self.default_lidar_yaw_variance
+
+        if not self.yaw_filter.initialized:
+            self.yaw_filter.initialize(lidar_yaw, yaw_variance)
+        elif was_stale:
+            self.yaw_filter.reset_yaw(lidar_yaw, yaw_variance)
+        elif not self.yaw_filter.update_yaw(
+                lidar_yaw, yaw_variance, self.lidar_yaw_gate):
+            self.get_logger().warn(
+                'LiDAR yaw innovation이 gate를 넘어 yaw 갱신을 거부했습니다.',
+                throttle_duration_sec=2.0)
+
+        source_stamp = _stamp_sec(msg.header.stamp)
+        self.last_pose_stamp = source_stamp if source_stamp > 0.0 else now
+        self.last_pose_receive_time = now
+        self.last_pose_x = x
+        self.last_pose_y = y
+        self.last_lidar_yaw = lidar_yaw
+        self.last_lidar_yaw_variance = yaw_variance
+        covariance_x = float(msg.pose.covariance[0])
+        covariance_y = float(msg.pose.covariance[7])
+        if math.isfinite(covariance_x) and covariance_x > 0.0:
+            self.position_variance_x = covariance_x
+        if math.isfinite(covariance_y) and covariance_y > 0.0:
+            self.position_variance_y = covariance_y
+
+        if was_stale:
+            self.estimator.reset()
+        self.vx_body, self.vy_body, _ = self.estimator.update(
+            self.last_pose_stamp, x, y, self.yaw_filter.yaw)
+
+    def _on_imu(self, msg: Imu):
+        raw_yaw_rate = self.yaw_rate_sign * float(msg.angular_velocity.z)
+        if not math.isfinite(raw_yaw_rate):
             return
 
-        receive_time = time.monotonic()
-        self.raw_imu_yaw = raw_yaw
-        self.imu_yaw = normalize_angle(raw_yaw + self.imu_yaw_offset_rad)
-        self.imu_yaw_rate = yaw_rate
-        self.imu_stamp = _stamp_sec(msg.header.stamp)
-        self.last_imu_receive_time = receive_time
+        now = time.monotonic()
+        self.latest_raw_yaw_rate = raw_yaw_rate
+        self.last_imu_receive_time = now
+        self.yaw_filter.predict(raw_yaw_rate, now, self.max_predict_dt)
 
-        self._imu_yaw_samples.append((receive_time, raw_yaw, yaw_rate))
-        cutoff = receive_time - self.calibration_window_sec
-        while self._imu_yaw_samples and self._imu_yaw_samples[0][0] < cutoff:
-            self._imu_yaw_samples.popleft()
+        self._gyro_samples.append((now, raw_yaw_rate))
+        cutoff = now - self.calibration_window_sec
+        while self._gyro_samples and self._gyro_samples[0][0] < cutoff:
+            self._gyro_samples.popleft()
 
     def _on_calibrate_imu_yaw(self, _request, response):
-        """현재 선체가 target yaw를 향한다고 가정하고 IMU yaw 오프셋을 맞춘다."""
+        """선체를 정지한 상태에서 초기 gyro bias를 평균하고 LiDAR yaw로 재정렬."""
         now = time.monotonic()
-        if (self.last_imu_receive_time is None or
-                now - self.last_imu_receive_time > self.imu_timeout):
+        if (self.last_imu_receive_time is None
+                or now - self.last_imu_receive_time > self.imu_timeout):
             response.success = False
-            response.message = (
-                '최신 IMU orientation이 없습니다. /imu/data 연결과 GQ7 상태를 '
-                '확인하세요.')
+            response.message = '최신 IMU gyro 데이터가 없습니다.'
+            return response
+        if (self.last_pose_receive_time is None
+                or now - self.last_pose_receive_time > self.pos_timeout
+                or self.last_lidar_yaw is None):
+            response.success = False
+            response.message = '최신 LiDAR 선수/선미 pose가 없습니다.'
             return response
 
         cutoff = now - self.calibration_window_sec
-        samples = [sample for sample in self._imu_yaw_samples if sample[0] >= cutoff]
-
+        samples = [sample for sample in self._gyro_samples if sample[0] >= cutoff]
         if len(samples) < self.calibration_min_samples:
             response.success = False
             response.message = (
-                f'IMU 표본 수집 중: {len(samples)}/{self.calibration_min_samples}. '
-                '배를 -X 방향으로 고정하고 움직이지 마세요.')
+                f'IMU 표본 수집 중: {len(samples)}/'
+                f'{self.calibration_min_samples}. 배를 정지하세요.')
             return response
-
         duration = samples[-1][0] - samples[0][0]
         if duration < self.calibration_min_duration_sec:
             response.success = False
             response.message = (
                 f'정지 표본 시간 부족: {duration:.2f}/'
-                f'{self.calibration_min_duration_sec:.2f}s. 그대로 기다리세요.')
+                f'{self.calibration_min_duration_sec:.2f}s.')
             return response
 
-        max_yaw_rate = max(abs(sample[2]) for sample in samples)
-        if max_yaw_rate > self.calibration_max_yaw_rate:
+        rates = [sample[1] for sample in samples]
+        mean_bias = sum(rates) / len(rates)
+        max_deviation = max(abs(rate - mean_bias) for rate in rates)
+        if max_deviation > self.calibration_max_rate_deviation:
             response.success = False
             response.message = (
-                f'선체 움직임 감지: 최대 yaw rate {max_yaw_rate:.3f} rad/s '
-                f'(허용 {self.calibration_max_yaw_rate:.3f}). 배를 고정하세요.')
+                f'선체 회전 감지: gyro 최대 편차 {max_deviation:.4f} rad/s '
+                f'(허용 {self.calibration_max_rate_deviation:.4f}).')
             return response
-
-        raw_yaws = [sample[1] for sample in samples]
-        try:
-            mean_yaw, offset, max_deviation = _calibration_offset(
-                raw_yaws, self.calibration_target_yaw)
-        except ValueError as exc:
-            response.success = False
-            response.message = f'IMU yaw 평균 계산 실패: {exc}'
-            return response
-
-        if max_deviation > self.calibration_max_yaw_spread:
+        if abs(mean_bias) > self.calibration_max_abs_bias:
             response.success = False
             response.message = (
-                f'IMU yaw 흔들림이 큼: {math.degrees(max_deviation):.2f}° '
-                f'(허용 {math.degrees(self.calibration_max_yaw_spread):.2f}°). '
-                '배를 고정하고 다시 기다리세요.')
+                f'추정 bias {mean_bias:.4f} rad/s가 허용 범위를 넘습니다.')
             return response
 
-        self.imu_yaw_offset_rad = offset
-        self.imu_yaw = normalize_angle(self.raw_imu_yaw + offset)
+        sample_variance = sum(
+            (rate - mean_bias) ** 2 for rate in rates) / max(1, len(rates) - 1)
+        self.yaw_filter.set_bias(
+            mean_bias, variance=max(sample_variance / len(rates), 1e-8))
+        self.yaw_filter.reset_yaw(
+            self.last_lidar_yaw, self.last_lidar_yaw_variance)
         self.yaw_calibrated = True
         self.estimator.reset()
-
-        corrected_yaw = normalize_angle(mean_yaw + offset)
         response.success = True
         response.message = (
-            f'yaw 보정 완료: raw 평균 {math.degrees(mean_yaw):.2f}°, '
-            f'offset {math.degrees(offset):.2f}°, '
-            f'odom yaw {math.degrees(corrected_yaw):.2f}° '
-            '(180°와 -180°는 같은 방향)')
+            f'gyro bias 보정 완료: {mean_bias:.5f} rad/s, '
+            f'LiDAR yaw {math.degrees(self.last_lidar_yaw):.2f}°로 정렬')
         self.get_logger().info(response.message)
         return response
 
     def _tick(self):
-        now_monotonic = time.monotonic()
-
-        # 1. 위치 신호 유효성 검사
-        if self.last_pos_receive_time is None:
-            # 실제 위치를 받기 전에 (0, 0) 가짜 odom을 내보내면 제어기가 이를
-            # 유효 위치로 오인할 수 있다. 첫 LiDAR 위치까지는 발행하지 않는다.
+        now = time.monotonic()
+        if self.last_pose_receive_time is None:
             return
-
-        pos_age = now_monotonic - self.last_pos_receive_time
-        if pos_age > self.pos_timeout:
-            if self._pos_ok:
+        pose_age = now - self.last_pose_receive_time
+        if pose_age > self.pos_timeout:
+            if self._pose_ok:
                 self.get_logger().warn(
-                    f"⚠️ [indoor_lidar_odom] 외부 라이다 위치 신호 유실 ({pos_age:.2f}s 전) — /odom 발행 중단 (워치독 정지)",
+                    f'LiDAR pose 유실 ({pose_age:.2f}s) — /odom 발행 중단',
                     throttle_duration_sec=2.0)
-                self._pos_ok = False
+                self._pose_ok = False
                 self.estimator.reset()
             return
 
-        # 2. IMU도 fresh해야 유효한 pose를 만들 수 있다. 이전 yaw를 계속 쓰면
-        # 제어기는 센서 유실을 알 수 없으므로, IMU timeout 시에도 odom을 멈춘다.
         if self.last_imu_receive_time is None:
             return
-        imu_age = now_monotonic - self.last_imu_receive_time
+        imu_age = now - self.last_imu_receive_time
         if imu_age > self.imu_timeout:
             if self._imu_ok:
                 self.get_logger().warn(
-                    f"⚠️ [indoor_lidar_odom] 선체 IMU 신호 유실 ({imu_age:.2f}s 전) "
-                    "— /odom 발행 중단",
+                    f'IMU gyro 유실 ({imu_age:.2f}s) — /odom 발행 중단',
                     throttle_duration_sec=2.0)
                 self._imu_ok = False
                 self.estimator.reset()
             return
 
+        if not self.yaw_filter.initialized:
+            return
         if not self.yaw_calibrated:
             self.get_logger().warn(
-                'yaw 보정 전이므로 /odom 발행을 대기합니다. '
+                '시작 gyro bias 보정 전입니다. '
                 '`ros2 run kaboat_hardware calibrate_indoor_imu`를 실행하세요.',
                 throttle_duration_sec=5.0)
             return
 
-        if not self._pos_ok or not self._imu_ok:
-            self._pos_ok = True
+        if not self._pose_ok or not self._imu_ok:
+            self._pose_ok = True
             self._imu_ok = True
-            self.estimator.reset()
             self.get_logger().info(
-                "✅ [indoor_lidar_odom] LiDAR 위치와 IMU 모두 정상 — /odom 발행 재개")
+                '✅ LiDAR pose와 IMU gyro 정상 — EKF /odom 발행')
 
-        # 3. 새 위치 표본마다 odom을 한 번만 발행한다. source stamp가 같거나 0이어도
-        # 콜백 순번으로 구분하므로 드라이버 timestamp 품질에 안전하게 대응한다.
-        if self._last_published_position_seq == self._position_seq:
-            return
+        yaw = self.yaw_filter.yaw
+        yaw_rate = self.latest_raw_yaw_rate - self.yaw_filter.bias
+        stamp = self.get_clock().now().to_msg()
+        odom = self._build_odometry(
+            stamp, self.last_pose_x, self.last_pose_y, yaw,
+            self.vx_body, self.vy_body, yaw_rate)
+        self.odom_pub.publish(odom)
 
-        x = self.last_pos_x
-        y = self.last_pos_y
-        stamp_sec = self.last_pos_stamp
-
-        yaw = self.imu_yaw
-        yaw_rate = self.imu_yaw_rate
-
-        # 4. 위치 미분 기반 선속도 (body frame) 추정
-        vx_body, vy_body, _ = self.estimator.update(stamp_sec, x, y, yaw)
-
-        # 5. Odometry 메시지 생성 및 발행
-        stamp_msg = self.get_clock().now().to_msg()
-        odom_msg = self._build_odometry(stamp_msg, x, y, yaw, vx_body, vy_body, yaw_rate)
-        self.odom_pub.publish(odom_msg)
-
-        # 6. TF 발행 (odom -> base_link)
         if self.publish_tf:
-            tf_msg = TransformStamped()
-            tf_msg.header.stamp = stamp_msg
-            tf_msg.header.frame_id = self.odom_frame
-            tf_msg.child_frame_id = self.base_frame
-            tf_msg.transform.translation.x = x
-            tf_msg.transform.translation.y = y
-            tf_msg.transform.translation.z = 0.0
-            tf_msg.transform.rotation = _quat_from_yaw(yaw)
-            self.tf_broadcaster.sendTransform(tf_msg)
+            transform = TransformStamped()
+            transform.header.stamp = stamp
+            transform.header.frame_id = self.odom_frame
+            transform.child_frame_id = self.base_frame
+            transform.transform.translation.x = self.last_pose_x
+            transform.transform.translation.y = self.last_pose_y
+            transform.transform.rotation = _quat_from_yaw(yaw)
+            self.tf_broadcaster.sendTransform(transform)
 
-        self._last_published_position_seq = self._position_seq
-
-    def _build_odometry(self, stamp_msg, x, y, yaw, vx, vy, yaw_rate) -> Odometry:
+    def _build_odometry(self, stamp, x, y, yaw, vx, vy, yaw_rate):
         msg = Odometry()
-        msg.header.stamp = stamp_msg
+        msg.header.stamp = stamp
         msg.header.frame_id = self.odom_frame
         msg.child_frame_id = self.base_frame
-
         msg.pose.pose.position.x = x
         msg.pose.pose.position.y = y
-        msg.pose.pose.position.z = 0.0
         msg.pose.pose.orientation = _quat_from_yaw(yaw)
-
-        # Body frame 선속도 및 각속도
         msg.twist.twist.linear.x = vx
         msg.twist.twist.linear.y = vy
-        msg.twist.twist.linear.z = 0.0
         msg.twist.twist.angular.z = yaw_rate
-
-        var_xy = float(self.get_parameter('pose_stddev_xy').value) ** 2
-        var_yaw = float(self.get_parameter('pose_stddev_yaw').value) ** 2
-        var_tw = float(self.get_parameter('twist_stddev').value) ** 2
-        msg.pose.covariance[0] = var_xy
-        msg.pose.covariance[7] = var_xy
-        msg.pose.covariance[35] = var_yaw
-        msg.twist.covariance[0] = var_tw
-        msg.twist.covariance[7] = var_tw
+        msg.pose.covariance[0] = self.position_variance_x
+        msg.pose.covariance[7] = self.position_variance_y
+        msg.pose.covariance[35] = self.yaw_filter.yaw_variance
+        twist_variance = float(self.get_parameter('twist_stddev').value) ** 2
+        msg.twist.covariance[0] = twist_variance
+        msg.twist.covariance[7] = twist_variance
+        msg.twist.covariance[35] = twist_variance
         return msg
 
 

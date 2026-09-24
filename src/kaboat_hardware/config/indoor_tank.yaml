@@ -1,10 +1,10 @@
-# 실내 수조 시험 설정 — 외부 라이다(수조 GPS) + 선체 GQ7 IMU → /odom
+# 실내 수조 시험 설정 — 외부 LiDAR 절대 pose + 선체 GQ7 gyro EKF → /odom
 
 indoor_lidar_odom:
   ros__parameters:
     odom_frame: odom
     base_frame: base_link
-    pos_topic: "/boat_position"       # 외부 라이다 추적기가 발행하는 배 절대 위치 (실내 GPS)
+    pose_topic: "/boat_pose"          # 선수/선미 봉으로 계산한 x, y, 절대 yaw
     imu_topic: "/imu/data"            # 선체 GQ7 IMU
     publish_tf: true                  # odom -> base_link TF 발행
 
@@ -13,17 +13,25 @@ indoor_lidar_odom:
     pos_timeout_sec: 1.0              # 라이다 위치 수신 타임아웃 [s] (초과 시 /odom 중단)
     imu_timeout_sec: 0.5              # IMU 수신 타임아웃 [s] (초과 시 /odom 중단)
 
-    # ── 자세 및 헤딩 보정 ─────────────────────────────
-    imu_yaw_offset_deg: -51.27          # 수조 +X축(0도) 기준 IMU 설치 편차 [deg] (배가 +X를 볼 때 odom 0° 정렬 보정)
-    yaw_rate_sign: 1.0                # 좌회전(반시계) 양수 부호 보정 (+1.0 또는 -1.0)
-    gyro_bias_z: 0.0                  # Z축 각속도 정지 바이어스 [rad/s]
-    require_yaw_calibration: true     # 매 실행마다 -X(180도) 정렬 보정 전에는 /odom 발행 금지
-    calibration_target_yaw_deg: 180.0
+    # ── LiDAR yaw + IMU gyro bias EKF ────────────────────
+    yaw_rate_sign: 1.0                # 좌회전(반시계) 양수 (+1.0 또는 -1.0)
+    gyro_bias_z: 0.0                  # EKF 초기 Z축 bias [rad/s]
+    gyro_noise_stddev: 0.01           # gyro 측정 잡음 [rad/s]
+    gyro_bias_walk_stddev: 0.001      # bias random walk [rad/s/sqrt(s)]
+    initial_gyro_bias_stddev: 0.05
+    max_gyro_bias_abs: 0.20
+    max_imu_predict_dt: 0.20
+    lidar_yaw_stddev_deg: 2.0         # /boat_pose covariance가 없을 때 기본값
+    lidar_yaw_gate_deg: 45.0          # 연속 LiDAR yaw 이상치 gate
+
+    # 방향을 -X에 맞출 필요는 없다. 배를 정지시키면 gyro bias를 평균하고,
+    # 두 봉으로 계산한 현재 LiDAR yaw를 절대 기준으로 사용한다.
+    require_yaw_calibration: true
     calibration_window_sec: 2.0
     calibration_min_duration_sec: 1.5
     calibration_min_samples: 30
-    calibration_max_yaw_rate: 0.05
-    calibration_max_yaw_spread_deg: 2.0
+    calibration_max_rate_deviation: 0.02
+    calibration_max_abs_bias: 0.10
 
     # ── 속도 추정 필터 (pose_velocity) ─────────────────
     vel_window_sec: 0.15
@@ -31,6 +39,5 @@ indoor_lidar_odom:
     vel_max_speed: 3.0
 
     # ── 공분산 ─────────────────────────────────────────
-    pose_stddev_xy: 0.02
-    pose_stddev_yaw: 0.02
+    pose_stddev_xy: 0.03
     twist_stddev: 0.05

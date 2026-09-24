@@ -193,21 +193,22 @@ ros2 topic echo /imu/data --field angular_velocity.z
 가만히 두고 `angular_velocity.z` 를 본다. **0.01 rad/s 이하면 무시해도 된다**
 (D항 기여가 `max_angular` 의 1.5% 수준). 크면 `gyro_bias_z` 에 넣어 뺀다.
 
-### 4.4 실내 주행 전 orientation 확인
+### 4.4 실내 주행 전 gyro 및 LiDAR heading 확인
 
-GQ7의 GNSS fix가 실내에서 실패하는 것은 정상이다. 그러나 현재
-`indoor_lidar_odom`은 `/imu/data.orientation`에서 yaw를 읽으므로, 모터 주행에는
-유효한 쿼터니언과 회전에 따라 변하는 yaw가 필요하다. orientation이 0
-쿼터니언이거나 고정되어 있으면 위치 토픽이 정상이어도 주행하지 않는다.
+GQ7의 GNSS fix가 실내에서 실패하는 것은 정상이다. 실내 융합 노드는 GQ7의
+절대 orientation 대신 `/imu/data.angular_velocity.z`를 사용하고, 외부 LiDAR가
+두 봉으로 계산한 `/boat_pose` yaw로 누적 오차와 gyro bias를 보정한다.
 
 ```bash
-ros2 topic echo /imu/data --once --field orientation --qos-reliability best_effort
+ros2 topic echo /imu/data --once --field angular_velocity --qos-reliability best_effort
+ros2 topic echo /boat_pose --once
 ```
 
 배를 손으로 반시계 방향으로 돌렸을 때 `/odom` yaw와
-`twist.twist.angular.z`가 모두 양의 방향으로 변하는지 확인한다. 수조 +X축과
-선수 방향이 맞지 않으면 `indoor_tank.yaml`의 `imu_yaw_offset_deg`를 실측값으로
-조정한다.
+`twist.twist.angular.z`가 모두 양의 방향으로 변하는지 확인한다. 반대로 변하면
+`indoor_tank.yaml`의 `yaw_rate_sign`을 `-1.0`으로 바꾼다. 정지한 배의 LiDAR
+yaw가 선수 방향과 180° 반대라면 얇은 선수 봉/두꺼운 선미 봉의 직경 범위 또는
+장착 좌표를 먼저 확인한다.
 
 ---
 
@@ -385,7 +386,7 @@ Map `/occupancy_grid` · LaserScan `/scan` · Odometry `/odom` 이 뜬다.
 
 ## 10. 실내 수조 모드 (외부 TG-50 라이다 + 선체 GQ7 IMU)
 
-실내에서는 GNSS 신호를 수신할 수 없으므로, 수조 외벽에 고정된 YDLIDAR TG-50 라이다가 배의 2D 위치(`/boat_position`, 실내 GPS 역할)를 추적하고, 선체에 탑재된 GQ7 IMU(`/imu/data`)와 결합하여 `indoor_lidar_odom` 노드가 최종 `/odom` 및 TF(`odom -> base_link`)를 생성합니다.
+실내에서는 GNSS 신호를 수신할 수 없으므로, 수조 외벽의 YDLIDAR TG-50이 얇은 선수 봉과 두꺼운 선미 봉을 구분해 배의 절대 pose(`/boat_pose`)를 계산합니다. 선체 GQ7의 gyro-z와 2상태 EKF로 융합하여 `indoor_lidar_odom` 노드가 최종 `/odom` 및 TF(`odom -> base_link`)를 생성합니다. 기본 장착 가정은 두 봉 간격 1.0m, `base_link` 기준 선수 `+0.5m`, 선미 `-0.5m`입니다.
 
 ### 10.1 실행 (2대 기기 분담)
 
@@ -400,16 +401,14 @@ ros2 launch kaboat_hardware indoor_tank.launch.py enable_thrusters:=false
 ### 10.2 토픽 확인 및 판정 기준
 
 ```bash
-# 외부 라이다 배 위치 (10 Hz PointStamped)
-ros2 topic hz /boat_position
-ros2 topic echo /boat_position --once
+# 외부 라이다 배 pose (10 Hz PoseWithCovarianceStamped)
+ros2 topic hz /boat_pose
+ros2 topic echo /boat_pose --once
 
 # 선체 GQ7 IMU (50~100 Hz)
 ros2 topic hz /imu/data
 
-# indoor_lidar_odom 융합 오도메트리
-# 내부 검사 타이머는 30 Hz지만 새 /boat_position 표본마다 한 번만 발행하므로
-# 현재 외부 LiDAR가 10 Hz이면 실제 /odom도 대략 10 Hz이다.
+# indoor_lidar_odom 융합 오도메트리 (30 Hz)
 ros2 topic hz /odom
 ros2 topic echo /odom --once
 ros2 topic echo /odom --once --field twist.twist.angular.z
@@ -422,9 +421,9 @@ ros2 run tf2_ros tf2_echo odom base_link
 
 | 로그 | 뜻 |
 |---|---|
-| `[indoor_lidar_odom] 시작 (실내 GPS + 선체 IMU 융합)!` | 정상 시작 |
-| `외부 라이다 위치 신호 유실` | 라이다 위치 미수신(1.0s 초과)으로 `/odom` 발행 중단 (**의도된 안전 동작**) |
-| `선체 IMU 신호 유실` | IMU 미수신(0.5s 초과)으로 `/odom` 발행 중단 (**의도된 안전 동작**) |
+| `[indoor_lidar_odom] LiDAR yaw + IMU gyro EKF 시작` | 정상 시작 |
+| `LiDAR pose 유실` | 두 봉 pose 미수신(1.0s 초과)으로 `/odom` 발행 중단 (**의도된 안전 동작**) |
+| `IMU gyro 유실` | IMU 미수신(0.5s 초과)으로 `/odom` 발행 중단 (**의도된 안전 동작**) |
 
 위치나 IMU 신호가 끊겼을 때 `/odom` 발행을 멈추는 것은 의도된 안전
 메커니즘입니다. 마지막 위치를 계속 재발행하면 배가 옛 좌표를 믿을 수
@@ -514,7 +513,7 @@ ps -ef | grep -E "gz sim|ros2 launch|parameter_bridge|robot_state_publisher" \
 | `/gps/fix` **배선** | ✅ 검증 가능 | 2 Hz + `status: -1` ← **정상 결과** |
 | `/gps/fix` **좌표** | ❌ | 실외 필요 |
 | `/odom` (GQ7 EKF) | ❌ | 실외 + 이동 필요 |
-| `/odom` (실내 라이다+IMU) | ✅ | 현재 약 10 Hz(`/boat_position` 표본률), §10 |
+| `/odom` (실내 라이다+IMU) | ✅ | 30 Hz, LiDAR yaw + gyro bias EKF, §10 |
 
 ---
 

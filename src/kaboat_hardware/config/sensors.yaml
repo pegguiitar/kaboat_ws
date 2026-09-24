@@ -45,8 +45,3 @@ sensor_health_monitor:
       min_rate_hz: 5.0
       timeout_sec: 1.0
 
-indoor_lidar_odom:
-  ros__parameters:
-    imu_yaw_offset_deg: -51.27
-    yaw_rate_sign: 1.0
-

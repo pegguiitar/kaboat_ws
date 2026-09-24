@@ -58,7 +58,7 @@ def generate_launch_description():
             condition=IfCondition(launch_driver),
         ),
 
-        # 2. 배 위치 추적 노드 (/detections, /boat_position, /odom 발행)
+        # 2. 두 봉으로 배 pose 추적 (/boat_pose, 호환용 /boat_position 발행)
         Node(
             package='kaboat_hardware',
             executable='lidar_boat_tracker',

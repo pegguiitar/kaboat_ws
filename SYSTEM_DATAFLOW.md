@@ -13,21 +13,21 @@
    │                                                     │
    │                                                     ▼  /scan (10Hz LaserScan)
    │                                              [ lidar_boat_tracker ]
-   │                                              (수조 10mx5m ROI + 중앙값 필터)
+   │                                              (ROI + 얇은 선수봉/두꺼운 선미봉 식별)
    │                                                     │
    │                                                     ├─► [ RViz2 모니터링 ]
    │                                                     │   (/bspline_test/path, /bspline_test/markers 등)
    │                                                     ▼
-   └───────────────────► 토픽: /boat_position (10Hz, 배의 X,Y 절대위치) ─────────────┐
+   └───────────────────► 토픽: /boat_pose (10Hz, 배의 X,Y, 절대 Yaw) ────────────────┐
                                                                                      │ (Wi-Fi 무선 전송)
 [ 🚤 배 내부 젯슨 (Jetson) ]                                                          │
    ┌─────────────────────────────────────────────────────────────────────────────────┘
    │
    ▼
 [ indoor_lidar_odom 노드 ] ◄── /imu/data (50~100Hz) ── [ 선체 GQ7 IMU 센서 ]
-   (라이다 실측 X,Y + 선체 IMU 실측 선수각 Yaw/자이로 융합)
+   (라이다 절대 X,Y,Yaw + IMU gyro-z/bias 2상태 EKF)
    │
-   ▼ 토픽: /odom (현재 위치 표본률 ≈10Hz) & TF (odom -> base_link)
+   ▼ 토픽: /odom (30Hz) & TF (odom -> base_link)
    │
    ├─── [ 경로 A: 실내 수조 단독 테스트 (Tank Test Direct Path — 1개 노드만 선택 실행) ]
    │    │  (bspline_track_test / straight_line_test / circle_drive_test / station_keeping_test)
@@ -65,22 +65,22 @@
 flowchart TD
     subgraph LAPTOP ["수조 외벽 노트북"]
         LidarHW["YDLIDAR TG-50 라이다"] -->|"시리얼 512000bps"| Driver["ydlidar_ros2_driver_node"]
-        Driver -->|"/scan"| Tracker["lidar_boat_tracker<br/>• 10m x 5m ROI 필터<br/>• 클러스터링 & Median 추출<br/>• EMA 위치 필터"]
+        Driver -->|"/scan"| Tracker["lidar_boat_tracker<br/>• 10m x 5m ROI 필터<br/>• 얇은 선수봉/두꺼운 선미봉 식별<br/>• 1m 간격으로 절대 pose 계산"]
         Tracker -->|"/lidar_tracker/markers"| Rviz["RViz2 모니터링"]
     end
 
-    Tracker ==>|"/boat_position<br/>(Wi-Fi 무선 전송)"| OdomFusion
+    Tracker ==>|"/boat_pose: X,Y,Yaw<br/>(Wi-Fi 무선 전송)"| OdomFusion
     UserCmd["조종자 터미널 (노트북)"] -.->|"/start_mission, /emergency_stop"| TestNodes
     UserCmd -.->|"/clear_trajectory 서비스"| TestNodes
 
     subgraph JETSON ["배 내부 젯슨 (Jetson)"]
         subgraph SENSORS ["1. 오도메트리 융합부"]
             IMU_HW["선체 탑재 GQ7 IMU"] -->|"/imu/data"| OdomFusion
-            OdomFusion["indoor_lidar_odom<br/>• 위치: 라이다 X,Y<br/>• 자세: IMU Yaw (-51.27° 보정)<br/>• 속도: 위치 미분 추정"]
+            OdomFusion["indoor_lidar_odom<br/>• 위치: 라이다 X,Y<br/>• 자세: LiDAR yaw + IMU gyro EKF<br/>• gyro bias 동시 추정"]
         end
 
-        OdomFusion ==>|"/odom (현재 ≈10Hz) & TF"| TestNodes
-        OdomFusion ==>|"/odom (현재 ≈10Hz) & TF"| MissionAutonomy
+        OdomFusion ==>|"/odom (30Hz) & TF"| TestNodes
+        OdomFusion ==>|"/odom (30Hz) & TF"| MissionAutonomy
 
         subgraph CONTROL ["2. 제어 계층 (두 경로 분리)"]
             subgraph TestNodes ["경로 A: 실내 수조 단독 테스트 (1개만 실행)"]
@@ -115,9 +115,9 @@ flowchart TD
 | 노드명 (`Node`) | 구독 토픽 (`Subscription`) | 발행 토픽 (`Publication`) | 서비스 (`Service`) | 설명 |
 | :--- | :--- | :--- | :--- | :--- |
 | **`ydlidar_ros2_driver_node`** | - | `/scan` (`LaserScan`) | - | TG-50 라이다 360° 원본 스캔 데이터 발행 (10Hz, 노트북 소유) |
-| **`lidar_boat_tracker`** | `/scan` | **`/boat_position`** (`PointStamped`)<br>`/lidar_tracker/markers` (`MarkerArray`) | - | 수조 10m x 5m ROI 필터링 후 배의 2D 절대 위치 발행 (10Hz, 노트북 소유) |
-| **`microstrain_inertial_driver`** | - | `/imu/data` (`Imu`) | - | 선체 탑재 GQ7 센서의 자세(Yaw) 및 각속도 발행 (젯슨 소유) |
-| **`indoor_lidar_odom`** | `/boat_position`<br>`/imu/data` | **`/odom`** (`Odometry`)<br>`/tf` (`odom -> base_link`) | - | 라이다 절대 위치와 IMU 선수각/자이로를 융합합니다. 검사 타이머는 30Hz지만 새 위치 표본마다 한 번만 발행하므로 현재 10Hz LiDAR 구성에서는 `/odom`도 약 10Hz입니다. |
+| **`lidar_boat_tracker`** | `/scan` | **`/boat_pose`** (`PoseWithCovarianceStamped`)<br>`/boat_position` (호환용)<br>`/lidar_tracker/markers` | - | 얇은 선수 봉과 두꺼운 선미 봉을 구분하고 1m 장착 간격으로 X,Y,Yaw를 계산 (노트북 소유) |
+| **`microstrain_inertial_driver`** | - | `/imu/data` (`Imu`) | - | 선체 탑재 GQ7의 각속도 발행 (젯슨 소유) |
+| **`indoor_lidar_odom`** | `/boat_pose`<br>`/imu/data` | **`/odom`** (`Odometry`, 30Hz)<br>`/tf` (`odom -> base_link`) | `/calibrate_imu_yaw` | gyro로 yaw를 예측하고 LiDAR 절대 yaw로 보정하는 2상태 EKF. yaw와 gyro bias를 함께 추정 |
 | **`bspline_track_test`** | `/odom`<br>`/start_mission` (`Bool`)<br>`/emergency_stop` (`Bool`) | **`/cmd_vel`** (`Twist`, 직접 발행)<br>`/bspline_test/path` (`Path`)<br>`/bspline_test/markers` (`MarkerArray`) | `/start_test`<br>`/clear_trajectory` | Clamped B-Spline 곡선 생성 및 Lookahead 추종. **`cmd_mux` 없이 `/cmd_vel`로 직결** |
 | **`straight_line_test`** | `/odom`<br>`/start_mission` (`Bool`)<br>`/emergency_stop` (`Bool`) | **`/cmd_vel`** (`Twist`, 직접 발행)<br>`/straight_drive/markers` (`MarkerArray`) | `/start_test`<br>`/clear_trajectory` | $(9.0, 3.0) \to (1.0, 3.0)$ 8m 구간 직선 LOS 추종. **`cmd_mux` 없이 `/cmd_vel`로 직결** |
 | **`circle_drive_test`** | `/odom`<br>`/start_mission` (`Bool`)<br>`/emergency_stop` (`Bool`) | **`/cmd_vel`** (`Twist`, 직접 발행)<br>`/circle_drive/markers` (`MarkerArray`) | `/start_test`<br>`/clear_trajectory` | 중심점 기준 반경 1.2m 원 궤도 추종. **`cmd_mux` 없이 `/cmd_vel`로 직결** |
@@ -130,7 +130,7 @@ flowchart TD
 ## ⚡ 4. 안전 및 장애 대응 메커니즘 (Fail-Safe)
 
 1. **라이다 신호 두절 감지 (`indoor_lidar_odom`)**:
-   - 외부 라이다의 `/boat_position` 신호가 **1.0초(`pos_timeout_sec: 1.0`) 이상** 끊기면 즉시 `/odom` 발행을 중단합니다.
+   - 외부 라이다의 `/boat_pose` 신호가 **1.0초(`pos_timeout_sec: 1.0`) 이상** 끊기면 즉시 `/odom` 발행을 중단합니다.
    - GQ7 `/imu/data`가 **0.5초(`imu_timeout_sec: 0.5`) 이상** 끊겨도 `/odom` 발행을 중단합니다.
 2. **오도메트리 수신 타임아웃 (`bspline_track_test` 등 테스트 노드)**:
    - `/odom` 신호가 **0.5초(`odom_timeout_sec: 0.5`) 이상** 지연되면 테스트 노드가 즉시 속도 명령을 0으로 차단하고 안전 정지합니다.
@@ -140,8 +140,8 @@ flowchart TD
    - 노트북에서 언제든 `ros2 topic pub --once /emergency_stop std_msgs/msg/Bool "{data: true}"`를 발행하여 모터를 즉각 정지시킬 수 있습니다.
 5. **궤적 이력 초기화 (`Clear Trajectory`)**:
    - RViz 상의 실제 주행 궤적 이력을 초기화할 때 노트북에서 `ros2 service call /clear_trajectory std_srvs/srv/Trigger "{}"`를 호출합니다. 목표 경로와 미션 상태는 유지됩니다.
-6. **직진 테스트 경계 가드**:
-   - `straight_line_test`는 기본적으로 수조 벽에서 0.5m 안쪽의 안전 영역을 벗어나면 정지를 래치합니다. 현재 `bspline_track_test`, `circle_drive_test`, `station_keeping_test`에는 같은 경계 가드가 없으므로 목표 경로와 좌표를 운용 전에 확인해야 합니다.
+6. **수조 경계 운용**:
+   - 테스트 노드는 위치 기반 벽면 자동 정지를 사용하지 않습니다. 운용자가 목표 경로를 확인하고 `/emergency_stop`을 준비해야 합니다. 센서 타임아웃과 스러스터 워치독은 계속 동작합니다.
 
 수조 단독 테스트 경로와 종합 미션 경로는 모두 최종적으로 `/cmd_vel`을
 사용합니다. 따라서 테스트 노드와 `cmd_mux`/자율운항 스택을 동시에 실행하면

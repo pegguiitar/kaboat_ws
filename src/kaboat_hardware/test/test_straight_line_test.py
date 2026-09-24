@@ -131,25 +131,11 @@ class TestStraightLineTest(unittest.TestCase):
         self.assertEqual(latest_cmd.linear.x, 0.0)
         self.assertEqual(latest_cmd.angular.z, 0.0)
 
-    def test_wall_guard_latches_stop(self):
-        """벽면 안전 영역 밖에서는 정지하고 위치가 돌아와도 자동 재출발하지 않아야 한다."""
+    def test_coordinates_near_wall_do_not_trigger_automatic_stop(self):
+        """위치 기반 벽면 가드가 없으므로 경계 부근에서도 제어 명령을 계산한다."""
         self._feed_odom(x=9.7, y=3.0, yaw=math.pi)
         self.node._control_loop()
 
-        self.assertTrue(self.node.boundary_stopped)
-        self.assertEqual(self.published_cmds[-1].linear.x, 0.0)
-        self.assertEqual(self.published_cmds[-1].angular.z, 0.0)
-
-        self._feed_odom(x=8.0, y=3.0, yaw=math.pi)
-        self.node._control_loop()
-        self.assertEqual(self.published_cmds[-1].linear.x, 0.0)
-        self.assertEqual(self.published_cmds[-1].angular.z, 0.0)
-
-    def test_wall_guard_boundary_is_allowed(self):
-        """정확히 wall_margin 경계에 있는 위치는 안전 영역에 포함한다."""
-        self._feed_odom(x=9.5, y=3.0, yaw=math.pi)
-        self.node._control_loop()
-        self.assertFalse(self.node.boundary_stopped)
         self.assertGreater(self.published_cmds[-1].linear.x, 0.0)
 
     def test_start_mission_topic_and_pause(self):
@@ -328,7 +314,6 @@ class TestStraightLineTest(unittest.TestCase):
         self.node.started = True
         self.node.mission_finished = False
         self.node.emergency_stopped = False
-        self.node.boundary_stopped = False
         self.node.start_x = 9.0
         self.node.goal_x = 1.0
 
@@ -340,7 +325,6 @@ class TestStraightLineTest(unittest.TestCase):
         self.assertTrue(self.node.started)
         self.assertFalse(self.node.mission_finished)
         self.assertFalse(self.node.emergency_stopped)
-        self.assertFalse(self.node.boundary_stopped)
         self.assertEqual(self.node.start_x, 9.0)
         self.assertEqual(self.node.goal_x, 1.0)
         self.assertEqual(len(self.published_cmds), 0)

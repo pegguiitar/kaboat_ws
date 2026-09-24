@@ -25,7 +25,7 @@ def generate_launch_description():
         'max_angular', default_value='0.60',
         description='최대 회전 모터 출력 비율 (0.0 ~ 1.0, 기본 0.60 = 60%)')
     lookahead_dist_arg = DeclareLaunchArgument(
-        'lookahead_dist', default_value='0.6',
+        'lookahead_dist', default_value='1.0',
         description='Lookahead 전방 주시 거리 [m]')
     goal_tol_arg = DeclareLaunchArgument(
         'goal_tolerance', default_value='0.40',

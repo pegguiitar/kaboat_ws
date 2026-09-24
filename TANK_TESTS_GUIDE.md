@@ -86,11 +86,11 @@ ros2 launch kaboat_hardware lidar_boat_tracker.launch.py port:=/dev/ttyUSB0
 ros2 launch kaboat_hardware indoor_tank.launch.py enable_thrusters:=false
 ```
 
-### [Step 2-1] 매 실험 시작 전 IMU yaw 자동 보정
+### [Step 2-1] 매 실험 시작 전 IMU gyro bias 자동 보정
 
-`indoor_tank.launch.py`를 실행한 뒤, **선체에 고정된 IMU의 전방(+X 표시)을
-수조 -X 방향으로 정확히 맞추고 배를 움직이지 않은 상태**에서 젯슨의 새 터미널에
-다음 명령을 실행합니다.
+`indoor_tank.launch.py`를 실행한 뒤, 외부 LiDAR에서 선수의 얇은 봉과 선미의
+두꺼운 봉이 모두 보이는지 확인합니다. **배의 방향은 어느 쪽이어도 되지만 배를
+움직이거나 돌리지 않은 상태**에서 젯슨의 새 터미널에 다음 명령을 실행합니다.
 
 ```bash
 # [선체 젯슨: 새 터미널]
@@ -103,12 +103,12 @@ export ROS_LOCALHOST_ONLY=0
 ros2 run kaboat_hardware calibrate_indoor_imu
 ```
 
-최근 약 2초의 IMU 자세를 원형 평균하여 현재 방향을 odom의 180°로 맞춥니다.
-배의 회전이나 자세 흔들림이 감지되면 적용하지 않고 안정될 때까지 자동으로
-재시도합니다. 성공 로그를 확인한 뒤에만 모터 드라이버와 테스트 노드를
-실행하십시오. 각도 표현 범위에 따라 확인 도구에는 `180°` 대신 `-180°`로
-나올 수 있으며 두 값은 동일한 방향입니다. `indoor_lidar_odom`을 다시
-시작했거나 GQ7 전원을 다시 켰다면 이 명령도 다시 실행해야 합니다.
+최근 약 2초의 정지 자이로 값을 평균하여 Z축 bias를 초기화하고, 그 순간의
+LiDAR 선수-선미 방향을 절대 yaw로 사용합니다. 이후에는 IMU 각속도로 고속
+예측하고 LiDAR yaw로 누적 오차와 bias를 계속 보정합니다. 회전이 감지되면
+보정을 적용하지 않고 안정될 때까지 자동 재시도합니다. 성공 로그를 확인한
+뒤에만 모터 드라이버와 테스트 노드를 실행하십시오. `indoor_lidar_odom`이나
+GQ7을 다시 시작했다면 이 명령도 다시 실행합니다.
 
 ### [Step 3] 센서 및 오도메트리 토픽 점검 (Topic Checks)
 
@@ -119,16 +119,15 @@ ros2 run kaboat_hardware calibrate_indoor_imu
 # 1) 라이다 스캔 (≈10 Hz)
 ros2 topic hz /scan --qos-reliability best_effort
 
-# 2) 외부 라이다가 추적한 배 위치 (≈10 Hz)
-ros2 topic hz /boat_position
-ros2 topic echo /boat_position --once
+# 2) 외부 라이다가 두 봉으로 계산한 배 pose (≈10 Hz)
+ros2 topic hz /boat_pose
+ros2 topic echo /boat_pose --once
 
 # 3) 선체 GQ7 IMU 데이터 (≈50~100 Hz)
 ros2 topic hz /imu/data --qos-reliability best_effort
-ros2 topic echo /imu/data --once --field orientation --qos-reliability best_effort
+ros2 topic echo /imu/data --once --field angular_velocity --qos-reliability best_effort
 
-# 4) indoor_lidar_odom이 융합 발행하는 오도메트리
-# 검사 타이머는 30 Hz지만 새 위치 표본마다 한 번 발행하므로 현재는 약 10 Hz
+# 4) indoor_lidar_odom이 30 Hz로 융합 발행하는 오도메트리
 ros2 topic hz /odom
 ros2 topic echo /odom --once
 ros2 topic info /odom --verbose | grep "Publisher count"   # 반드시 1
@@ -139,7 +138,7 @@ ros2 run tf2_ros tf2_echo odom base_link
 
 ### [Step 4] 스러스터 모터 드라이버 별도 실행 (Separate Thruster Launch)
 
-오도메트리가 `/boat_position` 갱신률에 맞춰 정상 발행되는 것을 확인한 후,
+오도메트리가 30 Hz로 정상 발행되는 것을 확인한 후,
 젯슨에서 모터 드라이버를 단독 실행합니다.
 
 ```bash
@@ -204,8 +203,18 @@ ros2 service call /clear_trajectory std_srvs/srv/Trigger "{}"
   * `bspline_lookahead_target`: 청록색 구체 (현재 전방 주시점)
   * `goal_tolerance`: 노란색 원 (종점 허용오차 0.40m 반경)
   * `actual_trajectory`: 오렌지색 선 (배가 실제 지나온 주행 궤적)
-* **수조 라이다 배 위치**: `/boat_position`, `/detections`, `/lidar_tracker/markers`
+* **수조 라이다 배 pose**: `/boat_pose`, `/detections`, `/lidar_tracker/markers`
 * **라이다 스캔**: `/scan`, `/lidar_tracker/filtered_scan`
+
+### 선수/선미 봉 기본 장착 가정
+
+기본 설정은 `base_link` 원점을 두 봉의 중점으로 두고, 선수 얇은 봉을
+`(+0.50, 0.0)m`, 선미 두꺼운 봉을 `(-0.50, 0.0)m`에 놓아 정확히 1.0m
+간격으로 가정합니다. 실제 장착 위치가 다르면
+`src/kaboat_hardware/config/lidar_tracker.yaml`의
+`bow_marker_body_*`, `stern_marker_body_*`를 실측값으로 바꿉니다. 또한 LiDAR가
+관측하는 클러스터 폭은 실제 봉 지름과 다를 수 있으므로 정지 상태에서
+`bow_*_diameter`, `stern_*_diameter` 범위를 반드시 튜닝하십시오.
 
 ---
 
@@ -213,7 +222,7 @@ ros2 service call /clear_trajectory std_srvs/srv/Trigger "{}"
 
 배(Jetson) 내부 터미널에서 **`tank_tests.launch.py`**의 `test` 인자만 변경하여
 네 가지 테스트를 동일한 형식으로 실행할 수 있습니다. 이 통합 런치는 테스트
-노드만 선택하므로 센서, IMU yaw 보정, 스러스터 드라이버는 앞 단계의 절차대로
+노드만 선택하므로 센서, IMU gyro bias 보정, 스러스터 드라이버는 앞 단계의 절차대로
 미리 실행해야 합니다.
 
 ```bash
@@ -308,7 +317,7 @@ launch가 자동으로 로드하지 않습니다. 실행 시 노출된 launch �
 ### 주요 기본 파라미터 현황
 * **전진 기본 순항 출력 (`cruise_speed`)**: B-Spline은 `0.30` (30%), 직진·원형 테스트는 `0.50` (50%)
 * **최대 회전 출력 (`max_angular`)**: 기본값 `0.60` (60% 모터 출력 비율)
-* **B-Spline Lookahead 거리 (`lookahead_dist`)**: 기본값 `0.6` (0.6m 전방 주시)
+* **B-Spline Lookahead 거리 (`lookahead_dist`)**: 기본값 `1.0` (경로 호길이 기준 1.0m 전방 주시)
 * **종점 도착 판정 반경 (`goal_tolerance`)**: 기본값 `0.40` (40cm 이내 도달 시 종료)
 * **종점 접근 감속 반경 (`slow_radius`)**: 기본값 `1.5` (1.5m 전방부터 점진적 감속)
 * **헤딩 P/D 제어 게인 (`kp_yaw`, `kd_yaw`)**: `kp_yaw: 1.5`, `kd_yaw: 0.15`

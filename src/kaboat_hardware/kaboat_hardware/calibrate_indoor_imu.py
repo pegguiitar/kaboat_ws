@@ -1,7 +1,7 @@
-"""실내 수조 시험 시작 전 GQ7 yaw를 수조 -X(180도)에 정렬한다.
+"""실내 수조 시험 시작 전 정지 gyro bias를 계산하고 LiDAR yaw로 정렬한다.
 
-먼저 indoor_tank.launch.py를 실행하고 선체/IMU의 전방을 수조 -X 방향으로
-고정한 뒤 이 실행 파일을 호출한다. 실제 보정 계산과 적용은
+먼저 LiDAR 두 봉 추적과 indoor_tank.launch.py를 실행하고 선체를 어느 방향이든
+움직이지 않게 고정한 뒤 호출한다. 실제 보정 계산과 적용은
 indoor_lidar_odom 노드가 담당하며, 이 클라이언트는 충분한 정지 표본이 모일
 때까지 서비스를 반복 호출한다.
 """
@@ -29,8 +29,7 @@ class IndoorImuCalibrationClient(Node):
     def calibrate(self) -> bool:
         deadline = time.monotonic() + self.timeout_sec
         self.get_logger().info(
-            '선체/IMU 전방을 수조 -X 방향으로 맞추고 움직이지 마세요. '
-            '안정된 IMU 표본을 기다립니다.')
+            '선체를 움직이지 마세요. LiDAR 절대 yaw와 안정된 gyro 표본을 기다립니다.')
 
         while rclpy.ok() and time.monotonic() < deadline:
             remaining = deadline - time.monotonic()

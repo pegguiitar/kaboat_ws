@@ -4,9 +4,9 @@
   - 수조 안전 경계(10m x 5m 내벽 여유폭) 내에서 매끄러운 B-Spline 곡선 생성
   - 기본 제공 프리셋: S자 슬라럼 궤적 (수조를 대각/곡선으로 가로지르는 부드러운 코스)
   - 임의의 제어점(Control Points) 파라미터 입력 지원
-  - 전방 주시(Lookahead) 기반 Pure Pursuit 경로 추종 및 P-D 헤딩 조향 제어
+  - 전방 주시(Lookahead) 목표점 기반 경로 추종 및 P-D 헤딩 조향 제어
   - 곡률 및 헤딩 오차 적응형 감속, 목표 종점 정밀 접근 및 안전 제동
-  - 수조 벽면 비상 정지 가드 및 /odom 타임아웃 워치독
+  - /emergency_stop 연동 및 /odom 타임아웃 워치독
   - RViz 실시간 시각화 (/bspline_test/path, /bspline_test/markers)
 """
 
@@ -151,7 +151,7 @@ class BSplineTrackTest(Node):
         # ── 주행 및 제어 파라미터 ─────────────────────────
         self.declare_parameter('cruise_speed', 0.30)    # 전진 기본 출력 비율 (30%)
         self.declare_parameter('max_angular', 0.60)     # 최대 회전 출력 비율 (60%)
-        self.declare_parameter('lookahead_dist', 0.6)   # Lookahead 전방 주시 거리 [m]
+        self.declare_parameter('lookahead_dist', 1.0)   # Lookahead 전방 주시 거리 [m]
         self.declare_parameter('goal_tolerance', 0.40)  # 도착 판정 반경 [m]
         self.declare_parameter('slow_radius', 1.5)      # 종점 접근 감속 시작 반경 [m]
         self.declare_parameter('kp_yaw', 1.5)           # 헤딩 비례 게인 P
@@ -338,7 +338,7 @@ class BSplineTrackTest(Node):
             return
 
         # 6. Lookahead 목표점 산출
-        lookahead_steps = int(self.lookahead / self.spacing)
+        lookahead_steps = int(round(self.lookahead / self.spacing))
         target_idx = min(self.num_points - 1, self.progress_idx + lookahead_steps)
         target_x = self.path_x[target_idx]
         target_y = self.path_y[target_idx]
@@ -439,7 +439,7 @@ class BSplineTrackTest(Node):
 
         # 현재 Lookahead 타겟 마커 (청록색 구체)
         if self.current_x is not None and not self.mission_finished:
-            lookahead_steps = int(self.lookahead / self.spacing)
+            lookahead_steps = int(round(self.lookahead / self.spacing))
             target_idx = min(self.num_points - 1, self.progress_idx + lookahead_steps)
             tx = float(self.path_x[target_idx])
             ty = float(self.path_y[target_idx])

@@ -9,8 +9,8 @@
      - 외부 PC나 수조 라이다가 필요 없습니다.
   2) 실내 수조 시험 (Indoor Tank Test):
      - `indoor_tank.launch.py`는 실내이므로 GQ7 EKF의 /odom remap을 비활성화합니다 (enable_odom_remap:=false).
-     - 외부 라이다(수조 옆 PC, lidar_boat_tracker)가 실내 GPS 역할을 하여 배 위치(/boat_position)를 발행합니다.
-     - 배 내부(Jetson)의 indoor_lidar_odom 노드가 라이다 위치와 선체 IMU(/imu/data)를 융합하여 /odom 및 TF를 발행합니다.
+     - 외부 라이다가 선수/선미 봉으로 절대 pose(/boat_pose)를 발행합니다.
+     - 배 내부의 indoor_lidar_odom EKF가 LiDAR yaw와 IMU gyro를 융합하여 /odom 및 TF를 발행합니다.
 
 사용법:
   # 1. 수조 외벽 노트북 (외부 라이다)
@@ -37,7 +37,6 @@ def generate_launch_description():
     sensors_config = os.path.join(hardware_share, 'config', 'sensors.yaml')
 
     tank_config_file = LaunchConfiguration('tank_config_file')
-    imu_yaw_offset_deg = LaunchConfiguration('imu_yaw_offset_deg')
     enable_thrusters = LaunchConfiguration('enable_thrusters')
     thruster_hw = LaunchConfiguration('thruster_hardware_type')
     thruster_port = LaunchConfiguration('thruster_port')
@@ -86,11 +85,7 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'tank_config_file', default_value=default_config,
             description='indoor_lidar_odom 파라미터 (수조 실측 설정값)'),
-        DeclareLaunchArgument(
-            'imu_yaw_offset_deg', default_value='-51.27',
-            description='수조 +X축(0도) 기준 IMU 설치 편차 각도 [deg] (+X 방향 정렬 시 0도 보정)'),
-
-        LogInfo(msg='[INDOOR TANK] 실내 수조 모드: 외부 라이다(/boat_position, 실내 GPS) + 선체 GQ7 IMU(/imu/data) → /odom 융합 + 모터 드라이버 실행.'),
+        LogInfo(msg='[INDOOR TANK] 외부 LiDAR /boat_pose + GQ7 gyro EKF → /odom 융합.'),
 
         sensors,
         thrusters,
@@ -105,7 +100,6 @@ def generate_launch_description():
                 tank_config_file,
                 {
                     'use_sim_time': False,
-                    'imu_yaw_offset_deg': imu_yaw_offset_deg,
                 }
             ],
         ),

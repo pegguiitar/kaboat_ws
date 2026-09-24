@@ -26,7 +26,7 @@ bspline_track_test:
     sample_spacing: 0.05      # [m] 곡선 보간 샘플 간격 (5cm)
     cruise_speed: 0.30        # 기본 전진 출력 비 (30%)
     max_angular: 0.60         # 최대 회전 출력 비 (60%)
-    lookahead_dist: 0.6       # [m] Pure Pursuit 전방 주시 거리
+    lookahead_dist: 1.0       # [m] 경로 위 목표점 전방 주시 거리
     goal_tolerance: 0.40      # [m] 도착 판정 반경
     slow_radius: 1.5          # [m] 종점 감속 반경
     kp_yaw: 1.5               # 헤딩 P 게인

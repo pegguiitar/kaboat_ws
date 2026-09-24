@@ -13,16 +13,35 @@ lidar_boat_tracker:
     pool_size_y: 5.0          # [m] 수조 세로 폭 (위쪽 주황색 화살표 방향 +Y, 0~5m)
     wall_margin: 0.18         # [m] 벽면 제거 마진 (수조 4면 벽면 노이즈 제거)
 
-    # ── 배 돌출 기둥 클러스터링 & 노이즈 필터링 ──────────────────
+    # ── 선수/선미 봉 클러스터링 ────────────────────────────────
     cluster_dist_tol: 0.25    # [m] 인접 포인트 군집화 거리
     min_cluster_pts: 2        # 기둥 최소 반사 포인트 수
     max_cluster_pts: 80       # 기둥 최대 반사 포인트 수
     min_target_diameter: 0.02 # [m] 기둥 최소 직경 (2cm)
     max_target_diameter: 0.45 # [m] 기둥 최대 직경 (45cm)
 
+    # 선수는 얇은 봉, 선미는 두꺼운 봉이다. 실제 제작 직경을 측정한 뒤
+    # 두 구간이 겹치지 않도록 반드시 현장에서 조정한다.
+    bow_min_diameter: 0.02    # [m] 선수 얇은 봉 검출 최소 폭
+    bow_max_diameter: 0.10    # [m] 선수 얇은 봉 검출 최대 폭
+    stern_min_diameter: 0.12  # [m] 선미 두꺼운 봉 검출 최소 폭
+    stern_max_diameter: 0.30  # [m] 선미 두꺼운 봉 검출 최대 폭
+    marker_separation_tolerance: 0.20 # [m] 설정 간격 1m 대비 허용 오차
+    max_position_jump: 0.75   # [m/scan] 연속 검출 위치 이상치 제한
+    max_yaw_jump_deg: 60.0    # [deg/scan] 연속 검출 yaw 이상치 제한
+
+    # base_link 기준 실제 장착 좌표. 현재 가정: 중심축 위에서 정확히 1.0m 간격.
+    bow_marker_body_x: 0.50
+    bow_marker_body_y: 0.0
+    stern_marker_body_x: -0.50
+    stern_marker_body_y: 0.0
+
     # ── EMA 노이즈 필터 계수 (0 < alpha <= 1.0) ─────────────────
     pos_ema_alpha: 0.45       # 위치 EMA 계수 (작을수록 부드러움)
     vel_ema_alpha: 0.30       # 속도 EMA 계수
+    position_stddev: 0.03     # [m] LiDAR 중심 위치 표준편차
+    marker_point_stddev: 0.02 # [m] 각 봉 중심 검출 표준편차
+    min_yaw_stddev_deg: 1.0   # [deg] 발행 yaw 공분산 하한
 
     # ── 좌표계 프레임 및 발행 옵션 ───────────────────────────────
     odom_frame: "odom"
@@ -30,4 +49,3 @@ lidar_boat_tracker:
     laser_frame: "laser_frame"
     publish_odom: false       # 실내 GPS 역할이므로 odom 발행 비활성 (배 내부 indoor_lidar_odom 사용)
     publish_tf: false         # odom->base_link TF 발행 비활성
-
