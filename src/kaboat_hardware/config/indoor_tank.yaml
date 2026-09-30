@@ -14,7 +14,7 @@ indoor_lidar_odom:
     imu_timeout_sec: 0.5              # IMU 수신 타임아웃 [s] (초과 시 /odom 중단)
 
     # ── LiDAR yaw + IMU gyro bias EKF ────────────────────
-    yaw_rate_sign: 1.0                # 좌회전(반시계) 양수 (+1.0 또는 -1.0)
+    yaw_rate_sign: -1.0               # GQ7 실측 부호 반전: 반시계 +, 시계 - (ROS REP-103)
     gyro_bias_z: 0.0                  # EKF 초기 Z축 bias [rad/s]
     gyro_noise_stddev: 0.01           # gyro 측정 잡음 [rad/s]
     gyro_bias_walk_stddev: 0.001      # bias random walk [rad/s/sqrt(s)]
