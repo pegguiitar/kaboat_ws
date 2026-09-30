@@ -88,7 +88,7 @@ ros2 launch kaboat_hardware indoor_tank.launch.py enable_thrusters:=false
 
 ### [Step 2-1] 매 실험 시작 전 IMU gyro bias 자동 보정
 
-`indoor_tank.launch.py`를 실행한 뒤, 외부 LiDAR에서 선수의 얇은 봉과 선미의
+`indoor_tank.launch.py`를 실행한 뒤, 외부 LiDAR에서 좌현의 얇은 봉과 우현의
 두꺼운 봉이 모두 보이는지 확인합니다. **배의 방향은 어느 쪽이어도 되지만 배를
 움직이거나 돌리지 않은 상태**에서 젯슨의 새 터미널에 다음 명령을 실행합니다.
 
@@ -206,15 +206,15 @@ ros2 service call /clear_trajectory std_srvs/srv/Trigger "{}"
 * **수조 라이다 배 pose**: `/boat_pose`, `/detections`, `/lidar_tracker/markers`
 * **라이다 스캔**: `/scan`, `/lidar_tracker/filtered_scan`
 
-### 선수/선미 봉 기본 장착 가정
+### 좌현/우현 봉 기본 장착 가정
 
-기본 설정은 `base_link` 원점을 두 봉의 중점으로 두고, 선수 얇은 봉을
-`(+0.50, 0.0)m`, 선미 두꺼운 봉을 `(-0.50, 0.0)m`에 놓아 정확히 1.0m
-간격으로 가정합니다. 실제 장착 위치가 다르면
+`base_link`의 +X는 선수, +Y는 좌현입니다. 기본 설정은 원점을 두 봉의
+중점으로 두고 좌현 얇은 봉을 `(0.0, +0.30)m`, 우현 두꺼운 봉을
+`(0.0, -0.30)m`에 놓아 정확히 0.60m 간격으로 가정합니다. 실제 장착 위치가 다르면
 `src/kaboat_hardware/config/lidar_tracker.yaml`의
-`bow_marker_body_*`, `stern_marker_body_*`를 실측값으로 바꿉니다. 또한 LiDAR가
+`thin_marker_body_*`, `thick_marker_body_*`를 실측값으로 바꿉니다. 또한 LiDAR가
 관측하는 클러스터 폭은 실제 봉 지름과 다를 수 있으므로 정지 상태에서
-`bow_*_diameter`, `stern_*_diameter` 범위를 반드시 튜닝하십시오.
+`thin_*_diameter`, `thick_*_diameter` 범위를 반드시 튜닝하십시오.
 
 ---
 

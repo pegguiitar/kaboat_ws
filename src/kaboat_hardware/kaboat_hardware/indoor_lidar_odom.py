@@ -1,6 +1,6 @@
 """외부 LiDAR 절대 pose와 선체 IMU gyro를 융합해 실내 `/odom`을 발행한다.
 
-LiDAR는 얇은 선수 봉/두꺼운 선미 봉으로부터 x, y, 절대 yaw를 제공한다.
+LiDAR는 좌현 얇은 봉/우현 두꺼운 봉으로부터 x, y, 절대 yaw를 제공한다.
 2상태 EKF는 IMU gyro-z로 yaw를 고속 예측하고 LiDAR yaw로 보정하면서 gyro
 bias까지 추정한다. GQ7 quaternion yaw는 절대 heading으로 사용하지 않는다.
 """
@@ -249,7 +249,7 @@ class IndoorLidarOdom(Node):
                 or now - self.last_pose_receive_time > self.pos_timeout
                 or self.last_lidar_yaw is None):
             response.success = False
-            response.message = '최신 LiDAR 선수/선미 pose가 없습니다.'
+            response.message = '최신 LiDAR 좌현/우현 표식 pose가 없습니다.'
             return response
 
         cutoff = now - self.calibration_window_sec

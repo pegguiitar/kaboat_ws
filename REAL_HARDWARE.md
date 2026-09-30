@@ -158,7 +158,7 @@ ros2 topic echo /odom --once
 
 ### 기기별 역할 분담 (Ownership)
 
-* **수조 외벽 노트북**: 고정 YDLIDAR TG-50과 `lidar_boat_tracker`를 실행합니다. 추적기는 얇은 선수 봉과 두꺼운 선미 봉을 구분하고, 기본 1.0m 장착 간격으로 배의 절대 X,Y,Yaw(`/boat_pose`, 약 10Hz)를 계산합니다.
+* **수조 외벽 노트북**: 고정 YDLIDAR TG-50과 `lidar_boat_tracker`를 실행합니다. 추적기는 좌현 얇은 봉과 우현 두꺼운 봉을 구분하고, 기본 0.60m 장착 간격으로 배의 절대 X,Y,Yaw(`/boat_pose`, 약 10Hz)를 계산합니다.
 * **선체 젯슨 (Jetson)**: GQ7 드라이버와 `indoor_lidar_odom`을 실행합니다. IMU gyro-z로 yaw를 고속 예측하고 LiDAR 절대 yaw로 드리프트와 gyro bias를 보정하는 2상태 EKF가 `/odom` 및 TF(`odom -> base_link`)를 30Hz로 발행합니다.
 
 포트 이름은 실행 전에 확인합니다. LiDAR launch는 `port`를 생략하면

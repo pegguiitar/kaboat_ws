@@ -4,7 +4,7 @@ indoor_lidar_odom:
   ros__parameters:
     odom_frame: odom
     base_frame: base_link
-    pose_topic: "/boat_pose"          # 선수/선미 봉으로 계산한 x, y, 절대 yaw
+    pose_topic: "/boat_pose"          # 좌현 얇은 봉/우현 두꺼운 봉으로 계산한 x, y, 절대 yaw
     imu_topic: "/imu/data"            # 선체 GQ7 IMU
     publish_tf: true                  # odom -> base_link TF 발행
 

@@ -207,7 +207,7 @@ ros2 topic echo /boat_pose --once
 배를 손으로 반시계 방향으로 돌렸을 때 `/odom` yaw와
 `twist.twist.angular.z`가 모두 양의 방향으로 변하는지 확인한다. 반대로 변하면
 `indoor_tank.yaml`의 `yaw_rate_sign`을 `-1.0`으로 바꾼다. 정지한 배의 LiDAR
-yaw가 선수 방향과 180° 반대라면 얇은 선수 봉/두꺼운 선미 봉의 직경 범위 또는
+yaw가 선수 방향과 180° 반대라면 좌현 얇은 봉/우현 두꺼운 봉의 직경 범위 또는
 장착 좌표를 먼저 확인한다.
 
 ---
@@ -386,7 +386,7 @@ Map `/occupancy_grid` · LaserScan `/scan` · Odometry `/odom` 이 뜬다.
 
 ## 10. 실내 수조 모드 (외부 TG-50 라이다 + 선체 GQ7 IMU)
 
-실내에서는 GNSS 신호를 수신할 수 없으므로, 수조 외벽의 YDLIDAR TG-50이 얇은 선수 봉과 두꺼운 선미 봉을 구분해 배의 절대 pose(`/boat_pose`)를 계산합니다. 선체 GQ7의 gyro-z와 2상태 EKF로 융합하여 `indoor_lidar_odom` 노드가 최종 `/odom` 및 TF(`odom -> base_link`)를 생성합니다. 기본 장착 가정은 두 봉 간격 1.0m, `base_link` 기준 선수 `+0.5m`, 선미 `-0.5m`입니다.
+실내에서는 GNSS 신호를 수신할 수 없으므로, 수조 외벽의 YDLIDAR TG-50이 좌현 얇은 봉과 우현 두꺼운 봉을 구분해 배의 절대 pose(`/boat_pose`)를 계산합니다. 선체 GQ7의 gyro-z와 2상태 EKF로 융합하여 `indoor_lidar_odom` 노드가 최종 `/odom` 및 TF(`odom -> base_link`)를 생성합니다. 기본 장착 가정은 두 봉 간격 0.60m, `base_link` 기준 좌현 얇은 봉 `(0,+0.30)m`, 우현 두꺼운 봉 `(0,-0.30)m`입니다.
 
 ### 10.1 실행 (2대 기기 분담)
 

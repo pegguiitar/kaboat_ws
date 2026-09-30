@@ -13,7 +13,7 @@
    │                                                     │
    │                                                     ▼  /scan (10Hz LaserScan)
    │                                              [ lidar_boat_tracker ]
-   │                                              (ROI + 얇은 선수봉/두꺼운 선미봉 식별)
+   │                                              (ROI + 좌현 얇은 봉/우현 두꺼운 봉 식별)
    │                                                     │
    │                                                     ├─► [ RViz2 모니터링 ]
    │                                                     │   (/bspline_test/path, /bspline_test/markers 등)
@@ -65,7 +65,7 @@
 flowchart TD
     subgraph LAPTOP ["수조 외벽 노트북"]
         LidarHW["YDLIDAR TG-50 라이다"] -->|"시리얼 512000bps"| Driver["ydlidar_ros2_driver_node"]
-        Driver -->|"/scan"| Tracker["lidar_boat_tracker<br/>• 10m x 5m ROI 필터<br/>• 얇은 선수봉/두꺼운 선미봉 식별<br/>• 1m 간격으로 절대 pose 계산"]
+        Driver -->|"/scan"| Tracker["lidar_boat_tracker<br/>• 10m x 5m ROI 필터<br/>• 좌현 얇은 봉/우현 두꺼운 봉 식별<br/>• 0.60m 간격으로 절대 pose 계산"]
         Tracker -->|"/lidar_tracker/markers"| Rviz["RViz2 모니터링"]
     end
 
@@ -115,7 +115,7 @@ flowchart TD
 | 노드명 (`Node`) | 구독 토픽 (`Subscription`) | 발행 토픽 (`Publication`) | 서비스 (`Service`) | 설명 |
 | :--- | :--- | :--- | :--- | :--- |
 | **`ydlidar_ros2_driver_node`** | - | `/scan` (`LaserScan`) | - | TG-50 라이다 360° 원본 스캔 데이터 발행 (10Hz, 노트북 소유) |
-| **`lidar_boat_tracker`** | `/scan` | **`/boat_pose`** (`PoseWithCovarianceStamped`)<br>`/boat_position` (호환용)<br>`/lidar_tracker/markers` | - | 얇은 선수 봉과 두꺼운 선미 봉을 구분하고 1m 장착 간격으로 X,Y,Yaw를 계산 (노트북 소유) |
+| **`lidar_boat_tracker`** | `/scan` | **`/boat_pose`** (`PoseWithCovarianceStamped`)<br>`/boat_position` (호환용)<br>`/lidar_tracker/markers` | - | 좌현 얇은 봉과 우현 두꺼운 봉을 구분하고 0.60m 장착 간격으로 X,Y,Yaw를 계산 (노트북 소유) |
 | **`microstrain_inertial_driver`** | - | `/imu/data` (`Imu`) | - | 선체 탑재 GQ7의 각속도 발행 (젯슨 소유) |
 | **`indoor_lidar_odom`** | `/boat_pose`<br>`/imu/data` | **`/odom`** (`Odometry`, 30Hz)<br>`/tf` (`odom -> base_link`) | `/calibrate_imu_yaw` | gyro로 yaw를 예측하고 LiDAR 절대 yaw로 보정하는 2상태 EKF. yaw와 gyro bias를 함께 추정 |
 | **`bspline_track_test`** | `/odom`<br>`/start_mission` (`Bool`)<br>`/emergency_stop` (`Bool`) | **`/cmd_vel`** (`Twist`, 직접 발행)<br>`/bspline_test/path` (`Path`)<br>`/bspline_test/markers` (`MarkerArray`) | `/start_test`<br>`/clear_trajectory` | Clamped B-Spline 곡선 생성 및 Lookahead 추종. **`cmd_mux` 없이 `/cmd_vel`로 직결** |

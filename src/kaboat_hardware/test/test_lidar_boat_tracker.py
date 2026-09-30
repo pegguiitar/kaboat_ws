@@ -55,11 +55,11 @@ class TestLidarBoatTrackerPipeline(unittest.TestCase):
         msg.ranges = ranges.tolist()
         return msg
 
-    def test_scan_to_pose_detects_one_meter_bow_stern_pair(self):
-        # 선수 얇은 봉: 6cm 폭, 선미 두꺼운 봉: 18cm 폭.
+    def test_scan_to_pose_detects_sixty_centimeter_left_right_pair(self):
+        # yaw=+90°: 좌현 얇은 봉은 서쪽, 우현 두꺼운 봉은 동쪽에 놓인다.
         points = [
-            (5.5, 2.47), (5.5, 2.50), (5.5, 2.53),
-            (4.5, 2.41), (4.5, 2.50), (4.5, 2.59),
+            (4.7, 2.47), (4.7, 2.50), (4.7, 2.53),
+            (5.3, 2.41), (5.3, 2.50), (5.3, 2.59),
         ]
         self.node._on_scan(self._scan_with_world_points(points))
 
@@ -67,4 +67,5 @@ class TestLidarBoatTrackerPipeline(unittest.TestCase):
         pose = self.poses[0].pose.pose
         self.assertAlmostEqual(pose.position.x, 5.0, delta=0.01)
         self.assertAlmostEqual(pose.position.y, 2.5, delta=0.01)
-        self.assertAlmostEqual(_yaw_from_quat(pose.orientation), 0.0, delta=0.01)
+        self.assertAlmostEqual(
+            _yaw_from_quat(pose.orientation), math.pi / 2, delta=0.01)

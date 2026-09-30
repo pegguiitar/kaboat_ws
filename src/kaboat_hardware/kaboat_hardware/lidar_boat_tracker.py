@@ -1,7 +1,7 @@
-"""고정 TG-50으로 선수/선미 표식을 검출해 수조 기준 선체 pose를 발행한다.
+"""고정 TG-50으로 좌현/우현 표식을 검출해 수조 기준 선체 pose를 발행한다.
 
-선수의 얇은 봉과 선미의 두꺼운 봉을 클러스터 직경으로 구분하고, 알려진 장착
-좌표와 1 m 간격 제약으로 잘못된 쌍을 제거한다. 출력 `/boat_pose`에는 x, y,
+좌현의 얇은 봉과 우현의 두꺼운 봉을 클러스터 직경으로 구분하고, 알려진 장착
+좌표와 0.60 m 간격 제약으로 잘못된 쌍을 제거한다. 출력 `/boat_pose`에는 x, y,
 yaw와 공분산이 포함되며 젯슨의 indoor_lidar_odom EKF가 이를 IMU와 융합한다.
 `/boat_position`과 `/detections`는 기존 도구 호환을 위해 함께 발행한다.
 """
@@ -50,19 +50,19 @@ class LidarBoatTracker(Node):
         self.declare_parameter('max_target_diameter', 0.45)
 
         # 실제 봉 제작 후 실측 직경에 맞춰 YAML에서 조정한다.
-        self.declare_parameter('bow_min_diameter', 0.02)
-        self.declare_parameter('bow_max_diameter', 0.10)
-        self.declare_parameter('stern_min_diameter', 0.12)
-        self.declare_parameter('stern_max_diameter', 0.30)
-        self.declare_parameter('marker_separation_tolerance', 0.20)
+        self.declare_parameter('thin_min_diameter', 0.02)
+        self.declare_parameter('thin_max_diameter', 0.10)
+        self.declare_parameter('thick_min_diameter', 0.12)
+        self.declare_parameter('thick_max_diameter', 0.30)
+        self.declare_parameter('marker_separation_tolerance', 0.12)
         self.declare_parameter('max_position_jump', 0.75)
         self.declare_parameter('max_yaw_jump_deg', 60.0)
 
-        # 기본 표식 간격 1.0 m. 중점이 base_link 원점이다.
-        self.declare_parameter('bow_marker_body_x', 0.50)
-        self.declare_parameter('bow_marker_body_y', 0.0)
-        self.declare_parameter('stern_marker_body_x', -0.50)
-        self.declare_parameter('stern_marker_body_y', 0.0)
+        # base_link: +X 선수, +Y 좌현. 표식 중점이 원점이고 간격은 0.60 m.
+        self.declare_parameter('thin_marker_body_x', 0.0)
+        self.declare_parameter('thin_marker_body_y', 0.30)
+        self.declare_parameter('thick_marker_body_x', 0.0)
+        self.declare_parameter('thick_marker_body_y', -0.30)
 
         self.declare_parameter('pos_ema_alpha', 0.45)
         self.declare_parameter('vel_ema_alpha', 0.30)
@@ -87,28 +87,28 @@ class LidarBoatTracker(Node):
         self.max_pts = int(self.get_parameter('max_cluster_pts').value)
         self.min_diam = float(self.get_parameter('min_target_diameter').value)
         self.max_diam = float(self.get_parameter('max_target_diameter').value)
-        self.bow_diameter_range = (
-            float(self.get_parameter('bow_min_diameter').value),
-            float(self.get_parameter('bow_max_diameter').value))
-        self.stern_diameter_range = (
-            float(self.get_parameter('stern_min_diameter').value),
-            float(self.get_parameter('stern_max_diameter').value))
+        self.thin_diameter_range = (
+            float(self.get_parameter('thin_min_diameter').value),
+            float(self.get_parameter('thin_max_diameter').value))
+        self.thick_diameter_range = (
+            float(self.get_parameter('thick_min_diameter').value),
+            float(self.get_parameter('thick_max_diameter').value))
         self.separation_tolerance = float(
             self.get_parameter('marker_separation_tolerance').value)
         self.max_position_jump = float(
             self.get_parameter('max_position_jump').value)
         self.max_yaw_jump = math.radians(float(
             self.get_parameter('max_yaw_jump_deg').value))
-        self.bow_body = np.array([
-            float(self.get_parameter('bow_marker_body_x').value),
-            float(self.get_parameter('bow_marker_body_y').value)])
-        self.stern_body = np.array([
-            float(self.get_parameter('stern_marker_body_x').value),
-            float(self.get_parameter('stern_marker_body_y').value)])
+        self.thin_body = np.array([
+            float(self.get_parameter('thin_marker_body_x').value),
+            float(self.get_parameter('thin_marker_body_y').value)])
+        self.thick_body = np.array([
+            float(self.get_parameter('thick_marker_body_x').value),
+            float(self.get_parameter('thick_marker_body_y').value)])
         self.marker_separation = float(np.linalg.norm(
-            self.bow_body - self.stern_body))
+            self.thin_body - self.thick_body))
         if self.marker_separation <= 0.0:
-            raise ValueError('선수/선미 표식 장착 좌표가 같을 수 없습니다')
+            raise ValueError('두 표식의 장착 좌표가 같을 수 없습니다')
 
         self.pos_alpha = float(self.get_parameter('pos_ema_alpha').value)
         self.vel_alpha = float(self.get_parameter('vel_ema_alpha').value)
@@ -150,10 +150,10 @@ class LidarBoatTracker(Node):
 
         self.get_logger().info(
             '🚀 [lidar_boat_tracker] 두 표식 2D pose 추적 시작\n'
-            f'   - 얇은 선수 봉 직경: {self.bow_diameter_range[0]:.2f}~'
-            f'{self.bow_diameter_range[1]:.2f}m\n'
-            f'   - 두꺼운 선미 봉 직경: {self.stern_diameter_range[0]:.2f}~'
-            f'{self.stern_diameter_range[1]:.2f}m\n'
+            f'   - 좌현 얇은 봉 직경: {self.thin_diameter_range[0]:.2f}~'
+            f'{self.thin_diameter_range[1]:.2f}m\n'
+            f'   - 우현 두꺼운 봉 직경: {self.thick_diameter_range[0]:.2f}~'
+            f'{self.thick_diameter_range[1]:.2f}m\n'
             f'   - 설정 표식 간격: {self.marker_separation:.2f}m '
             f'(허용 ±{self.separation_tolerance:.2f}m)\n'
             '   - 발행: /boat_pose (x, y, yaw, covariance)')
@@ -222,10 +222,10 @@ class LidarBoatTracker(Node):
         previous_pose = self.last_raw_pose if self.target_lost_count <= 3 else None
         pair = select_marker_pair(
             candidates=candidates,
-            bow_diameter_range=self.bow_diameter_range,
-            stern_diameter_range=self.stern_diameter_range,
-            bow_body=self.bow_body,
-            stern_body=self.stern_body,
+            thin_diameter_range=self.thin_diameter_range,
+            thick_diameter_range=self.thick_diameter_range,
+            thin_body=self.thin_body,
+            thick_body=self.thick_body,
             separation_tolerance=self.separation_tolerance,
             previous_pose=previous_pose,
             max_position_jump=self.max_position_jump,
@@ -290,7 +290,7 @@ class LidarBoatTracker(Node):
             self.vx = self.vy = 0.0
             if self.target_lost_count == 16:
                 self.get_logger().warn(
-                    '⚠️ 선수/선미 표식 쌍 미검출 — /boat_pose 발행 중단')
+                    '⚠️ 좌현/우현 표식 쌍 미검출 — /boat_pose 발행 중단')
 
     def _publish_outputs(self, stamp, x, y, yaw, vx, vy, yaw_stddev):
         orientation = yaw_to_quaternion(yaw)
@@ -372,8 +372,8 @@ class LidarBoatTracker(Node):
 
         if pair is not None:
             for marker_id, name, candidate, color in (
-                (1, 'bow_thin', pair.bow, (0.0, 1.0, 1.0)),
-                (2, 'stern_thick', pair.stern, (1.0, 0.0, 1.0)),
+                (1, 'port_thin', pair.thin, (0.0, 1.0, 1.0)),
+                (2, 'starboard_thick', pair.thick, (1.0, 0.0, 1.0)),
             ):
                 marker = Marker()
                 marker.header.stamp = stamp
@@ -397,19 +397,33 @@ class LidarBoatTracker(Node):
             baseline.header.frame_id = self.odom_frame
             baseline.ns = 'marker_baseline'
             baseline.id = 3
-            baseline.type = Marker.ARROW
+            baseline.type = Marker.LINE_STRIP
             baseline.action = Marker.ADD
-            baseline.scale.x, baseline.scale.y, baseline.scale.z = 0.04, 0.10, 0.12
+            baseline.scale.x = 0.04
             baseline.color.r, baseline.color.g, baseline.color.b, baseline.color.a = 0.0, 1.0, 0.2, 1.0
             baseline.points = [
-                Point(x=float(pair.stern.center[0]), y=float(pair.stern.center[1])),
-                Point(x=float(pair.bow.center[0]), y=float(pair.bow.center[1]))]
+                Point(x=float(pair.thick.center[0]), y=float(pair.thick.center[1])),
+                Point(x=float(pair.thin.center[0]), y=float(pair.thin.center[1]))]
             markers.markers.append(baseline)
+
+            heading = Marker()
+            heading.header = baseline.header
+            heading.ns = 'boat_heading_lidar'
+            heading.id = 4
+            heading.type = Marker.ARROW
+            heading.action = Marker.ADD
+            heading.scale.x, heading.scale.y, heading.scale.z = 0.05, 0.12, 0.14
+            heading.color.r, heading.color.g, heading.color.b, heading.color.a = 0.1, 1.0, 0.1, 1.0
+            heading.points = [
+                Point(x=x, y=y),
+                Point(x=x + 0.75 * math.cos(pair.yaw),
+                      y=y + 0.75 * math.sin(pair.yaw))]
+            markers.markers.append(heading)
 
             center = Marker()
             center.header = baseline.header
             center.ns = 'boat_pose_lidar'
-            center.id = 4
+            center.id = 5
             center.type = Marker.SPHERE
             center.action = Marker.ADD
             center.pose.position.x = x
@@ -422,7 +436,7 @@ class LidarBoatTracker(Node):
             label = Marker()
             label.header = baseline.header
             label.ns = 'boat_pose_label'
-            label.id = 5
+            label.id = 6
             label.type = Marker.TEXT_VIEW_FACING
             label.action = Marker.ADD
             label.pose.position.x = x
