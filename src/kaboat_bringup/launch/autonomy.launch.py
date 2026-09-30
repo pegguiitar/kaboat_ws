@@ -16,6 +16,7 @@ from launch.actions import DeclareLaunchArgument
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
@@ -24,6 +25,14 @@ def generate_launch_description():
 
     use_sim_time_value = LaunchConfiguration('use_sim_time')
     common_params = {'use_sim_time': use_sim_time_value}
+    dock_detector_params = {
+        **common_params,
+        'weights': LaunchConfiguration('dock_weights'),
+        'target_class': LaunchConfiguration('dock_target_class'),
+        'device': LaunchConfiguration('dock_device'),
+        'wall_to_mouth_m': ParameterValue(
+            LaunchConfiguration('wall_to_mouth_m'), value_type=float),
+    }
 
     perception = [
         Node(package='kaboat_perception', executable='occupancy_grid',
@@ -31,15 +40,22 @@ def generate_launch_description():
         Node(package='kaboat_perception', executable='buoy_detector',
              name='buoy_detector', output='screen', parameters=[common_params]),
         Node(package='kaboat_perception', executable='dock_mark_detector',
-             name='dock_mark_detector', output='screen', parameters=[common_params]),
+             name='dock_mark_detector', output='screen', parameters=[dock_detector_params]),
     ]
 
     behaviors = [
         Node(package='kaboat_behaviors', executable=exe,
              name=exe, output='screen', parameters=[common_params])
-        for exe in ['gate_follower', 'station_keeper', 'docking_ctrl',
+        for exe in ['gate_follower', 'station_keeper',
                     'search_circler', 'obstacle_planner']
     ]
+    behaviors.append(Node(
+        package='kaboat_behaviors', executable='docking_ctrl',
+        name='docking_ctrl', output='screen',
+        parameters=[common_params, {
+            'dock.motion_enabled': ParameterValue(
+                LaunchConfiguration('dock_motion_enabled'), value_type=bool),
+        }]))
 
     control = [
         Node(package='kaboat_control', executable='cmd_mux',
@@ -63,6 +79,21 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'use_sim_actuator', default_value='false',
             description='Gazebo용 twist2thrust 실행 여부; 실물에서는 false'),
+        DeclareLaunchArgument(
+            'dock_weights', default_value='',
+            description='검증된 YOLO26n-seg .pt 절대 경로; 비워두면 검출 fail-closed'),
+        DeclareLaunchArgument(
+            'dock_target_class', default_value='red_triangle',
+            description='red_triangle / green_circle / blue_square'),
+        DeclareLaunchArgument(
+            'dock_device', default_value='cpu',
+            description='Ultralytics device: cpu 또는 Jetson CUDA 0'),
+        DeclareLaunchArgument(
+            'wall_to_mouth_m', default_value='2.5',
+            description='마커 벽에서 입구까지의 수평 거리; 현장 실측 필요'),
+        DeclareLaunchArgument(
+            'dock_motion_enabled', default_value='false',
+            description='기본값 false; TF/오프셋/안전 검증 후에만 true'),
         *perception,
         *behaviors,
         *control,

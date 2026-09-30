@@ -1,113 +1,202 @@
-"""dock_mark_detector — 도킹 표식 인식 (YOLO 자리, 도킹 state 에서만 추론)
+"""Gated D455 YOLO26-seg detector and depth-based dock entrance estimator.
 
-입력   /camera/color/image_raw (sensor_msgs/Image)
-       /camera/depth/image_raw (sensor_msgs/Image)    — 거리 채움 (buoy_detector 와 동일)
-       /detector/enable (std_msgs/Bool, latched) — mission_manager 가 게이팅
-출력   /detections/dock_marks (kaboat_msgs/MarkArray)
-
-node_structure v5 의 dock_mark_detector. YOLO 추론(모양 3클래스: 원·삼각·
-사각)은 연산이 비싸서 **도킹 state 에서만 ON** 한다 — mission_manager 가
-state == 'dock' 일 때만 /detector/enable=true 를 latched 로 발행하고,
-이 노드는 disabled 동안 이미지 콜백을 즉시 리턴해 추론 비용을 0 으로 만든다.
-부표·게이트는 buoy_detector(HSV, 상시)가 따로 맡는다 — 이 분리가 v5 의 핵심.
-
-skeleton 구현 — 아직 YOLO 아님:
-  buoy_detector.hsv_blobs() 를 재사용한 색 블롭 placeholder.
-  shape 은 "unknown", distance 는 buoy_detector.distance_at() 재사용해
-  뎁스 이미지로 채움 (도킹 최종 접근 정렬에 거리가 중요해서 먼저 반영).
-
-TODO(팀): YOLOv8 추론으로 교체 —
-  1) 모양 3클래스(circle/triangle/square) 모델 로드 (ultralytics)
-  2) bbox 내부 HSV 로 색 확정 (v5: "색은 bbox 내부 HSV 확정")
-  3) enable=false 전환 시 모델을 GPU 에서 내리는(또는 유지하는) 정책 결정
+Inputs: aligned color/depth/camera_info and latched /detector/enable.
+Outputs: /detections/dock_marks, /dock/marker_base (3D),
+         /dock/entrance_base (boat-local z=0), /dock/detection_status.
+No entrance is published without valid depth, a stable marker plane, and TF.
 """
+
+import json
+import math
+from pathlib import Path
+
+import cv2
+import numpy as np
+if int(np.__version__.split('.')[0]) >= 2:
+    raise RuntimeError('ROS Humble cv_bridge requires a NumPy 1.x runtime; '
+                       'use a compatible ROS/YOLO environment')
 import rclpy
-from rclpy.node import Node
-from rclpy.qos import QoSProfile, DurabilityPolicy, qos_profile_sensor_data
-from sensor_msgs.msg import Image
-from std_msgs.msg import Bool
-
+from cv_bridge import CvBridge
+from geometry_msgs.msg import PointStamped
 from kaboat_msgs.msg import Mark, MarkArray
+from message_filters import ApproximateTimeSynchronizer, Subscriber
+from rclpy.duration import Duration
+from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile, qos_profile_sensor_data
+from sensor_msgs.msg import CameraInfo, Image
+from std_msgs.msg import Bool, String
+from tf2_geometry_msgs import do_transform_point
+from tf2_ros import Buffer, TransformException, TransformListener
 
-try:
-    from cv_bridge import CvBridge
-    from kaboat_perception.buoy_detector import hsv_blobs, CV_AVAILABLE
-    from kaboat_perception.depth_utils import depth_to_meters, distance_at
-except ImportError:
-    CV_AVAILABLE = False
+from .depth_utils import depth_to_meters
+from .dock_geometry import estimate_marker, project_entrance_xy
+from .dock_segmentation import CLASS_NAMES, CLASS_PARTS, DockSegmenter
 
 
 class DockMarkDetector(Node):
     def __init__(self):
         super().__init__('dock_mark_detector')
-
-        self.declare_parameter('hfov_rad', 1.5184)   # buoy_detector 와 동일 근거
-        self.hfov = float(self.get_parameter('hfov_rad').value)
-
+        for name, value in {
+            'weights': '', 'target_class': 'red_triangle', 'base_frame': 'base_link',
+            'wall_to_mouth_m': 2.5, 'confidence': 0.45, 'image_size': 640,
+            'device': 'cpu', 'min_depth_m': 0.25, 'max_depth_m': 12.0,
+            'min_mask_pixels': 40, 'min_valid_fraction': 0.5,
+            'max_plane_rms_m': 0.08, 'sync_slop_s': 0.08,
+        }.items():
+            self.declare_parameter(name, value)
+        self.weights = str(self.get_parameter('weights').value)
+        self.target_class = str(self.get_parameter('target_class').value)
+        if self.target_class not in CLASS_NAMES:
+            raise ValueError(f'target_class must be one of {CLASS_NAMES}')
+        self.base_frame = str(self.get_parameter('base_frame').value)
+        self.wall_to_mouth = float(self.get_parameter('wall_to_mouth_m').value)
+        if not math.isfinite(self.wall_to_mouth) or self.wall_to_mouth < 0:
+            raise ValueError('wall_to_mouth_m must be finite and non-negative')
         self.enabled = False
-        self.pub = self.create_publisher(MarkArray, '/detections/dock_marks', 10)
-
-        # mission_manager 가 latched 로 발행 — 이 노드가 늦게 떠도 최신 상태 수신
+        self.segmenter = None
+        self.model_error = ''
+        self.bridge = CvBridge()
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self)
+        self.marks_pub = self.create_publisher(MarkArray, '/detections/dock_marks', 10)
+        self.marker_pub = self.create_publisher(PointStamped, '/dock/marker_base', 10)
+        self.entrance_pub = self.create_publisher(PointStamped, '/dock/entrance_base', 10)
+        self.status_pub = self.create_publisher(String, '/dock/detection_status', 10)
         latched = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.create_subscription(Bool, '/detector/enable', self._on_enable, latched)
-
-        if not CV_AVAILABLE:
-            self.get_logger().error(
-                'cv2/cv_bridge 를 찾을 수 없습니다 — 인식 비활성.')
-            return
-
-        self.bridge = CvBridge()
-        self.depth = None   # buoy_detector 와 동일한 뎁스 프레임 캐시 패턴
-        self.create_subscription(
-            Image, '/camera/color/image_raw', self.on_image, qos_profile_sensor_data)
-        self.create_subscription(
-            Image, '/camera/depth/image_raw', self._on_depth, qos_profile_sensor_data)
-        self.get_logger().info(
-            'dock_mark_detector 대기 (YOLO placeholder=HSV) — '
-            '/detector/enable=true 인 동안만 추론 → /detections/dock_marks')
-
-    def _on_depth(self, msg: Image):
-        raw = self.bridge.imgmsg_to_cv2(msg, desired_encoding='passthrough')
-        try:
-            self.depth = depth_to_meters(raw, msg.encoding)
-        except ValueError as exc:
-            self.depth = None
-            self.get_logger().error(str(exc), throttle_duration_sec=5.0)
+        image = Subscriber(self, Image, '/camera/color/image_raw',
+                           qos_profile=qos_profile_sensor_data)
+        depth = Subscriber(self, Image, '/camera/depth/image_raw',
+                           qos_profile=qos_profile_sensor_data)
+        info = Subscriber(self, CameraInfo, '/camera/camera_info',
+                          qos_profile=qos_profile_sensor_data)
+        self.sync = ApproximateTimeSynchronizer(
+            [image, depth, info], queue_size=12,
+            slop=float(self.get_parameter('sync_slop_s').value))
+        self.sync.registerCallback(self.on_frame)
+        if not self.weights or not Path(self.weights).is_file():
+            self.get_logger().error('Dock YOLO weights unset or missing; detector fails closed.')
 
     def _on_enable(self, msg: Bool):
-        if msg.data != self.enabled:
-            self.get_logger().info(
-                f"추론 {'ON (도킹 state 진입)' if msg.data else 'OFF (도킹 state 이탈)'}")
-        self.enabled = msg.data
-        # TODO(팀): YOLO 교체 후 — ON 전환 시 모델 로드/워밍업, OFF 시 해제 정책
+        self.enabled = bool(msg.data)
+        if self.enabled and self.segmenter is None and not self.model_error:
+            try:
+                if not self.weights or not Path(self.weights).is_file():
+                    raise FileNotFoundError(self.weights or 'weights parameter unset')
+                self.segmenter = DockSegmenter(
+                    self.weights, float(self.get_parameter('confidence').value),
+                    int(self.get_parameter('image_size').value),
+                    str(self.get_parameter('device').value))
+                self.get_logger().info(f'Dock YOLO ready: {self.weights}')
+            except Exception as exc:
+                self.model_error = str(exc)
+                self.get_logger().error(f'Dock YOLO unavailable: {exc}')
 
-    def on_image(self, msg: Image):
+    def _status(self, valid: bool, reason: str, **extra):
+        msg = String()
+        msg.data = json.dumps({'valid': valid, 'reason': reason,
+                               'target_class': self.target_class, **extra})
+        self.status_pub.publish(msg)
+
+    @staticmethod
+    def _point(stamp, frame, xyz):
+        point = PointStamped()
+        point.header.stamp = stamp
+        point.header.frame_id = frame
+        point.point.x, point.point.y, point.point.z = map(float, xyz)
+        return point
+
+    def on_frame(self, rgb_msg: Image, depth_msg: Image, info_msg: CameraInfo):
         if not self.enabled:
-            return   # 게이팅 — disabled 동안 추론 비용 0
-
-        frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
-        width = frame.shape[1]
-        depth = self.depth
-        if depth is not None and depth.shape[:2] != frame.shape[:2]:
-            self.get_logger().error(
-                'RGB/depth 해상도가 다릅니다 — RGB에 정렬된 depth 토픽을 사용하세요 '
-                f'(RGB={frame.shape[:2]}, depth={depth.shape[:2]})',
-                throttle_duration_sec=5.0)
-            depth = None
-
-        out = MarkArray()
-        out.header = msg.header
-        # TODO(팀): 여기를 YOLO 추론으로 교체 (아래는 HSV placeholder)
-        for color, _cnt, area, cx, cy in hsv_blobs(frame):
-            bearing = -(cx - width / 2.0) / (width / 2.0) * (self.hfov / 2.0)
+            return
+        if self.segmenter is None:
+            self._status(False, 'model_unavailable', detail=self.model_error)
+            return
+        if (rgb_msg.width != depth_msg.width or rgb_msg.height != depth_msg.height
+                or (info_msg.width, info_msg.height) != (rgb_msg.width, rgb_msg.height)):
+            self._status(False, 'unaligned_rgb_depth_or_info')
+            return
+        fx, fy, cx, cy = map(float, (info_msg.k[0], info_msg.k[4],
+                                      info_msg.k[2], info_msg.k[5]))
+        if min(fx, fy) <= 0 or not all(map(math.isfinite, (fx, fy, cx, cy))):
+            self._status(False, 'invalid_intrinsics')
+            return
+        if (any(abs(value) > 0 for value in info_msg.d)
+                and info_msg.distortion_model not in ('plumb_bob', 'rational_polynomial')):
+            self._status(False, 'unsupported_distortion_model')
+            return
+        try:
+            rgb = self.bridge.imgmsg_to_cv2(rgb_msg, desired_encoding='bgr8')
+            raw_depth = self.bridge.imgmsg_to_cv2(depth_msg, desired_encoding='passthrough')
+            depth = depth_to_meters(raw_depth, depth_msg.encoding)
+            detections = self.segmenter.predict(rgb)
+        except (ValueError, cv2.error, RuntimeError) as exc:
+            self._status(False, 'image_or_inference_error', detail=str(exc))
+            return
+        marks = MarkArray()
+        marks.header = rgb_msg.header
+        estimates = {}
+        for detection in detections:
+            try:
+                estimate = estimate_marker(
+                    detection.mask, depth, fx, fy, cx, cy,
+                    min_depth=float(self.get_parameter('min_depth_m').value),
+                    max_depth=float(self.get_parameter('max_depth_m').value),
+                    min_pixels=int(self.get_parameter('min_mask_pixels').value),
+                    max_plane_rms=float(self.get_parameter('max_plane_rms_m').value),
+                    distortion=info_msg.d)
+            except (np.linalg.LinAlgError, cv2.error, ValueError) as exc:
+                self._status(False, 'marker_geometry_error', detail=str(exc))
+                return
+            if estimate is None or estimate.valid_fraction < float(
+                    self.get_parameter('min_valid_fraction').value):
+                continue
+            estimates[detection.class_name] = (detection, estimate)
             mark = Mark()
-            mark.color = color
-            mark.shape = 'unknown'   # TODO(팀): YOLO 모양 클래스 (circle/triangle/square)
-            mark.confidence = min(area / 5000.0, 1.0)
-            mark.bearing = float(bearing)
-            mark.distance = distance_at(depth, cx, cy)
-            out.marks.append(mark)
-        self.pub.publish(out)
+            mark.color, mark.shape = CLASS_PARTS[detection.class_name]
+            mark.confidence = detection.confidence
+            x, _, z = estimate.point_optical
+            mark.bearing = math.atan2(-x, z)
+            mark.distance = math.hypot(x, z)
+            marks.marks.append(mark)
+        self.marks_pub.publish(marks)
+        if self.target_class not in estimates:
+            self._status(False, 'target_missing_or_invalid_depth')
+            return
+        detection, estimate = estimates[self.target_class]
+        optical_frame = rgb_msg.header.frame_id
+        if not optical_frame:
+            self._status(False, 'missing_optical_frame')
+            return
+        stamp = rgb_msg.header.stamp
+        try:
+            transform = self.tf_buffer.lookup_transform(
+                self.base_frame, optical_frame, rclpy.time.Time.from_msg(stamp),
+                timeout=Duration(seconds=0.1))
+            marker_optical = self._point(stamp, optical_frame, estimate.point_optical)
+            tip_optical = self._point(
+                stamp, optical_frame,
+                estimate.point_optical + estimate.outward_normal_optical)
+            marker_base = do_transform_point(marker_optical, transform)
+            tip_base = do_transform_point(tip_optical, transform)
+        except TransformException as exc:
+            self._status(False, 'camera_to_base_tf_unavailable', detail=str(exc))
+            return
+        marker_xyz = np.array([marker_base.point.x, marker_base.point.y,
+                               marker_base.point.z])
+        normal_xyz = np.array([tip_base.point.x, tip_base.point.y,
+                               tip_base.point.z]) - marker_xyz
+        entrance_xyz = project_entrance_xy(
+            marker_xyz, normal_xyz, self.wall_to_mouth)
+        if entrance_xyz is None:
+            self._status(False, 'invalid_wall_normal_or_offset')
+            return
+        self.marker_pub.publish(marker_base)
+        self.entrance_pub.publish(self._point(stamp, self.base_frame, entrance_xyz))
+        self._status(True, 'ok', confidence=detection.confidence,
+                     depth_m=estimate.median_depth_m,
+                     valid_fraction=estimate.valid_fraction,
+                     plane_rms_m=estimate.plane_rms_m)
 
 
 def main(args=None):
