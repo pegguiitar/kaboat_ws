@@ -22,11 +22,14 @@ indoor_lidar_odom:
     max_gyro_bias_abs: 0.20
     max_imu_predict_dt: 0.20
     lidar_yaw_stddev_deg: 2.0         # /boat_pose covariance가 없을 때 기본값
-    lidar_yaw_gate_deg: 45.0          # 연속 LiDAR yaw 이상치 gate
+    lidar_yaw_gate_deg: 45.0          # IMU 예측 대비 LiDAR yaw 이상치 gate
+    lidar_yaw_correction_interval_sec: 3.0 # IMU 적분 yaw의 LiDAR 보정 주기 [s]
 
-    # 방향을 -X에 맞출 필요는 없다. 배를 정지시키면 gyro bias를 평균하고,
-    # 두 봉으로 계산한 현재 LiDAR yaw를 절대 기준으로 사용한다.
+    # 최초 앞뒤 분기를 확정하려면 선수를 -X(180도) 근처에 두고 정지 보정한다.
+    # 이후 방향 변화는 IMU가 유지하고 LiDAR는 180도 모호성을 제거해 보정한다.
     require_yaw_calibration: true
+    calibration_reference_yaw_deg: 180.0
+    calibration_reference_tolerance_deg: 45.0
     calibration_window_sec: 2.0
     calibration_min_duration_sec: 1.5
     calibration_min_samples: 30

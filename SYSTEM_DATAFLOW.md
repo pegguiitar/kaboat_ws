@@ -25,7 +25,7 @@
    │
    ▼
 [ indoor_lidar_odom 노드 ] ◄── /imu/data (50~100Hz) ── [ 선체 GQ7 IMU 센서 ]
-   (라이다 절대 X,Y,Yaw + IMU gyro-z/bias 2상태 EKF)
+   (라이다 절대 X,Y + IMU 연속 yaw, 3초 주기 LiDAR yaw/bias 보정 EKF)
    │
    ▼ 토픽: /odom (30Hz) & TF (odom -> base_link)
    │
@@ -76,7 +76,7 @@ flowchart TD
     subgraph JETSON ["배 내부 젯슨 (Jetson)"]
         subgraph SENSORS ["1. 오도메트리 융합부"]
             IMU_HW["선체 탑재 GQ7 IMU"] -->|"/imu/data"| OdomFusion
-            OdomFusion["indoor_lidar_odom<br/>• 위치: 라이다 X,Y<br/>• 자세: LiDAR yaw + IMU gyro EKF<br/>• gyro bias 동시 추정"]
+            OdomFusion["indoor_lidar_odom<br/>• 위치: 라이다 X,Y<br/>• 자세: IMU gyro 연속 yaw<br/>• 3초 주기 LiDAR yaw/bias 보정"]
         end
 
         OdomFusion ==>|"/odom (30Hz) & TF"| TestNodes
@@ -117,7 +117,7 @@ flowchart TD
 | **`ydlidar_ros2_driver_node`** | - | `/scan` (`LaserScan`) | - | TG-50 라이다 360° 원본 스캔 데이터 발행 (10Hz, 노트북 소유) |
 | **`lidar_boat_tracker`** | `/scan` | **`/boat_pose`** (`PoseWithCovarianceStamped`)<br>`/boat_position` (호환용)<br>`/lidar_tracker/markers` | - | 좌현 얇은 봉과 우현 두꺼운 봉을 구분하고 0.60m 장착 간격으로 X,Y,Yaw를 계산 (노트북 소유) |
 | **`microstrain_inertial_driver`** | - | `/imu/data` (`Imu`) | - | 선체 탑재 GQ7의 각속도 발행 (젯슨 소유) |
-| **`indoor_lidar_odom`** | `/boat_pose`<br>`/imu/data` | **`/odom`** (`Odometry`, 30Hz)<br>`/tf` (`odom -> base_link`) | `/calibrate_imu_yaw` | gyro로 yaw를 예측하고 LiDAR 절대 yaw로 보정하는 2상태 EKF. yaw와 gyro bias를 함께 추정 |
+| **`indoor_lidar_odom`** | `/boat_pose`<br>`/imu/data` | **`/odom`** (`Odometry`, 30Hz)<br>`/tf` (`odom -> base_link`) | `/calibrate_imu_yaw` | gyro로 연속 yaw를 예측하고 3초마다 LiDAR의 180° 두 후보 중 가까운 방향으로 yaw와 bias를 보정하는 2상태 EKF |
 | **`bspline_track_test`** | `/odom`<br>`/start_mission` (`Bool`)<br>`/emergency_stop` (`Bool`) | **`/cmd_vel`** (`Twist`, 직접 발행)<br>`/bspline_test/path` (`Path`)<br>`/bspline_test/markers` (`MarkerArray`) | `/start_test`<br>`/clear_trajectory` | Clamped B-Spline 곡선 생성 및 Lookahead 추종. **`cmd_mux` 없이 `/cmd_vel`로 직결** |
 | **`straight_line_test`** | `/odom`<br>`/start_mission` (`Bool`)<br>`/emergency_stop` (`Bool`) | **`/cmd_vel`** (`Twist`, 직접 발행)<br>`/straight_drive/markers` (`MarkerArray`) | `/start_test`<br>`/clear_trajectory` | $(9.0, 3.0) \to (1.0, 3.0)$ 8m 구간 직선 LOS 추종. **`cmd_mux` 없이 `/cmd_vel`로 직결** |
 | **`circle_drive_test`** | `/odom`<br>`/start_mission` (`Bool`)<br>`/emergency_stop` (`Bool`) | **`/cmd_vel`** (`Twist`, 직접 발행)<br>`/circle_drive/markers` (`MarkerArray`) | `/start_test`<br>`/clear_trajectory` | 중심점 기준 반경 1.2m 원 궤도 추종. **`cmd_mux` 없이 `/cmd_vel`로 직결** |

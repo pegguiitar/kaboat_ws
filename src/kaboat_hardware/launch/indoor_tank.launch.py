@@ -10,7 +10,7 @@
   2) 실내 수조 시험 (Indoor Tank Test):
      - `indoor_tank.launch.py`는 실내이므로 GQ7 EKF의 /odom remap을 비활성화합니다 (enable_odom_remap:=false).
      - 외부 라이다가 좌현 얇은 봉/우현 두꺼운 봉으로 절대 pose(/boat_pose)를 발행합니다.
-     - 배 내부의 indoor_lidar_odom EKF가 LiDAR yaw와 IMU gyro를 융합하여 /odom 및 TF를 발행합니다.
+     - 배 내부의 indoor_lidar_odom EKF가 IMU 연속 yaw를 3초마다 LiDAR yaw로 보정하여 /odom 및 TF를 발행합니다.
 
 사용법:
   # 1. 수조 외벽 노트북 (외부 라이다)

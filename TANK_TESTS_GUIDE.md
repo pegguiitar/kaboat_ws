@@ -89,8 +89,9 @@ ros2 launch kaboat_hardware indoor_tank.launch.py enable_thrusters:=false
 ### [Step 2-1] 매 실험 시작 전 IMU gyro bias 자동 보정
 
 `indoor_tank.launch.py`를 실행한 뒤, 외부 LiDAR에서 좌현의 얇은 봉과 우현의
-두꺼운 봉이 모두 보이는지 확인합니다. **배의 방향은 어느 쪽이어도 되지만 배를
-움직이거나 돌리지 않은 상태**에서 젯슨의 새 터미널에 다음 명령을 실행합니다.
+두꺼운 봉이 모두 보이는지 확인합니다. **선수를 수조 좌표계의 -X 방향(180°)에
+맞추고 배를 움직이거나 돌리지 않은 상태**에서 젯슨의 새 터미널에 다음 명령을
+실행합니다.
 
 ```bash
 # [선체 젯슨: 새 터미널]
@@ -104,11 +105,12 @@ ros2 run kaboat_hardware calibrate_indoor_imu
 ```
 
 최근 약 2초의 정지 자이로 값을 평균하여 Z축 bias를 초기화하고, 그 순간의
-LiDAR 선수-선미 방향을 절대 yaw로 사용합니다. 이후에는 IMU 각속도로 고속
-예측하고 LiDAR yaw로 누적 오차와 bias를 계속 보정합니다. 회전이 감지되면
-보정을 적용하지 않고 안정될 때까지 자동 재시도합니다. 성공 로그를 확인한
-뒤에만 모터 드라이버와 테스트 노드를 실행하십시오. `indoor_lidar_odom`이나
-GQ7을 다시 시작했다면 이 명령도 다시 실행합니다.
+LiDAR yaw의 두 후보 중 180°에 가까운 방향으로 최초 앞뒤를 확정합니다. 이후
+헤딩 변화는 IMU 각속도로 고속 예측하고, 3초마다 LiDAR yaw와 그 반대 방향 중
+IMU 예측에 가까운 후보로 누적 오차와 bias를 보정합니다. 회전이 감지되면 시작
+보정을 적용하지 않고 안정될 때까지 자동 재시도합니다. 성공 로그를 확인한 뒤에만
+모터 드라이버와 테스트 노드를 실행하십시오. `indoor_lidar_odom`이나 GQ7을 다시
+시작했다면 이 명령도 다시 실행합니다.
 
 ### [Step 3] 센서 및 오도메트리 토픽 점검 (Topic Checks)
 
@@ -203,7 +205,9 @@ ros2 service call /clear_trajectory std_srvs/srv/Trigger "{}"
   * `bspline_lookahead_target`: 청록색 구체 (현재 전방 주시점)
   * `goal_tolerance`: 노란색 원 (종점 허용오차 0.40m 반경)
   * `actual_trajectory`: 오렌지색 선 (배가 실제 지나온 주행 궤적)
-* **수조 라이다 배 pose**: `/boat_pose`, `/detections`, `/lidar_tracker/markers`
+* **최종 융합 헤딩**: `/odom` (주황색 화살표, IMU 연속 방향 + 3초 주기 LiDAR 보정)
+* **수조 라이다 원시 pose**: `/boat_pose`, `/detections`, `/lidar_tracker/markers`
+  * `/detections` 원시 yaw 화살표는 180° 모호성이 있어 RViz 기본값에서 비활성화
 * **라이다 스캔**: `/scan`, `/lidar_tracker/filtered_scan`
 
 ### 좌현/우현 봉 기본 장착 가정

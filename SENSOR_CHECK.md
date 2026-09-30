@@ -197,7 +197,8 @@ ros2 topic echo /imu/data --field angular_velocity.z
 
 GQ7의 GNSS fix가 실내에서 실패하는 것은 정상이다. 실내 융합 노드는 GQ7의
 절대 orientation 대신 `/imu/data.angular_velocity.z`를 사용하고, 외부 LiDAR가
-두 봉으로 계산한 `/boat_pose` yaw로 누적 오차와 gyro bias를 보정한다.
+두 봉으로 계산한 `/boat_pose` yaw의 180° 두 후보 중 IMU 예측에 가까운 방향으로
+3초마다 누적 오차와 gyro bias를 보정한다.
 
 ```bash
 ros2 topic echo /imu/data --once --field angular_velocity --qos-reliability best_effort
@@ -386,7 +387,7 @@ Map `/occupancy_grid` · LaserScan `/scan` · Odometry `/odom` 이 뜬다.
 
 ## 10. 실내 수조 모드 (외부 TG-50 라이다 + 선체 GQ7 IMU)
 
-실내에서는 GNSS 신호를 수신할 수 없으므로, 수조 외벽의 YDLIDAR TG-50이 좌현 얇은 봉과 우현 두꺼운 봉을 구분해 배의 절대 pose(`/boat_pose`)를 계산합니다. 선체 GQ7의 gyro-z와 2상태 EKF로 융합하여 `indoor_lidar_odom` 노드가 최종 `/odom` 및 TF(`odom -> base_link`)를 생성합니다. 기본 장착 가정은 두 봉 간격 0.60m, `base_link` 기준 좌현 얇은 봉 `(0,+0.30)m`, 우현 두꺼운 봉 `(0,-0.30)m`입니다.
+실내에서는 GNSS 신호를 수신할 수 없으므로, 수조 외벽의 YDLIDAR TG-50이 좌현 얇은 봉과 우현 두꺼운 봉으로 배의 pose(`/boat_pose`)를 계산합니다. 봉 구분이 뒤집혀 생기는 180° yaw 모호성은 `indoor_lidar_odom`이 IMU gyro 예측과 비교해 제거하고, 3초마다 LiDAR yaw로 보정하여 최종 `/odom` 및 TF(`odom -> base_link`)를 생성합니다. 기본 장착 가정은 두 봉 간격 0.60m, `base_link` 기준 좌현 얇은 봉 `(0,+0.30)m`, 우현 두꺼운 봉 `(0,-0.30)m`입니다.
 
 ### 10.1 실행 (2대 기기 분담)
 
@@ -422,6 +423,7 @@ ros2 run tf2_ros tf2_echo odom base_link
 | 로그 | 뜻 |
 |---|---|
 | `[indoor_lidar_odom] LiDAR yaw + IMU gyro EKF 시작` | 정상 시작 |
+| `IMU 기준으로 정렬한 LiDAR yaw innovation이 gate를 넘어...` | IMU 예측과 가장 가까운 LiDAR 후보도 45° 이상 차이 나 보정 거부 |
 | `LiDAR pose 유실` | 두 봉 pose 미수신(1.0s 초과)으로 `/odom` 발행 중단 (**의도된 안전 동작**) |
 | `IMU gyro 유실` | IMU 미수신(0.5s 초과)으로 `/odom` 발행 중단 (**의도된 안전 동작**) |
 

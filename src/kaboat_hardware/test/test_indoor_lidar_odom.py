@@ -8,7 +8,8 @@ from sensor_msgs.msg import Imu
 from std_srvs.srv import Trigger
 
 from kaboat_hardware.indoor_lidar_odom import (
-    IndoorLidarOdom, _quat_from_yaw, _yaw_from_quat,
+    IndoorLidarOdom, _quat_from_yaw, _resolve_pi_ambiguous_yaw,
+    _yaw_from_quat,
 )
 from kaboat_hardware.pose_velocity import normalize_angle
 
@@ -38,6 +39,24 @@ def test_quaternion_yaw_conversion():
         recovered = _yaw_from_quat(_quat_from_yaw(angle))
         assert math.isclose(
             normalize_angle(angle - recovered), 0.0, abs_tol=1e-6)
+
+
+def test_resolve_pi_ambiguous_yaw_follows_imu_reference():
+    raw_lidar_yaw = math.radians(2.0)
+    imu_reference = math.radians(-179.0)
+
+    resolved = _resolve_pi_ambiguous_yaw(raw_lidar_yaw, imu_reference)
+
+    assert abs(normalize_angle(resolved - math.radians(-178.0))) < 1e-9
+
+
+def test_resolve_pi_ambiguous_yaw_keeps_matching_branch():
+    raw_lidar_yaw = math.radians(178.0)
+    imu_reference = math.radians(179.0)
+
+    resolved = _resolve_pi_ambiguous_yaw(raw_lidar_yaw, imu_reference)
+
+    assert abs(normalize_angle(resolved - raw_lidar_yaw)) < 1e-9
 
 
 class TestIndoorLidarOdomSafety(unittest.TestCase):
@@ -104,6 +123,59 @@ class TestIndoorLidarOdomSafety(unittest.TestCase):
         self.node._on_lidar_pose(msg)
         self.assertIsNone(self.node.last_pose_receive_time)
 
+    def test_lidar_180_flip_is_aligned_to_imu_heading(self):
+        expected_yaw = math.radians(178.0)
+        self.node.yaw_filter.initialize(
+            expected_yaw, math.radians(2.0) ** 2)
+        self.node.yaw_calibrated = True
+        self.node.last_lidar_yaw_correction_time = (
+            time.monotonic()
+            - self.node.lidar_yaw_correction_interval - 0.1)
+
+        self.node._on_lidar_pose(_pose(yaw=math.radians(-2.0)))
+
+        error = normalize_angle(self.node.yaw_filter.yaw - expected_yaw)
+        self.assertAlmostEqual(error, 0.0, places=6)
+        self.assertAlmostEqual(
+            normalize_angle(
+                self.node.last_aligned_lidar_yaw - expected_yaw),
+            0.0, places=6)
+
+    def test_lidar_yaw_correction_waits_for_configured_interval(self):
+        initial_yaw = math.radians(10.0)
+        self.node.yaw_filter.initialize(
+            initial_yaw, math.radians(2.0) ** 2)
+        self.node.yaw_calibrated = True
+        self.node.last_lidar_yaw_correction_time = time.monotonic()
+
+        self.node._on_lidar_pose(_pose(yaw=0.0))
+
+        self.assertAlmostEqual(
+            normalize_angle(self.node.yaw_filter.yaw - initial_yaw),
+            0.0, places=6)
+
+        self.node.last_lidar_yaw_correction_time = (
+            time.monotonic()
+            - self.node.lidar_yaw_correction_interval - 0.1)
+        self.node._on_lidar_pose(_pose(yaw=0.0))
+
+        self.assertLess(abs(self.node.yaw_filter.yaw), abs(initial_yaw))
+
+    def test_stale_lidar_reacquisition_does_not_reset_imu_yaw(self):
+        imu_yaw = math.radians(35.0)
+        self.node.yaw_filter.initialize(imu_yaw, math.radians(2.0) ** 2)
+        self.node.yaw_calibrated = True
+        self.node.last_pose_receive_time = (
+            time.monotonic() - self.node.pos_timeout - 0.1)
+        self.node.last_lidar_yaw_correction_time = time.monotonic()
+
+        self.node._on_lidar_pose(_pose(yaw=normalize_angle(
+            imu_yaw + math.pi)))
+
+        self.assertAlmostEqual(
+            normalize_angle(self.node.yaw_filter.yaw - imu_yaw),
+            0.0, places=6)
+
     def test_calibration_estimates_bias_and_uses_lidar_yaw(self):
         lidar_yaw = 2.4
         self.node._on_lidar_pose(_pose(yaw=lidar_yaw))
@@ -141,3 +213,38 @@ class TestIndoorLidarOdomSafety(unittest.TestCase):
 
         self.assertFalse(response.success)
         self.assertIn('회전 감지', response.message)
+
+    def test_calibration_uses_180_degree_branch_at_start(self):
+        self.node._on_lidar_pose(_pose(yaw=0.0))
+        now = time.monotonic()
+        duration = self.node.calibration_min_duration_sec + 0.01
+        sample_count = self.node.calibration_min_samples + 1
+        self.node._gyro_samples.clear()
+        for index in range(sample_count):
+            stamp = now - duration + index * duration / (sample_count - 1)
+            self.node._gyro_samples.append((stamp, 0.0))
+        self.node.last_imu_receive_time = now
+
+        response = self.node._on_calibrate_imu_yaw(
+            Trigger.Request(), Trigger.Response())
+
+        self.assertTrue(response.success, response.message)
+        self.assertAlmostEqual(
+            abs(self.node.yaw_filter.yaw), math.pi, places=6)
+
+    def test_calibration_rejects_heading_far_from_180_degree_reference(self):
+        self.node._on_lidar_pose(_pose(yaw=math.pi / 2.0))
+        now = time.monotonic()
+        duration = self.node.calibration_min_duration_sec + 0.01
+        sample_count = self.node.calibration_min_samples + 1
+        self.node._gyro_samples.clear()
+        for index in range(sample_count):
+            stamp = now - duration + index * duration / (sample_count - 1)
+            self.node._gyro_samples.append((stamp, 0.0))
+        self.node.last_imu_receive_time = now
+
+        response = self.node._on_calibrate_imu_yaw(
+            Trigger.Request(), Trigger.Response())
+
+        self.assertFalse(response.success)
+        self.assertIn('선수를 -X 방향', response.message)

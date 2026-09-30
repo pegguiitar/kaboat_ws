@@ -335,8 +335,9 @@ class LidarBoatTracker(Node):
             self.tf_broadcaster.sendTransform(tf_boat)
 
         self.get_logger().info(
-            f'📍 LiDAR 선체 pose: ({x:.3f}, {y:.3f})m, '
-            f'yaw={math.degrees(yaw):.1f}°, σyaw={math.degrees(yaw_stddev):.1f}°',
+            f'📍 LiDAR 원시 pose: ({x:.3f}, {y:.3f})m, '
+            f'yaw={math.degrees(yaw):.1f}° (±180° 모호), '
+            f'σyaw={math.degrees(yaw_stddev):.1f}°',
             throttle_duration_sec=1.0)
 
     def _broadcast_static_tf(self):
@@ -406,24 +407,10 @@ class LidarBoatTracker(Node):
                 Point(x=float(pair.thin.center[0]), y=float(pair.thin.center[1]))]
             markers.markers.append(baseline)
 
-            heading = Marker()
-            heading.header = baseline.header
-            heading.ns = 'boat_heading_lidar'
-            heading.id = 4
-            heading.type = Marker.ARROW
-            heading.action = Marker.ADD
-            heading.scale.x, heading.scale.y, heading.scale.z = 0.05, 0.12, 0.14
-            heading.color.r, heading.color.g, heading.color.b, heading.color.a = 0.1, 1.0, 0.1, 1.0
-            heading.points = [
-                Point(x=x, y=y),
-                Point(x=x + 0.75 * math.cos(pair.yaw),
-                      y=y + 0.75 * math.sin(pair.yaw))]
-            markers.markers.append(heading)
-
             center = Marker()
             center.header = baseline.header
             center.ns = 'boat_pose_lidar'
-            center.id = 5
+            center.id = 4
             center.type = Marker.SPHERE
             center.action = Marker.ADD
             center.pose.position.x = x
@@ -436,15 +423,13 @@ class LidarBoatTracker(Node):
             label = Marker()
             label.header = baseline.header
             label.ns = 'boat_pose_label'
-            label.id = 6
+            label.id = 5
             label.type = Marker.TEXT_VIEW_FACING
             label.action = Marker.ADD
             label.pose.position.x = x
             label.pose.position.y = y
             label.pose.position.z = 0.45
-            label.text = (
-                f'Boat ({x:.2f}, {y:.2f}) '
-                f'yaw {math.degrees(pair.yaw):.1f}°')
+            label.text = f'LiDAR position ({x:.2f}, {y:.2f})'
             label.scale.z = 0.22
             label.color.r = label.color.g = label.color.b = label.color.a = 1.0
             markers.markers.append(label)

@@ -1,8 +1,9 @@
-"""외부 LiDAR 절대 pose와 선체 IMU gyro를 융합해 실내 `/odom`을 발행한다.
+"""외부 LiDAR 위치와 선체 IMU gyro를 융합해 실내 `/odom`을 발행한다.
 
-LiDAR는 좌현 얇은 봉/우현 두꺼운 봉으로부터 x, y, 절대 yaw를 제공한다.
-2상태 EKF는 IMU gyro-z로 yaw를 고속 예측하고 LiDAR yaw로 보정하면서 gyro
-bias까지 추정한다. GQ7 quaternion yaw는 절대 heading으로 사용하지 않는다.
+IMU gyro-z 적분값이 연속적인 yaw와 회전 방향을 유지한다. LiDAR 두 봉의 구분이
+뒤집혀도 180도 점프하지 않도록 LiDAR yaw와 그 반대 방향 중 IMU 예측값에 가까운
+쪽을 선택하고, 정해진 주기마다 절대 yaw와 gyro bias를 보정한다. GQ7 quaternion
+yaw는 절대 heading으로 사용하지 않는다.
 """
 
 import math
@@ -43,6 +44,15 @@ def _stamp_sec(stamp) -> float:
     return stamp.sec + stamp.nanosec * 1e-9
 
 
+def _resolve_pi_ambiguous_yaw(measured_yaw: float, reference_yaw: float) -> float:
+    """두 봉 순서가 뒤집힌 yaw를 reference에 가장 가까운 방향으로 정렬한다."""
+    first = normalize_angle(float(measured_yaw))
+    opposite = normalize_angle(first + math.pi)
+    first_error = abs(normalize_angle(first - reference_yaw))
+    opposite_error = abs(normalize_angle(opposite - reference_yaw))
+    return first if first_error <= opposite_error else opposite
+
+
 class IndoorLidarOdom(Node):
     def __init__(self):
         super().__init__('indoor_lidar_odom')
@@ -67,9 +77,12 @@ class IndoorLidarOdom(Node):
         self.declare_parameter('max_imu_predict_dt', 0.20)
         self.declare_parameter('lidar_yaw_stddev_deg', 2.0)
         self.declare_parameter('lidar_yaw_gate_deg', 45.0)
+        self.declare_parameter('lidar_yaw_correction_interval_sec', 3.0)
 
-        # 선택적 시작 정지 보정: 방향 정렬은 필요 없고 gyro bias만 초기화한다.
+        # 자이로만으로는 최초 앞뒤를 알 수 없으므로 시작 때 -X 근처에서 분기를 확정한다.
         self.declare_parameter('require_yaw_calibration', False)
+        self.declare_parameter('calibration_reference_yaw_deg', 180.0)
+        self.declare_parameter('calibration_reference_tolerance_deg', 45.0)
         self.declare_parameter('calibration_window_sec', 2.0)
         self.declare_parameter('calibration_min_duration_sec', 1.5)
         self.declare_parameter('calibration_min_samples', 30)
@@ -96,6 +109,8 @@ class IndoorLidarOdom(Node):
             self.get_parameter('lidar_yaw_stddev_deg').value)) ** 2
         self.lidar_yaw_gate = math.radians(float(
             self.get_parameter('lidar_yaw_gate_deg').value))
+        self.lidar_yaw_correction_interval = max(0.0, float(
+            self.get_parameter('lidar_yaw_correction_interval_sec').value))
 
         initial_bias = float(self.get_parameter('gyro_bias_z').value)
         self.yaw_filter = YawBiasEkf(
@@ -112,6 +127,10 @@ class IndoorLidarOdom(Node):
         self.require_yaw_calibration = bool(
             self.get_parameter('require_yaw_calibration').value)
         self.yaw_calibrated = not self.require_yaw_calibration
+        self.calibration_reference_yaw = math.radians(float(
+            self.get_parameter('calibration_reference_yaw_deg').value))
+        self.calibration_reference_tolerance = math.radians(max(0.0, float(
+            self.get_parameter('calibration_reference_tolerance_deg').value)))
         self.calibration_window_sec = max(0.1, float(
             self.get_parameter('calibration_window_sec').value))
         self.calibration_min_duration_sec = max(0.0, float(
@@ -133,7 +152,9 @@ class IndoorLidarOdom(Node):
         self.last_pose_x = 0.0
         self.last_pose_y = 0.0
         self.last_lidar_yaw: Optional[float] = None
+        self.last_aligned_lidar_yaw: Optional[float] = None
         self.last_lidar_yaw_variance = self.default_lidar_yaw_variance
+        self.last_lidar_yaw_correction_time: Optional[float] = None
         default_position_variance = float(
             self.get_parameter('pose_stddev_xy').value) ** 2
         self.position_variance_x = default_position_variance
@@ -167,6 +188,8 @@ class IndoorLidarOdom(Node):
             f"   - LiDAR pose: '{self.pose_topic}'\n"
             f"   - IMU gyro: '{self.imu_topic}'\n"
             f'   - 초기 gyro bias: {initial_bias:.5f} rad/s\n'
+            f'   - LiDAR yaw 보정 주기: '
+            f'{self.lidar_yaw_correction_interval:.2f}s\n'
             f'   - 시작 정지 보정 필수: {self.require_yaw_calibration}\n'
             f"   - 발행: /odom, TF '{self.odom_frame}' -> '{self.base_frame}'")
 
@@ -195,13 +218,29 @@ class IndoorLidarOdom(Node):
 
         if not self.yaw_filter.initialized:
             self.yaw_filter.initialize(lidar_yaw, yaw_variance)
-        elif was_stale:
-            self.yaw_filter.reset_yaw(lidar_yaw, yaw_variance)
-        elif not self.yaw_filter.update_yaw(
-                lidar_yaw, yaw_variance, self.lidar_yaw_gate):
-            self.get_logger().warn(
-                'LiDAR yaw innovation이 gate를 넘어 yaw 갱신을 거부했습니다.',
-                throttle_duration_sec=2.0)
+            if self.yaw_calibrated:
+                self.last_aligned_lidar_yaw = lidar_yaw
+                self.last_lidar_yaw_correction_time = now
+        elif self.yaw_calibrated:
+            aligned_lidar_yaw = _resolve_pi_ambiguous_yaw(
+                lidar_yaw, self.yaw_filter.yaw)
+            correction_due = (
+                self.last_lidar_yaw_correction_time is None
+                or now - self.last_lidar_yaw_correction_time
+                >= self.lidar_yaw_correction_interval)
+            if correction_due:
+                self.last_lidar_yaw_correction_time = now
+                if self.yaw_filter.update_yaw(
+                        aligned_lidar_yaw, yaw_variance,
+                        self.lidar_yaw_gate):
+                    self.last_aligned_lidar_yaw = aligned_lidar_yaw
+                else:
+                    innovation_deg = math.degrees(normalize_angle(
+                        aligned_lidar_yaw - self.yaw_filter.yaw))
+                    self.get_logger().warn(
+                        'IMU 기준으로 정렬한 LiDAR yaw innovation이 gate를 '
+                        f'넘어 갱신을 거부했습니다 ({innovation_deg:.1f}°).',
+                        throttle_duration_sec=2.0)
 
         source_stamp = _stamp_sec(msg.header.stamp)
         self.last_pose_stamp = source_stamp if source_stamp > 0.0 else now
@@ -285,16 +324,30 @@ class IndoorLidarOdom(Node):
 
         sample_variance = sum(
             (rate - mean_bias) ** 2 for rate in rates) / max(1, len(rates) - 1)
+        aligned_lidar_yaw = _resolve_pi_ambiguous_yaw(
+            self.last_lidar_yaw, self.calibration_reference_yaw)
+        reference_error = abs(normalize_angle(
+            aligned_lidar_yaw - self.calibration_reference_yaw))
+        if reference_error > self.calibration_reference_tolerance:
+            response.success = False
+            response.message = (
+                '초기 방향 확인 실패: 선수를 -X 방향(180°)에 맞추세요. '
+                f'가까운 LiDAR 후보 오차 {math.degrees(reference_error):.1f}° '
+                f'(허용 {math.degrees(self.calibration_reference_tolerance):.1f}°).')
+            return response
+
         self.yaw_filter.set_bias(
             mean_bias, variance=max(sample_variance / len(rates), 1e-8))
         self.yaw_filter.reset_yaw(
-            self.last_lidar_yaw, self.last_lidar_yaw_variance)
+            aligned_lidar_yaw, self.last_lidar_yaw_variance)
         self.yaw_calibrated = True
+        self.last_aligned_lidar_yaw = aligned_lidar_yaw
+        self.last_lidar_yaw_correction_time = now
         self.estimator.reset()
         response.success = True
         response.message = (
             f'gyro bias 보정 완료: {mean_bias:.5f} rad/s, '
-            f'LiDAR yaw {math.degrees(self.last_lidar_yaw):.2f}°로 정렬')
+            f'LiDAR yaw {math.degrees(aligned_lidar_yaw):.2f}°로 정렬')
         self.get_logger().info(response.message)
         return response
 

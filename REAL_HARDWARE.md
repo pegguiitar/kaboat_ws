@@ -159,7 +159,7 @@ ros2 topic echo /odom --once
 ### 기기별 역할 분담 (Ownership)
 
 * **수조 외벽 노트북**: 고정 YDLIDAR TG-50과 `lidar_boat_tracker`를 실행합니다. 추적기는 좌현 얇은 봉과 우현 두꺼운 봉을 구분하고, 기본 0.60m 장착 간격으로 배의 절대 X,Y,Yaw(`/boat_pose`, 약 10Hz)를 계산합니다.
-* **선체 젯슨 (Jetson)**: GQ7 드라이버와 `indoor_lidar_odom`을 실행합니다. IMU gyro-z로 yaw를 고속 예측하고 LiDAR 절대 yaw로 드리프트와 gyro bias를 보정하는 2상태 EKF가 `/odom` 및 TF(`odom -> base_link`)를 30Hz로 발행합니다.
+* **선체 젯슨 (Jetson)**: GQ7 드라이버와 `indoor_lidar_odom`을 실행합니다. IMU gyro-z로 연속 yaw를 고속 예측하고 3초마다 LiDAR의 180° 두 후보 중 가까운 방향으로 드리프트와 gyro bias를 보정하는 2상태 EKF가 `/odom` 및 TF(`odom -> base_link`)를 30Hz로 발행합니다.
 
 포트 이름은 실행 전에 확인합니다. LiDAR launch는 `port`를 생략하면
 `/dev/ttyUSB*` 중 첫 장치를 기본값으로 고르지만, 여러 USB 장치가 있으면
@@ -180,7 +180,7 @@ ros2 launch kaboat_hardware indoor_tank.launch.py enable_thrusters:=false
 | `/odom` 필드 | 출처 | 이유 |
 |---|---|---|
 | `pose.position` | **외부 TG-50 라이다** (`/boat_pose`) | 두 봉의 절대 좌표와 장착 좌표로 `base_link` 위치 계산 |
-| `pose.orientation` | **LiDAR + GQ7 EKF** | LiDAR 두 봉의 절대 yaw를 기준으로 IMU gyro 적분값과 bias를 지속 보정 |
+| `pose.orientation` | **GQ7 gyro + LiDAR EKF** | IMU 적분값이 방향 연속성을 유지하고 3초마다 LiDAR의 가까운 180° 후보로 yaw와 bias 보정 |
 | `twist.angular.z` | **GQ7 자이로 + 추정 bias** | `yaw_rate_sign * angular_velocity.z - EKF gyro_bias` |
 | `twist.linear.x/y` | 위치 미분 추정 (`VelocityEstimator`) | 0.15초 윈도우 및 지수이동평균(EMA) 필터링으로 미분 노이즈 억제 |
 
