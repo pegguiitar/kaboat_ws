@@ -2,6 +2,13 @@
 
 수조 외벽 노트북에는 **고정 TG-50**, 배 위 젯슨에는 **GQ7과 모터 제어기**를 연결합니다. 선체 TG-50을 장착하지 않으면 젯슨 라이다는 기본값으로 꺼집니다. 두 기기는 같은 네트워크에 연결하고 `ROS_DOMAIN_ID=42`를 사용합니다.
 
+고정 TG-50의 기본 위치는 수조 절대좌표 `(10.0, 2.5)m`(오른쪽 벽 중앙)이며,
+스캔 0° 방향이 `-X`를 바라보도록 장착합니다. 좌표와 각도는
+[`lidar_tracker.yaml`](src/kaboat_hardware/config/lidar_tracker.yaml)에서 설정합니다.
+배에는 좌우 두 봉을 잇는 길이 0.60m의 횡단 판을 부착하고, 그 중점이
+`base_link` 원점과 일치해야 합니다. 추적기는 판의 선분 기울기와 중점으로
+`/boat_pose`를 계산합니다.
+
 `/dev/ttyUSB0` 같은 번호는 연결 순서에 따라 바뀔 수 있습니다. 각 기기에서 포트를 확인해 입력합니다. 장치가 고유한 USB 식별자를 제공한다면 `/dev/serial/by-id/...` 경로를 우선 사용하세요. 이 경로가 없으면 `/dev/serial/by-path/...` 또는 현재의 `/dev/ttyUSB*`를 확인해 입력합니다.
 
 ## 1. 수조 외벽 노트북: 라이다와 배 위치 추적
@@ -28,6 +35,21 @@ ros2 launch kaboat_hardware lidar_boat_tracker.launch.py port:="$LIDAR_PORT" ena
 ```
 
 이 터미널은 켜 둡니다. 고정 라이다는 `/shore/scan`, 배 위치 추적기는 `/boat_pose`를 발행합니다.
+라이다를 옮긴 뒤에는 기존 추적기 프로세스를 종료하고 이 명령으로 다시 실행해야 새 설치 좌표가 적용됩니다.
+
+**호스트의 그래픽 데스크톱 터미널 2** — RViz 창을 별도로 엽니다. 컨테이너의
+root 사용자에게 X11 화면 접근을 허용해야 합니다. SSH 터미널이 아닌 노트북
+화면에서 실행합니다.
+
+```bash
+xhost +si:localuser:root
+docker exec -it -e DISPLAY="$DISPLAY" kaboat_lidar bash -lc \
+  'source /workspace/kaboat_ws/install/setup.bash && ros2 run rviz2 rviz2 -d /workspace/kaboat_ws/install/kaboat_bringup/share/kaboat_bringup/rviz/tank_tracking.rviz'
+```
+
+RViz를 닫은 뒤 화면 접근 권한을 해제하려면 호스트에서
+`xhost -si:localuser:root`를 실행합니다. 자세한 GUI 오류 점검은
+[LIDAR_DOCKER.md](LIDAR_DOCKER.md)의 "RViz 창 열기"를 참고하세요.
 
 ## 2. 젯슨: 센서와 오도메트리
 
@@ -61,12 +83,14 @@ ros2 launch kaboat_hardware indoor_tank.launch.py enable_thrusters:=false
 ls -l /dev/serial/by-id/ /dev/serial/by-path/ /dev/ttyUSB* 2>/dev/null
 printf '선체 TG-50 포트 경로: '
 read -r ONBOARD_LIDAR_PORT
-ros2 launch kaboat_hardware indoor_tank.launch.py enable_thrusters:=false enable_onboard_lidar:=true onboard_lidar_port:="$ONBOARD_LIDAR_PORT"
+ros2 launch kaboat_hardware indoor_tank.launch.py enable_thrusters:=false enable_onboard_lidar:=false onboard_lidar_port:="$ONBOARD_LIDAR_PORT"
 ```
 
 ## 3. 젯슨: IMU 보정과 모터·테스트 시작
 
-선수를 수조 좌표계의 **-X 방향(180°)**으로 두고 배를 움직이지 마세요. 외벽 라이다에 좌현·우현 봉이 모두 보여야 합니다.
+선수를 수조 좌표계의 **-X 방향(180°)**으로 두고 배를 움직이지 마세요.
+외벽 라이다에 횡단 판이 충분한 길이의 한 선분으로 보여야 합니다. 판만으로는
+선수 앞뒤를 구분할 수 없어, 이 자세에서 IMU 초기 보정으로 방향을 확정합니다.
 
 **젯슨 터미널 2** — 위의 젯슨 새 터미널 준비 명령을 실행한 뒤 IMU 보정:
 
@@ -80,10 +104,7 @@ ros2 topic hz /odom
 **젯슨 터미널 3** — 새 터미널 준비 명령을 실행한 뒤 모터 제어기 시작. 포트를 **모터 제어기 장치**로 바꾸세요.
 
 ```bash
-ls -l /dev/serial/by-id/ /dev/serial/by-path/ /dev/ttyUSB* /dev/ttyACM* 2>/dev/null
-printf '모터 제어기 포트 경로: '
-read -r THRUSTER_PORT
-ros2 launch kaboat_hardware thrusters.launch.py hardware_type:=serial port:="$THRUSTER_PORT"
+ros2 launch kaboat_hardware thrusters.launch.py hardware_type:=serial port:=/dev/ttyUSB0 allow_port_scan:=false
 ```
 
 **젯슨 터미널 4** — 새 터미널 준비 명령을 실행한 뒤 B-Spline 주행 노드 시작. 출발 명령 전까지 대기합니다.

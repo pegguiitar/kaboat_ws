@@ -1,6 +1,6 @@
 """실내 수조 시험 시작 전 정지 gyro bias를 계산하고 LiDAR yaw로 정렬한다.
 
-먼저 LiDAR 두 봉 추적과 indoor_tank.launch.py를 실행하고 선수를 수조 -X
+먼저 LiDAR 횡단 판 추적과 indoor_tank.launch.py를 실행하고 선수를 수조 -X
 방향(180도)에 맞춰 움직이지 않게 고정한 뒤 호출한다. 실제 보정 계산과 적용은
 indoor_lidar_odom 노드가 담당하며, 이 클라이언트는 충분한 정지 표본이 모일
 때까지 서비스를 반복 호출한다.

@@ -158,7 +158,7 @@ ros2 topic echo /odom --once
 
 ### 기기별 역할 분담 (Ownership)
 
-* **수조 외벽 노트북**: 고정 YDLIDAR TG-50이 `/shore/scan`을 발행하고 `lidar_boat_tracker`가 이를 구독합니다. 추적기는 좌현 얇은 봉과 우현 두꺼운 봉을 구분하고, 기본 0.60m 장착 간격으로 배의 절대 X,Y,Yaw(`/boat_pose`, 약 10Hz)를 계산합니다.
+* **수조 외벽 노트북**: 오른쪽 벽 중앙 `(10.0, 2.5)m`에서 수조 안쪽 `-X`를 향한 고정 YDLIDAR TG-50이 `/shore/scan`을 발행하고 `lidar_boat_tracker`가 이를 구독합니다. 추적기는 좌우 봉을 잇는 길이 0.60m 횡단 판의 선분 중점과 기울기로 배 위치와 180° 모호한 yaw(`/boat_pose`)를 계산합니다.
 * **선체 젯슨 (Jetson)**: GQ7 드라이버와 `indoor_lidar_odom`이 `/odom` 및 TF를 발행합니다. 추가 TG-50을 연결하면 0.40m 이내 반사를 제거한 `/scan`을 발행합니다. 선체 `/scan`과 외벽 `/shore/scan`은 섞이지 않습니다.
 
 포트 이름은 실행 전에 확인합니다. LiDAR launch는 `port`를 생략하면
@@ -169,7 +169,8 @@ ros2 topic echo /odom --once
 ```bash
 # 1. 수조 외벽 노트북 (외부 고정 라이다 드라이버 + 추적기 + RViz2)
 ls -l /dev/serial/by-id/ /dev/ttyUSB* 2>/dev/null
-ros2 launch kaboat_hardware lidar_boat_tracker.launch.py port:=/dev/ttyUSB0
+ros2 launch kaboat_hardware lidar_boat_tracker.launch.py \
+  port:=/dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0
 
 # 2. 배 (Jetson — GQ7 + indoor_lidar_odom, 선체 TG-50 미장착, 모터 비활성화)
 ros2 launch kaboat_hardware indoor_tank.launch.py enable_thrusters:=false
@@ -181,8 +182,8 @@ ros2 launch kaboat_hardware indoor_tank.launch.py \
   onboard_lidar_port:=/dev/serial/by-id/<선체-TG-50-장치명>
 
 # 외벽 TG-50 확인. 아래 /scan은 선체 TG-50 장착 시에만 확인
-ros2 topic hz /shore/scan --qos-reliability best_effort
-ros2 topic hz /scan --qos-reliability best_effort
+ros2 topic hz /shore/scan
+ros2 topic hz /scan
 ```
 
 선체 TG-50의 0.40m 컷오프는 센서 원점 기준이다. 실제 선체 부품이
@@ -195,9 +196,9 @@ ros2 topic hz /scan --qos-reliability best_effort
 
 | `/odom` 필드 | 출처 | 이유 |
 |---|---|---|
-| `pose.position` | **외부 TG-50 라이다** (`/boat_pose`) | 두 봉의 절대 좌표와 장착 좌표로 `base_link` 위치 계산 |
-| `pose.orientation` | **GQ7 gyro + LiDAR EKF** | IMU 적분값이 방향 연속성을 유지하고 3초마다 LiDAR의 가까운 180° 후보로 yaw와 bias 보정 |
-| `twist.angular.z` | **GQ7 자이로 + 추정 bias** | `yaw_rate_sign * angular_velocity.z - EKF gyro_bias` |
+| `pose.position` | **외부 TG-50 라이다** (`/boat_pose`) | 횡단 판 선분의 중점으로 `base_link` 위치 계산 |
+| `pose.orientation` | **외부 TG-50 라이다** (`/boat_pose`) | 판 기울기의 두 yaw 후보 중 IMU gyro가 추적한 방향에 가까운 쪽 선택 |
+| `twist.angular.z` | **외부 TG-50 라이다** | 연속 판 yaw 차분값을 EMA로 완화 |
 | `twist.linear.x/y` | 위치 미분 추정 (`VelocityEstimator`) | 0.15초 윈도우 및 지수이동평균(EMA) 필터링으로 미분 노이즈 억제 |
 
 속도 노이즈는 5mm 검출 오차 기준 실측(`test_pose_velocity.py`)으로

@@ -96,16 +96,31 @@ class TestIndoorLidarOdomSafety(unittest.TestCase):
         self.assertAlmostEqual(_yaw_from_quat(odom.pose.pose.orientation), 1.1)
         self.assertGreater(odom.pose.covariance[35], 0.0)
 
-    def test_stale_imu_stops_odom(self):
+    def test_odom_angular_rate_comes_from_panel_not_imu(self):
+        self.node._on_lidar_pose(_pose(yaw=0.0))
+        self.node._on_imu(_imu(yaw_rate=0.8))
+        self.node._tick()
+        self.assertAlmostEqual(
+            self.published[-1].twist.twist.angular.z, 0.0)
+
+        self.node.last_lidar_yaw_correction_time = time.monotonic() - 0.1
+        self.node._on_lidar_pose(_pose(yaw=0.1))
+        self.node._tick()
+        self.assertGreater(
+            self.published[-1].twist.twist.angular.z, 0.1)
+
+    def test_stale_imu_keeps_lidar_odom_and_previous_branch(self):
         self.node._on_lidar_pose(_pose())
         self.node._on_imu(_imu())
         self.node._tick()
         self.node.last_imu_receive_time = (
             time.monotonic() - self.node.imu_timeout - 0.1)
         self.node._tick()
-        self.assertEqual(len(self.published), 1)
+        self.assertEqual(len(self.published), 2)
+        self.assertAlmostEqual(
+            _yaw_from_quat(self.published[-1].pose.pose.orientation), 0.0)
 
-    def test_stale_lidar_continues_odom_and_corrects_on_reacquisition(self):
+    def test_stale_lidar_stops_odom_until_reacquisition(self):
         transforms = []
         self.node.publish_tf = True
         self.node.tf_broadcaster.sendTransform = transforms.append
@@ -114,28 +129,19 @@ class TestIndoorLidarOdomSafety(unittest.TestCase):
         self.node._tick()
         old_correction_time = time.monotonic() - 3.2
         self.node.last_lidar_yaw_correction_time = old_correction_time
-        self.node.vx_body = 0.5
-        self.node.last_position_predict_time = time.monotonic() - 2.0
         self.node.last_pose_receive_time = (
             time.monotonic() - 3.2)
         self.node._tick()
         self.node._tick()
-        self.assertEqual(len(self.published), 3)
-        self.assertEqual(len(transforms), 3)
-        self.assertGreater(self.published[-1].pose.pose.position.x, 5.9)
-        self.assertAlmostEqual(
-            transforms[-1].transform.translation.x,
-            self.published[-1].pose.pose.position.x)
-        self.assertGreater(
-            self.published[-1].pose.covariance[0],
-            self.published[0].pose.covariance[0])
+        self.assertEqual(len(self.published), 1)
+        self.assertEqual(len(transforms), 1)
         self.assertEqual(
             self.node.last_lidar_yaw_correction_time, old_correction_time)
 
         self.node._on_lidar_pose(_pose(x=6.2, yaw=0.2))
         self.node._tick()
-        self.assertEqual(len(self.published), 4)
-        self.assertEqual(len(transforms), 4)
+        self.assertEqual(len(self.published), 2)
+        self.assertEqual(len(transforms), 2)
         self.assertAlmostEqual(
             self.published[-1].pose.pose.position.x, 6.2, places=2)
         self.assertGreater(
@@ -171,9 +177,6 @@ class TestIndoorLidarOdomSafety(unittest.TestCase):
         self.node.yaw_filter.initialize(
             expected_yaw, math.radians(2.0) ** 2)
         self.node.yaw_calibrated = True
-        self.node.last_lidar_yaw_correction_time = (
-            time.monotonic()
-            - self.node.lidar_yaw_correction_interval - 0.1)
 
         self.node._on_lidar_pose(_pose(yaw=math.radians(-2.0)))
 
@@ -184,7 +187,7 @@ class TestIndoorLidarOdomSafety(unittest.TestCase):
                 self.node.last_aligned_lidar_yaw - expected_yaw),
             0.0, places=6)
 
-    def test_lidar_yaw_correction_waits_for_configured_interval(self):
+    def test_each_lidar_panel_measurement_sets_odom_heading(self):
         initial_yaw = math.radians(10.0)
         self.node.yaw_filter.initialize(
             initial_yaw, math.radians(2.0) ** 2)
@@ -192,17 +195,20 @@ class TestIndoorLidarOdomSafety(unittest.TestCase):
         self.node.last_lidar_yaw_correction_time = time.monotonic()
 
         self.node._on_lidar_pose(_pose(yaw=0.0))
-
         self.assertAlmostEqual(
-            normalize_angle(self.node.yaw_filter.yaw - initial_yaw),
-            0.0, places=6)
+            self.node.yaw_filter.yaw, 0.0, places=6)
 
-        self.node.last_lidar_yaw_correction_time = (
-            time.monotonic()
-            - self.node.lidar_yaw_correction_interval - 0.1)
-        self.node._on_lidar_pose(_pose(yaw=0.0))
+        measured_yaw = math.radians(12.0)
+        self.node._on_lidar_pose(_pose(x=6.0, yaw=measured_yaw))
+        self.node._on_imu(_imu(yaw_rate=0.0))
+        self.node._tick()
 
-        self.assertLess(abs(self.node.yaw_filter.yaw), abs(initial_yaw))
+        self.assertAlmostEqual(self.node.yaw_filter.yaw, measured_yaw, places=6)
+        self.assertAlmostEqual(
+            self.published[-1].pose.pose.position.x, 6.0, places=6)
+        self.assertAlmostEqual(
+            _yaw_from_quat(self.published[-1].pose.pose.orientation),
+            measured_yaw, places=6)
 
     def test_stale_lidar_reacquisition_does_not_reset_imu_yaw(self):
         imu_yaw = math.radians(35.0)

@@ -1,51 +1,38 @@
 # 실내 수조 고정 라이다 배 위치 추적 파라미터
 # 수조: 좌하단 원점 (0,0), 가로 X: 10m (0~10m), 세로 Y: 5m (0~5m)
-# 라이다: (5.0, 0.0) 하단 변 정중앙에서 위쪽(+Y) 수조 안쪽을 향해 스캔
+# 라이다: (10.0, 2.5) 오른쪽 벽 중앙에서 왼쪽(-X) 수조 안쪽을 향해 스캔
 lidar_boat_tracker:
   ros__parameters:
     # ── 라이다 설치 좌표 (수조 좌하단 원점 0,0 기준) ───────────────
-    lidar_pos_x: 5.0          # [m] 수조 하단 변(10m) 정중앙 (5.0, 0.0)
-    lidar_pos_y: 0.0          # [m] 하단 벽면
-    lidar_yaw_deg: 90.0       # [deg] 라이다 전방이 수조 위쪽(+Y)을 향함
+    lidar_pos_x: 10.0         # [m] 수조 오른쪽 벽
+    lidar_pos_y: 2.5          # [m] 오른쪽 벽 중앙
+    lidar_yaw_deg: 180.0      # [deg] 라이다 전방이 수조 왼쪽(-X)을 향함
 
     # ── 수조 규격 및 유효 ROI 필터 (가로 X: 10m, 세로 Y: 5m) ────────
     pool_size_x: 10.0         # [m] 수조 가로 길이 (오른쪽 방향 +X, 0~10m)
     pool_size_y: 5.0          # [m] 수조 세로 폭 (위쪽 주황색 화살표 방향 +Y, 0~5m)
     wall_margin: 0.18         # [m] 벽면 제거 마진 (수조 4면 벽면 노이즈 제거)
 
-    # ── 좌현/우현 봉 클러스터링 ────────────────────────────────
-    cluster_dist_tol: 0.25    # [m] 인접 포인트 군집화 거리
-    min_cluster_pts: 2        # 기둥 최소 반사 포인트 수
-    max_cluster_pts: 80       # 기둥 최대 반사 포인트 수
-    min_target_diameter: 0.02 # [m] 기둥 최소 직경 (2cm)
-    max_target_diameter: 0.45 # [m] 기둥 최대 직경 (45cm)
-
-    # 좌현(+Y)은 얇은 봉, 우현(-Y)은 두꺼운 봉이다. 실제 제작 직경을 측정한 뒤
-    # 두 구간이 겹치지 않도록 반드시 현장에서 조정한다.
-    thin_min_diameter: 0.02   # [m] 좌현 얇은 봉 검출 최소 폭
-    thin_max_diameter: 0.10   # [m] 좌현 얇은 봉 검출 최대 폭
-    thick_min_diameter: 0.12  # [m] 우현 두꺼운 봉 검출 최소 폭
-    thick_max_diameter: 0.30  # [m] 우현 두꺼운 봉 검출 최대 폭
-    marker_separation_tolerance: 0.12 # [m] 설정 간격 0.60m 대비 허용 오차
+    # ── 두 봉을 잇는 횡단 판(중점 = base_link) ────────────────
+    cluster_dist_tol: 0.15       # [m] 연속 스캔 점 사이 최대 거리
+    panel_span: 0.60             # [m] 실제 판의 수평 길이
+    panel_min_visible_span: 0.35 # [m] 이보다 짧으면 위치 중점이 불확실하여 거부
+    panel_max_visible_span: 0.80 # [m] 봉 끝 반사 등을 포함할 수 있는 상한
+    panel_min_points: 6          # 직선 맞춤에 필요한 최소 점 수
+    panel_max_line_rms: 0.03     # [m] 직선에서 벗어난 점의 RMS 허용치
     max_position_jump: 0.75   # [m/scan] 연속 검출 위치 이상치 제한
     max_yaw_jump_deg: 60.0    # [deg/scan] 연속 검출 yaw 이상치 제한
-
-    # base_link(+X 선수, +Y 좌현) 기준 실제 장착 좌표. 중점 기준 0.60m 간격.
-    thin_marker_body_x: 0.0
-    thin_marker_body_y: 0.30
-    thick_marker_body_x: 0.0
-    thick_marker_body_y: -0.30
 
     # ── EMA 노이즈 필터 계수 (0 < alpha <= 1.0) ─────────────────
     pos_ema_alpha: 0.45       # 위치 EMA 계수 (작을수록 부드러움)
     vel_ema_alpha: 0.30       # 속도 EMA 계수
     position_stddev: 0.03     # [m] LiDAR 중심 위치 표준편차
-    marker_point_stddev: 0.02 # [m] 각 봉 중심 검출 표준편차
+    panel_point_stddev: 0.02  # [m] 판 점 위치 표준편차
     min_yaw_stddev_deg: 1.0   # [deg] 발행 yaw 공분산 하한
 
     # ── 좌표계 프레임 및 발행 옵션 ───────────────────────────────
     odom_frame: "odom"
     base_frame: "base_link"
-    laser_frame: "laser_frame"
+    laser_frame: "shore_laser_frame"
     publish_odom: false       # 실내 GPS 역할이므로 odom 발행 비활성 (배 내부 indoor_lidar_odom 사용)
     publish_tf: false         # odom->base_link TF 발행 비활성

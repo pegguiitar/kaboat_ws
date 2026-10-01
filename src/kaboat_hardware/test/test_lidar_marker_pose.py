@@ -3,7 +3,8 @@ import math
 import numpy as np
 
 from kaboat_hardware.lidar_marker_pose import (
-    MarkerCandidate, estimate_base_pose, select_marker_pair,
+    MarkerCandidate, estimate_base_pose, laser_points_to_pool,
+    select_marker_pair,
 )
 from kaboat_hardware.pose_velocity import normalize_angle
 
@@ -14,6 +15,14 @@ THICK_BODY = np.array([0.0, -0.3])
 
 def _candidate(x, y, diameter):
     return MarkerCandidate(np.array([x, y], dtype=float), diameter, 5)
+
+
+def test_right_wall_laser_points_into_pool_coordinates():
+    points = laser_points_to_pool(
+        ranges=[5.0, math.hypot(5.0, 1.0)],
+        angles=[0.0, -math.atan2(1.0, 5.0)],
+        lidar_x=10.0, lidar_y=2.5, lidar_yaw=math.pi)
+    np.testing.assert_allclose(points, [[5.0, 2.5], [5.0, 3.5]], atol=1e-12)
 
 
 def test_estimate_base_pose_for_axis_aligned_markers():

@@ -26,6 +26,17 @@ class MarkerPairResult:
     separation: float
 
 
+def laser_points_to_pool(ranges, angles, lidar_x, lidar_y, lidar_yaw):
+    """레이저 극좌표를 수조 절대좌표로 변환한다 (각도는 rad)."""
+    ranges = np.asarray(ranges, dtype=float)
+    angles = np.asarray(angles, dtype=float)
+    world_angles = angles + lidar_yaw
+    return np.column_stack((
+        lidar_x + ranges * np.cos(world_angles),
+        lidar_y + ranges * np.sin(world_angles),
+    ))
+
+
 def estimate_base_pose(
     thin_world: Sequence[float],
     thick_world: Sequence[float],

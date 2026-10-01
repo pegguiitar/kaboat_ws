@@ -45,7 +45,7 @@ def generate_launch_description():
             'enable_rviz', default_value='true',
             description='RViz2 시각화 자동 실행 여부 (true/false)'),
 
-        LogInfo(msg=f'[LIDAR BOAT TRACKER] 수조 (5.0m, 0.0m) 고정 TG50 라이다 (포트: {default_port}) 배 위치 추적 시작...'),
+        LogInfo(msg=f'[LIDAR BOAT TRACKER] 고정 TG50 라이다 (포트: {default_port}) 배 위치 추적 시작. 설치 좌표와 방향은 추적기 파라미터를 확인하세요.'),
 
         # 1. 외벽 TG-50은 /shore/scan 발행 (선체 /scan과 분리)
         Node(
@@ -62,7 +62,7 @@ def generate_launch_description():
             condition=IfCondition(launch_driver),
         ),
 
-        # 2. 두 봉으로 배 pose 추적 (/boat_pose, 호환용 /boat_position 발행)
+        # 2. 횡단 판 선분으로 배 pose 추적 (/boat_pose, 호환용 /boat_position 발행)
         Node(
             package='kaboat_hardware',
             executable='lidar_boat_tracker',

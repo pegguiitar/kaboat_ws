@@ -1,7 +1,7 @@
-"""LiDAR 절대 yaw와 IMU gyro-z를 융합하는 2상태 EKF.
+"""판 선분의 180° 방향 분기를 고르기 위한 내부 gyro 예측 EKF.
 
-상태는 [yaw, gyro_bias]이다. IMU 각속도로 고속 예측하고 LiDAR 표식 yaw로
-보정하므로, 절대 heading과 자이로 바이어스를 함께 추정할 수 있다.
+상태는 [yaw, gyro_bias]이다. IMU 각속도로 다음 선분의 방향을 예측한다.
+/odom yaw 자체는 이 예측값이 아닌, 선택된 LiDAR 판 yaw를 사용한다.
 """
 
 import math

@@ -1,18 +1,17 @@
-# 실내 수조 시험 설정 — 외부 LiDAR 절대 pose + 선체 GQ7 gyro EKF → /odom
+# 실내 수조 시험 설정 — 외부 LiDAR 판 위치·yaw + 선체 GQ7 gyro 방향 선택 → /odom
 
 indoor_lidar_odom:
   ros__parameters:
     odom_frame: odom
     base_frame: base_link
-    pose_topic: "/boat_pose"          # 좌현 얇은 봉/우현 두꺼운 봉으로 계산한 x, y, 절대 yaw
+    pose_topic: "/boat_pose"          # 횡단 판 선분으로 계산한 x, y, 180° 모호한 yaw
     imu_topic: "/imu/data"            # 선체 GQ7 IMU
     publish_tf: true                  # odom -> base_link TF 발행
 
     # ── 타이밍 및 타임아웃 ─────────────────────────────
     publish_rate: 30.0                # /odom 발행 주기 [Hz]
-    pos_timeout_sec: 1.0              # 라이다 위치 유실 경고 기준 [s] (초과해도 /odom 추정 발행)
-    pos_dead_reckoning_stddev_mps: 0.2 # 라이다 유실 중 위치 불확실성 증가율 [m/s]
-    imu_timeout_sec: 0.5              # IMU 수신 타임아웃 [s] (초과 시 /odom 중단)
+    pos_timeout_sec: 1.0              # 라이다 pose 유실 시 /odom 발행 중단 기준 [s]
+    imu_timeout_sec: 0.5              # IMU 분기 예측 사용 가능 시간 [s]
 
     # ── LiDAR yaw + IMU gyro bias EKF ────────────────────
     yaw_rate_sign: -1.0               # GQ7 실측 부호 반전: 반시계 +, 시계 - (ROS REP-103)
@@ -24,10 +23,10 @@ indoor_lidar_odom:
     max_imu_predict_dt: 0.20
     lidar_yaw_stddev_deg: 2.0         # /boat_pose covariance가 없을 때 기본값
     lidar_yaw_gate_deg: 45.0          # IMU 예측 대비 LiDAR yaw 이상치 gate
-    lidar_yaw_correction_interval_sec: 3.0 # IMU 적분 yaw의 LiDAR 보정 주기 [s]
+    # 유효한 횡단 판 yaw는 매 스캔 /odom 헤딩에 반영한다.
 
     # 최초 앞뒤 분기를 확정하려면 선수를 -X(180도) 근처에 두고 정지 보정한다.
-    # 이후 방향 변화는 IMU가 유지하고 LiDAR는 180도 모호성을 제거해 보정한다.
+    # 이후 LiDAR 판 기울기가 헤딩을 결정하고 IMU는 180도 분기를 선택한다.
     require_yaw_calibration: true
     calibration_reference_yaw_deg: 180.0
     calibration_reference_tolerance_deg: 45.0
@@ -41,6 +40,7 @@ indoor_lidar_odom:
     vel_window_sec: 0.15
     vel_filter_tau: 0.15
     vel_max_speed: 3.0
+    yaw_rate_ema_alpha: 0.30          # 판 yaw 차분 각속도 EMA (twist.angular.z)
 
     # ── 공분산 ─────────────────────────────────────────
     pose_stddev_xy: 0.03
