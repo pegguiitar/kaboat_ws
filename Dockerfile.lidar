@@ -1,0 +1,33 @@
+FROM osrf/ros:humble-desktop-full
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# The pool laptop runs the TG-50 driver and boat tracker; Gazebo is not needed.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    git \
+    python3-colcon-common-extensions \
+    python3-numpy \
+    python3-scipy \
+    python3-yaml \
+    && rm -rf /var/lib/apt/lists/*
+
+# The checked-in ydlidar_ros2_driver requires this separate C++ SDK.
+ARG YDLIDAR_SDK_COMMIT=42a82ed10d2304094c111fc63dee8e4a229b79b7
+RUN git init /tmp/YDLidar-SDK \
+    && git -C /tmp/YDLidar-SDK remote add origin https://github.com/YDLIDAR/YDLidar-SDK.git \
+    && git -C /tmp/YDLidar-SDK fetch --depth 1 origin "${YDLIDAR_SDK_COMMIT}" \
+    && git -C /tmp/YDLidar-SDK checkout --detach FETCH_HEAD \
+    && cmake -S /tmp/YDLidar-SDK -B /tmp/YDLidar-SDK/build \
+        -DBUILD_SHARED_LIBS=ON -DBUILD_EXAMPLES=OFF -DBUILD_TEST=OFF \
+    && cmake --build /tmp/YDLidar-SDK/build --parallel 2 \
+    && cmake --install /tmp/YDLidar-SDK/build \
+    && ldconfig \
+    && rm -rf /tmp/YDLidar-SDK
+
+WORKDIR /workspace/kaboat_ws
+RUN echo 'source /opt/ros/humble/setup.bash' >> /root/.bashrc \
+    && echo 'if [ -f /workspace/kaboat_ws/install/setup.bash ]; then source /workspace/kaboat_ws/install/setup.bash; fi' >> /root/.bashrc
+
+CMD ["sleep", "infinity"]

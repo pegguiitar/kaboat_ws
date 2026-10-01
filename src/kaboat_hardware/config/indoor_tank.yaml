@@ -10,7 +10,8 @@ indoor_lidar_odom:
 
     # ── 타이밍 및 타임아웃 ─────────────────────────────
     publish_rate: 30.0                # /odom 발행 주기 [Hz]
-    pos_timeout_sec: 1.0              # 라이다 위치 수신 타임아웃 [s] (초과 시 /odom 중단)
+    pos_timeout_sec: 1.0              # 라이다 위치 유실 경고 기준 [s] (초과해도 /odom 추정 발행)
+    pos_dead_reckoning_stddev_mps: 0.2 # 라이다 유실 중 위치 불확실성 증가율 [m/s]
     imu_timeout_sec: 0.5              # IMU 수신 타임아웃 [s] (초과 시 /odom 중단)
 
     # ── LiDAR yaw + IMU gyro bias EKF ────────────────────

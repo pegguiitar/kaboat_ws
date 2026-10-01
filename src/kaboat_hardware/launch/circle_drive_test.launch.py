@@ -29,6 +29,9 @@ def generate_launch_description():
         'kd_yaw', default_value='0.15', description='요레이트 D 게인')
     k_converge_arg = DeclareLaunchArgument(
         'k_converge', default_value='1.5', description='원 궤도 진입 수렴 게인')
+    curvature_slowdown_arg = DeclareLaunchArgument(
+        'curvature_slowdown', default_value='0.25',
+        description='곡률 기반 전진 감속 가중치 (0이면 감속 비활성화)')
     odom_timeout_arg = DeclareLaunchArgument(
         'odom_timeout_sec', default_value='0.5', description='오도메트리 미수신 안전 정지 타임아웃 [초]')
     wait_for_start_arg = DeclareLaunchArgument(
@@ -51,6 +54,7 @@ def generate_launch_description():
             'kp_yaw': LaunchConfiguration('kp_yaw'),
             'kd_yaw': LaunchConfiguration('kd_yaw'),
             'k_converge': LaunchConfiguration('k_converge'),
+            'curvature_slowdown': LaunchConfiguration('curvature_slowdown'),
             'odom_timeout_sec': LaunchConfiguration('odom_timeout_sec'),
             'wait_for_start': LaunchConfiguration('wait_for_start'),
             'use_sim_time': False,
@@ -68,6 +72,7 @@ def generate_launch_description():
         kp_yaw_arg,
         kd_yaw_arg,
         k_converge_arg,
+        curvature_slowdown_arg,
         odom_timeout_arg,
         wait_for_start_arg,
         LogInfo(msg='[CircleDriveTest] 실내 수조 원형 선회 주행 테스트 노드 시작 중...'),

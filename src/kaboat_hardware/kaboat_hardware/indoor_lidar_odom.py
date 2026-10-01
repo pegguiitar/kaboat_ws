@@ -3,7 +3,9 @@
 IMU gyro-z 적분값이 연속적인 yaw와 회전 방향을 유지한다. LiDAR 두 봉의 구분이
 뒤집혀도 180도 점프하지 않도록 LiDAR yaw와 그 반대 방향 중 IMU 예측값에 가까운
 쪽을 선택하고, 정해진 주기마다 절대 yaw와 gyro bias를 보정한다. GQ7 quaternion
-yaw는 절대 heading으로 사용하지 않는다.
+yaw는 절대 heading으로 사용하지 않는다. LiDAR pose가 잠시 끊기면 마지막
+위치·속도와 IMU heading으로 /odom 및 TF를 계속 추정하고, 다음 유효한
+LiDAR pose가 오면 위치를 다시 맞춘다.
 """
 
 import math
@@ -64,6 +66,7 @@ class IndoorLidarOdom(Node):
         self.declare_parameter('publish_tf', True)
 
         self.declare_parameter('pos_timeout_sec', 1.0)
+        self.declare_parameter('pos_dead_reckoning_stddev_mps', 0.2)
         self.declare_parameter('imu_timeout_sec', 0.5)
         self.declare_parameter('publish_rate', 30.0)
         self.declare_parameter('yaw_rate_sign', 1.0)
@@ -101,6 +104,8 @@ class IndoorLidarOdom(Node):
         self.imu_topic = str(self.get_parameter('imu_topic').value)
         self.publish_tf = bool(self.get_parameter('publish_tf').value)
         self.pos_timeout = float(self.get_parameter('pos_timeout_sec').value)
+        self.pos_dead_reckoning_stddev_mps = max(0.0, float(
+            self.get_parameter('pos_dead_reckoning_stddev_mps').value))
         self.imu_timeout = float(self.get_parameter('imu_timeout_sec').value)
         self.yaw_rate_sign = float(self.get_parameter('yaw_rate_sign').value)
         self.max_predict_dt = float(
@@ -151,6 +156,9 @@ class IndoorLidarOdom(Node):
         self.last_pose_receive_time: Optional[float] = None
         self.last_pose_x = 0.0
         self.last_pose_y = 0.0
+        self.estimated_x = 0.0
+        self.estimated_y = 0.0
+        self.last_position_predict_time: Optional[float] = None
         self.last_lidar_yaw: Optional[float] = None
         self.last_aligned_lidar_yaw: Optional[float] = None
         self.last_lidar_yaw_variance = self.default_lidar_yaw_variance
@@ -229,10 +237,10 @@ class IndoorLidarOdom(Node):
                 or now - self.last_lidar_yaw_correction_time
                 >= self.lidar_yaw_correction_interval)
             if correction_due:
-                self.last_lidar_yaw_correction_time = now
                 if self.yaw_filter.update_yaw(
                         aligned_lidar_yaw, yaw_variance,
                         self.lidar_yaw_gate):
+                    self.last_lidar_yaw_correction_time = now
                     self.last_aligned_lidar_yaw = aligned_lidar_yaw
                 else:
                     innovation_deg = math.degrees(normalize_angle(
@@ -247,6 +255,9 @@ class IndoorLidarOdom(Node):
         self.last_pose_receive_time = now
         self.last_pose_x = x
         self.last_pose_y = y
+        self.estimated_x = x
+        self.estimated_y = y
+        self.last_position_predict_time = now
         self.last_lidar_yaw = lidar_yaw
         self.last_lidar_yaw_variance = yaw_variance
         covariance_x = float(msg.pose.covariance[0])
@@ -359,11 +370,10 @@ class IndoorLidarOdom(Node):
         if pose_age > self.pos_timeout:
             if self._pose_ok:
                 self.get_logger().warn(
-                    f'LiDAR pose 유실 ({pose_age:.2f}s) — /odom 발행 중단',
+                    f'LiDAR pose 유실 ({pose_age:.2f}s) — '
+                    'IMU 헤딩과 마지막 속도로 /odom 추정 발행',
                     throttle_duration_sec=2.0)
                 self._pose_ok = False
-                self.estimator.reset()
-            return
 
         if self.last_imu_receive_time is None:
             return
@@ -375,6 +385,8 @@ class IndoorLidarOdom(Node):
                     throttle_duration_sec=2.0)
                 self._imu_ok = False
                 self.estimator.reset()
+                self.vx_body = self.vy_body = 0.0
+                self.last_position_predict_time = now
             return
 
         if not self.yaw_filter.initialized:
@@ -386,18 +398,32 @@ class IndoorLidarOdom(Node):
                 throttle_duration_sec=5.0)
             return
 
-        if not self._pose_ok or not self._imu_ok:
-            self._pose_ok = True
+        if not self._imu_ok:
             self._imu_ok = True
+        if not self._pose_ok and pose_age <= self.pos_timeout:
+            self._pose_ok = True
             self.get_logger().info(
                 '✅ LiDAR pose와 IMU gyro 정상 — EKF /odom 발행')
 
         yaw = self.yaw_filter.yaw
         yaw_rate = self.latest_raw_yaw_rate - self.yaw_filter.bias
+        if self.last_position_predict_time is not None:
+            dt = max(0.0, now - self.last_position_predict_time)
+            c, s = math.cos(yaw), math.sin(yaw)
+            self.estimated_x += (c * self.vx_body - s * self.vy_body) * dt
+            self.estimated_y += (s * self.vx_body + c * self.vy_body) * dt
+        self.last_position_predict_time = now
+
+        # 절대 위치가 없는 동안에는 추정 오차가 커진다. LiDAR 재획득 시
+        # _on_lidar_pose()가 측정 위치와 공분산으로 즉시 되돌린다.
+        position_drift_variance = (
+            self.pos_dead_reckoning_stddev_mps * pose_age) ** 2
         stamp = self.get_clock().now().to_msg()
         odom = self._build_odometry(
-            stamp, self.last_pose_x, self.last_pose_y, yaw,
+            stamp, self.estimated_x, self.estimated_y, yaw,
             self.vx_body, self.vy_body, yaw_rate)
+        odom.pose.covariance[0] += position_drift_variance
+        odom.pose.covariance[7] += position_drift_variance
         self.odom_pub.publish(odom)
 
         if self.publish_tf:
@@ -405,8 +431,8 @@ class IndoorLidarOdom(Node):
             transform.header.stamp = stamp
             transform.header.frame_id = self.odom_frame
             transform.child_frame_id = self.base_frame
-            transform.transform.translation.x = self.last_pose_x
-            transform.transform.translation.y = self.last_pose_y
+            transform.transform.translation.x = self.estimated_x
+            transform.transform.translation.y = self.estimated_y
             transform.transform.rotation = _quat_from_yaw(yaw)
             self.tf_broadcaster.sendTransform(transform)
 

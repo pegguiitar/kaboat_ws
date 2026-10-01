@@ -158,8 +158,8 @@ ros2 topic echo /odom --once
 
 ### 기기별 역할 분담 (Ownership)
 
-* **수조 외벽 노트북**: 고정 YDLIDAR TG-50과 `lidar_boat_tracker`를 실행합니다. 추적기는 좌현 얇은 봉과 우현 두꺼운 봉을 구분하고, 기본 0.60m 장착 간격으로 배의 절대 X,Y,Yaw(`/boat_pose`, 약 10Hz)를 계산합니다.
-* **선체 젯슨 (Jetson)**: GQ7 드라이버와 `indoor_lidar_odom`을 실행합니다. IMU gyro-z로 연속 yaw를 고속 예측하고 3초마다 LiDAR의 180° 두 후보 중 가까운 방향으로 드리프트와 gyro bias를 보정하는 2상태 EKF가 `/odom` 및 TF(`odom -> base_link`)를 30Hz로 발행합니다.
+* **수조 외벽 노트북**: 고정 YDLIDAR TG-50이 `/shore/scan`을 발행하고 `lidar_boat_tracker`가 이를 구독합니다. 추적기는 좌현 얇은 봉과 우현 두꺼운 봉을 구분하고, 기본 0.60m 장착 간격으로 배의 절대 X,Y,Yaw(`/boat_pose`, 약 10Hz)를 계산합니다.
+* **선체 젯슨 (Jetson)**: GQ7 드라이버와 `indoor_lidar_odom`이 `/odom` 및 TF를 발행합니다. 추가 TG-50을 연결하면 0.40m 이내 반사를 제거한 `/scan`을 발행합니다. 선체 `/scan`과 외벽 `/shore/scan`은 섞이지 않습니다.
 
 포트 이름은 실행 전에 확인합니다. LiDAR launch는 `port`를 생략하면
 `/dev/ttyUSB*` 중 첫 장치를 기본값으로 고르지만, 여러 USB 장치가 있으면
@@ -171,9 +171,25 @@ ros2 topic echo /odom --once
 ls -l /dev/serial/by-id/ /dev/ttyUSB* 2>/dev/null
 ros2 launch kaboat_hardware lidar_boat_tracker.launch.py port:=/dev/ttyUSB0
 
-# 2. 배 (Jetson — GQ7 드라이버 + indoor_lidar_odom 실행, 모터는 기본 비활성화)
+# 2. 배 (Jetson — GQ7 + indoor_lidar_odom, 선체 TG-50 미장착, 모터 비활성화)
 ros2 launch kaboat_hardware indoor_tank.launch.py enable_thrusters:=false
+
+# 선체 TG-50 장착 시에는 위 명령 대신 아래 명령 실행
+# onboard_lidar_port는 Jetson에서 확인한 실제 TG-50 포트로 교체
+ros2 launch kaboat_hardware indoor_tank.launch.py \
+  enable_thrusters:=false enable_onboard_lidar:=true \
+  onboard_lidar_port:=/dev/serial/by-id/<선체-TG-50-장치명>
+
+# 외벽 TG-50 확인. 아래 /scan은 선체 TG-50 장착 시에만 확인
+ros2 topic hz /shore/scan --qos-reliability best_effort
+ros2 topic hz /scan --qos-reliability best_effort
 ```
+
+선체 TG-50의 0.40m 컷오프는 센서 원점 기준이다. 실제 선체 부품이
+0.40m보다 멀리 보이면 장착 위치를 확인하고
+[`tg50_onboard.yaml`](src/kaboat_hardware/config/tg50_onboard.yaml)의
+`range_min`을 현장 측정값에 맞춘다. 선체 라이다의 `onboard_laser_frame`에서
+`base_link`까지의 장착 변환도 별도로 실측해야 한다.
 
 필드별로 센서의 장점을 취하여 융합합니다:
 

@@ -73,6 +73,7 @@ class CircleDriveTest(Node):
         self.declare_parameter('kp_yaw', 1.5)            # 헤딩 비례(P) 게인
         self.declare_parameter('kd_yaw', 0.15)           # 요레이트 감쇠(D) 게인
         self.declare_parameter('k_converge', 1.5)        # 궤도 진입 수렴 게인
+        self.declare_parameter('curvature_slowdown', 0.25)  # 곡률 기반 전진 감속 가중치
 
         # ── 안전 파라미터 ─────────────────────────────────
         self.declare_parameter('odom_timeout_sec', 0.5)  # /odom 타임아웃 [s]
@@ -91,8 +92,14 @@ class CircleDriveTest(Node):
         self.kp_yaw = float(self.get_parameter('kp_yaw').value)
         self.kd_yaw = float(self.get_parameter('kd_yaw').value)
         self.k_converge = float(self.get_parameter('k_converge').value)
+        self.curvature_slowdown = float(self.get_parameter('curvature_slowdown').value)
         self.odom_timeout = float(self.get_parameter('odom_timeout_sec').value)
         self.wait_for_start = bool(self.get_parameter('wait_for_start').value)
+
+        if not math.isfinite(self.radius) or self.radius <= 0.0:
+            raise ValueError('radius는 양의 유한한 값이어야 합니다.')
+        if not math.isfinite(self.curvature_slowdown) or self.curvature_slowdown < 0.0:
+            raise ValueError('curvature_slowdown은 0 이상의 유한한 값이어야 합니다.')
 
         # 상태 변수
         self.current_x: Optional[float] = None
@@ -260,9 +267,11 @@ class CircleDriveTest(Node):
         raw_angular = self.kp_yaw * heading_err - self.kd_yaw * self.current_yaw_rate
         angular_cmd = max(-self.max_angular, min(self.max_angular, raw_angular))
 
-        # 헤딩 오차가 클 때는 감속하여 안정적으로 방향 전환
+        # 헤딩 오차와 원의 곡률(|κ| = 1/R)에 따라 전진 출력을 감속
         heading_alignment = max(0.2, math.cos(heading_err))
-        linear_cmd = self.cruise_speed * heading_alignment
+        curvature = 1.0 / self.radius
+        curvature_factor = 1.0 / (1.0 + self.curvature_slowdown * curvature)
+        linear_cmd = self.cruise_speed * heading_alignment * curvature_factor
 
         # 8. 모터 명령 발행
         twist = Twist()
@@ -274,6 +283,7 @@ class CircleDriveTest(Node):
         dir_label = "CCW" if self.dir_sign > 0 else "CW"
         self.get_logger().info(
             f"🔄 [{dir_label} 원형 주행] 위치: ({x:.2f}, {y:.2f})m | "
+            f"곡률: {curvature:.3f}/m | "
             f"반경오차: {radial_error*100:+.1f}cm | 헤딩오차: {math.degrees(heading_err):.1f}° | "
             f"진행: {self.current_laps:.2f}/{self.target_laps:.1f}바퀴 | "
             f"출력: [전진 {linear_cmd*100:.0f}%, 회전 {angular_cmd*100:.0f}%]",

@@ -14,9 +14,12 @@
 #endif
 
 #include "src/CYdLidar.h"
+#include <algorithm>
 #include <math.h>
 #include <chrono>
+#include <cmath>
 #include <iostream>
+#include <limits>
 #include <memory>
 
 #include "rclcpp/clock.hpp"
@@ -148,6 +151,7 @@ int main(int argc, char *argv[]) {
   f_optvalue = 0.1f;
   node->declare_parameter("range_min", f_optvalue);
   node->get_parameter("range_min", f_optvalue);
+  const float configured_min_range = f_optvalue;
   laser.setlidaropt(LidarPropMinRange, &f_optvalue, sizeof(float));
   /// unit: Hz
   f_optvalue = 10.f;
@@ -224,19 +228,24 @@ int main(int argc, char *argv[]) {
       scan_msg->angle_increment = scan.config.angle_increment;
       scan_msg->scan_time = scan.config.scan_time;
       scan_msg->time_increment = scan.config.time_increment;
-      scan_msg->range_min = scan.config.min_range;
+      scan_msg->range_min = std::max(
+        configured_min_range, static_cast<float>(scan.config.min_range));
       scan_msg->range_max = scan.config.max_range;
       
       int size = (scan.config.max_angle - scan.config.min_angle)/ scan.config.angle_increment + 1;
-      scan_msg->ranges.resize(size);
-      scan_msg->intensities.resize(size);
+      const float invalid_range = invalid_range_is_inf
+        ? std::numeric_limits<float>::infinity() : 0.0f;
+      scan_msg->ranges.assign(size, invalid_range);
+      scan_msg->intensities.assign(size, 0.0f);
       for (size_t i=0; i < scan.points.size(); i++) 
       {
         const auto& p = scan.points.at(i);
         int index = std::ceil((scan.points[i].angle - scan.config.min_angle)/scan.config.angle_increment);
-        if(index >=0 && index < size) {
-          scan_msg->ranges[index] = scan.points[i].range;
-          scan_msg->intensities[index] = scan.points[i].intensity;
+        if(index >=0 && index < size && std::isfinite(p.range)
+            && p.range > scan_msg->range_min
+            && p.range < scan_msg->range_max) {
+          scan_msg->ranges[index] = p.range;
+          scan_msg->intensities[index] = p.intensity;
         }
         //file << "i:" << i << ",a:" << p.angle << ",d:" << p.range << ",p:" << p.intensity << std::endl;
       }

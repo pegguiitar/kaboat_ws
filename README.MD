@@ -6,6 +6,9 @@ OSRF VRX 오픈소스 기반 WAM-V 선박의 통합 자율주행 알고리즘 �
 > 이 문서는 **컨테이너 설치와 시뮬레이터 환경 구축**을 다룹니다.
 > 자율주행 스택(perception/behavior/control/mission)의 **코드 구조·설계**는
 > **[SKELETON.MD](SKELETON.MD)** 를 참고하세요.
+>
+> **실물 수조 외벽 라이다 노트북**은 시뮬레이션용 아래 절차 대신
+> **[LIDAR_DOCKER.md](LIDAR_DOCKER.md)** 를 따릅니다.
 
 ---
 

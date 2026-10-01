@@ -14,6 +14,7 @@ from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node, SetRemap
+from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
 
@@ -74,6 +75,15 @@ def generate_launch_description():
             'config_file', default_value=default_config,
             description='센서 토픽/최소 주기/timeout 설정'),
         DeclareLaunchArgument(
+            'enable_scan_monitor', default_value='true',
+            description='선체 /scan 진단 활성화 여부'),
+        DeclareLaunchArgument(
+            'enable_camera_monitor', default_value=enable_d455,
+            description='D455 카메라 토픽 진단 활성화 여부'),
+        DeclareLaunchArgument(
+            'enable_gps_monitor', default_value='true',
+            description='GNSS /gps/fix 진단 활성화 여부'),
+        DeclareLaunchArgument(
             'gq7_config_file', default_value=default_gq7_config,
             description='GQ7 드라이버 override 설정'),
         DeclareLaunchArgument(
@@ -95,7 +105,22 @@ def generate_launch_description():
             executable='sensor_health_monitor',
             name='sensor_health_monitor',
             output='screen',
-            parameters=[config_file, {'use_sim_time': False}],
+            parameters=[
+                config_file,
+                {
+                    'use_sim_time': False,
+                    'scan.enabled': ParameterValue(
+                        LaunchConfiguration('enable_scan_monitor'), value_type=bool),
+                    'color.enabled': ParameterValue(
+                        LaunchConfiguration('enable_camera_monitor'), value_type=bool),
+                    'depth.enabled': ParameterValue(
+                        LaunchConfiguration('enable_camera_monitor'), value_type=bool),
+                    'camera_info.enabled': ParameterValue(
+                        LaunchConfiguration('enable_camera_monitor'), value_type=bool),
+                    'gps.enabled': ParameterValue(
+                        LaunchConfiguration('enable_gps_monitor'), value_type=bool),
+                },
+            ],
         ),
         # RViz 가 Fixed Frame 을 해석하려면 TF 트리가 있어야 한다. 실물에는
         # 발행자가 없어(gq7.yaml 의 tf_mode: 0) 여기서 최소 체인만 채운다 —

@@ -40,6 +40,7 @@ def generate_launch_description():
     enable_thrusters = LaunchConfiguration('enable_thrusters')
     thruster_hw = LaunchConfiguration('thruster_hardware_type')
     thruster_port = LaunchConfiguration('thruster_port')
+    enable_onboard_lidar = LaunchConfiguration('enable_onboard_lidar')
 
     # 배 센서 드라이버 (GQ7 IMU 등) 실행
     sensors = IncludeLaunchDescription(
@@ -51,6 +52,8 @@ def generate_launch_description():
             # 핵심 — 실내에서는 GQ7 EKF remap을 끄고, indoor_lidar_odom이 /odom을 소유
             'enable_odom_remap': 'false',
             'publish_tf': 'false',  # indoor_lidar_odom이 odom->base_link TF를 직접 발행
+            'enable_scan_monitor': enable_onboard_lidar,
+            'enable_gps_monitor': 'false',
             'config_file': sensors_config,
         }.items(),
     )
@@ -66,6 +69,15 @@ def generate_launch_description():
         condition=IfCondition(enable_thrusters),
     )
 
+    onboard_lidar = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(hardware_share, 'launch', 'onboard_lidar.launch.py')),
+        launch_arguments={
+            'port': LaunchConfiguration('onboard_lidar_port'),
+        }.items(),
+        condition=IfCondition(enable_onboard_lidar),
+    )
+
     return LaunchDescription([
         DeclareLaunchArgument(
             'enable_d455', default_value='false',
@@ -76,6 +88,12 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'enable_thrusters', default_value='false',
             description='스러스터 드라이버 동시 실행 여부 (기본값: false, 별도 실행 권장)'),
+        DeclareLaunchArgument(
+            'enable_onboard_lidar', default_value='false',
+            description='선체 TG-50 /scan 발행 및 스캔 진단 (기본값: false)'),
+        DeclareLaunchArgument(
+            'onboard_lidar_port', default_value='/dev/ttyUSB0',
+            description='선체 TG-50 포트; /dev/serial/by-id/... 명시 권장'),
         DeclareLaunchArgument(
             'thruster_hardware_type', default_value='serial',
             description="스러스터 하드웨어 타입 ('serial' | 'dummy' | 'pca9685')"),
@@ -88,6 +106,7 @@ def generate_launch_description():
         LogInfo(msg='[INDOOR TANK] 외부 LiDAR /boat_pose + GQ7 gyro EKF → /odom 융합.'),
 
         sensors,
+        onboard_lidar,
         thrusters,
 
         # 실내 오도메트리 융합 노드 (외부 라이다 위치 + 선체 IMU)

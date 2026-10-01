@@ -83,6 +83,25 @@ class TestCircleDriveTest(unittest.TestCase):
         latest_cmd: Twist = self.published_cmds[-1]
         self.assertGreater(latest_cmd.linear.x, 0.0)
 
+    def test_curvature_reduces_forward_command_for_tighter_circle(self):
+        """같은 헤딩 정렬에서 반경이 작을수록 전진 출력이 낮아진다."""
+        self.node.started = True
+        self._feed_odom(x=6.2, y=2.5, yaw=math.pi / 2.0)
+        self.node._control_loop()
+        tight_cmd = self.published_cmds[-1].linear.x
+
+        self.node.radius = 2.4
+        self._feed_odom(x=7.4, y=2.5, yaw=math.pi / 2.0)
+        self.node._control_loop()
+        wide_cmd = self.published_cmds[-1].linear.x
+        self.assertLess(tight_cmd, wide_cmd)
+        self.assertLess(wide_cmd, self.node.cruise_speed)
+
+        self.node.curvature_slowdown = 0.0
+        self._feed_odom(x=7.4, y=2.5, yaw=math.pi / 2.0)
+        self.node._control_loop()
+        self.assertAlmostEqual(self.published_cmds[-1].linear.x, self.node.cruise_speed)
+
     def test_start_service(self):
         """/start_test 서비스 호출로 출발 활성화 확인."""
         class MockResponse:

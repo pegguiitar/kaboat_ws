@@ -1,0 +1,31 @@
+services:
+  kaboat_lidar:
+    build:
+      context: .
+      dockerfile: Dockerfile.lidar
+    image: kaboat-lidar:humble
+    container_name: kaboat_lidar
+    network_mode: host
+    environment:
+      DISPLAY: ${DISPLAY:-:0}
+      QT_X11_NO_MITSHM: "1"
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-42}
+      ROS_LOCALHOST_ONLY: "0"
+    # Keep USB serial devices visible even when they are plugged in later.
+    volumes:
+      - ./src:/workspace/kaboat_ws/src
+      - kaboat_lidar_build:/workspace/kaboat_ws/build
+      - kaboat_lidar_install:/workspace/kaboat_ws/install
+      - kaboat_lidar_log:/workspace/kaboat_ws/log
+      - /dev:/dev
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro
+    device_cgroup_rules:
+      - 'c 188:* rwm'
+      - 'c 226:* rwm'
+    stdin_open: true
+    tty: true
+
+volumes:
+  kaboat_lidar_build:
+  kaboat_lidar_install:
+  kaboat_lidar_log:

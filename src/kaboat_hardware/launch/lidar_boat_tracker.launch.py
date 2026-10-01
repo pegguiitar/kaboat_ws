@@ -47,14 +47,18 @@ def generate_launch_description():
 
         LogInfo(msg=f'[LIDAR BOAT TRACKER] 수조 (5.0m, 0.0m) 고정 TG50 라이다 (포트: {default_port}) 배 위치 추적 시작...'),
 
-        # 1. TG50 YDLIDAR 드라이버 노드 (/scan 발행)
+        # 1. 외벽 TG-50은 /shore/scan 발행 (선체 /scan과 분리)
         Node(
             package='ydlidar_ros2_driver',
             executable='ydlidar_ros2_driver_node',
             name='ydlidar_ros2_driver_node',
             output='screen',
             emulate_tty=True,
-            parameters=[tg50_config_file, {'port': port}],
+            parameters=[tg50_config_file, {
+                'port': port,
+                'frame_id': 'shore_laser_frame',
+            }],
+            remappings=[('scan', '/shore/scan')],
             condition=IfCondition(launch_driver),
         ),
 
@@ -64,7 +68,11 @@ def generate_launch_description():
             executable='lidar_boat_tracker',
             name='lidar_boat_tracker',
             output='screen',
-            parameters=[tracker_config_file, {'use_sim_time': False}],
+            parameters=[tracker_config_file, {
+                'use_sim_time': False,
+                'laser_frame': 'shore_laser_frame',
+            }],
+            remappings=[('/scan', '/shore/scan')],
         ),
 
         # 3. RViz2 시각화

@@ -48,6 +48,7 @@ circle_drive_test:
     kp_yaw: 1.5               # 헤딩 P 게인
     kd_yaw: 0.15              # 요레이트 D 게인
     k_converge: 1.5           # 원 궤도 수렴 게인
+    curvature_slowdown: 0.25  # 곡률(1/반경)에 따른 전진 감속 가중치
     odom_timeout_sec: 0.5     # [s] /odom 타임아웃
     wait_for_start: true      # 외부 시작 신호 대기
 

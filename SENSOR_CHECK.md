@@ -387,7 +387,7 @@ Map `/occupancy_grid` · LaserScan `/scan` · Odometry `/odom` 이 뜬다.
 
 ## 10. 실내 수조 모드 (외부 TG-50 라이다 + 선체 GQ7 IMU)
 
-실내에서는 GNSS 신호를 수신할 수 없으므로, 수조 외벽의 YDLIDAR TG-50이 좌현 얇은 봉과 우현 두꺼운 봉으로 배의 pose(`/boat_pose`)를 계산합니다. 봉 구분이 뒤집혀 생기는 180° yaw 모호성은 `indoor_lidar_odom`이 IMU gyro 예측과 비교해 제거하고, 3초마다 LiDAR yaw로 보정하여 최종 `/odom` 및 TF(`odom -> base_link`)를 생성합니다. 기본 장착 가정은 두 봉 간격 0.60m, `base_link` 기준 좌현 얇은 봉 `(0,+0.30)m`, 우현 두꺼운 봉 `(0,-0.30)m`입니다.
+실내에서는 GNSS 신호를 수신할 수 없으므로, 수조 외벽의 YDLIDAR TG-50(`/shore/scan`)이 좌현 얇은 봉과 우현 두꺼운 봉으로 배의 pose(`/boat_pose`)를 계산합니다. 선택 장착하는 선체 TG-50은 0.40m 이내 반사를 무효화한 `/scan`을 발행합니다. 봉 구분이 뒤집혀 생기는 180° yaw 모호성은 `indoor_lidar_odom`이 IMU gyro 예측과 비교해 제거하고, 3초마다 LiDAR yaw로 보정하여 최종 `/odom` 및 TF(`odom -> base_link`)를 생성합니다. 기본 장착 가정은 두 봉 간격 0.60m, `base_link` 기준 좌현 얇은 봉 `(0,+0.30)m`, 우현 두꺼운 봉 `(0,-0.30)m`입니다.
 
 ### 10.1 실행 (2대 기기 분담)
 
@@ -395,14 +395,21 @@ Map `/occupancy_grid` · LaserScan `/scan` · Odometry `/odom` 이 뜬다.
 # 1. 수조 외벽 노트북 (외부 고정 TG-50 라이다 + 배 위치 추적기 + RViz2)
 ros2 launch kaboat_hardware lidar_boat_tracker.launch.py port:=/dev/ttyUSB0
 
-# 2. 배 (Jetson — GQ7 드라이버 + indoor_lidar_odom 실행, 모터는 기본 비활성화)
+# 2. 배 (Jetson — GQ7 + indoor_lidar_odom, 선체 TG-50 미장착, 모터 비활성화)
 ros2 launch kaboat_hardware indoor_tank.launch.py enable_thrusters:=false
+
+# 선체 TG-50 장착 시에는 위 명령 대신 다음 명령 사용
+ros2 launch kaboat_hardware indoor_tank.launch.py \
+  enable_thrusters:=false enable_onboard_lidar:=true \
+  onboard_lidar_port:=/dev/serial/by-id/<선체-TG-50-장치명>
 ```
 
 ### 10.2 토픽 확인 및 판정 기준
 
 ```bash
 # 외부 라이다 배 pose (10 Hz PoseWithCovarianceStamped)
+ros2 topic hz /shore/scan --qos-reliability best_effort
+ros2 topic hz /scan --qos-reliability best_effort  # 선체 라이다 장착 시에만 확인
 ros2 topic hz /boat_pose
 ros2 topic echo /boat_pose --once
 
@@ -424,13 +431,15 @@ ros2 run tf2_ros tf2_echo odom base_link
 |---|---|
 | `[indoor_lidar_odom] LiDAR yaw + IMU gyro EKF 시작` | 정상 시작 |
 | `IMU 기준으로 정렬한 LiDAR yaw innovation이 gate를 넘어...` | IMU 예측과 가장 가까운 LiDAR 후보도 45° 이상 차이 나 보정 거부 |
-| `LiDAR pose 유실` | 두 봉 pose 미수신(1.0s 초과)으로 `/odom` 발행 중단 (**의도된 안전 동작**) |
+| `LiDAR pose 유실` | 두 봉 pose 미수신(1.0s 초과). 마지막 위치·속도와 IMU 헤딩으로 `/odom`·TF 추정 발행, 위치 공분산 증가 |
 | `IMU gyro 유실` | IMU 미수신(0.5s 초과)으로 `/odom` 발행 중단 (**의도된 안전 동작**) |
 
-위치나 IMU 신호가 끊겼을 때 `/odom` 발행을 멈추는 것은 의도된 안전
-메커니즘입니다. 마지막 위치를 계속 재발행하면 배가 옛 좌표를 믿을 수
-있으므로, 테스트 노드의 0.5초 odom 타임아웃이 먼저 0 명령을 내고 그 명령까지
-끊기면 `thruster_driver`의 300ms 워치독이 모터를 중립으로 복귀시킵니다.
+LiDAR pose만 끊기면 IMU 자이로가 헤딩을 계속 예측하고, 마지막 측정 속도로
+위치를 외삽해 `/odom`을 30Hz로 발행합니다. 3초 헤딩 보정 시점에 측정값이
+없으면 보정을 건너뛰고, 이후 첫 유효한 LiDAR pose에서 위치와 헤딩을
+갱신합니다. 유실 시간이 길수록 위치 오차가 커지므로 pose covariance와
+`/boat_pose` 수신 상태를 함께 확인합니다. IMU까지 끊기면 `/odom` 발행을
+중단하며, 테스트 노드의 odom 타임아웃과 `thruster_driver` 워치독이 적용됩니다.
 
 ### ⚠️ `/odom` 발행자 중복 주의
 

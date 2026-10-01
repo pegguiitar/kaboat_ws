@@ -105,14 +105,57 @@ class TestIndoorLidarOdomSafety(unittest.TestCase):
         self.node._tick()
         self.assertEqual(len(self.published), 1)
 
-    def test_stale_lidar_stops_odom(self):
+    def test_stale_lidar_continues_odom_and_corrects_on_reacquisition(self):
+        transforms = []
+        self.node.publish_tf = True
+        self.node.tf_broadcaster.sendTransform = transforms.append
         self.node._on_lidar_pose(_pose())
         self.node._on_imu(_imu())
         self.node._tick()
+        old_correction_time = time.monotonic() - 3.2
+        self.node.last_lidar_yaw_correction_time = old_correction_time
+        self.node.vx_body = 0.5
+        self.node.last_position_predict_time = time.monotonic() - 2.0
         self.node.last_pose_receive_time = (
-            time.monotonic() - self.node.pos_timeout - 0.1)
+            time.monotonic() - 3.2)
         self.node._tick()
-        self.assertEqual(len(self.published), 1)
+        self.node._tick()
+        self.assertEqual(len(self.published), 3)
+        self.assertEqual(len(transforms), 3)
+        self.assertGreater(self.published[-1].pose.pose.position.x, 5.9)
+        self.assertAlmostEqual(
+            transforms[-1].transform.translation.x,
+            self.published[-1].pose.pose.position.x)
+        self.assertGreater(
+            self.published[-1].pose.covariance[0],
+            self.published[0].pose.covariance[0])
+        self.assertEqual(
+            self.node.last_lidar_yaw_correction_time, old_correction_time)
+
+        self.node._on_lidar_pose(_pose(x=6.2, yaw=0.2))
+        self.node._tick()
+        self.assertEqual(len(self.published), 4)
+        self.assertEqual(len(transforms), 4)
+        self.assertAlmostEqual(
+            self.published[-1].pose.pose.position.x, 6.2, places=2)
+        self.assertGreater(
+            self.node.last_lidar_yaw_correction_time, old_correction_time)
+        self.assertGreater(_yaw_from_quat(
+            self.published[-1].pose.pose.orientation), 0.0)
+
+    def test_rejected_lidar_yaw_does_not_delay_next_correction(self):
+        self.node._on_lidar_pose(_pose(yaw=0.0))
+        self.node._on_imu(_imu())
+        old_correction_time = time.monotonic() - 3.2
+        self.node.last_lidar_yaw_correction_time = old_correction_time
+
+        self.node._on_lidar_pose(_pose(yaw=math.pi / 2.0))
+        self.assertEqual(
+            self.node.last_lidar_yaw_correction_time, old_correction_time)
+
+        self.node._on_lidar_pose(_pose(yaw=0.1))
+        self.assertGreater(
+            self.node.last_lidar_yaw_correction_time, old_correction_time)
 
     def test_invalid_lidar_orientation_is_rejected(self):
         msg = _pose()

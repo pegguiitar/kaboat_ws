@@ -7,7 +7,7 @@ Panels:
         - /Global Options1
         - /수조 기준 그리드 (1m)1
         - /수조 테두리 및 마커1
-        - /라이다 원본 데이터 (/scan)1
+        - /라이다 원본 데이터 (/shore/scan)1
         - /필터링된 라이다 스캔 (/lidar_tracker/filtered_scan)1
         - /LiDAR 원시 pose (/detections)1
         - /융합 보트 헤딩 (/odom)1
@@ -74,7 +74,7 @@ Visualization Manager:
       Max Intensity: 4096
       Min Color: 0; 0; 0
       Min Intensity: 0
-      Name: "라이다 원본 데이터 (/scan)"
+      Name: "라이다 원본 데이터 (/shore/scan)"
       Position Transformer: XYZ
       Queue Size: 10
       Selectable: true
@@ -87,7 +87,7 @@ Visualization Manager:
         Filter size: 10
         History Policy: Keep Last
         Reliability Policy: Best Effort
-        Value: /scan
+        Value: /shore/scan
       Use Fixed Frame: true
       Use rainbow: false
       Value: true
