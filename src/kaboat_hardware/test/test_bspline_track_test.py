@@ -165,6 +165,25 @@ class TestBSplineTrackTest(unittest.TestCase):
         self.assertGreater(cmd.linear.x, 0.0)
         self.assertFalse(self.node.mission_finished)
 
+    def test_upcoming_curvature_slows_before_the_turn(self):
+        """현재 점이 직선이어도 전방 곡률 창의 급곡선에 먼저 감속한다."""
+        start_x = float(self.node.path_x[0])
+        start_y = float(self.node.path_y[0])
+        start_yaw = float(self.node.path_headings[0])
+        self._feed_odom(start_x, start_y, start_yaw)
+
+        self.node.path_curvatures[:] = 0.0
+        self.node._control_loop()
+        straight_cmd = self.published_cmds[-1].linear.x
+
+        # 10번째 점(0.5m 앞)은 전방 곡률 창 안이지만 현재 점은 직선이다.
+        self.node.path_curvatures[10] = 2.0
+        self.node._control_loop()
+        turn_cmd = self.published_cmds[-1].linear.x
+
+        self.assertGreater(straight_cmd, 0.0)
+        self.assertLess(turn_cmd, straight_cmd)
+
     def test_goal_arrival_stop(self):
         """B-spline 곡선 종점 도달 시 미션 종료 및 완전 정지 검증."""
         end_x = float(self.node.path_x[-1])

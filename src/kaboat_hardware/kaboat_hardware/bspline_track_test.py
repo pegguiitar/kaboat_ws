@@ -5,13 +5,14 @@
   - 기본 제공 프리셋: S자 슬라럼 궤적 (수조를 대각/곡선으로 가로지르는 부드러운 코스)
   - 임의의 제어점(Control Points) 파라미터 입력 지원
   - 전방 주시(Lookahead) 목표점 기반 경로 추종 및 P-D 헤딩 조향 제어
-  - 곡률 및 헤딩 오차 적응형 감속, 목표 종점 정밀 접근 및 안전 제동
+  - 회피 플래너 follow_cmd와 동일한 전방 곡률 감속·조향, 종점 접근 및 안전 제동
   - /emergency_stop 연동 및 /odom 타임아웃 워치독
   - RViz 실시간 시각화 (/bspline_test/path, /bspline_test/markers)
 """
 
 import math
 import time
+from dataclasses import replace
 from typing import List, Optional, Tuple
 
 import numpy as np
@@ -26,6 +27,8 @@ from std_msgs.msg import Bool
 from std_srvs.srv import Trigger
 from visualization_msgs.msg import Marker, MarkerArray
 
+from kaboat_behaviors.avoid_fsm import FsmParams, follow_cmd
+from kaboat_behaviors.bspline_planner import SampledPlan
 from kaboat_hardware.test_coordinates import BSPLINE_TRACK, get_bspline_control_points_xy
 from kaboat_hardware.trajectory_visualization import (
     BoundedTrajectoryHistory,
@@ -156,7 +159,15 @@ class BSplineTrackTest(Node):
         self.declare_parameter('slow_radius', 1.5)      # 종점 접근 감속 시작 반경 [m]
         self.declare_parameter('kp_yaw', 1.5)           # 헤딩 비례 게인 P
         self.declare_parameter('kd_yaw', 0.15)          # 요레이트 감쇠 게인 D
-        self.declare_parameter('curvature_slowdown', 0.25)  # 곡률 기반 감속 가중치
+        # 회피 플래너 follow_cmd와 같은 전방 최대 곡률/속도→출력 변환.
+        # v_full/cmd_exp는 실물 주행 로그로 다시 교정해야 한다.
+        follow_defaults = FsmParams()
+        self.declare_parameter('kappa_window', follow_defaults.kappa_window)
+        self.declare_parameter('v_min', follow_defaults.v_min)
+        self.declare_parameter('v_max', follow_defaults.v_max)
+        self.declare_parameter('omega_max', follow_defaults.omega_max)
+        self.declare_parameter('v_full', follow_defaults.v_full)
+        self.declare_parameter('cmd_exp', follow_defaults.cmd_exp)
 
         # ── 안전 파라미터 ─────────────────────────────────
         self.declare_parameter('odom_timeout_sec', 0.5) # /odom 타임아웃 [s]
@@ -175,7 +186,28 @@ class BSplineTrackTest(Node):
         self.slow_radius = float(self.get_parameter('slow_radius').value)
         self.kp_yaw = float(self.get_parameter('kp_yaw').value)
         self.kd_yaw = float(self.get_parameter('kd_yaw').value)
-        self.curvature_slowdown = float(self.get_parameter('curvature_slowdown').value)
+        self.follow_params = replace(
+            follow_defaults,
+            lookahead=self.lookahead,
+            kappa_window=float(self.get_parameter('kappa_window').value),
+            v_min=float(self.get_parameter('v_min').value),
+            v_max=float(self.get_parameter('v_max').value),
+            omega_max=float(self.get_parameter('omega_max').value),
+            slow_radius=self.slow_radius,
+            cmd_full=self.cruise_speed,
+            v_full=float(self.get_parameter('v_full').value),
+            cmd_exp=float(self.get_parameter('cmd_exp').value),
+        )
+        if not 0.0 <= self.cruise_speed <= 1.0:
+            raise ValueError('cruise_speed는 0.0~1.0 출력 비율이어야 합니다.')
+        if (self.spacing <= 0.0 or self.lookahead <= 0.0 or self.slow_radius <= 0.0
+                or self.follow_params.kappa_window <= 0.0
+                or self.follow_params.v_full <= 0.0
+                or self.follow_params.v_max <= 0.0
+                or not 0.0 <= self.follow_params.v_min <= self.follow_params.v_max
+                or self.follow_params.omega_max < 0.0
+                or self.follow_params.cmd_exp <= 0.0):
+            raise ValueError('경로 간격과 follow_cmd 속도·곡률 파라미터를 확인하세요.')
         self.odom_timeout = float(self.get_parameter('odom_timeout_sec').value)
         self.wait_for_start = bool(self.get_parameter('wait_for_start').value)
 
@@ -189,6 +221,11 @@ class BSplineTrackTest(Node):
             generate_bspline_path(self.control_points, spacing=self.spacing, degree=self.degree)
         )
         self.num_points = len(self.path_x)
+        self.follow_plan = SampledPlan(
+            samples=np.column_stack((self.path_x, self.path_y)),
+            curvatures=self.path_curvatures,
+            spacing=self.spacing,
+        )
 
         # 상태 변수
         self.current_x: Optional[float] = None
@@ -226,7 +263,9 @@ class BSplineTrackTest(Node):
             f"   - 제어점 개수: {len(self.control_points)}개, 생성된 곡선 샘플: {self.num_points}개\n"
             f"   - 총 경로 길이: {self.total_path_len:.2f}m (샘플 간격: {self.spacing*100:.1f}cm)\n"
             f"   - 시작점: ({self.path_x[0]:.2f}, {self.path_y[0]:.2f})m -> 종점: ({self.path_x[-1]:.2f}, {self.path_y[-1]:.2f})m\n"
-            f"   - 기본 순항 출력: {self.cruise_speed*100:.1f}%, 전방 주시거리: {self.lookahead:.1f}m\n"
+            f"   - 기준 출력/상한: {self.cruise_speed*100:.1f}%, 전방 주시거리: {self.lookahead:.1f}m\n"
+            f"   - 곡률 평가: 전방 {self.follow_params.kappa_window:.1f}m, "
+            f"속도 교정: {self.follow_params.v_full:.2f}m/s @ 기준 출력\n"
             f"   - 상태: {wait_msg}\n"
             f"   - /odom 수신 대기 중..."
         )
@@ -337,42 +376,26 @@ class BSplineTrackTest(Node):
             self.mission_finished = True
             return
 
-        # 6. Lookahead 목표점 산출
-        lookahead_steps = int(round(self.lookahead / self.spacing))
-        target_idx = min(self.num_points - 1, self.progress_idx + lookahead_steps)
-        target_x = self.path_x[target_idx]
-        target_y = self.path_y[target_idx]
-
-        # 7. 목표 선수각 및 P-D 조향 제어
-        desired_yaw = math.atan2(target_y - y, target_x - x)
-        heading_error = normalize_angle(desired_yaw - yaw)
-        angular_cmd = (self.kp_yaw * heading_error) - (self.kd_yaw * self.current_yaw_rate)
+        # 6. 회피 플래너와 같은 lookahead/PD/전방 최대 곡률 감속을 사용.
+        # 고정 시험 경로의 진행 인덱스만 공통 추종 표현에 동기화한다.
+        self.follow_plan.progress_idx = self.progress_idx
+        linear_cmd, angular_cmd = follow_cmd(
+            self.follow_plan, (x, y), yaw, self.current_yaw_rate,
+            (goal_x, goal_y), self.follow_params, self.kp_yaw, self.kd_yaw)
+        linear_cmd = max(0.0, min(self.cruise_speed, linear_cmd))
         angular_cmd = max(-self.max_angular, min(self.max_angular, angular_cmd))
 
-        # 8. 속도 제어기 (곡률 및 헤딩 오차 적응형 감속 + 종점 접근 감속)
-        speed = self.cruise_speed
-
-        # (a) 헤딩 오차 감속
-        if abs(heading_error) > math.radians(40):
-            speed *= 0.4
-        elif abs(heading_error) > math.radians(20):
-            speed *= 0.7
-
-        # (b) 곡선 곡률에 따른 감속
-        local_curv = abs(self.path_curvatures[closest_idx])
-        curv_factor = 1.0 / (1.0 + self.curvature_slowdown * local_curv)
-        speed *= curv_factor
-
-        # (c) 종점 접근 점진적 감속
-        if remaining_path_dist < self.slow_radius:
-            slow_ratio = max(0.35, remaining_path_dist / self.slow_radius)
-            speed *= slow_ratio
-
-        # 9. 명령 송출 (/cmd_vel)
+        # 7. 명령 송출 (/cmd_vel)
         cmd = Twist()
-        cmd.linear.x = float(speed)
+        cmd.linear.x = float(linear_cmd)
         cmd.angular.z = float(angular_cmd)
         self.cmd_pub.publish(cmd)
+
+        target_idx = (self.num_points - 1 if dist_to_goal <= self.lookahead else
+                      min(self.num_points - 1,
+                          self.progress_idx + int(round(self.lookahead / self.spacing))))
+        target_x, target_y = self.path_x[target_idx], self.path_y[target_idx]
+        heading_error = normalize_angle(math.atan2(target_y - y, target_x - x) - yaw)
 
         self.get_logger().info(
             f"곡선 추종 중 -> 현재: ({x:.2f}, {y:.2f})m | 진행: {self.progress_idx}/{self.num_points} | "

@@ -1,4 +1,4 @@
-"""Jetson-mounted TG-50 publishes /scan with returns within 0.40 m masked."""
+"""Jetson TG-50: /scan/raw -> structure-sector filter -> public /scan."""
 
 import os
 
@@ -7,6 +7,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
@@ -21,6 +22,12 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'config_file', default_value=default_config,
             description='TG-50 settings with 0.40 m minimum range'),
+        DeclareLaunchArgument(
+            'mask_start_deg', default_value='220.0',
+            description='First boat-structure bearing to discard [deg, 0..360]'),
+        DeclareLaunchArgument(
+            'mask_end_deg', default_value='320.0',
+            description='Last boat-structure bearing to discard [deg, 0..360]'),
         Node(
             package='ydlidar_ros2_driver',
             executable='ydlidar_ros2_driver_node',
@@ -29,6 +36,18 @@ def generate_launch_description():
             emulate_tty=True,
             parameters=[LaunchConfiguration('config_file'),
                         {'port': LaunchConfiguration('port')}],
-            remappings=[('scan', '/scan')],
+            remappings=[('scan', '/scan/raw')],
+        ),
+        Node(
+            package='kaboat_hardware',
+            executable='onboard_scan_filter',
+            name='onboard_scan_filter',
+            output='screen',
+            parameters=[{
+                'mask_start_deg': ParameterValue(
+                    LaunchConfiguration('mask_start_deg'), value_type=float),
+                'mask_end_deg': ParameterValue(
+                    LaunchConfiguration('mask_end_deg'), value_type=float),
+            }],
         ),
     ])

@@ -19,7 +19,7 @@ import math
 import numpy as np
 
 from .bspline_planner import (
-    Plan, PlannerParams, check, curvature_ahead, generate, pick_ref_obstacle,
+    Plan, PlannerParams, SampledPlan, check, curvature_ahead, generate, pick_ref_obstacle,
     repair)
 from .motion_controller import (
     DesiredVelocity, MotionControllerParams, control_velocity,
@@ -87,7 +87,7 @@ def speed_to_cmd(v: float, p: FsmParams) -> float:
     return speed_to_command(v, _controller_params(p, 0.0, 0.0))
 
 
-def follow_cmd(plan: Plan, boat_xy, yaw: float, yaw_rate: float, wp_xy,
+def follow_cmd(plan: Plan | SampledPlan, boat_xy, yaw: float, yaw_rate: float, wp_xy,
                fsm: FsmParams, yaw_kp: float, yaw_kd: float
                ) -> tuple[float, float]:
     """경로 추종 명령 (linear_x, angular_z) — PD 조향 + 곡률 feedforward 감속.

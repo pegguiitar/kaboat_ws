@@ -99,6 +99,15 @@ class Plan:
     progress_idx: int = 0    # 배가 지나온 samples 진행 인덱스 — check 가 갱신(단조)
 
 
+@dataclass
+class SampledPlan:
+    """미리 생성한 경로를 공통 follow_cmd로 추종할 때 쓰는 샘플 표현."""
+    samples: np.ndarray
+    curvatures: np.ndarray
+    spacing: float
+    progress_idx: int = 0
+
+
 def _wrap(a):
     return (a + math.pi) % (2.0 * math.pi) - math.pi
 
@@ -319,7 +328,7 @@ def repair(plan: Plan, dri, violation_idx: int, p: PlannerParams) -> bool:
     return True
 
 
-def curvature_ahead(plan: Plan, window: float) -> float:
+def curvature_ahead(plan: Plan | SampledPlan, window: float) -> float:
     """진행 위치부터 전방 window[m] 구간의 max |κ| [1/m].
 
     follow 감속 v = ω_max/κ_max 의 입력 (§4). κ 는 B-spline 도함수로 해석
@@ -327,6 +336,14 @@ def curvature_ahead(plan: Plan, window: float) -> float:
     감속이 덜컹거린다. 호길이↔파라미터 대응만 조밀 평가로 만든다.
     samples 가 호길이 등간격이라 진행 호길이 = progress_idx·spacing.
     """
+    if isinstance(plan, SampledPlan):
+        # 고정 시험 코스는 제어점 개수/차수가 가변이므로 생성 때 계산한
+        # 해석적 곡률 샘플을 사용한다. 현재 점만이 아니라 전방 창의 최대값.
+        start = min(plan.progress_idx, len(plan.curvatures) - 1)
+        end = min(len(plan.curvatures),
+                  start + max(1, int(math.ceil(window / plan.spacing))) + 1)
+        return float(np.max(np.abs(plan.curvatures[start:end])))
+
     spl = BSpline(_KNOTS, plan.cps, 3)
     u = np.linspace(0.0, 1.0, 200)
     pts = np.asarray(spl(u))

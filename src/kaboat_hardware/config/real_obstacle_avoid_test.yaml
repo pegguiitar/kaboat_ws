@@ -1,0 +1,27 @@
+# Jetson TG-50 /scan + indoor_tank /odom -> occupancy grid -> DRI/B-spline/FSM.
+# Sim planner geometry and DRI defaults are inherited unless overridden below.
+real_obstacle_avoid_test:
+  ros__parameters:
+    drive_enabled: false
+    allow_escape: false
+    goal_distance: 3.0
+    goal_tolerance: 0.5
+    require_front_obstacle: true
+    front_corridor_half_width: 1.0
+    max_cross_track_error: 0.7
+    max_linear_cmd: 0.10
+    max_angular_cmd: 0.06
+    odom_timeout_sec: 0.5
+    scan_timeout_sec: 0.5
+    grid_timeout_sec: 0.5
+    viz_dri_scale: 4.0
+
+    # Short tank path: these are test-specific overrides, not sim mission defaults.
+    fsm.lookahead: 0.8
+    fsm.kappa_window: 1.0
+    fsm.v_min: 0.2
+    fsm.v_max: 0.5
+    fsm.slow_radius: 1.5
+
+    # The inherited cmd_full/v_full/cmd_exp are from sim. Calibrate for the
+    # actual boat before interpreting fsm.v_* as achieved physical speed.

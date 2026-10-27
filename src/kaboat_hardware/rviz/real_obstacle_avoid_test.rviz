@@ -1,0 +1,161 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+    Tree Height: 680
+  - Class: rviz_common/Views
+    Name: Views
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: "수조 좌표 (1 m)"
+      Enabled: true
+      Alpha: 0.35
+      Color: 100; 130; 160
+      Cell Size: 1
+      Plane: XY
+      Plane Cell Count: 20
+      Reference Frame: odom
+      Value: true
+    - Class: rviz_default_plugins/Map
+      Name: "TG-50 점유 지도"
+      Enabled: true
+      Alpha: 0.85
+      Color Scheme: map
+      Draw Behind: true
+      Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /occupancy_grid
+      Value: true
+    - Class: rviz_default_plugins/Map
+      Name: "DRI 위험도 (겹쳐 보기)"
+      Enabled: true
+      Alpha: 0.38
+      Color Scheme: costmap
+      Draw Behind: false
+      Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /real_avoid_test/dri
+      Value: true
+    - Class: rviz_default_plugins/LaserScan
+      Name: "선체 TG-50 필터 후 스캔"
+      Enabled: true
+      Alpha: 0.9
+      Color: 255; 60; 60
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Position Transformer: XYZ
+      Queue Size: 10
+      Size (Pixels): 4
+      Style: Points
+      Topic:
+        Depth: 10
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /scan
+      Use Fixed Frame: true
+      Value: true
+    - Class: rviz_default_plugins/LaserScan
+      Name: "필터 전 스캔 비교 (/scan/raw, 필요 시 켜기)"
+      Enabled: false
+      Alpha: 0.6
+      Color: 255; 200; 0
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Position Transformer: XYZ
+      Queue Size: 10
+      Size (Pixels): 3
+      Style: Points
+      Topic:
+        Depth: 10
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /scan/raw
+      Use Fixed Frame: true
+      Value: false
+    - Class: rviz_default_plugins/Odometry
+      Name: "선체 자세 (/odom)"
+      Enabled: true
+      Keep: 1
+      Shape:
+        Alpha: 1
+        Color: 255; 180; 0
+        Value: Arrow
+      Topic:
+        Depth: 10
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /odom
+      Value: true
+    - Class: rviz_default_plugins/Path
+      Name: "회피 B-spline (청록)"
+      Enabled: true
+      Alpha: 1
+      Buffer Length: 1
+      Color: 0; 230; 255
+      Line Style: Lines
+      Line Width: 0.07
+      Pose Style: None
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /real_avoid_test/path
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Name: "목표 (초록) · 제어점 (빨강) · 실제 궤적 (주황)"
+      Enabled: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /real_avoid_test/markers
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Name: "수조 경계 (외벽 추적기)"
+      Enabled: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /lidar_tracker/markers
+      Value: true
+  Enabled: true
+  Global Options:
+    Background Color: 24; 26; 32
+    Fixed Frame: odom
+    Frame Rate: 30
+  Name: root
+  Tools:
+    - Class: rviz_default_plugins/Interact
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+  Views:
+    Current:
+      Class: rviz_default_plugins/TopDownOrtho
+      Name: 수조 평면도
+      Angle: 0
+      Scale: 75
+      Target Frame: odom
+      X: 5.0
+      Y: 2.5
+    Saved: ~
+Window Geometry:
+  Displays:
+    collapsed: false
+  Height: 900
+  Width: 1250
+  X: 100
+  Y: 60

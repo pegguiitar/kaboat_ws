@@ -3,7 +3,7 @@ ydlidar_ros2_driver_node:
   ros__parameters:
     port: /dev/ttyUSB0
     frame_id: onboard_laser_frame
-    ignore_array: ""
+    ignore_array: ""  # post-driver 220..320 deg mask is in onboard_scan_filter
     baudrate: 512000
     lidar_type: 0
     device_type: 0

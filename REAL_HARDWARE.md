@@ -151,86 +151,13 @@ ros2 topic echo /odom --once
 - GNSS fix 상태와 좌표가 유효한지
 - GQ7 INS odometry의 위치/속도가 유한하고 child frame이 존재하는지
 
-## 실내 수조 시험 (외부 TG-50 라이다 + 선체 GQ7 IMU)
+## 실내 수조 시험 (외벽 TG-50 + 선체 GQ7·TG-50)
 
-실내는 GNSS가 물리적으로 차단되어 GQ7의 RTK-GNSS + IMU EKF `/odom`을 사용할 수 없습니다.
-따라서 실내 수조(10m $\times$ 5m) 환경에서는 다음과 같이 2대 기기가 역할을 분담하여 위치 추적 및 오도메트리를 생성합니다:
+실내에서는 GNSS를 사용할 수 없어 외벽 TG-50의 `/boat_pose`와 선체 GQ7 IMU로 `/odom`을 만듭니다. `indoor_tank.launch.py`가 실외용 GQ7 EKF `/odom` remap과 TF broadcaster를 끄므로 실내에서 `real_sensors.launch.py`를 따로 실행하면 안 됩니다. 선체 TG-50을 쓰면 `/scan/raw`에서 배 구조물이 보이는 220°~320°를 가린 `/scan`을 지도·회피에 사용합니다. 고정 라이다 `/shore/scan`에는 이 필터가 적용되지 않습니다.
 
-### 기기별 역할 분담 (Ownership)
+**노트북·젯슨 빌드, 포트 선택, IMU 보정, 고정 B-Spline 추종, 장애물 회피 미리보기·주행, RViz, 출발·정지는 [TANK_TESTS_GUIDE.md](TANK_TESTS_GUIDE.md)에 모았습니다.** 이 절차의 설치 좌표와 선체 폭·라이다 원점 변환은 현장 실측값으로 확인해야 합니다. 선체 TG-50의 최소 거리 설정은 [`tg50_onboard.yaml`](src/kaboat_hardware/config/tg50_onboard.yaml), 실내 오도메트리 설정은 [`indoor_tank.yaml`](src/kaboat_hardware/config/indoor_tank.yaml)에 있습니다.
 
-* **수조 외벽 노트북**: 오른쪽 벽 중앙 `(10.0, 2.5)m`에서 수조 안쪽 `-X`를 향한 고정 YDLIDAR TG-50이 `/shore/scan`을 발행하고 `lidar_boat_tracker`가 이를 구독합니다. 추적기는 좌우 봉을 잇는 길이 0.60m 횡단 판의 선분 중점과 기울기로 배 위치와 180° 모호한 yaw(`/boat_pose`)를 계산합니다.
-* **선체 젯슨 (Jetson)**: GQ7 드라이버와 `indoor_lidar_odom`이 `/odom` 및 TF를 발행합니다. 추가 TG-50을 연결하면 0.40m 이내 반사를 제거한 `/scan`을 발행합니다. 선체 `/scan`과 외벽 `/shore/scan`은 섞이지 않습니다.
-
-포트 이름은 실행 전에 확인합니다. LiDAR launch는 `port`를 생략하면
-`/dev/ttyUSB*` 중 첫 장치를 기본값으로 고르지만, 여러 USB 장치가 있으면
-오선택할 수 있습니다. 스러스터의 대체 포트 탐색은 기본 비활성이므로 두 장치
-모두 확인한 포트, 가능하면 `/dev/serial/by-id/...`를 명시합니다.
-
-```bash
-# 1. 수조 외벽 노트북 (외부 고정 라이다 드라이버 + 추적기 + RViz2)
-ls -l /dev/serial/by-id/ /dev/ttyUSB* 2>/dev/null
-ros2 launch kaboat_hardware lidar_boat_tracker.launch.py \
-  port:=/dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0
-
-# 2. 배 (Jetson — GQ7 + indoor_lidar_odom, 선체 TG-50 미장착, 모터 비활성화)
-ros2 launch kaboat_hardware indoor_tank.launch.py enable_thrusters:=false
-
-# 선체 TG-50 장착 시에는 위 명령 대신 아래 명령 실행
-# onboard_lidar_port는 Jetson에서 확인한 실제 TG-50 포트로 교체
-ros2 launch kaboat_hardware indoor_tank.launch.py \
-  enable_thrusters:=false enable_onboard_lidar:=true \
-  onboard_lidar_port:=/dev/serial/by-id/<선체-TG-50-장치명>
-
-# 외벽 TG-50 확인. 아래 /scan은 선체 TG-50 장착 시에만 확인
-ros2 topic hz /shore/scan
-ros2 topic hz /scan
-```
-
-선체 TG-50의 0.40m 컷오프는 센서 원점 기준이다. 실제 선체 부품이
-0.40m보다 멀리 보이면 장착 위치를 확인하고
-[`tg50_onboard.yaml`](src/kaboat_hardware/config/tg50_onboard.yaml)의
-`range_min`을 현장 측정값에 맞춘다. 선체 라이다의 `onboard_laser_frame`에서
-`base_link`까지의 장착 변환도 별도로 실측해야 한다.
-
-필드별로 센서의 장점을 취하여 융합합니다:
-
-| `/odom` 필드 | 출처 | 이유 |
-|---|---|---|
-| `pose.position` | **외부 TG-50 라이다** (`/boat_pose`) | 횡단 판 선분의 중점으로 `base_link` 위치 계산 |
-| `pose.orientation` | **외부 TG-50 라이다** (`/boat_pose`) | 판 기울기의 두 yaw 후보 중 IMU gyro가 추적한 방향에 가까운 쪽 선택 |
-| `twist.angular.z` | **외부 TG-50 라이다** | 연속 판 yaw 차분값을 EMA로 완화 |
-| `twist.linear.x/y` | 위치 미분 추정 (`VelocityEstimator`) | 0.15초 윈도우 및 지수이동평균(EMA) 필터링으로 미분 노이즈 억제 |
-
-속도 노이즈는 5mm 검출 오차 기준 실측(`test_pose_velocity.py`)으로
-window 1프레임 0.205 m/s → window 0.15s 0.042 → +EMA **0.011 m/s**.
-
-외부 라이다 추적 전 TG-50와 Occupancy Grid 파이프라인만 짧게 시험할 때는
-임시 IMU dead-reckoning launch(`imu_tg50_mapping.launch.py`)를 쓸 수 있으나, 가속도 이중 적분이라 빠르게 드리프트하며 모터 주행용이 아닙니다 (세부 절차는 [`SENSOR_CHECK.md`](SENSOR_CHECK.md) §11 참조).
-
-### ⚠️ `/odom` 발행자 중복 주의
-
-`indoor_tank.launch.py`는 실내 모드에 맞춰 GQ7 EKF의 `/odom` remap과 실외용
-TF broadcaster를 자동으로 끕니다. 실내에서는 `real_sensors.launch.py`를 따로
-중복 실행하지 않습니다. 수동 구성이 꼭 필요하면
-`enable_odom_remap:=false publish_tf:=false`를 모두 지정해야 합니다.
-
-```bash
-ros2 topic info /odom --verbose | grep "Publisher count"   # 반드시 1이어야 함
-```
-
-### ⚠️ 파라미터 스케일
-
-현재 기본값들은 실제 경기장(수십 m, 전속 1.48 m/s) 기준이라 실내 수조에서는
-전부 과대합니다. `d_panic`(3.0m)·`escape_radius`(2.5m)·`lookahead`(2.0m)·
-`min_horizon`(3.0m)·`transition_radius`(2.0m)·occupancy_grid `size`(20m)와
-경기장 좌표 waypoint를 수조 실측값으로 재산출해야 합니다. 센서 융합 설정은
-[`indoor_tank.yaml`](src/kaboat_hardware/config/indoor_tank.yaml)에 적용됩니다.
-[`tank_tests.yaml`](src/kaboat_hardware/config/tank_tests.yaml)은 현재 launch가
-자동 로드하지 않는 참고용 파일이므로, 테스트 주행값은 실제 노드 기본값과
-launch 인자를 기준으로 확인합니다.
-
-또 **수조 벽이 LiDAR에 전부 장애물로 잡혀** 격자가 사방으로 막힙니다. avoid
-플래너는 "전진 반평면에 답 없음" → ESCAPE(후진)로 갈 것이므로, 수조 단독 테스트 노드(`tank_tests.launch.py`)를 통해 먼저 검증하는 것을 권장합니다.
+외벽 라이다 추적 전 센서만 짧게 확인할 때의 임시 IMU dead reckoning 절차는 [SENSOR_CHECK.md](SENSOR_CHECK.md) §11을 참조하세요. 가속도 이중 적분으로 빠르게 드리프트하므로 모터 주행용 오도메트리로 사용하지 않습니다.
 
 ---
 

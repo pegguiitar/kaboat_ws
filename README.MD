@@ -8,7 +8,7 @@ OSRF VRX 오픈소스 기반 WAM-V 선박의 통합 자율주행 알고리즘 �
 > **[SKELETON.MD](SKELETON.MD)** 를 참고하세요.
 >
 > **실물 수조 외벽 라이다 노트북**은 시뮬레이션용 아래 절차 대신
-> **[LIDAR_DOCKER.md](LIDAR_DOCKER.md)** 를 따릅니다.
+> **[TANK_TESTS_GUIDE.md](TANK_TESTS_GUIDE.md)** 를 따릅니다.
 
 ---
 

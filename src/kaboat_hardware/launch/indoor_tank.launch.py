@@ -75,6 +75,8 @@ def generate_launch_description():
             os.path.join(hardware_share, 'launch', 'onboard_lidar.launch.py')),
         launch_arguments={
             'port': LaunchConfiguration('onboard_lidar_port'),
+            'mask_start_deg': LaunchConfiguration('onboard_lidar_mask_start_deg'),
+            'mask_end_deg': LaunchConfiguration('onboard_lidar_mask_end_deg'),
         }.items(),
         condition=IfCondition(enable_onboard_lidar),
     )
@@ -95,6 +97,12 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'onboard_lidar_port', default_value='/dev/ttyUSB0',
             description='선체 TG-50 포트; /dev/serial/by-id/... 명시 권장'),
+        DeclareLaunchArgument(
+            'onboard_lidar_mask_start_deg', default_value='220.0',
+            description='선체 구조물로 가릴 스캔 시작각 [deg]'),
+        DeclareLaunchArgument(
+            'onboard_lidar_mask_end_deg', default_value='320.0',
+            description='선체 구조물로 가릴 스캔 끝각 [deg]'),
         DeclareLaunchArgument(
             'thruster_hardware_type', default_value='serial',
             description="스러스터 하드웨어 타입 ('serial' | 'dummy' | 'pca9685')"),

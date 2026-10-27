@@ -31,7 +31,12 @@ bspline_track_test:
     slow_radius: 1.5          # [m] 종점 감속 반경
     kp_yaw: 1.5               # 헤딩 P 게인
     kd_yaw: 0.15              # 요레이트 D 게인
-    curvature_slowdown: 0.25  # 곡률 기반 자동 감속 가중치
+    kappa_window: 2.0         # [m] 전방 최대 곡률 평가 구간
+    v_min: 0.3                # [m/s] 곡률 감속 하한
+    v_max: 1.4                # [m/s] 경로 추종 속도 상한
+    omega_max: 0.52           # [rad/s] 곡률 기반 속도 제한
+    v_full: 1.48              # [m/s] cruise_speed 출력에서의 속도 (실물 재교정 필요)
+    cmd_exp: 1.64             # 속도→출력 변환 지수 (실물 재교정 필요)
     odom_timeout_sec: 0.5     # [s] /odom 타임아웃
     wait_for_start: true      # 외부 시작 신호 대기
 
