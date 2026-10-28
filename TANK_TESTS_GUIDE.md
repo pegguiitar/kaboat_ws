@@ -9,7 +9,7 @@
 `base_link` 원점과 일치해야 합니다. 추적기는 판의 선분 기울기와 중점으로
 `/boat_pose`를 계산합니다.
 
-`/dev/ttyUSB0` 같은 번호는 연결 순서에 따라 바뀔 수 있습니다. 각 기기에서 포트를 확인해 입력합니다. 장치가 고유한 USB 식별자를 제공한다면 `/dev/serial/by-id/...` 경로를 우선 사용하세요. 이 경로가 없으면 `/dev/serial/by-path/...` 또는 현재의 `/dev/ttyUSB*`를 확인해 입력합니다.
+`/dev/ttyUSB0`이나 `/dev/ttyCH341USB0`(CH340 아두이노 사용 시) 같은 포트는 연결 장치와 드라이버에 따라 다릅니다. 각 기기에서 포트를 확인해 입력합니다. 아두이노 CH340 제어기는 `/dev/ttyCH341USB0`, 고유한 USB 식별자를 제공하는 장치는 `/dev/serial/by-id/...`, 그 외에는 `/dev/serial/by-path/...` 또는 `/dev/ttyUSB*`를 확인해 입력합니다.
 
 ## 1. 수조 외벽 노트북: 라이다와 배 위치 추적
 
@@ -111,12 +111,17 @@ ros2 topic hz /odom
 보정 성공 메시지와 `/odom` 발행을 확인하고 `ros2 topic hz`는 `Ctrl+C`로 종료합니다. 보정 실패 시 모터를 시작하지 마세요. GQ7 또는 `indoor_tank.launch.py`를 재시작했다면 다시 보정합니다.
 `ros2 topic info /odom --verbose`의 `Publisher count`도 **1**인지 확인합니다. 실내에서는 `real_sensors.launch.py`를 별도로 실행하지 않습니다.
 
-**젯슨 터미널 3** — 새 터미널 준비 명령을 실행한 뒤 모터 제어기 시작. 포트를 **모터 제어기 장치**로 지정하세요.
+**젯슨 터미널 3** — 새 터미널 준비 명령을 실행한 뒤 모터 제어기 시작. 아두이노(CH340) 모터 제어기는 전용 드라이버에 의해 `/dev/ttyCH341USB0`으로 등록됩니다.
 
 ```bash
-ls -l /dev/serial/by-id/ /dev/serial/by-path/ /dev/ttyUSB* /dev/ttyACM* 2>/dev/null
-printf '모터 제어기 포트 경로: '
+# 아두이노 CH340 제어기 기본 실행 (포트: /dev/ttyCH341USB0)
+ros2 launch kaboat_hardware thrusters.launch.py hardware_type:=serial port:=/dev/ttyCH341USB0 allow_port_scan:=false
+
+# 또는 포트 직접 확인 후 지정 실행 (아두이노는 /dev/ttyCH341USB0, CP2102/기타는 /dev/ttyUSB*)
+ls -l /dev/serial/by-id/ /dev/ttyCH341* /dev/ttyUSB* /dev/ttyACM* 2>/dev/null
+printf '모터 제어기 포트 경로 (기본값 /dev/ttyCH341USB0): '
 read -r THRUSTER_PORT
+THRUSTER_PORT=${THRUSTER_PORT:-/dev/ttyCH341USB0}
 ros2 launch kaboat_hardware thrusters.launch.py hardware_type:=serial port:="$THRUSTER_PORT" allow_port_scan:=false
 ```
 
@@ -170,11 +175,8 @@ ros2 topic echo /real_avoid_test/status
 미리보기를 확인한 뒤 **4절의 테스트 런처를 종료**합니다. 다른 `/cmd_vel` 발행 노드는 함께 켜지 않습니다. 젯슨 터미널 3에서 모터 제어기를 3절과 같이 확인해 드라이버를 시작하고, 젯슨 터미널 4에서 새 터미널 준비 명령 후 주행 모드를 켭니다.
 
 ```bash
-# 젯슨 터미널 3: 모터 포트 확인 후 지정
-ls -l /dev/serial/by-id/ /dev/serial/by-path/ /dev/ttyUSB* /dev/ttyACM* 2>/dev/null
-printf '모터 제어기 포트 경로: '
-read -r THRUSTER_PORT
-ros2 launch kaboat_hardware thrusters.launch.py hardware_type:=serial port:="$THRUSTER_PORT" allow_port_scan:=false
+# 젯슨 터미널 3: 아두이노(CH340) 모터 제어기 시작 (포트: /dev/ttyCH341USB0)
+ros2 launch kaboat_hardware thrusters.launch.py hardware_type:=serial port:=/dev/ttyCH341USB0 allow_port_scan:=false
 ```
 
 ```bash
