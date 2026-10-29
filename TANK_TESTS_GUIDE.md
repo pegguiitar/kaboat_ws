@@ -9,7 +9,7 @@
 `base_link` 원점과 일치해야 합니다. 추적기는 판의 선분 기울기와 중점으로
 `/boat_pose`를 계산합니다.
 
-`/dev/ttyUSB0`이나 `/dev/ttyCH341USB0`(CH340 아두이노 사용 시) 같은 포트는 연결 장치와 드라이버에 따라 다릅니다. 각 기기에서 포트를 확인해 입력합니다. 아두이노 CH340 제어기는 `/dev/ttyCH341USB0`, 고유한 USB 식별자를 제공하는 장치는 `/dev/serial/by-id/...`, 그 외에는 `/dev/serial/by-path/...` 또는 `/dev/ttyUSB*`를 확인해 입력합니다.
+외벽 노트북의 고정 TG-50은 확인된 `/dev/serial/by-id/...` 경로를, 젯슨의 아두이노 CH340 모터 제어기는 최신 가이드의 `/dev/ttyCH341USB0`을 아래 명령에 직접 지정했습니다. 선체 TG-50 포트는 젯슨에서 따로 확인해 입력하세요. 장치나 드라이버가 바뀌면 해당 기기에서 `/dev/serial/by-id/`, `/dev/serial/by-path/`, `/dev/ttyUSB*`, `/dev/ttyCH341*`를 다시 확인해야 합니다.
 
 ## 1. 수조 외벽 노트북: 라이다와 배 위치 추적
 
@@ -28,10 +28,9 @@ cd /workspace/kaboat_ws
 source /opt/ros/humble/setup.bash
 colcon build --symlink-install --packages-up-to kaboat_hardware
 source install/setup.bash
-ls -l /dev/serial/by-id/ /dev/serial/by-path/ /dev/ttyUSB* 2>/dev/null
-printf '고정 TG-50 포트 경로: '
-read -r LIDAR_PORT
-ros2 launch kaboat_hardware lidar_boat_tracker.launch.py port:="$LIDAR_PORT" enable_rviz:=false
+ros2 launch kaboat_hardware lidar_boat_tracker.launch.py \
+  port:=/dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0 \
+  enable_rviz:=false
 ```
 
 이 터미널은 켜 둡니다. 고정 라이다는 `/shore/scan`, 배 위치 추적기는 `/boat_pose`를 발행합니다.
@@ -111,18 +110,11 @@ ros2 topic hz /odom
 보정 성공 메시지와 `/odom` 발행을 확인하고 `ros2 topic hz`는 `Ctrl+C`로 종료합니다. 보정 실패 시 모터를 시작하지 마세요. GQ7 또는 `indoor_tank.launch.py`를 재시작했다면 다시 보정합니다.
 `ros2 topic info /odom --verbose`의 `Publisher count`도 **1**인지 확인합니다. 실내에서는 `real_sensors.launch.py`를 별도로 실행하지 않습니다.
 
-**젯슨 터미널 3** — 새 터미널 준비 명령을 실행한 뒤 모터 제어기 시작. 아두이노(CH340) 모터 제어기는 전용 드라이버에 의해 `/dev/ttyCH341USB0`으로 등록됩니다.
+**젯슨 터미널 3** — 새 터미널 준비 명령을 실행한 뒤 모터 제어기 시작. 아두이노(CH340) 모터 제어기 포트는 최신 가이드에 지정된 `/dev/ttyCH341USB0`입니다. 젯슨에서 해당 장치가 실제로 등록됐는지 확인하세요.
 
 ```bash
-# 아두이노 CH340 제어기 기본 실행 (포트: /dev/ttyCH341USB0)
+ls -l /dev/ttyCH341USB0
 ros2 launch kaboat_hardware thrusters.launch.py hardware_type:=serial port:=/dev/ttyCH341USB0 allow_port_scan:=false
-
-# 또는 포트 직접 확인 후 지정 실행 (아두이노는 /dev/ttyCH341USB0, CP2102/기타는 /dev/ttyUSB*)
-ls -l /dev/serial/by-id/ /dev/ttyCH341* /dev/ttyUSB* /dev/ttyACM* 2>/dev/null
-printf '모터 제어기 포트 경로 (기본값 /dev/ttyCH341USB0): '
-read -r THRUSTER_PORT
-THRUSTER_PORT=${THRUSTER_PORT:-/dev/ttyCH341USB0}
-ros2 launch kaboat_hardware thrusters.launch.py hardware_type:=serial port:="$THRUSTER_PORT" allow_port_scan:=false
 ```
 
 **젯슨 터미널 4** — 새 터미널 준비 명령을 실행한 뒤 B-Spline 주행 노드 시작. 출발 명령 전까지 대기합니다.
