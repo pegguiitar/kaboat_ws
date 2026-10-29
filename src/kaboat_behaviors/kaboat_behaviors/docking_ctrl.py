@@ -1,8 +1,8 @@
-"""docking_ctrl — 표식 기반 도킹 FSM의 ROS 배선 노드.
+"""docking_ctrl — 3D marker에서 계산된 boat-local 입구 XY 추종.
 
-v5: 도킹 표식은 공유 버스의 buoys 가 아니라 **/detections/dock_marks**
-(dock_mark_detector, YOLO — dock state 에서만 mission_manager 가
-/detector/enable 로 추론을 켠다)를 이 behavior 만 단독 구독한다.
+YOLO는 /dock/entrance_base (PointStamped, base_link, z=0)를 발행한다.
+MarkArray의 픽셀 중심 거리로 진입하지 않는다. 기본 motion_enabled=false:
+카메라 TF·입구 오프셋·현장 안전 검증 후 명시적으로 켜야 추력이 나온다.
 
   APPROACH → ACQUIRE → ALIGN → ENTER → HOLD → REVERSE → COMPLETE
 
@@ -13,12 +13,11 @@ Twist 변환만 담당한다. 표식을 잡은 ALIGN 이후에는 도킹 구조�
 import dataclasses
 
 import rclpy
-from geometry_msgs.msg import Twist
+from geometry_msgs.msg import PointStamped, Twist
 
-from kaboat_msgs.msg import MarkArray
-
-from .behavior_base import BehaviorBase
-from .docking_fsm import DockingFsm, DockParams, DockTarget
+from .behavior_base import BehaviorBase, YAW_KD
+from .dock_target import target_from_entrance
+from .docking_fsm import DockingFsm, DockParams
 from .obstacle_avoidance_utils import apply_repulsion
 
 
@@ -28,13 +27,19 @@ class DockingCtrl(BehaviorBase):
 
     def __init__(self):
         super().__init__()
-        self.declare_parameter('target_color', 'red')   # 당일 지정 표식 색
-        self.declare_parameter('target_shape', 'unknown')
-        self.declare_parameter('dock.mark_freshness', 0.5)
-        self.target_color = self.get_parameter('target_color').value
-        self.target_shape = self.get_parameter('target_shape').value
-        self.mark_freshness = float(
-            self.get_parameter('dock.mark_freshness').value)
+        self.declare_parameter('dock.motion_enabled', False)
+        self.declare_parameter('dock.entrance_freshness_s', 0.35)
+        self.declare_parameter('dock.max_stamp_age_s', 0.5)
+        self.declare_parameter('dock.max_entrance_range_m', 12.0)
+        self.declare_parameter('dock.base_frame', 'base_link')
+        self.motion_enabled = bool(self.get_parameter('dock.motion_enabled').value)
+        self.entrance_freshness = float(
+            self.get_parameter('dock.entrance_freshness_s').value)
+        self.max_stamp_age = float(
+            self.get_parameter('dock.max_stamp_age_s').value)
+        self.max_entrance_range = float(
+            self.get_parameter('dock.max_entrance_range_m').value)
+        self.base_frame = str(self.get_parameter('dock.base_frame').value)
 
         defaults = DockParams()
         values = {}
@@ -43,46 +48,55 @@ class DockingCtrl(BehaviorBase):
             self.declare_parameter(name, getattr(defaults, field.name))
             values[field.name] = self.get_parameter(name).value
         self.fsm = DockingFsm(DockParams(**values))
-        self.dock_marks = []   # 도킹 전용 검출 (공유 버스와 별도)
-        self._marks_received_at = None
+        self.entrance = None
+        self._entrance_received_at = None
         self.create_subscription(
-            MarkArray, '/detections/dock_marks', self._on_dock_marks, 10)
+            PointStamped, '/dock/entrance_base', self._on_entrance, 10)
+        if not self.motion_enabled:
+            self.get_logger().warning(
+                'dock.motion_enabled=false — 좌표는 구독하지만 도킹 추력은 차단')
 
     def on_activate(self):
         self.fsm.reset()
-        self.dock_marks = []
-        self._marks_received_at = None
+        self.entrance = None
+        self._entrance_received_at = None
 
     def on_deactivate(self):
         self.fsm.reset()
-        self.dock_marks = []
-        self._marks_received_at = None
+        self.entrance = None
+        self._entrance_received_at = None
 
-    def _on_dock_marks(self, msg: MarkArray):
-        self.dock_marks = list(msg.marks)
-        self._marks_received_at = self.get_clock().now().nanoseconds * 1e-9
+    def _on_entrance(self, msg: PointStamped):
+        if msg.header.frame_id != self.base_frame:
+            self.get_logger().warning(
+                f'입구 좌표 frame 오류: {msg.header.frame_id} != {self.base_frame}',
+                throttle_duration_sec=5.0)
+            return
+        now = self.get_clock().now().nanoseconds * 1e-9
+        stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+        age = now - stamp
+        if stamp <= 0 or age < -0.1 or age > self.max_stamp_age:
+            self.get_logger().warning(
+                f'입구 좌표 시각 오류/지연: age={age:.2f}s',
+                throttle_duration_sec=5.0)
+            return
+        self.entrance = msg
+        self._entrance_received_at = now
 
-    def _best_target(self, now: float):
-        if (self._marks_received_at is None
-                or now - self._marks_received_at > self.mark_freshness):
+    def _fresh_target(self, now: float):
+        if (self.entrance is None or self._entrance_received_at is None
+                or now - self._entrance_received_at > self.entrance_freshness):
             return None
-        targets = [
-            mark for mark in self.dock_marks
-            if mark.color == self.target_color
-            and (self.target_shape == 'unknown'
-                 or mark.shape == self.target_shape)
-            and mark.distance >= 0.0
-        ]
-        if not targets:
-            return None
-        best = max(targets, key=lambda mark: mark.confidence)
-        return DockTarget(
-            bearing=float(best.bearing),
-            distance=float(best.distance))
+        point = self.entrance.point
+        return target_from_entrance(
+            float(point.x), float(point.y), float(point.z),
+            max_range=self.max_entrance_range)
 
     def compute_cmd(self):
+        if not self.motion_enabled:
+            return Twist()
         now = self.get_clock().now().nanoseconds * 1e-9
-        target = self._best_target(now)
+        target = self._fresh_target(now)
         out = self.fsm.step(now, self.distance_to_goal(), target)
         if out.event is not None:
             self.get_logger().info(f'도킹 FSM: {out.event}')
@@ -95,6 +109,8 @@ class DockingCtrl(BehaviorBase):
             cmd = Twist()
             cmd.linear.x = self.max_linear * out.linear
             cmd.angular.z = self.max_angular * out.angular
+            if self.odom is not None and out.angular != 0.0:
+                cmd.angular.z -= YAW_KD * self.odom.twist.twist.angular.z
 
         if out.use_repulsion:
             return apply_repulsion(cmd, self.occupancy_grid, self.odom)
