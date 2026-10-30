@@ -39,8 +39,9 @@ behavior 의 회피가 공유하는 지도를 만든다. v5 설계상 장애물 
   히트가 window 밖인 빔도 경계까지의 경로는 free 로 갱신(cv2 클리핑).
   lidar와 base_link 는 동일 위치/자세로 가정(TF 미사용, behavior 쪽과 동일
   단순화) — 실물 전환 시 lidar 장착 오프셋 보정 필요.
-  IMU 롤/피치가 TILT_MAX 를 넘으면 그 스캔은 통째로 버린다(배가 기울면
-  2D LiDAR 가 수면/하늘을 훑어 유령 장애물이 생기기 때문).
+  enable_tilt_gate=true 일 때 IMU 롤/피치가 TILT_MAX 를 넘으면 그 스캔은
+  통째로 버린다(배가 기울면 2D LiDAR 가 수면/하늘을 훑을 수 있기 때문).
+  실내 수조처럼 평형을 가정하는 시험은 이 게이트를 끌 수 있다.
 
   뎁스캠(/camera/depth/points)은 LiDAR 를 대체하는 게 아니라 사각지대
   보완용 — LiDAR 수평 한 평면이 놓치는 물체를 z-band(수면 위 cam_z_min~
@@ -114,6 +115,7 @@ class OccupancyGridNode(Node):
         self.declare_parameter('publish_rate', 10.0)  # 발행 주기 [Hz] — 스캔(10Hz)과 동율.
         # 변환이 0.07ms 라 부담 없고, 유령/신규 장애물이 소비자에게 보이는 지연을
         # 최대 1s → 0.1s 로 줄인다. 10Hz 넘게 올려도 스캔이 10Hz 라 무의미.
+        self.declare_parameter('enable_tilt_gate', True)  # 실내 수조 시험은 false
         self.declare_parameter('hit_dedup', True)    # 히트를 스캔당 셀당 1회로 캡
         # 같은 스캔의 이웃 빔은 독립 관측이 아니므로 중복 누적하면 증거 과대계상 —
         # 수면 반사 노이즈가 한 스캔에 검정(97)까지 튀는 원인이었다(베이즈 독립성 교정).
@@ -130,6 +132,7 @@ class OccupancyGridNode(Node):
         rate = float(self.get_parameter('publish_rate').value)
         self.cells = int(self.size / self.resolution)
         self.hit_dedup = bool(self.get_parameter('hit_dedup').value)
+        self.enable_tilt_gate = bool(self.get_parameter('enable_tilt_gate').value)
         self.cam_stride = int(self.get_parameter('cam_stride').value)
         self.cam_height = float(self.get_parameter('cam_height').value)
         self.cam_z_min = float(self.get_parameter('cam_z_min').value)
@@ -146,8 +149,9 @@ class OccupancyGridNode(Node):
         self.create_subscription(
             LaserScan, '/scan', self._on_scan, qos_profile_sensor_data)
         self.create_subscription(Odometry, '/odom', self._on_odom, 10)
-        self.create_subscription(
-            Imu, '/imu/data', self._on_imu, qos_profile_sensor_data)
+        if self.enable_tilt_gate:
+            self.create_subscription(
+                Imu, '/imu/data', self._on_imu, qos_profile_sensor_data)
         self.create_subscription(
             PointCloud2, '/camera/depth/points', self._on_points,
             qos_profile_sensor_data)
@@ -156,7 +160,8 @@ class OccupancyGridNode(Node):
         self.create_timer(1.0 / rate, self._publish)
 
         self.get_logger().info(
-            f'occupancy_grid 시작 — {self.cells}×{self.cells}셀 @ {self.resolution}m → /occupancy_grid')
+            f'occupancy_grid 시작 — {self.cells}×{self.cells}셀 @ {self.resolution}m '
+            f'→ /occupancy_grid (기울기 차단: {self.enable_tilt_gate})')
 
     def _on_odom(self, msg: Odometry):
         self.odom = msg
@@ -210,7 +215,7 @@ class OccupancyGridNode(Node):
         self.anchor = (ax, ay)
 
     def _on_scan(self, msg: LaserScan):
-        if self.odom is None or self.tilted:
+        if self.odom is None or (self.enable_tilt_gate and self.tilted):
             return  # 기울면 이번 스캔은 통째로 버림 — 유령 장애물 방지
         self._recenter()
 
@@ -268,7 +273,7 @@ class OccupancyGridNode(Node):
 
     def _on_points(self, msg: PointCloud2):
         """뎁스캠으로 LiDAR 사각지대 보완 — 점유 증거만 더함(자유공간 갱신 없음)."""
-        if self.odom is None or self.tilted:
+        if self.odom is None or (self.enable_tilt_gate and self.tilted):
             return
 
         pts = pc2.read_points_numpy(msg, field_names=('x', 'y', 'z'), skip_nans=True)

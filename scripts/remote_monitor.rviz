@@ -1,0 +1,160 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+    Tree Height: 660
+  - Class: rviz_common/Views
+    Name: Views
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Grid
+      Enabled: true
+      Alpha: 0.35
+      Cell Size: 1
+      Plane: XY
+      Plane Cell Count: 30
+      Reference Frame: odom
+      Value: true
+    - Class: rviz_default_plugins/TF
+      Name: TF
+      Enabled: true
+      Value: true
+    - Class: rviz_default_plugins/Map
+      Name: "장애물 점유 지도"
+      Enabled: true
+      Alpha: 0.55
+      Color Scheme: map
+      Draw Behind: true
+      Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /occupancy_grid
+      Value: true
+    - Class: rviz_default_plugins/LaserScan
+      Name: "선체 라이다 /scan"
+      Enabled: true
+      Alpha: 0.9
+      Color: 255; 75; 75
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Position Transformer: XYZ
+      Queue Size: 10
+      Size (Pixels): 4
+      Style: Points
+      Topic:
+        Depth: 10
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /scan
+      Use Fixed Frame: true
+      Value: true
+    - Class: rviz_default_plugins/Odometry
+      Name: "배 위치 /odom"
+      Enabled: true
+      Keep: 1
+      Topic:
+        Depth: 10
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /odom
+      Value: true
+    - Class: rviz_default_plugins/Path
+      Name: "자율 회피 /avoid/plan"
+      Enabled: true
+      Alpha: 1
+      Buffer Length: 1
+      Color: 0; 230; 255
+      Line Style: Lines
+      Line Width: 0.08
+      Pose Style: None
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /avoid/plan
+      Value: true
+    - Class: rviz_default_plugins/Path
+      Name: "수조 회피 시험 /real_avoid_test/path"
+      Enabled: true
+      Alpha: 1
+      Buffer Length: 1
+      Color: 90; 255; 125
+      Line Style: Lines
+      Line Width: 0.08
+      Pose Style: None
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /real_avoid_test/path
+      Value: true
+    - Class: rviz_default_plugins/Path
+      Name: "도킹 목표점 /dock/waypoints"
+      Enabled: true
+      Alpha: 1
+      Buffer Length: 1
+      Color: 255; 175; 35
+      Line Style: Lines
+      Line Width: 0.1
+      Pose Style: Axes
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /dock/waypoints
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Name: "회피 제어점 /avoid/cps"
+      Enabled: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /avoid/cps
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Name: "수조 회피 마커 /real_avoid_test/markers"
+      Enabled: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /real_avoid_test/markers
+      Value: true
+  Enabled: true
+  Global Options:
+    Background Color: 24; 26; 32
+    Fixed Frame: odom
+    Frame Rate: 30
+  Name: root
+  Tools:
+    - Class: rviz_default_plugins/Interact
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 15.0
+      Focal Point:
+        X: 0.0
+        Y: 0.0
+        Z: 0.0
+      Name: Overview
+      Pitch: 0.6
+      Yaw: 0.8
+    Saved: ~
+Window Geometry:
+  Height: 900
+  Width: 1300
+  X: 100
+  Y: 60

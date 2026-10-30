@@ -1,0 +1,180 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1190" viewBox="0 0 1600 1190" role="img" aria-labelledby="title description">
+  <title id="title">KABOAT 실물 도킹 미션: 세 목표점과 상태 전이</title>
+  <desc id="description">세 슬롯 중 목표 표식을 인식하여 입구 바깥 W1, 입구 W2, 표식 앞 1미터 W3를 순서대로 추종한다. 도킹 상태기계는 접근, 표식 획득, W1 이동, 축 정렬, 입구 이동, 접안점 이동, 접안 검증, 정지, 후진, 완료 순서이며 검출 및 자세 오류는 중단으로 이어진다.</desc>
+  <defs>
+    <marker id="arrow-blue" markerWidth="11" markerHeight="11" refX="9" refY="5.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M1 1 L10 5.5 L1 10 Z" fill="#2975c7"/>
+    </marker>
+    <marker id="arrow-slate" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M1 1 L9 5 L1 9 Z" fill="#62748a"/>
+    </marker>
+    <marker id="arrow-purple" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M1 1 L9 5 L1 9 Z" fill="#7c55bf"/>
+    </marker>
+    <style>
+      text { font-family: 'Noto Sans CJK KR', 'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif; fill: #203047; }
+      .heading { font-size: 31px; font-weight: 800; }
+      .sub { font-size: 16px; fill: #5d6d80; }
+      .section { font-size: 21px; font-weight: 800; }
+      .body { font-size: 15px; }
+      .small { font-size: 13px; }
+      .tiny { font-size: 12px; }
+      .muted { fill: #66788b; }
+      .strong { font-weight: 700; }
+      .white { fill: #ffffff; }
+      .card { fill: #ffffff; stroke: #dce5ed; stroke-width: 1.5; }
+      .line { stroke: #2975c7; stroke-width: 4; fill: none; marker-end: url(#arrow-blue); }
+      .flow { stroke: #62748a; stroke-width: 2.8; fill: none; marker-end: url(#arrow-slate); }
+      .state { fill: #f5f8fc; stroke: #d6e2ed; stroke-width: 1.5; }
+      .state-name { font-size: 18px; font-weight: 800; }
+      .state-detail { font-size: 13px; fill: #4b5d70; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="1190" fill="#f3f7fb"/>
+  <text x="48" y="64" class="heading">KABOAT 실물 도킹 미션</text>
+  <text x="48" y="99" class="sub">목표 표식 선택 → 세 개의 로컬 목표점 추종 → 표식 거리 확인 → 후진 복귀</text>
+  <rect x="1320" y="38" width="224" height="42" rx="21" fill="#e8f2ff"/>
+  <text x="1432" y="65" text-anchor="middle" class="body strong" fill="#225aa1">real 브랜치 구현 기준</text>
+
+  <!-- Spatial plan -->
+  <rect x="40" y="138" width="1010" height="608" rx="20" class="card"/>
+  <text x="68" y="186" class="section">① 슬롯과 W1 · W2 · W3</text>
+  <text x="998" y="185" text-anchor="end" class="small muted">위에서 본 개념도 · 축척 아님</text>
+  <rect x="67" y="216" width="956" height="351" rx="16" fill="#eaf5fb"/>
+
+  <!-- Four dock fingers create three slots. Slot order is illustrative. -->
+  <rect x="660" y="244" width="265" height="27" rx="3" fill="#3079b6"/>
+  <rect x="660" y="334" width="265" height="27" rx="3" fill="#3079b6"/>
+  <rect x="660" y="424" width="265" height="27" rx="3" fill="#3079b6"/>
+  <rect x="660" y="514" width="265" height="27" rx="3" fill="#3079b6"/>
+  <rect x="875" y="244" width="50" height="297" rx="3" fill="#3079b6"/>
+  <rect x="661" y="362" width="213" height="61" fill="#51bdab" fill-opacity="0.20" stroke="#2f9d87" stroke-width="2" stroke-dasharray="7 5"/>
+  <text x="948" y="402" class="small strong">선택한 슬롯</text>
+  <text x="948" y="423" class="tiny muted">예: 초록 원</text>
+
+  <!-- Three distinct rear-wall symbols, with nonbinding order. -->
+  <path d="M863 287 L875 309 L851 309 Z" fill="#d95653" stroke="#ffffff" stroke-width="2"/>
+  <circle cx="863" cy="393" r="12" fill="#39a778" stroke="#ffffff" stroke-width="2"/>
+  <rect x="851" y="471" width="24" height="24" rx="2" fill="#4a79d0" stroke="#ffffff" stroke-width="2"/>
+  <text x="946" y="529" class="tiny muted">표식 순서는 예시</text>
+
+  <!-- The boat and visual target sequence. -->
+  <path d="M212 369 L275 369 L296 393 L275 417 L212 417 Q203 417 203 408 L203 378 Q203 369 212 369 Z" fill="#ffffff" stroke="#274d73" stroke-width="3"/>
+  <path d="M224 381 L268 381 L279 393 L268 405 L224 405 Z" fill="#d5e9f7"/>
+  <text x="248" y="446" text-anchor="middle" class="small strong">배 · 선체 중심</text>
+  <text x="248" y="465" text-anchor="middle" class="tiny muted">약 1 × 1 m</text>
+  <path d="M298 393 L440 393" class="line"/>
+  <path d="M467 393 L648 393" class="line"/>
+  <path d="M680 393 L746 393" class="line"/>
+  <circle cx="450" cy="393" r="12" fill="#ffffff" stroke="#2975c7" stroke-width="4"/>
+  <circle cx="660" cy="393" r="12" fill="#ffffff" stroke="#2975c7" stroke-width="4"/>
+  <circle cx="755" cy="393" r="12" fill="#ffffff" stroke="#2975c7" stroke-width="4"/>
+  <text x="450" y="331" text-anchor="middle" class="body strong">W1</text>
+  <text x="450" y="351" text-anchor="middle" class="small">입구 바깥</text>
+  <text x="660" y="315" text-anchor="middle" class="body strong">W2</text>
+  <text x="660" y="330" text-anchor="middle" class="small">입구 중심</text>
+  <text x="755" y="464" text-anchor="middle" class="body strong">W3</text>
+  <text x="755" y="483" text-anchor="middle" class="small">접안점</text>
+  <text x="862" y="362" text-anchor="middle" class="small strong">표식</text>
+
+  <!-- Distances refer to the current base_link target point, not hull clearance. -->
+  <path d="M450 496 L450 510 M660 496 L660 510 M450 503 L660 503" stroke="#476a8a" stroke-width="1.6"/>
+  <text x="555" y="530" text-anchor="middle" class="small strong">pre_entry_offset = 1.5 m</text>
+  <path d="M755 554 L755 568 M875 554 L875 568 M755 562 L875 562" stroke="#476a8a" stroke-width="1.6"/>
+  <text x="815" y="586" text-anchor="middle" class="small strong">1.0 m</text>
+
+  <rect x="67" y="601" width="956" height="119" rx="14" fill="#f6f9fc" stroke="#e0e9f0"/>
+  <text x="87" y="631" class="body strong">목표점 계산: 표식 → 입구 방향을 ‘슬롯 바깥쪽’으로 사용</text>
+  <text x="87" y="658" class="small">W1 = 입구 + 바깥방향 × 1.5 m　　W2 = 입구　　W3 = 표식 + 바깥방향 × 1.0 m</text>
+  <text x="87" y="686" class="small muted">1.0 m는 표식과 base_link(선체 중심)의 평면거리 기준. 선수 끝과 벽 사이 거리와 다릅니다.</text>
+  <text x="87" y="707" class="small muted">입구는 depth·벽 법선과 실측 wall_to_mouth_m으로 추정합니다. B-spline 곡선은 생성하지 않습니다.</text>
+
+  <!-- Implementation data flow -->
+  <rect x="1070" y="138" width="490" height="608" rx="20" class="card"/>
+  <text x="1098" y="186" class="section">② 실제 코드의 데이터 흐름</text>
+  <rect x="1096" y="214" width="438" height="73" rx="12" fill="#eaf5fb"/>
+  <text x="1114" y="241" class="body strong">D455 카메라</text>
+  <text x="1114" y="264" class="small">RGB + 정렬 depth + camera_info</text>
+  <path d="M1315 287 L1315 303" class="flow"/>
+  <rect x="1096" y="304" width="438" height="73" rx="12" fill="#eff5fd"/>
+  <text x="1114" y="331" class="body strong">dock_mark_detector.py</text>
+  <text x="1114" y="354" class="small">YOLO 표식 선택 · 깊이 · 벽 법선 · TF</text>
+  <path d="M1315 377 L1315 393" class="flow"/>
+  <rect x="1096" y="394" width="438" height="73" rx="12" fill="#eff5fd"/>
+  <text x="1114" y="421" class="body strong">표식점 + 입구점 (base_link)</text>
+  <text x="1114" y="444" class="small">/dock/marker_base · /dock/entrance_base</text>
+  <path d="M1315 467 L1315 483" class="flow"/>
+  <rect x="1096" y="484" width="438" height="73" rx="12" fill="#eff5fd"/>
+  <text x="1114" y="511" class="body strong">dock_target.py → docking_fsm.py</text>
+  <text x="1114" y="534" class="small">매 관측마다 목표점 갱신 · 단계 전이</text>
+  <path d="M1315 557 L1315 573" class="flow"/>
+  <rect x="1096" y="574" width="438" height="73" rx="12" fill="#eaf7ef"/>
+  <text x="1114" y="601" class="body strong">docking_ctrl.py</text>
+  <text x="1114" y="624" class="small">/dock/waypoints · /cmd/dock → cmd_mux</text>
+  <text x="1098" y="685" class="small strong" fill="#9c5b1d">기본 dock.motion_enabled = false</text>
+  <text x="1098" y="708" class="small muted">로컬 목표점은 보이나, 실제 추력 명령은 0입니다.</text>
+
+  <!-- State machine: first row left to right, second row right to left. -->
+  <rect x="40" y="770" width="1520" height="385" rx="20" class="card"/>
+  <text x="68" y="813" class="section">③ 도킹 상태기계 (FSM)</text>
+  <text x="1518" y="813" text-anchor="end" class="small muted">화살표 순서대로 이동 · 각 카드에는 다음 단계의 핵심 조건 표시</text>
+
+  <rect x="70" y="835" width="270" height="85" rx="13" class="state"/>
+  <text x="90" y="864" class="state-name">APPROACH</text>
+  <text x="90" y="889" class="state-detail">odom staging 반경 ≤ 1.5 m</text>
+  <text x="90" y="906" class="tiny muted">mission waypoint 접근</text>
+
+  <rect x="365" y="835" width="270" height="85" rx="13" class="state"/>
+  <text x="385" y="864" class="state-name">ACQUIRE</text>
+  <text x="385" y="889" class="state-detail">유효한 표식 · 입구 쌍 획득</text>
+  <text x="385" y="906" class="tiny muted">탐색 회전, 최대 15초</text>
+
+  <rect x="660" y="835" width="270" height="85" rx="13" class="state"/>
+  <text x="680" y="864" class="state-name">PRE_ENTRY</text>
+  <text x="680" y="889" class="state-detail">W1까지 ≤ 0.40 m</text>
+  <text x="680" y="906" class="tiny muted">저속 위치 추종</text>
+
+  <rect x="955" y="835" width="270" height="85" rx="13" class="state"/>
+  <text x="975" y="864" class="state-name">ALIGN</text>
+  <text x="975" y="889" class="state-detail">슬롯 축 오차 ≤ 5° · 0.5초</text>
+  <text x="975" y="906" class="tiny muted">전진 없이 선수각 정렬</text>
+
+  <rect x="1250" y="835" width="270" height="85" rx="13" class="state"/>
+  <text x="1270" y="864" class="state-name">TO_MOUTH</text>
+  <text x="1270" y="889" class="state-detail">W2까지 ≤ 0.35 m</text>
+  <text x="1270" y="906" class="tiny muted">입구 방향으로 저속 전진</text>
+
+  <path d="M340 877 L357 877 M635 877 L652 877 M930 877 L947 877 M1225 877 L1242 877" class="flow"/>
+  <path d="M1385 920 L1385 964" class="flow"/>
+
+  <rect x="1250" y="970" width="270" height="85" rx="13" class="state"/>
+  <text x="1270" y="999" class="state-name">TO_BERTH</text>
+  <text x="1270" y="1024" class="state-detail">표식 거리 ≤ 1.0 m</text>
+  <text x="1270" y="1041" class="tiny muted">W3 추종, 표식 1 m에서 정지</text>
+
+  <rect x="955" y="970" width="270" height="85" rx="13" class="state"/>
+  <text x="975" y="999" class="state-name">BERTH_VERIFY</text>
+  <text x="975" y="1024" class="state-detail">거리 · 각도 0.5초 연속 유효</text>
+  <text x="975" y="1041" class="tiny muted">추진 없이 접안 판정</text>
+
+  <rect x="660" y="970" width="270" height="85" rx="13" class="state"/>
+  <text x="680" y="999" class="state-name">HOLD</text>
+  <text x="680" y="1024" class="state-detail">3초간 정지</text>
+  <text x="680" y="1041" class="tiny muted">접안 확인 후 대기</text>
+
+  <rect x="365" y="970" width="270" height="85" rx="13" class="state"/>
+  <text x="385" y="999" class="state-name">REVERSE</text>
+  <text x="385" y="1024" class="state-detail">후진 거리 · 시간 · staging</text>
+  <text x="385" y="1041" class="tiny muted">세 조건 모두 만족해야 완료</text>
+
+  <rect x="70" y="970" width="270" height="85" rx="13" fill="#e7f6ec" stroke="#7dc39a" stroke-width="1.8"/>
+  <text x="90" y="999" class="state-name">COMPLETE</text>
+  <text x="90" y="1024" class="state-detail">미션 완료 보고</text>
+  <text x="90" y="1041" class="tiny muted">슬롯에서 나와 staging 복귀</text>
+
+  <path d="M1250 1012 L1233 1012 M955 1012 L938 1012 M660 1012 L643 1012 M365 1012 L348 1012" class="flow"/>
+  <rect x="70" y="1080" width="1450" height="48" rx="11" fill="#fff2f1" stroke="#edc7c4"/>
+  <text x="88" y="1110" class="small strong" fill="#aa4b43">ABORT · 정지</text>
+  <text x="204" y="1110" class="small">표식 상실 ≥ 0.7초, 진입 각도 오류, W3와 거리 모순, 표식 획득 15초 초과, 후진 30초 초과 등</text>
+</svg>

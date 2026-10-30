@@ -9,7 +9,8 @@ services:
     environment:
       DISPLAY: ${DISPLAY:-:0}
       QT_X11_NO_MITSHM: "1"
-      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-42}
+      # Shore LiDAR stays on the laptop's ROS domain; /boat_pose crosses via Zenoh.
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-43}
       ROS_LOCALHOST_ONLY: "0"
     # Keep USB serial devices visible even when they are plugged in later.
     volumes:
