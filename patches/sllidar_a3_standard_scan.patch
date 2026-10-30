@@ -1,0 +1,13 @@
+diff --git a/src/sllidar_node.cpp b/src/sllidar_node.cpp
+--- a/src/sllidar_node.cpp
++++ b/src/sllidar_node.cpp
+@@ -310,5 +310,8 @@ public:
+         LidarScanMode current_scan_mode;
+-        if (scan_mode.empty()) {
++        if (scan_mode == "Standard") {
++            // A3M1: use the SDK standard scan command directly.
++            op_result = drv->startScan(false, false, 0, &current_scan_mode);
++        } else if (scan_mode.empty()) {
+             op_result = drv->startScan(false /* not force scan */, true /* use typical scan mode */, 0, &current_scan_mode);
+         } else {
+             std::vector<LidarScanMode> allSupportedScanModes;

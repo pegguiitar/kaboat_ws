@@ -10,7 +10,7 @@ RViz와 `sensor_check/boat_attitude.py`에서 읽도록 연결합니다. 서로 
 ```text
 Jetson ROS_DOMAIN_ID=42 ── Zenoh bridge ── Tailscale ── Zenoh bridge ── 노트북 ROS_DOMAIN_ID=43
      /scan, /odom, 회피·도킹 경로, GQ7 상태  ──────────────────────────────→  RViz / 자세 화면
-     indoor_lidar_odom 이 쓰는 /boat_pose       ←──────────────────────────────  외벽 TG-50
+     indoor_lidar_odom 이 쓰는 /boat_pose       ←──────────────────────────────  외벽 RPLIDAR A3M1
 ```
 
 두 ROS 도메인을 달리해 같은 와이파이에서 DDS 직통 경로가 생겨도 Zenoh와
@@ -100,7 +100,7 @@ python3 scripts/zenoh_monitor_link.py jetson
 
 ## 노트북에서 실행
 
-외벽 TG-50 Docker 컨테이너를 쓰는 수조 시험에서는 컨테이너를 노트북
+외벽 RPLIDAR A3M1 Docker 컨테이너를 쓰는 수조 시험에서는 컨테이너를 노트북
 도메인 43으로 생성합니다. `docker-compose.lidar.yml`은 호스트 네트워크를
 사용하므로 별도 Docker 포트 게시가 필요하지 않습니다.
 
@@ -109,7 +109,7 @@ cd /home/jiwoo/Projects/KABOAT/kaboat_ws
 ROS_DOMAIN_ID=43 docker compose -f docker-compose.lidar.yml up -d --build --force-recreate
 ```
 
-수조 테스트 가이드의 외벽 TG-50 실행 명령을 이어서 사용합니다.
+수조 테스트 가이드의 외벽 RPLIDAR A3M1 실행 명령을 이어서 사용합니다.
 `--force-recreate`는 기존 컨테이너를 재시작하므로 센서 시험 시작 전에
 실행합니다. 실외에서 외벽 라이다를 쓰지 않으면 Docker 단계는 생략합니다.
 

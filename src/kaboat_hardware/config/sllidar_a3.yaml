@@ -1,0 +1,11 @@
+# Shore RPLIDAR A3M1. The launch file overrides serial_port with the device by-id path.
+sllidar_node:
+  ros__parameters:
+    channel_type: serial
+    serial_port: /dev/ttyUSB0
+    serial_baudrate: 256000
+    frame_id: shore_laser_frame
+    inverted: false
+    angle_compensate: true
+    # The direct serial packet test succeeded with the standard scan command.
+    scan_mode: Standard

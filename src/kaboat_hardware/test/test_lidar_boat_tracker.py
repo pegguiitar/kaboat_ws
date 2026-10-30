@@ -29,15 +29,15 @@ class TestLidarBoatTrackerPipeline(unittest.TestCase):
         self.node.destroy_node()
 
     @staticmethod
-    def _scan_with_world_points(points):
+    def _scan_with_world_points(points, beam_count=2030):
         """오른쪽 벽 LiDAR pose (10, 2.5, 180deg)의 합성 LaserScan."""
         msg = LaserScan()
         msg.header.frame_id = 'shore_laser_frame'
         msg.header.stamp.sec = 1
         msg.angle_min = -math.pi
         msg.angle_max = math.pi
-        # 실측 TG-50 스캔과 같은 약 2030개 빔으로 원거리 분해능도 확인한다.
-        msg.angle_increment = 2.0 * math.pi / 2029
+        # TG-50은 약 2030빔, 수조 외벽 RPLIDAR A3M1은 실측 720빔이다.
+        msg.angle_increment = 2.0 * math.pi / (beam_count - 1)
         msg.range_min = 0.08
         msg.range_max = 15.0
         beam_count = int(round(
@@ -98,3 +98,15 @@ class TestLidarBoatTrackerPipeline(unittest.TestCase):
         self.assertAlmostEqual(pose.position.x, 2.0, delta=0.03)
         self.assertAlmostEqual(pose.position.y, 2.5, delta=0.03)
         self.assertAlmostEqual(_yaw_from_quat(pose.orientation), 0.0, delta=0.03)
+
+    def test_a3_720_beam_scan_detects_panel_eight_meters_away(self):
+        scan = self._scan_with_world_points(
+            self._panel_points(x=2.0), beam_count=720)
+        scan.range_min = 0.05
+        scan.range_max = 25.0
+        scan.intensities = [0.0] * 720
+        self.node._on_scan(scan)
+        self.assertEqual(len(self.poses), 1)
+        pose = self.poses[0].pose.pose
+        self.assertAlmostEqual(pose.position.x, 2.0, delta=0.07)
+        self.assertAlmostEqual(pose.position.y, 2.5, delta=0.07)

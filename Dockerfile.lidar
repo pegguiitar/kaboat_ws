@@ -2,7 +2,7 @@ FROM osrf/ros:humble-desktop-full
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# The pool laptop runs the TG-50 driver and boat tracker; Gazebo is not needed.
+# The pool laptop runs the shore RPLIDAR A3 driver and boat tracker.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     cmake \
@@ -26,8 +26,23 @@ RUN git init /tmp/YDLidar-SDK \
     && ldconfig \
     && rm -rf /tmp/YDLidar-SDK
 
+# Keep the shore driver outside /workspace: Compose bind-mounts the repository's src.
+ARG SLLIDAR_ROS2_COMMIT=34300099fadfc772965962dec837bf436706188f
+COPY patches/sllidar_a3_standard_scan.patch /tmp/sllidar_a3_standard_scan.patch
+RUN mkdir -p /opt/sllidar_ws/src \
+    && git init /opt/sllidar_ws/src/sllidar_ros2 \
+    && git -C /opt/sllidar_ws/src/sllidar_ros2 remote add origin https://github.com/Slamtec/sllidar_ros2.git \
+    && git -C /opt/sllidar_ws/src/sllidar_ros2 fetch --depth 1 origin "${SLLIDAR_ROS2_COMMIT}" \
+    && git -C /opt/sllidar_ws/src/sllidar_ros2 checkout --detach FETCH_HEAD \
+    && git -C /opt/sllidar_ws/src/sllidar_ros2 apply /tmp/sllidar_a3_standard_scan.patch \
+    && . /opt/ros/humble/setup.sh \
+    && cd /opt/sllidar_ws \
+    && colcon build --merge-install --packages-select sllidar_ros2 --cmake-args -DCMAKE_BUILD_TYPE=Release \
+    && rm -rf /opt/sllidar_ws/build /opt/sllidar_ws/log
+
 WORKDIR /workspace/kaboat_ws
 RUN echo 'source /opt/ros/humble/setup.bash' >> /root/.bashrc \
+    && echo 'source /opt/sllidar_ws/install/setup.bash' >> /root/.bashrc \
     && echo 'if [ -f /workspace/kaboat_ws/install/setup.bash ]; then source /workspace/kaboat_ws/install/setup.bash; fi' >> /root/.bashrc
 
 CMD ["sleep", "infinity"]

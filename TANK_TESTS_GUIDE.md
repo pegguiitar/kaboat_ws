@@ -1,15 +1,35 @@
 # 실내 수조 실물 테스트: 노트북·젯슨 실행 명령
 
-이 문서에 실내 수조 시험의 실행 명령을 모았습니다. 수조 외벽 노트북에는 **고정 TG-50**, 배 위 젯슨에는 **GQ7과 모터 제어기**를 연결합니다. 장애물 회피 시험에는 **선체 TG-50**도 연결합니다. 노트북은 `ROS_DOMAIN_ID=43`, 젯슨은 `ROS_DOMAIN_ID=42`를 사용합니다. 두 기기를 같은 Tailscale 네트워크에 연결하고 Zenoh 브리지를 각각 실행하면, 노트북의 `/boat_pose`가 젯슨에 전달되고 젯슨이 계산한 `/odom`이 노트북으로 돌아옵니다. 같은 와이파이에서도 두 ROS 도메인을 분리해 DDS 직접 전달과 Zenoh 전달이 중복되지 않게 합니다.
+이 문서에 실내 수조 시험의 실행 명령을 모았습니다. 수조 외벽 노트북에는 **고정 RPLIDAR A3M1**, 배 위 젯슨에는 **GQ7과 모터 제어기**를 연결합니다. 장애물 회피 시험에는 **선체 TG-50**도 연결합니다. 노트북은 `ROS_DOMAIN_ID=43`, 젯슨은 `ROS_DOMAIN_ID=42`를 사용합니다. 두 기기를 같은 Tailscale 네트워크에 연결하고 Zenoh 브리지를 각각 실행하면, 노트북의 `/boat_pose`가 젯슨에 전달되고 젯슨이 계산한 `/odom`이 노트북으로 돌아옵니다. 같은 와이파이에서도 두 ROS 도메인을 분리해 DDS 직접 전달과 Zenoh 전달이 중복되지 않게 합니다.
 
-고정 TG-50의 기본 위치는 수조 절대좌표 `(10.0, 2.5)m`(오른쪽 벽 중앙)이며,
-스캔 0° 방향이 `-X`를 바라보도록 장착합니다. 좌표와 각도는
+고정 RPLIDAR의 기본 위치는 수조 절대좌표 `(10.0, 2.5)m`(오른쪽 벽 중앙)이며,
+스캔 0° 방향이 `-X`를 바라보도록 장착합니다. 새 센서의 실제 0° 방향을 먼저 확인하고 좌표와 각도는
 [`lidar_tracker.yaml`](src/kaboat_hardware/config/lidar_tracker.yaml)에서 설정합니다.
 배에는 좌우 두 봉을 잇는 길이 0.60m의 횡단 판을 부착하고, 그 중점이
 `base_link` 원점과 일치해야 합니다. 추적기는 판의 선분 기울기와 중점으로
 `/boat_pose`를 계산합니다.
 
-외벽 노트북의 고정 TG-50은 확인된 `/dev/serial/by-id/...` 경로를, 젯슨의 아두이노 CH340 모터 제어기는 최신 가이드의 `/dev/ttyCH341USB0`을 아래 명령에 직접 지정했습니다. 선체 TG-50 포트는 젯슨에서 따로 확인해 입력하세요. 장치나 드라이버가 바뀌면 해당 기기에서 `/dev/serial/by-id/`, `/dev/serial/by-path/`, `/dev/ttyUSB*`, `/dev/ttyCH341*`를 다시 확인해야 합니다.
+외벽 노트북의 고정 RPLIDAR은 확인된 `/dev/serial/by-id/...` 경로를, 젯슨의 아두이노 CH340 모터 제어기는 최신 가이드의 `/dev/ttyCH341USB0`을 아래 명령에 직접 지정했습니다. 선체 TG-50 포트는 젯슨에서 따로 확인해 입력하세요. 장치나 드라이버가 바뀌면 해당 기기에서 `/dev/serial/by-id/`, `/dev/serial/by-path/`, `/dev/ttyUSB*`, `/dev/ttyCH341*`를 다시 확인해야 합니다.
+
+## 수조 밖에서 외벽 라이다 스캔만 확인
+
+이 런치는 RPLIDAR A3M1의 `/shore/scan`과 RViz만 실행하며 `/boat_pose` 추적기는 켜지 않습니다. 노트북의 그래픽 데스크톱 터미널에서 실행하세요.
+
+```bash
+cd ~/Projects/KABOAT/kaboat_ws
+ROS_DOMAIN_ID=43 docker compose -f docker-compose.lidar.yml up -d --build
+xhost +si:localuser:root
+docker exec -it -e DISPLAY="$DISPLAY" kaboat_lidar bash
+# Docker 내부
+cd /workspace/kaboat_ws
+source /opt/ros/humble/setup.bash
+source /opt/sllidar_ws/install/setup.bash
+colcon build --symlink-install --packages-select kaboat_hardware
+source install/setup.bash
+ros2 launch kaboat_hardware shore_lidar_scan.launch.py
+```
+
+RViz의 Fixed Frame은 `shore_laser_frame`, 표시 토픽은 `/shore/scan`입니다. 다른 Docker 터미널에서 `ros2 topic hz /shore/scan`으로 수신 주기를 확인합니다. 수조 위치 추적 런처를 시작하기 전 이 스캔 전용 런치를 `Ctrl+C`로 종료하세요. 한 장치를 두 드라이버가 동시에 열 수 없습니다.
 
 ## 1. 수조 외벽 노트북: 라이다와 배 위치 추적
 
@@ -26,16 +46,19 @@ docker exec -it kaboat_lidar bash
 ```bash
 cd /workspace/kaboat_ws
 source /opt/ros/humble/setup.bash
+source /opt/sllidar_ws/install/setup.bash
 colcon build --symlink-install --packages-up-to kaboat_hardware
 source install/setup.bash
 ros2 launch kaboat_hardware lidar_boat_tracker.launch.py \
-  port:=/dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0 \
+  port:=/dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_344ff5135095724097887d9c6d4b91ce-if00-port0 \
   enable_rviz:=false
 ```
 
 이 터미널은 켜 둡니다. 고정 라이다는 `/shore/scan`, 배 위치 추적기는 `/boat_pose`를 노트북 도메인 43에 발행합니다. `/boat_pose`만 Zenoh를 통해 젯슨 도메인 42로 전달됩니다. 외벽 라이다가 `/odom`을 젯슨에 직접 발행하지는 않습니다.
 라이다를 옮긴 뒤에는 기존 추적기 프로세스를 종료하고 이 명령으로 다시 실행해야 새 설치 좌표가 적용됩니다.
-별도 Docker 터미널에서 `ros2 topic hz /shore/scan`, `ros2 topic echo /shore/scan --once --field header`, `ros2 topic echo /boat_pose --once`로 확인할 수 있습니다. 스캔의 `header.frame_id`는 `shore_laser_frame`이어야 합니다. 수조 `(9.0, 2.5)m`에 놓은 물체가 RViz 스캔에서 그 부근에 보이는지도 확인합니다.
+별도 Docker 터미널에서 `ros2 topic hz /shore/scan`, `ros2 topic echo /shore/scan --once --field header`, `ros2 topic echo /boat_pose --once`로 확인할 수 있습니다. 스캔의 `header.frame_id`는 `shore_laser_frame`이어야 합니다. 수조 `(9.0, 2.5)m`에 놓은 물체가 RViz 스캔에서 그 부근에 보이는지도 확인합니다. 기본 설치값은 `(10.0, 2.5)m`, 스캔 0° 방향 `180°`입니다. 실제 장착값이 다르면 런치 명령에 `lidar_pos_x:=... lidar_pos_y:=... lidar_yaw_deg:=...`를 실측값으로 추가하세요. [`lidar_tracker.yaml`](src/kaboat_hardware/config/lidar_tracker.yaml)도 기본값으로 사용할 수 있습니다. `/boat_pose`의 위치·방향이 실물과 맞는지 확인하기 전에는 **배 추진 모터**를 켜지 않습니다.
+배의 0.60m 횡단 판을 수조 안의 **실측한 위치**에 놓고 `/boat_pose`가 그 좌표 근처에서 연속으로 발행되는지 확인하세요. A3M1은 실측 720빔으로 이전 TG-50보다 스캔 점이 적으므로, 검출이 끊기면 RViz의 `/lidar_tracker/filtered_scan`에서 판에 최소 6점이 남는지 먼저 확인합니다. 판이 없는데도 `/boat_pose`가 나오면 다른 직선 물체를 잘못 고른 것이므로 그 상태로 젯슨의 IMU 보정·주행을 진행하지 마세요.
+드라이버가 장치 정보와 `health status : OK`를 표시해도 `/shore/scan`이 나오지 않으면 회전부와 USB 연결을 확인하세요. 이 노트북의 A3M1은 공식 ROS 드라이버의 기존 `Standard` 경로에서 시간 초과됐지만, Docker 이미지의 표준 스캔 함수 패치 적용 후 `/shore/scan`을 약 12.7Hz로 발행했습니다. 이미지가 오래됐다면 `docker compose -f docker-compose.lidar.yml up -d --build --force-recreate`로 갱신하고, 같은 장치를 쓰는 스캔 전용 런치가 남아 있지 않은지 확인하세요. USB 재연결로 `/dev/ttyUSB*` 번호가 바뀌어도 같은 장치의 `by-id` 경로는 유지됩니다.
 
 **호스트 터미널 2** — Docker 밖에서 Zenoh 브리지를 켭니다. 젯슨의 `tailscale ip -4` 출력값을 물음에 입력하세요. 라이다가 먼저 실행돼 있어도 브리지를 나중에 켜면 연결되며, 이 터미널은 계속 열어 둡니다.
 
