@@ -163,6 +163,18 @@ ros2 topic hz /scan
 - **장착 오프셋 미보정** — `occupancy_grid` 는 TF 를 안 쓰고
   `lidar_link == base_link` 로 가정한다. 실물 오프셋을 반영하려면 코드를
   같이 고쳐야 한다.
+- **FastDDS 버퍼 오버플로우 (`sequence size exceeds remaining buffer`)** — TG-50의
+  한 스캔(약 2030 포인트) 패킷 크기가 Linux 기본 UDP 수신 버퍼(208KB)를 넘으면
+  역직렬화 실패가 발생합니다. 다음 명령으로 소켓 버퍼를 8MB로 확대하세요:
+  ```bash
+  sudo sysctl -w net.core.rmem_max=8388608
+  sudo sysctl -w net.core.rmem_default=8388608
+  ```
+- **스캔 토픽이 안 나올 때 (`ros2 topic hz /scan` 0Hz)** — 드라이버(`/scan/raw`)는
+  돌아가는데 필터링된 `/scan`이 안 나온다면, 보트나 IMU 센서가 ±5.0° 이상 기울어져
+  `onboard_scan_filter`가 수면/하늘 노이즈를 방지하기 위해 스캔을 차단(`drop`)하는
+  상태입니다. 아래 §4.5의 `view_roll_pitch.py`로 현재 기울기를 확인하세요. 육상 테스트라면
+  `enable_imu_filter:=false`로 필터를 끌 수 있습니다.
 
 ---
 
@@ -210,6 +222,25 @@ ros2 topic echo /boat_pose --once
 `indoor_tank.yaml`의 `yaw_rate_sign`을 `-1.0`으로 바꾼다. 판만 보이는
 `/boat_pose` yaw는 선수 앞뒤가 180° 모호하다. 정지한 배의 최종 `/odom` yaw가
 선수 방향과 반대라면 -X 방향 초기 보정을 다시 확인한다.
+
+### 4.5 실시간 Roll / Pitch 및 스캔 차단 상태 확인 (신규)
+
+GQ7의 quaternion 자세를 오일러 각(Roll / Pitch / Yaw [deg])으로 변환하여 실시간 모니터링합니다:
+
+```bash
+cd ~/Desktop/kaboat_ws/repo
+python3 scripts/view_roll_pitch.py
+```
+
+* **출력 예시**:
+  ```text
+  Roll:  -0.32° | Pitch:  -2.20° | Yaw: +35.24° | 상태: [ OK (정상 주행) ]
+  ```
+* **기울기 초과 시**:
+  ```text
+  Roll:  -1.90° | Pitch: -17.50° | Yaw: +25.10° | 상태: [ ⚠️ TILTED > 5° (스캔 차단됨) ]
+  ```
+* `onboard_scan_filter`와 `occupancy_grid`는 Roll이나 Pitch가 ±5.0°를 초과하면 해당 라이다 스캔을 즉시 버려 지도 오염을 차단합니다. 배의 수평을 맞추거나 필요시 센서 장착 각도를 점검하세요.
 
 ---
 

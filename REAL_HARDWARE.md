@@ -65,7 +65,13 @@ source install/setup.bash
 
 ## 센서 연결 전 코드 확인
 
+새 터미널에서는 반드시 ROS 2 기본 환경과 워크스페이스 `install` 환경을 모두 source해야 한다. (`install/setup.bash` 누락 시 `Package 'kaboat_hardware' not found` 오류 발생)
+
 ```bash
+cd /home/msga2026/Desktop/kaboat_ws/repo
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+export ROS_DOMAIN_ID=42
 ros2 launch kaboat_hardware real_sensors.launch.py
 ```
 

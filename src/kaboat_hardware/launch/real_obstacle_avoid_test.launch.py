@@ -35,8 +35,10 @@ def generate_launch_description():
                               description='Launch mapping node; false if one already runs'),
         DeclareLaunchArgument('grid_size', default_value='10.0',
                               description='Rolling occupancy grid side length [m]'),
-        DeclareLaunchArgument('enable_tilt_gate', default_value='false',
-                              description='Use IMU roll/pitch to reject scans (indoor default: false)'),
+        DeclareLaunchArgument('enable_tilt_gate', default_value='true',
+                              description='Use IMU roll/pitch to reject scans (default: true)'),
+        DeclareLaunchArgument('tilt_threshold_deg', default_value='5.0',
+                              description='Tilt gate threshold [deg] (default: 5.0)'),
         DeclareLaunchArgument('publish_scan_tf', default_value='true',
                               description='Publish identity base_link -> onboard_laser_frame for RViz'),
         DeclareLaunchArgument('enable_rviz', default_value='false',
@@ -51,6 +53,8 @@ def generate_launch_description():
                 'publish_rate': 10.0,
                 'enable_tilt_gate': ParameterValue(
                     LaunchConfiguration('enable_tilt_gate'), value_type=bool),
+                'tilt_threshold_deg': ParameterValue(
+                    LaunchConfiguration('tilt_threshold_deg'), value_type=float),
                 'use_sim_time': False,
             }],
             condition=IfCondition(LaunchConfiguration('start_occupancy_grid')),

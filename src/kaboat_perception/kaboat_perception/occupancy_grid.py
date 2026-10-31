@@ -89,7 +89,7 @@ L_MIN, L_MAX = -4.5, 4.35  # log-odds 클램프. 상한 4.35(≈5히트)면 포�
 # 상한을 올려도 유령엔 영향 없다: 3히트 해수면 유령(93)은 애초에 상한 근처에 못 가
 # 감쇄 속도가 그대로고, 상한까지 쌓이는 건 꾸준히 관측되는 실제 장애물뿐이다(예전 3.5는
 # 포화 97이라 문턱에 바짝 붙어 free 레이 한둘에 깜빡였다).
-TILT_MAX = math.radians(15.0)  # 이 이상 기울면 해당 스캔 버림 (15→10: 파도 유령 근원 축소)
+TILT_MAX = math.radians(5.0)  # 이 이상 기울면 해당 스캔 버림
 
 
 def _yaw(q) -> float:
@@ -116,6 +116,7 @@ class OccupancyGridNode(Node):
         # 변환이 0.07ms 라 부담 없고, 유령/신규 장애물이 소비자에게 보이는 지연을
         # 최대 1s → 0.1s 로 줄인다. 10Hz 넘게 올려도 스캔이 10Hz 라 무의미.
         self.declare_parameter('enable_tilt_gate', True)  # 실내 수조 시험은 false
+        self.declare_parameter('tilt_threshold_deg', 5.0)  # [deg] 기울기 게이트 임계
         self.declare_parameter('hit_dedup', True)    # 히트를 스캔당 셀당 1회로 캡
         # 같은 스캔의 이웃 빔은 독립 관측이 아니므로 중복 누적하면 증거 과대계상 —
         # 수면 반사 노이즈가 한 스캔에 검정(97)까지 튀는 원인이었다(베이즈 독립성 교정).
@@ -133,6 +134,8 @@ class OccupancyGridNode(Node):
         self.cells = int(self.size / self.resolution)
         self.hit_dedup = bool(self.get_parameter('hit_dedup').value)
         self.enable_tilt_gate = bool(self.get_parameter('enable_tilt_gate').value)
+        self.tilt_threshold_deg = float(self.get_parameter('tilt_threshold_deg').value)
+        self.tilt_max = math.radians(self.tilt_threshold_deg)
         self.cam_stride = int(self.get_parameter('cam_stride').value)
         self.cam_height = float(self.get_parameter('cam_height').value)
         self.cam_z_min = float(self.get_parameter('cam_z_min').value)
@@ -161,14 +164,15 @@ class OccupancyGridNode(Node):
 
         self.get_logger().info(
             f'occupancy_grid 시작 — {self.cells}×{self.cells}셀 @ {self.resolution}m '
-            f'→ /occupancy_grid (기울기 차단: {self.enable_tilt_gate})')
+            f'→ /occupancy_grid (기울기 차단: {self.enable_tilt_gate}, '
+            f'임계={self.tilt_threshold_deg:.1f}°)')
 
     def _on_odom(self, msg: Odometry):
         self.odom = msg
 
     def _on_imu(self, msg: Imu):
         roll, pitch = _roll_pitch(msg.orientation)
-        self.tilted = abs(roll) > TILT_MAX or abs(pitch) > TILT_MAX
+        self.tilted = abs(roll) > self.tilt_max or abs(pitch) > self.tilt_max
 
     def _cell(self, x: float, y: float):
         return (math.floor(x / self.resolution), math.floor(y / self.resolution))

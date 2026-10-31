@@ -84,19 +84,48 @@ tailscale ip -4
 
 ## 젯슨에서 실행
 
-젯슨에 클론한 `kaboat_ws` 경로에서, 센서/미션 노드와 별도 터미널을 엽니다.
+젯슨의 터미널에서는 워크스페이스 디렉토리로 이동한 후 **반드시 ROS 2 기본 환경과 워크스페이스 install 환경을 모두 source**합니다. (`install/setup.bash`를 생략하면 `Package 'kaboat_hardware' not found` 오류가 발생합니다.)
 
 ```bash
-cd /path/to/kaboat_ws
+cd ~/Desktop/kaboat_ws/repo
 source /opt/ros/humble/setup.bash
 source install/setup.bash
 export ROS_DOMAIN_ID=42
-tailscale ip -4                         # 나온 100.x 주소를 노트북에 기록
+
+# 1) Tailscale IP 확인 (예: 100.108.192.55)
+tailscale ip -4
+
+# 2) FastDDS 대용량 라이다(TG-50) 패킷 버퍼 설정 (재부팅 후 첫 실행 시 1회 권장)
+# 미설정 시 'sequence size exceeds remaining buffer' 에러가 발생할 수 있습니다.
+sudo sysctl -w net.core.rmem_max=8388608
+sudo sysctl -w net.core.rmem_default=8388608
+
+# 3) Zenoh 브리지 시작
 python3 scripts/zenoh_monitor_link.py jetson
 ```
 
 브리지는 젯슨의 **Tailscale IP에서만** TCP 7447을 듣습니다. 핫스팟의
 `192.168.x.x` 주소는 설정에 넣지 않습니다.
+
+### 젯슨에서 센서 및 모니터링 실행 명령
+
+별도 터미널에서 다음 명령들을 유용하게 실행할 수 있습니다:
+
+```bash
+cd ~/Desktop/kaboat_ws/repo
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+export ROS_DOMAIN_ID=42
+
+# 실시간 롤/피치 기울기 및 스캔 차단 상태 확인 (임계값: ±5.0°)
+python3 scripts/view_roll_pitch.py
+
+# 선체 TG-50 라이다 단독 실행 (IMU ±5.0° 기울기 필터 + 선체 220°~320° 가림 적용)
+ros2 launch kaboat_hardware onboard_lidar.launch.py port:=/dev/ttyUSB0
+
+# 육상/책상 테스트 등 센서가 기울어진 상태에서 필터를 끄고 스캔만 볼 때:
+ros2 launch kaboat_hardware onboard_lidar.launch.py port:=/dev/ttyUSB0 enable_imu_filter:=false
+```
 
 ## 노트북에서 실행
 
@@ -173,6 +202,36 @@ rviz2 -d /home/jiwoo/Projects/KABOAT/kaboat_ws/scripts/remote_monitor.rviz
 실외 GQ7 출력의 실제 프레임이 `map`이면 RViz에서 그에 맞게 바꾸고,
 `base_link`까지 필요한 TF가 이어지는지 확인합니다. 프레임 이름만 바꾸는 것은
 실제 좌표 변환을 만들지 않습니다.
+
+### 자주 발생하는 오류 및 현장 조치 (Troubleshooting)
+
+1. **RViz에서 `/scan`이 안 보이고 `queue is full` 에러가 발생할 때**
+   * 증상: `Message Filter dropping message: frame 'onboard_laser_frame' at time ... for reason 'discarding message because the queue is full'`
+   * 원인: RViz의 `Fixed Frame`이 `odom`으로 되어 있으나, 현재 TF 트리에 `odom -> base_link -> onboard_laser_frame` 변환이 없기 때문입니다.
+   * 조치: RViz 좌측 패널 상단 **`Global Options` → `Fixed Frame`을 `onboard_laser_frame`으로 변경**하면 라이다 스캔을 단독으로 즉시 확인할 수 있습니다.
+
+2. **`/scan` 토픽이 발행되지 않거나 데이터가 안 들어올 때**
+   * 증상: `ros2 topic hz /scan`이 0Hz이거나 메시지가 수신되지 않음.
+   * 원인: 젯슨의 IMU 기울기 필터가 활성화된 상태에서 보트나 IMU 센서가 $\pm 5.0^\circ$ 이상 기울어져 있어 스캔을 차단(`drop`)하는 중일 가능성이 높습니다.
+   * 확인: 젯슨에서 `python3 scripts/view_roll_pitch.py`를 실행하여 Roll / Pitch 각도와 `[ ⚠️ TILTED > 5° (스캔 차단됨) ]` 경고가 뜨는지 확인합니다.
+   * 조치: 센서의 수평을 맞추거나, 육상/벤치 테스트인 경우 `enable_imu_filter:=false` 옵션을 주어 실행합니다.
+
+3. **`sequence size exceeds remaining buffer` 에러**
+   * 증상: FastDDS CDR 역직렬화 실패로 스캔이 깨지거나 노드가 중단됨.
+   * 원인: TG-50 라이다 1회 스캔(약 2030포인트) 패킷 크기가 Linux 기본 UDP 수신 소켓 버퍼(208KB)를 초과함.
+   * 조치: 젯슨에서 소켓 버퍼 크기를 8MB로 확대합니다:
+     ```bash
+     sudo sysctl -w net.core.rmem_max=8388608
+     sudo sysctl -w net.core.rmem_default=8388608
+     ```
+
+4. **`Package 'kaboat_hardware' not found` 에러**
+   * 원인: ROS 2 환경 source 시 워크스페이스 `install/setup.bash`가 누락됨.
+   * 조치: `source /opt/ros/humble/setup.bash`와 함께 반드시 `source install/setup.bash`를 실행합니다.
+
+5. **`python3: can't open file 'scripts/zenoh_monitor_link.py': No such file or directory`**
+   * 원인: 터미널 작업 디렉토리가 홈(`~`)에 위치함.
+   * 조치: `cd ~/Desktop/kaboat_ws/repo`로 이동 후 실행합니다.
 
 ## 연결이 끊겼을 때
 
