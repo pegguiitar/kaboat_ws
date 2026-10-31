@@ -7,5 +7,6 @@ sllidar_node:
     frame_id: shore_laser_frame
     inverted: false
     angle_compensate: true
-    # The direct serial packet test succeeded with the standard scan command.
-    scan_mode: Standard
+    # Standard(4 kHz)는 한 바퀴 실측 약 110점이라 수조 먼 쪽 판에 점이 2~3개뿐이다.
+    # Sensitivity(16 kHz)는 약 630점(1800빔 출력)이고 이 노트북에서 13.4 Hz로 동작했다.
+    scan_mode: Sensitivity

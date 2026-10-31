@@ -13,17 +13,24 @@ lidar_boat_tracker:
     pool_size_y: 5.0          # [m] 수조 세로 폭 (위쪽 주황색 화살표 방향 +Y, 0~5m)
     wall_margin: 0.18         # [m] 벽면 제거 마진 (수조 4면 벽면 노이즈 제거)
 
-    # ── 두 봉을 잇는 횡단 판(중점 = base_link) ────────────────
+    # ── ┛ 모양 판 (base_link = 기존 0.60m 판의 중점) ──────────
+    # 횡단 판: 좌현 0.45m + 우현 0.30m, 세로판: 우현 끝에서 선미로 0.45m
     cluster_dist_tol: 0.15       # [m] 연속 스캔 점 사이 최대 거리
-    panel_span: 0.60             # [m] 실제 판의 수평 길이
-    panel_min_visible_span: 0.35 # [m] 이보다 짧으면 위치 중점이 불확실하여 거부
-    panel_max_visible_span: 0.80 # [m] 봉 끝 반사 등을 포함할 수 있는 상한
-    panel_min_points: 4          # 직선 맞춤에 필요한 최소 점 수
-    panel_max_line_rms: 0.10     # [m] 직선에서 벗어난 점의 RMS 허용치
+    cluster_dist_per_m: 0.04     # [m/m] 라이다 거리 1 m 당 추가 허용 간격 (8 m에서 0.47 m, 토막 난 판 점 묶기)
+    panel_left_length: 0.45      # [m] base_link → 횡단 판 좌현 끝
+    panel_right_length: 0.30     # [m] base_link → 횡단 판 우현 끝(세로판 뿌리)
+    sail_length: 0.45            # [m] 세로판 길이 (우현 끝 → 선미)
+    panel_min_points: 3          # 직선으로 인정할 최소 점 수 (L 모델 위에 놓여야 하는 최소 점 수)
+    panel_max_line_rms: 0.03     # [m] 직선 inlier 허용 거리 (실측 노이즈 약 0.008)
+    max_mean_cost: 3.0           # 점당 평균 비용 상한 (모델 밖 점·벽 비침 감점 포함)
+    default_yaw_deg: 180.0       # [deg] 앞뒤 모호 + 이전 pose 없음일 때 가정할 선수 방향 (-X)
+    yaw_memory_sec: 10.0         # [s] 놓친 뒤 이 시간 안에 다시 잡으면 마지막 yaw 를 기준으로 추종
+    yaw_follow_window_deg: 50.0  # [deg] 기존 yaw ± 이 범위 안 해석을 우선 (직선 해석은 90° 간격)
+    l_min_arm_hits: 2            # 두 판 모두 이 수 이상 점 → L자. +1 이상이면 기존 yaw 범위 밖이어도 후보
     max_position_jump: 0.75   # [m/scan] 연속 검출 위치 이상치 제한
-    max_yaw_jump_deg: 60.0    # [deg/scan] 연속 검출 yaw 이상치 제한
 
     # ── EMA 노이즈 필터 계수 (0 < alpha <= 1.0) ─────────────────
+    yaw_ema_alpha: 0.5        # 출력 yaw EMA 계수 (확실한 L자 재정렬 시에는 바로 반영)
     pos_ema_alpha: 0.45       # 위치 EMA 계수 (작을수록 부드러움)
     vel_ema_alpha: 0.30       # 속도 EMA 계수
     position_stddev: 0.03     # [m] LiDAR 중심 위치 표준편차
