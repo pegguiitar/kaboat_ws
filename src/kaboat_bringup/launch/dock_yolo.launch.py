@@ -19,12 +19,12 @@ def generate_launch_description():
     bringup_share = get_package_share_directory('kaboat_bringup')
     weights = os.path.join(
         get_package_share_directory('kaboat_perception'), 'models',
-        'dock_sequence_v3_yolo26n_best.pt')
+        'best.pt')
     return LaunchDescription([
         DeclareLaunchArgument('start_camera', default_value='true'),
         DeclareLaunchArgument('dock_weights', default_value=weights),
         DeclareLaunchArgument('dock_device', default_value='cpu'),
-        DeclareLaunchArgument('dock_target_class', default_value='red_triangle'),
+        DeclareLaunchArgument('dock_target_class', default_value='triangle'),
         DeclareLaunchArgument(
             'wall_to_mouth_m', default_value='2.5',
             description='마커 벽에서 입구까지 거리 [m]; 현장 실측값 필요'),

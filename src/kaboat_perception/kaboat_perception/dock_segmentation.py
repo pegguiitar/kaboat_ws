@@ -1,4 +1,4 @@
-"""YOLO26 segmentation adapter; one physical marker of each class per station."""
+"""YOLO shape segmentation for dock markers."""
 
 from dataclasses import dataclass
 
@@ -6,12 +6,7 @@ import cv2
 import numpy as np
 
 
-CLASS_NAMES = ("red_triangle", "green_circle", "blue_square")
-CLASS_PARTS = {
-    "red_triangle": ("red", "triangle"),
-    "green_circle": ("green", "circle"),
-    "blue_square": ("blue", "square"),
-}
+CLASS_NAMES = ("triangle", "circle", "square")
 
 
 @dataclass(frozen=True)

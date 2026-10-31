@@ -30,14 +30,14 @@ from tf2_ros import Buffer, TransformException, TransformListener
 
 from .depth_utils import depth_to_meters
 from .dock_geometry import estimate_marker, project_entrance_xy
-from .dock_segmentation import CLASS_NAMES, CLASS_PARTS, DockSegmenter
+from .dock_segmentation import CLASS_NAMES, DockSegmenter
 
 
 class DockMarkDetector(Node):
     def __init__(self):
         super().__init__('dock_mark_detector')
         for name, value in {
-            'weights': '', 'target_class': 'red_triangle', 'base_frame': 'base_link',
+            'weights': '', 'target_class': 'triangle', 'base_frame': 'base_link',
             'wall_to_mouth_m': 2.5, 'confidence': 0.45, 'image_size': 640,
             'device': 'cpu', 'min_depth_m': 0.25, 'max_depth_m': 12.0,
             'min_mask_pixels': 40, 'min_valid_fraction': 0.5,
@@ -161,7 +161,8 @@ class DockMarkDetector(Node):
                 continue
             estimates[detection.class_name] = (detection, estimate)
             mark = Mark()
-            mark.color, mark.shape = CLASS_PARTS[detection.class_name]
+            mark.color = 'unknown'
+            mark.shape = detection.class_name
             mark.confidence = detection.confidence
             x, _, z = estimate.point_optical
             mark.bearing = math.atan2(-x, z)

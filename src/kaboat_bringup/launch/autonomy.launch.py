@@ -24,7 +24,7 @@ def generate_launch_description():
     mission_params = os.path.join(bringup_share, 'config', 'mission_params.yaml')
     dock_weights = os.path.join(
         get_package_share_directory('kaboat_perception'), 'models',
-        'dock_sequence_v3_yolo26n_best.pt')
+        'best.pt')
 
     use_sim_time_value = LaunchConfiguration('use_sim_time')
     common_params = {'use_sim_time': use_sim_time_value}
@@ -86,8 +86,8 @@ def generate_launch_description():
             'dock_weights', default_value=dock_weights,
             description='YOLO26n-seg .pt 경로; 기본값은 패키지에 포함된 가중치'),
         DeclareLaunchArgument(
-            'dock_target_class', default_value='red_triangle',
-            description='red_triangle / green_circle / blue_square'),
+            'dock_target_class', default_value='triangle',
+            description='triangle / circle / square'),
         DeclareLaunchArgument(
             'dock_device', default_value='cpu',
             description='Ultralytics device: cpu 또는 Jetson CUDA 0'),
