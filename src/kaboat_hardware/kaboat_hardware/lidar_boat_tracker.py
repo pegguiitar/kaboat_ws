@@ -50,8 +50,8 @@ class LidarBoatTracker(Node):
         self.declare_parameter('panel_span', 0.60)
         self.declare_parameter('panel_min_visible_span', 0.35)
         self.declare_parameter('panel_max_visible_span', 0.80)
-        self.declare_parameter('panel_min_points', 6)
-        self.declare_parameter('panel_max_line_rms', 0.03)
+        self.declare_parameter('panel_min_points', 4)
+        self.declare_parameter('panel_max_line_rms', 0.10)
         self.declare_parameter('max_position_jump', 0.75)
         self.declare_parameter('max_yaw_jump_deg', 60.0)
 
@@ -135,6 +135,8 @@ class LidarBoatTracker(Node):
             '🚀 [lidar_boat_tracker] 횡단 판 2D pose 추적 시작\n'
             f'   - 판 길이: {self.panel_span:.2f}m '
             f'(관측 {self.panel_min_span:.2f}~{self.panel_max_span:.2f}m)\n'
+            f'   - 판 점: {self.panel_min_points}개 이상, '
+            f'직선 RMS 오차: {self.panel_max_line_rms:.2f}m 이하\n'
             f'   - 라이다 수조 좌표: ({self.lidar_x:.2f}, {self.lidar_y:.2f})m, '
             f'전방 yaw={math.degrees(self.lidar_yaw):.1f}°\n'
             '   - 발행: /boat_pose (x, y, 180° 모호한 yaw, covariance)')
