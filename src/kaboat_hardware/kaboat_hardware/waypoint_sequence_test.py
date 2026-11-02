@@ -57,7 +57,9 @@ class WaypointSequenceTest(Node):
             'waypoints_y': DEFAULT_Y,
             'waypoints_angle_deg': DEFAULT_ANGLES,
             'waypoints_use_heading': DEFAULT_USE_HEADING,
-            'thrust_ratio': 0.3,
+            'thrust_ratio': 0.2,
+            'position_tolerance': 0.9,
+            'heading_tolerance_deg': 10.0,
             'motion_enabled': False,
             'max_linear': 12.0 / 118.6,
             'max_angular': 3.0 / 118.6,
@@ -95,8 +97,8 @@ class WaypointSequenceTest(Node):
             yaw_kp=float(p('yaw_kp')),
             yaw_kd=float(p('yaw_kd')),
             slow_radius=float(p('slow_radius')),
-            position_tolerance=0.35,
-            heading_tolerance_deg=8.0,
+            position_tolerance=float(p('position_tolerance')),
+            heading_tolerance_deg=float(p('heading_tolerance_deg')),
             settle_time=0.5,
         )
         self.controller = WaypointController(tuning)

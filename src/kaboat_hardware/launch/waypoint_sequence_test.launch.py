@@ -15,8 +15,8 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('config_file', default_value=default_config,
                               description='YAML file with five tank waypoints'),
-        DeclareLaunchArgument('thrust_ratio', default_value='0.3',
-                              description='Ratio of motor thrust output [0..1] (0.3 = 30%)'),
+        DeclareLaunchArgument('thrust_ratio', default_value='0.2',
+                              description='Ratio of motor thrust output [0..1] (0.2 = 20%)'),
         DeclareLaunchArgument('motion_enabled', default_value='true',
                               description='false: preview only; true: publish /cmd_vel'),
         DeclareLaunchArgument('wait_for_start', default_value='false',
@@ -29,6 +29,12 @@ def generate_launch_description():
                               description='Heading P gain'),
         DeclareLaunchArgument('yaw_kd', default_value='0.15',
                               description='Heading D gain'),
+        DeclareLaunchArgument('position_tolerance', default_value='0.9',
+                              description='Waypoint arrival tolerance radius [m] (0.9m)'),
+        DeclareLaunchArgument('angle_tolerance', default_value='10.0',
+                              description='Heading tolerance [deg] (10.0 deg)'),
+        DeclareLaunchArgument('heading_tolerance_deg', default_value=LaunchConfiguration('angle_tolerance'),
+                              description='Heading tolerance [deg] (10.0 deg)'),
         DeclareLaunchArgument('hold_duration_sec', default_value='3.0',
                               description='Continuous hold at each point before advancing [s]'),
         Node(
@@ -39,6 +45,10 @@ def generate_launch_description():
                 {
                     'thrust_ratio': ParameterValue(
                         LaunchConfiguration('thrust_ratio'), value_type=float),
+                    'position_tolerance': ParameterValue(
+                        LaunchConfiguration('position_tolerance'), value_type=float),
+                    'heading_tolerance_deg': ParameterValue(
+                        LaunchConfiguration('heading_tolerance_deg'), value_type=float),
                     'motion_enabled': ParameterValue(
                         LaunchConfiguration('motion_enabled'), value_type=bool),
                     'wait_for_start': ParameterValue(

@@ -29,7 +29,9 @@ class IndoorWaypoint(Node):
         super().__init__('indoor_waypoint')
         defaults = {
             'target_x': 5.0, 'target_y': 2.5, 'target_angle_deg': 0.0,
-            'thrust_ratio': 0.3,
+            'thrust_ratio': 0.2,
+            'position_tolerance': 0.9,
+            'heading_tolerance_deg': 10.0,
             'motion_enabled': False,
             'tank_size_x': 10.0, 'tank_size_y': 5.0,
             'tank_margin': 0.25,
@@ -39,7 +41,8 @@ class IndoorWaypoint(Node):
             self.declare_parameter(name, value)
         tuning = WaypointParams()
         for name in vars(tuning):
-            self.declare_parameter(name, getattr(tuning, name))
+            if not self.has_parameter(name):
+                self.declare_parameter(name, getattr(tuning, name))
         p = lambda name: self.get_parameter(name).value
 
         self.target = waypoint(p('target_x'), p('target_y'),
