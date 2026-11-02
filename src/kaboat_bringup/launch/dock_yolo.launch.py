@@ -1,6 +1,6 @@
 """D455 + live dock detection, without mission or motor control nodes.
 
-The camera mounting TF to base_link must be supplied by the robot.
+For this test only, base_link -> camera_link mounting TF is zero.
 """
 
 import os
@@ -33,11 +33,18 @@ def generate_launch_description():
                 os.path.join(bringup_share, 'launch', 'd455.launch.py')),
             condition=IfCondition(LaunchConfiguration('start_camera'))),
         Node(
+            package='tf2_ros', executable='static_transform_publisher',
+            name='zero_camera_mount_tf', output='screen',
+            arguments=['--x', '0', '--y', '0', '--z', '0',
+                       '--roll', '0', '--pitch', '0', '--yaw', '0',
+                       '--frame-id', 'base_link', '--child-frame-id', 'camera_link']),
+        Node(
             package='kaboat_perception', executable='dock_mark_detector',
             name='dock_mark_detector', output='screen',
             parameters=[{
                 'use_sim_time': False,
                 'enabled': True,
+                'publish_debug_image': True,
                 'weights': LaunchConfiguration('dock_weights'),
                 'device': LaunchConfiguration('dock_device'),
                 'target_class': LaunchConfiguration('dock_target_class'),
