@@ -10,7 +10,7 @@ from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import Imu
 
-THRESHOLD_DEG = 5.0
+THRESHOLD_DEG = 3.0
 
 
 def quaternion_to_euler(x: float, y: float, z: float, w: float):
@@ -47,7 +47,7 @@ class RollPitchViewer(Node):
         self.last_msg_time = time.monotonic()
 
         tilted = abs(roll) > THRESHOLD_DEG or abs(pitch) > THRESHOLD_DEG
-        status = "\033[91m[ ⚠️ TILTED > 5° (스캔 차단됨) ]\033[0m" if tilted else "\033[92m[ OK (정상 주행) ]\033[0m"
+        status = "\033[91m[ ⚠️ TILTED > 3° (스캔 차단됨) ]\033[0m" if tilted else "\033[92m[ OK (정상 주행) ]\033[0m"
 
         output = (f"\r\033[K"
                   f"Roll: {roll:+6.2f}° | "

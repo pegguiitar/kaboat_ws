@@ -79,6 +79,7 @@ def generate_launch_description():
             'config_file': tg50_config,
             'mask_start_deg': LaunchConfiguration('onboard_lidar_mask_start_deg'),
             'mask_end_deg': LaunchConfiguration('onboard_lidar_mask_end_deg'),
+            'tilt_threshold_deg': LaunchConfiguration('onboard_lidar_tilt_threshold_deg'),
         }.items(),
         condition=IfCondition(enable_onboard_lidar),
     )
@@ -105,6 +106,9 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'onboard_lidar_mask_end_deg', default_value='230.0',
             description='선체 구조물로 가릴 스캔 끝각 [deg]'),
+        DeclareLaunchArgument(
+            'onboard_lidar_tilt_threshold_deg', default_value='3.0',
+            description='선체 롤/피치 기울기 스캔 차단 임계값 [deg] (기본: 3.0)'),
         DeclareLaunchArgument(
             'thruster_hardware_type', default_value='serial',
             description="스러스터 하드웨어 타입 ('serial' | 'dummy' | 'pca9685')"),

@@ -67,17 +67,17 @@ class TestOnboardScanFilter(unittest.TestCase):
         self.assertAlmostEqual(math.degrees(roll), 0.0, places=4)
         self.assertAlmostEqual(math.degrees(pitch), 20.0, places=4)
 
-    def test_is_tilted_threshold_5_deg(self):
-        thresh = math.radians(5.0)
+    def test_is_tilted_threshold_3_deg(self):
+        thresh = math.radians(3.0)
 
-        # 4.9 degrees -> not tilted
-        self.assertFalse(is_tilted(math.radians(4.9), math.radians(0.0), thresh))
-        self.assertFalse(is_tilted(math.radians(0.0), math.radians(-4.9), thresh))
+        # 2.9 degrees -> not tilted
+        self.assertFalse(is_tilted(math.radians(2.9), math.radians(0.0), thresh))
+        self.assertFalse(is_tilted(math.radians(0.0), math.radians(-2.9), thresh))
 
-        # 5.1 degrees -> tilted
-        self.assertTrue(is_tilted(math.radians(5.1), math.radians(0.0), thresh))
-        self.assertTrue(is_tilted(math.radians(0.0), math.radians(-5.1), thresh))
-        self.assertTrue(is_tilted(math.radians(6.0), math.radians(6.0), thresh))
+        # 3.1 degrees -> tilted
+        self.assertTrue(is_tilted(math.radians(3.1), math.radians(0.0), thresh))
+        self.assertTrue(is_tilted(math.radians(0.0), math.radians(-3.1), thresh))
+        self.assertTrue(is_tilted(math.radians(4.0), math.radians(4.0), thresh))
 
     def test_invalidate_all_ranges(self):
         raw = LaserScan()

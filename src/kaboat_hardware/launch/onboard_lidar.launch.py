@@ -35,8 +35,8 @@ def generate_launch_description():
             'enable_imu_filter', default_value='true',
             description='Filter scans when boat roll or pitch exceeds threshold (default: true)'),
         DeclareLaunchArgument(
-            'tilt_threshold_deg', default_value='5.0',
-            description='Boat tilt threshold for scan filtering [deg] (default: 5.0)'),
+            'tilt_threshold_deg', default_value='3.0',
+            description='Boat tilt threshold for scan filtering [deg] (default: 3.0)'),
         DeclareLaunchArgument(
             'tilt_action', default_value='drop',
             description='Action when tilted: "drop" (skip message) or "invalidate" (all inf)'),

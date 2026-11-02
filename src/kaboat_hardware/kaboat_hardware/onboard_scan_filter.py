@@ -5,7 +5,7 @@ its +X axis. The default 130..230 degree sector equals +130..+180 and -180..-130
 degrees (rear/stern sector) in a scan whose angle range is -180..180 degrees.
 
 IMU tilt filter rejects scans when boat roll or pitch exceeds tilt_threshold_deg
-(default: 5.0 degrees), preventing surface reflections or sky points from corrupting
+(default: 3.0 degrees), preventing surface reflections or sky points from corrupting
 downstream occupancy and DRI maps.
 """
 
@@ -70,7 +70,7 @@ class OnboardScanFilter(Node):
 
         # IMU tilt filter parameters
         self.declare_parameter('enable_imu_filter', True)
-        self.declare_parameter('tilt_threshold_deg', 5.0)
+        self.declare_parameter('tilt_threshold_deg', 3.0)
         self.declare_parameter('imu_timeout_sec', 1.0)
         self.declare_parameter('tilt_action', 'drop')  # 'drop' or 'invalidate'
 
