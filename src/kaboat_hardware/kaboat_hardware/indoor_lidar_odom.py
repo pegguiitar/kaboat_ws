@@ -80,6 +80,9 @@ class IndoorLidarOdom(Node):
         self.declare_parameter('lidar_yaw_stddev_deg', 2.0)
         self.declare_parameter('lidar_yaw_gate_deg', 45.0)
 
+        # 수조 외벽 라이다 검출 yaw를 Ground Truth로 직접 사용 (IMU 부호/분기 개입 배제)
+        self.declare_parameter('use_lidar_yaw_truth', True)
+
         # 자이로만으로는 최초 앞뒤를 알 수 없으므로 시작 때 -X 근처에서 분기를 확정한다.
         self.declare_parameter('require_yaw_calibration', False)
         self.declare_parameter('calibration_reference_yaw_deg', 180.0)
@@ -124,9 +127,12 @@ class IndoorLidarOdom(Node):
             max_bias_abs=float(
                 self.get_parameter('max_gyro_bias_abs').value))
 
+        self.use_lidar_yaw_truth = bool(
+            self.get_parameter('use_lidar_yaw_truth').value)
         self.require_yaw_calibration = bool(
             self.get_parameter('require_yaw_calibration').value)
-        self.yaw_calibrated = not self.require_yaw_calibration
+        self.yaw_calibrated = (
+            True if self.use_lidar_yaw_truth else not self.require_yaw_calibration)
         self.calibration_reference_yaw = math.radians(float(
             self.get_parameter('calibration_reference_yaw_deg').value))
         self.calibration_reference_tolerance = math.radians(max(0.0, float(
@@ -187,10 +193,15 @@ class IndoorLidarOdom(Node):
             self.get_parameter('publish_rate').value))
         self.create_timer(1.0 / publish_rate, self._tick)
 
+        mode_desc = (
+            '수조 라이다 yaw 직접 사용 (Ground Truth, cal_imu 불필요)'
+            if self.use_lidar_yaw_truth else
+            'LiDAR 판 yaw 주측정 + IMU gyro 180° 방향 선택'
+        )
         self.get_logger().info(
-            '🚀 [indoor_lidar_odom] LiDAR 판 yaw 주측정 + IMU gyro 방향 선택 시작\n'
+            f'🚀 [indoor_lidar_odom] {mode_desc} 시작\n'
             f"   - LiDAR pose: '{self.pose_topic}'\n"
-            f"   - IMU gyro: '{self.imu_topic}'\n"
+            f"   - IMU gyro: '{self.imu_topic}' (활용: {'미사용(LiDAR Truth)' if self.use_lidar_yaw_truth else '180° 분기 선택'})\n"
             f'   - 초기 gyro bias: {initial_bias:.5f} rad/s\n'
             '   - 유효한 판 yaw를 매 측정마다 적용\n'
             f'   - 시작 정지 보정 필수: {self.require_yaw_calibration}\n'
@@ -221,7 +232,25 @@ class IndoorLidarOdom(Node):
         if not math.isfinite(yaw_variance) or yaw_variance <= 0.0:
             yaw_variance = self.default_lidar_yaw_variance
 
-        if not self.yaw_filter.initialized:
+        if self.use_lidar_yaw_truth:
+            # 수조 라이다의 검출 yaw를 Ground Truth로 직접 사용 (IMU 180° 분기 선택 및 게이트 개입 배제)
+            if (self.last_aligned_lidar_yaw is not None
+                    and self.last_lidar_yaw_correction_time is not None):
+                dt = now - self.last_lidar_yaw_correction_time
+                if 0.001 < dt <= self.pos_timeout:
+                    measured_rate = normalize_angle(
+                        lidar_yaw - self.last_aligned_lidar_yaw) / dt
+                    self.lidar_yaw_rate = (
+                        self.yaw_rate_alpha * measured_rate
+                        + (1.0 - self.yaw_rate_alpha) * self.lidar_yaw_rate)
+            self.last_aligned_lidar_yaw = lidar_yaw
+            self.last_lidar_yaw_correction_time = now
+            self.yaw_calibrated = True
+            if not self.yaw_filter.initialized:
+                self.yaw_filter.initialize(lidar_yaw, yaw_variance)
+            else:
+                self.yaw_filter.reset_yaw(lidar_yaw, yaw_variance)
+        elif not self.yaw_filter.initialized:
             self.yaw_filter.initialize(lidar_yaw, yaw_variance)
             if self.yaw_calibrated:
                 self.last_aligned_lidar_yaw = lidar_yaw
@@ -391,16 +420,17 @@ class IndoorLidarOdom(Node):
             return
 
         if not self.yaw_calibrated or self.last_aligned_lidar_yaw is None:
-            self.get_logger().warn(
-                '시작 gyro bias 보정 전입니다. '
-                '`ros2 run kaboat_hardware calibrate_indoor_imu`를 실행하세요.',
-                throttle_duration_sec=5.0)
+            if not self.use_lidar_yaw_truth:
+                self.get_logger().warn(
+                    '시작 gyro bias 보정 전입니다. '
+                    '`ros2 run kaboat_hardware calibrate_indoor_imu`를 실행하세요.',
+                    throttle_duration_sec=5.0)
             return
 
         imu_fresh = (
             self.last_imu_receive_time is not None
             and now - self.last_imu_receive_time <= self.imu_timeout)
-        if self._imu_ok and not imu_fresh:
+        if not self.use_lidar_yaw_truth and self._imu_ok and not imu_fresh:
             self.get_logger().warn(
                 'IMU gyro 유실 — 이전 LiDAR 방향 분기로 /odom 유지',
                 throttle_duration_sec=2.0)

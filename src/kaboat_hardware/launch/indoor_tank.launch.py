@@ -134,7 +134,7 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'tank_config_file', default_value=default_config,
             description='indoor_lidar_odom 파라미터 (수조 실측 설정값)'),
-        LogInfo(msg='[INDOOR TANK] 외부 LiDAR 판 pose → /odom, GQ7 gyro로 180° 방향 선택.'),
+        LogInfo(msg='[INDOOR TANK] 수조 LiDAR /boat_pose를 Ground Truth로 직접 /odom 및 TF 발행 (cal_imu 불필요).'),
 
         sensors,
         onboard_lidar,

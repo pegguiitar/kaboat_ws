@@ -150,6 +150,7 @@ class TestIndoorLidarOdomSafety(unittest.TestCase):
             self.published[-1].pose.pose.orientation), 0.0)
 
     def test_rejected_lidar_yaw_does_not_delay_next_correction(self):
+        self.node.use_lidar_yaw_truth = False
         self.node._on_lidar_pose(_pose(yaw=0.0))
         self.node._on_imu(_imu())
         old_correction_time = time.monotonic() - 3.2
@@ -172,7 +173,23 @@ class TestIndoorLidarOdomSafety(unittest.TestCase):
         self.node._on_lidar_pose(msg)
         self.assertIsNone(self.node.last_pose_receive_time)
 
+    def test_lidar_yaw_truth_mode_directly_sets_odom_without_imu(self):
+        self.assertTrue(self.node.use_lidar_yaw_truth)
+        self.assertTrue(self.node.yaw_calibrated)
+        # IMU 데이터 및 cal_imu 없이 LiDAR pose만으로 즉시 /odom 발행 및 yaw 반영
+        test_yaw = math.radians(-15.5)
+        self.node._on_lidar_pose(_pose(x=6.64, y=1.89, yaw=test_yaw))
+        self.node._tick()
+
+        self.assertEqual(len(self.published), 1)
+        odom = self.published[-1]
+        self.assertAlmostEqual(odom.pose.pose.position.x, 6.64)
+        self.assertAlmostEqual(odom.pose.pose.position.y, 1.89)
+        self.assertAlmostEqual(
+            _yaw_from_quat(odom.pose.pose.orientation), test_yaw, places=6)
+
     def test_lidar_180_flip_is_aligned_to_imu_heading(self):
+        self.node.use_lidar_yaw_truth = False
         expected_yaw = math.radians(178.0)
         self.node.yaw_filter.initialize(
             expected_yaw, math.radians(2.0) ** 2)
@@ -211,6 +228,7 @@ class TestIndoorLidarOdomSafety(unittest.TestCase):
             measured_yaw, places=6)
 
     def test_stale_lidar_reacquisition_does_not_reset_imu_yaw(self):
+        self.node.use_lidar_yaw_truth = False
         imu_yaw = math.radians(35.0)
         self.node.yaw_filter.initialize(imu_yaw, math.radians(2.0) ** 2)
         self.node.yaw_calibrated = True
