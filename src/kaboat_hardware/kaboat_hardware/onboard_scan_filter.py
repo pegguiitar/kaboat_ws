@@ -1,8 +1,8 @@
 """Mask boat-structure returns and filter tilted scans using IMU in onboard TG-50.
 
 Angles are measured in the published LaserScan frame, counterclockwise from
-its +X axis. The default 220..320 degree sector equals -140..-40 degrees in
-a scan whose angle range is -180..180 degrees.
+its +X axis. The default 130..230 degree sector equals +130..+180 and -180..-130
+degrees (rear/stern sector) in a scan whose angle range is -180..180 degrees.
 
 IMU tilt filter rejects scans when boat roll or pitch exceeds tilt_threshold_deg
 (default: 5.0 degrees), preventing surface reflections or sky points from corrupting
@@ -65,8 +65,8 @@ class OnboardScanFilter(Node):
 
         # Sector mask parameters
         self.declare_parameter('enable_sector_mask', True)
-        self.declare_parameter('mask_start_deg', 220.0)
-        self.declare_parameter('mask_end_deg', 320.0)
+        self.declare_parameter('mask_start_deg', 130.0)
+        self.declare_parameter('mask_end_deg', 230.0)
 
         # IMU tilt filter parameters
         self.declare_parameter('enable_imu_filter', True)

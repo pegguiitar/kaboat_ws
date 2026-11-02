@@ -159,7 +159,7 @@ ros2 topic echo /odom --once
 
 ## 실내 수조 시험 (외벽 TG-50 + 선체 GQ7·TG-50)
 
-실내에서는 GNSS를 사용할 수 없어 외벽 TG-50의 `/boat_pose`와 선체 GQ7 IMU로 `/odom`을 만듭니다. `indoor_tank.launch.py`가 실외용 GQ7 EKF `/odom` remap과 TF broadcaster를 끄므로 실내에서 `real_sensors.launch.py`를 따로 실행하면 안 됩니다. 선체 TG-50을 쓰면 `/scan/raw`에서 배 구조물이 보이는 220°~320°를 가린 `/scan`을 지도·회피에 사용합니다. 고정 라이다 `/shore/scan`에는 이 필터가 적용되지 않습니다.
+실내에서는 GNSS를 사용할 수 없어 외벽 TG-50의 `/boat_pose`와 선체 GQ7 IMU로 `/odom`을 만듭니다. `indoor_tank.launch.py`가 실외용 GQ7 EKF `/odom` remap과 TF broadcaster를 끄므로 실내에서 `real_sensors.launch.py`를 따로 실행하면 안 됩니다. 선체 TG-50을 쓰면 `/scan/raw`에서 배 후방 구조물이 보이는 130°~230°를 가린 `/scan`을 지도·회피에 사용합니다. 고정 라이다 `/shore/scan`에는 이 필터가 적용되지 않습니다.
 
 **노트북·젯슨 빌드, 포트 선택, IMU 보정, 고정 B-Spline 추종, 장애물 회피 미리보기·주행, RViz, 출발·정지는 [TANK_TESTS_GUIDE.md](TANK_TESTS_GUIDE.md)에 모았습니다.** 이 절차의 설치 좌표와 선체 폭·라이다 원점 변환은 현장 실측값으로 확인해야 합니다. 선체 TG-50의 최소 거리 설정은 [`tg50_onboard.yaml`](src/kaboat_hardware/config/tg50_onboard.yaml), 실내 오도메트리 설정은 [`indoor_tank.yaml`](src/kaboat_hardware/config/indoor_tank.yaml)에 있습니다.
 

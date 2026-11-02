@@ -123,7 +123,7 @@ export ROS_DOMAIN_ID=42
 # 실시간 롤/피치 기울기 및 스캔 차단 상태 확인 (임계값: ±5.0°)
 python3 scripts/view_roll_pitch.py
 
-# 선체 TG-50 라이다 단독 실행 (IMU ±5.0° 기울기 필터 + 선체 220°~320° 가림 적용)
+# 선체 TG-50 라이다 단독 실행 (IMU ±5.0° 기울기 필터 + 선체 후방 130°~230° 가림 적용)
 ros2 launch kaboat_hardware onboard_lidar.launch.py port:=/dev/ttyUSB0
 
 # 육상/책상 테스트 등 센서가 기울어진 상태에서 필터를 끄고 스캔만 볼 때:
