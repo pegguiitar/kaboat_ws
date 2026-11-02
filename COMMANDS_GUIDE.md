@@ -96,8 +96,14 @@ source ~/.bashrc
 | **`run_motor`** | 현재 `/dev/ttyUSB0`을 지정하는 모터 드라이버 실행 | 실제 젯슨의 모터 포트가 확인될 때까지 사용하지 말고 [수조 가이드](TANK_TESTS_GUIDE.md#3-젯슨-imu-보정과-모터테스트-시작)의 포트 확인 절차를 따르세요 |
 | **`run_zenoh`** | `python3 scripts/zenoh_monitor_link.py jetson` | **노트북과의 원격 모니터링 통신 브리지 가동** |
 | **`view_pitch`** | `python3 scripts/view_roll_pitch.py` | 실시간 롤/피치 자세 각도 모니터링 |
-| **`test_los`** | `ros2 launch kaboat_hardware los_path_test.launch.py path_kind:=bspline` | LOS 경로 추종 자율주행 테스트 |
-| **`test_bspline`**| `ros2 launch kaboat_hardware bspline_track_test.launch.py wait_for_start:=true` | B-Spline 곡선 자율주행 테스트 |
+| **`test_bspline`**| `ros2 launch kaboat_hardware bspline_track_test.launch.py wait_for_start:=false` | B-Spline 곡선 자율주행 즉시 시작 |
+| **`test_straight`**| `ros2 launch kaboat_hardware straight_line_test.launch.py wait_for_start:=false` | 직선 주행 자율주행 즉시 시작 |
+| **`test_circle`** | `ros2 launch kaboat_hardware circle_drive_test.launch.py wait_for_start:=false` | 원형 선회 자율주행 즉시 시작 |
+| **`test_station`**| `ros2 launch kaboat_hardware station_keeping_test.launch.py wait_for_start:=false` | 정점 유지(DP) 즉시 시작 |
+| **`test_los`**    | `ros2 launch kaboat_hardware los_path_test.launch.py path_kind:=bspline motion_enabled:=true wait_for_start:=false` | LOS 경로 추종 자율주행 즉시 시작 |
+| **`test_avoid`**  | `ros2 launch kaboat_hardware real_obstacle_avoid_test.launch.py drive_enabled:=true wait_for_start:=false` | 실시간 장애물 회피 자율주행 즉시 시작 |
+
+> **팁**: 모든 자율주행 테스트 단축어 및 런처는 기본적으로 외부 시작 신호(`/start_mission`) 없이 **실행 즉시 시작(`wait_for_start:=false`)**됩니다. 출발 명령을 기다리게 하려면 `wait_for_start:=true`를 인자로 넘겨주면 됩니다.
 
 `run_boat_lidar`는 `run_tank` 전체 센서·오도메트리 스택에 **선체 TG-50**을 추가해 실행합니다. 두 명령을 동시에 실행하지 마세요. 현재 단축 명령의 TG-50 포트는 `/dev/ttyUSB0`으로 고정돼 있으므로 젯슨에서 실제 포트를 확인한 뒤 사용해야 합니다.
 

@@ -39,6 +39,7 @@ class RealObstacleAvoidTest(Node):
         super().__init__('real_obstacle_avoid_test')
 
         self.declare_parameter('drive_enabled', False)
+        self.declare_parameter('wait_for_start', True)
         self.declare_parameter('allow_escape', False)
         self.declare_parameter('goal_distance', 3.0)
         self.declare_parameter('goal_tolerance', 0.5)
@@ -53,6 +54,7 @@ class RealObstacleAvoidTest(Node):
         self.declare_parameter('viz_dri_scale', 4.0)
 
         self.drive_enabled = bool(self.get_parameter('drive_enabled').value)
+        self.wait_for_start = bool(self.get_parameter('wait_for_start').value)
         self.allow_escape = bool(self.get_parameter('allow_escape').value)
         self.goal_distance = float(self.get_parameter('goal_distance').value)
         self.goal_tolerance = float(self.get_parameter('goal_tolerance').value)
@@ -369,6 +371,10 @@ class RealObstacleAvoidTest(Node):
                 self.preview_received = now
                 self.preview_obstacle_distance = self._front_obstacle_distance(
                     dri.occ_xy, boat, yaw)
+                if not self.wait_for_start and plan is not None:
+                    ok, _ = self._arm()
+                    if ok:
+                        return
                 self._publish_command(Twist())
                 self._publish_debug(dri, plan, goal)
                 self._publish_status(

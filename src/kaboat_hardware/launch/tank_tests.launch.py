@@ -43,8 +43,8 @@ def generate_launch_description():
     )
     wait_for_start_arg = DeclareLaunchArgument(
         'wait_for_start',
-        default_value='true',
-        description='외부 시작 신호(/start_mission) 대기 여부 (true/false)'
+        default_value='false',
+        description='외부 시작 신호(/start_mission) 대기 여부 (기본: false, 즉시 시작)'
     )
 
     # 1. 직진 주행 테스트

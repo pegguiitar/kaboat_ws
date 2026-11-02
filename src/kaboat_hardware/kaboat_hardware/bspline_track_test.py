@@ -97,7 +97,7 @@ class BSplineTrackTest(Node):
 
         # ── 안전 파라미터 ─────────────────────────────────
         self.declare_parameter('odom_timeout_sec', 0.5) # /odom 타임아웃 [s]
-        self.declare_parameter('wait_for_start', True)  # 외부 시작 신호(/start_mission) 대기 여부
+        self.declare_parameter('wait_for_start', False)  # 외부 시작 신호(/start_mission) 대기 여부 (기본: 즉시 시작)
 
         # 파라미터 취득
         cps_x = list(self.get_parameter('control_points_x').value)

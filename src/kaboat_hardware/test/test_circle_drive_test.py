@@ -54,11 +54,13 @@ class TestCircleDriveTest(unittest.TestCase):
         self.assertAlmostEqual(normalize_angle(-3.0 * math.pi), -math.pi)
 
     def test_initial_state_and_wait(self):
-        """시작 신호 대기 중에는 모터 출력이 0인지 확인."""
-        self.assertTrue(self.node.wait_for_start)
-        self.assertFalse(self.node.started)
+        """기본 설정: 즉시 시작 모드 확인 및 wait_for_start 동작 검증."""
+        self.assertFalse(self.node.wait_for_start)
+        self.assertTrue(self.node.started)
 
-        # odom 입력 후 루프 실행
+        # wait_for_start 활성화 시 시작 신호 전 모터 출력 0 확인
+        self.node.wait_for_start = True
+        self.node.started = False
         self._feed_odom(x=5.0, y=1.3, yaw=0.0)
         self.node._control_loop()
 

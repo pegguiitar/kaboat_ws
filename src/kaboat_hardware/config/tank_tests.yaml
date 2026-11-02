@@ -15,7 +15,7 @@ straight_line_test:
     kp_yaw: 1.5               # 헤딩 P 게인
     kd_yaw: 0.15              # 요레이트 D 게인
     odom_timeout_sec: 0.5     # [s] /odom 수신 타임아웃
-    wait_for_start: true      # 외부 /start_mission 신호 대기
+    wait_for_start: false     # 외부 /start_mission 신호 대기 없이 즉시 시작
 
 # ── 2. B-Spline 곡선 추종 테스트 (BSpline Track Test) ─────────────────
 bspline_track_test:
@@ -38,7 +38,7 @@ bspline_track_test:
     v_full: 1.48              # [m/s] cruise_speed 출력에서의 속도 (실물 재교정 필요)
     cmd_exp: 1.64             # 속도→출력 변환 지수 (실물 재교정 필요)
     odom_timeout_sec: 0.5     # [s] /odom 타임아웃
-    wait_for_start: true      # 외부 시작 신호 대기
+    wait_for_start: false     # 외부 시작 신호 대기 없이 즉시 시작
 
 # ── 3. 원형 선회 주행 테스트 (Circle Drive Test) ──────────────────────
 circle_drive_test:
@@ -55,7 +55,7 @@ circle_drive_test:
     k_converge: 1.5           # 원 궤도 수렴 게인
     curvature_slowdown: 0.25  # 곡률(1/반경)에 따른 전진 감속 가중치
     odom_timeout_sec: 0.5     # [s] /odom 타임아웃
-    wait_for_start: true      # 외부 시작 신호 대기
+    wait_for_start: false     # 외부 시작 신호 대기 없이 즉시 시작
 
 # ── 4. 웨이포인트 정점 유지 테스트 (Station Keeping Test) ──────────────
 station_keeping_test:
@@ -73,4 +73,4 @@ station_keeping_test:
     kp_yaw: 1.5               # 헤딩 복귀 P 게인
     kd_yaw: 0.15              # 요레이트 감쇠 D 게인
     odom_timeout_sec: 0.5     # [s] /odom 타임아웃
-    wait_for_start: true      # 외부 시작 신호 대기
+    wait_for_start: false     # 외부 시작 신호 대기 없이 즉시 시작

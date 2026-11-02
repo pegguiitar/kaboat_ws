@@ -183,10 +183,12 @@ ls -l /dev/ttyCH341USB0
 ros2 launch kaboat_hardware thrusters.launch.py hardware_type:=serial port:=/dev/ttyCH341USB0 allow_port_scan:=false
 ```
 
-**젯슨 터미널 5** — 새 터미널 준비 명령을 실행한 뒤 B-Spline 주행 노드 시작. 출발 명령 전까지 대기합니다.
+**젯슨 터미널 5** — 새 터미널 준비 명령을 실행한 뒤 B-Spline 주행 노드 시작 (노트북 시작 신호 없이 실행 즉시 시작됩니다. 대기 모드로 실행하려면 `wait_for_start:=true`를 붙입니다).
 
 ```bash
-ros2 launch kaboat_hardware bspline_track_test.launch.py wait_for_start:=true
+ros2 launch kaboat_hardware bspline_track_test.launch.py wait_for_start:=false
+# 또는 간편 단축어:
+test_bspline
 ```
 
 이 테스트는 미리 지정한 B-Spline 코스를 따라가며, 회피 플래너의

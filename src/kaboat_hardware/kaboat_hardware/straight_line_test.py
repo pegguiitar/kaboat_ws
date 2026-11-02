@@ -73,7 +73,7 @@ class StraightLineTest(Node):
 
         # ── 안전 파라미터 ─────────────────────────────────
         self.declare_parameter('odom_timeout_sec', 0.5) # /odom 타임아웃 [s]
-        self.declare_parameter('wait_for_start', True)  # 외부 시작 신호(/start_mission) 대기 여부
+        self.declare_parameter('wait_for_start', False)  # 외부 시작 신호(/start_mission) 대기 여부 (기본: 즉시 시작)
 
         # 파라미터 로드
         self.start_x = float(self.get_parameter('start_x').value)

@@ -25,8 +25,10 @@ def generate_launch_description():
     rviz_config = os.path.join(get_package_share_directory('kaboat_hardware'),
                                'rviz', 'real_obstacle_avoid_test.rviz')
     return LaunchDescription([
-        DeclareLaunchArgument('drive_enabled', default_value='false',
-                              description='Publish commands to /cmd_vel (default: preview only)'),
+        DeclareLaunchArgument('drive_enabled', default_value='true',
+                              description='Publish commands to /cmd_vel (default: drive enabled)'),
+        DeclareLaunchArgument('wait_for_start', default_value='false',
+                              description='false: start immediately when path ready; true: wait for start service'),
         DeclareLaunchArgument('allow_escape', default_value='false',
                               description='Permit FSM reverse ESCAPE command'),
         DeclareLaunchArgument('goal_distance', default_value='3.0',
@@ -80,6 +82,8 @@ def generate_launch_description():
             name='real_obstacle_avoid_test', output='screen',
             parameters=[config, {
                 'drive_enabled': ParameterValue(drive_enabled, value_type=bool),
+                'wait_for_start': ParameterValue(
+                    LaunchConfiguration('wait_for_start'), value_type=bool),
                 'allow_escape': ParameterValue(
                     LaunchConfiguration('allow_escape'), value_type=bool),
                 'goal_distance': ParameterValue(

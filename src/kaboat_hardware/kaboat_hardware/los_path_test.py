@@ -46,6 +46,7 @@ class LosPathTest(Node):
             'sample_spacing': 0.05,
             'thrust_ratio': 0.5,
             'motion_enabled': False,
+            'wait_for_start': False,
             'tank_size_x': 10.0,
             'tank_size_y': 5.0,
             'tank_margin': 0.25,
@@ -83,7 +84,8 @@ class LosPathTest(Node):
                                     max_angular=DEFAULT_MAX_ANGULAR)
         self.odom = None
         self.last_odom_time = None
-        self.started = False
+        self.wait_for_start = bool(p('wait_for_start'))
+        self.started = not self.wait_for_start
         self.estop = False
         self.completed = False
         self.last_status = None

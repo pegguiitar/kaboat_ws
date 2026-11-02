@@ -48,10 +48,12 @@ class TestStationKeepingTest(unittest.TestCase):
         self.node._on_odom(msg)
 
     def test_wait_for_start(self):
-        """시작 신호 전에는 모터 출력 0 확인."""
-        self.assertTrue(self.node.wait_for_start)
-        self.assertFalse(self.node.started)
+        """기본 설정: 즉시 시작 모드 확인 및 wait_for_start 동작 검증."""
+        self.assertFalse(self.node.wait_for_start)
+        self.assertTrue(self.node.started)
 
+        self.node.wait_for_start = True
+        self.node.started = False
         self._feed_odom(x=4.0, y=2.5, yaw=0.0)
         self.node._control_loop()
 

@@ -140,6 +140,12 @@ class TestRealObstacleAvoidTest(unittest.TestCase):
         self.assertTrue(any(m.action == Marker.DELETEALL
                             for m in marker_arrays[-2].markers))
 
+    def test_auto_arm_when_wait_for_start_false(self):
+        self.node.wait_for_start = False
+        self.feed_scene()
+        self.node._tick()
+        self.assertTrue(self.node.started)
+
 
 if __name__ == '__main__':
     unittest.main()

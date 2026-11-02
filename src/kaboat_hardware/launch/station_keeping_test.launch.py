@@ -36,8 +36,8 @@ def generate_launch_description():
     odom_timeout_arg = DeclareLaunchArgument(
         'odom_timeout_sec', default_value='0.5', description='오도메트리 미수신 안전 정지 타임아웃 [초]')
     wait_for_start_arg = DeclareLaunchArgument(
-        'wait_for_start', default_value='true',
-        description='외부 시작 신호(/start_mission) 대기 여부 (기본값 true: 대기 후 출발)')
+        'wait_for_start', default_value='false',
+        description='외부 시작 신호(/start_mission) 대기 여부 (기본값 false: 즉시 자동 시작)')
 
     node = Node(
         package='kaboat_hardware',
