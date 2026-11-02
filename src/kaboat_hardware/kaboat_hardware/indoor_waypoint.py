@@ -168,6 +168,14 @@ class IndoorWaypoint(Node):
         self._send(cmd)
         self._status(step.phase if self.motion_enabled
                      else f'PREVIEW_{step.phase}')
+        cur_yaw_deg = math.degrees(_yaw(pose.orientation))
+        heading_err_deg = math.degrees(step.heading_error)
+        self.get_logger().info(
+            f'[{step.phase}] 현재: ({pose.position.x:.2f}, {pose.position.y:.2f})m '
+            f'| 목표거리: {step.distance:.2f}m (허용: {self.controller.params.position_tolerance:.2f}m) '
+            f'| 선수각: {cur_yaw_deg:.1f}° (오차: {heading_err_deg:.1f}°) '
+            f'| 출력: [전진 {cmd.linear.x*100:.0f}%, 회전 {cmd.angular.z*100:.0f}%]',
+            throttle_duration_sec=1.0)
 
     def stop(self):
         if self.cmd_pub is not None:

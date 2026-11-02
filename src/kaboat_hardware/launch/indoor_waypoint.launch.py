@@ -24,6 +24,12 @@ def generate_launch_description():
                               description='헤딩 P 게인'),
         DeclareLaunchArgument('yaw_kd', default_value='0.15',
                               description='요레이트 D 게인'),
+        DeclareLaunchArgument('position_tolerance', default_value='0.50',
+                              description='목표점 위치 도달 판정 반경 [m] (기본: 0.50m)'),
+        DeclareLaunchArgument('heading_tolerance_deg', default_value='15.0',
+                              description='최종 헤딩 정렬 허용 오차 [deg] (기본: 15.0°)'),
+        DeclareLaunchArgument('slow_radius', default_value='1.5',
+                              description='목표점 접근 시 감속 시작 반경 [m] (기본: 1.5m)'),
         Node(
             package='kaboat_hardware', executable='indoor_waypoint',
             name='indoor_waypoint', output='screen',
@@ -44,6 +50,12 @@ def generate_launch_description():
                     LaunchConfiguration('yaw_kp'), value_type=float),
                 'yaw_kd': ParameterValue(
                     LaunchConfiguration('yaw_kd'), value_type=float),
+                'position_tolerance': ParameterValue(
+                    LaunchConfiguration('position_tolerance'), value_type=float),
+                'heading_tolerance_deg': ParameterValue(
+                    LaunchConfiguration('heading_tolerance_deg'), value_type=float),
+                'slow_radius': ParameterValue(
+                    LaunchConfiguration('slow_radius'), value_type=float),
                 'use_sim_time': False,
             }],
         ),
