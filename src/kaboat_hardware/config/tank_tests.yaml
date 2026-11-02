@@ -7,8 +7,8 @@ straight_line_test:
     start_y: 3.0              # [m] 출발 기준점 Y
     goal_x: 1.0               # [m] 목표 종점 X
     goal_y: 3.0               # [m] 목표 종점 Y
-    cruise_speed: 0.50        # 기본 전진 출력 비 (50%)
-    max_angular: 0.60         # 최대 회전 출력 비 (60%)
+    cruise_speed: 0.30        # 기본 전진 출력 비 (30%)
+    max_angular: 0.30         # 최대 회전 출력 비 (30%)
     lookahead_dist: 1.5       # [m] 전방 주시 거리
     goal_tolerance: 0.35      # [m] 도착 판정 반경
     slow_radius: 1.2          # [m] 종점 접근 감속 반경

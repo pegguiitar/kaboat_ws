@@ -63,8 +63,8 @@ class StraightLineTest(Node):
         self.declare_parameter('goal_y', float(STRAIGHT_LINE['goal_y']))
 
         # ── 주행 및 제어 파라미터 ─────────────────────────
-        self.declare_parameter('cruise_speed', 0.50)    # 전진 출력 비율 (0.0 ~ 1.0, 기본 50%)
-        self.declare_parameter('max_angular', 0.60)     # 최대 회전 출력 비율 (60%)
+        self.declare_parameter('cruise_speed', 0.30)    # 전진 출력 비율 (0.0 ~ 1.0, 기본 30%)
+        self.declare_parameter('max_angular', 0.30)     # 최대 회전 출력 비율 (30%)
         self.declare_parameter('lookahead_dist', 1.2)   # LOS 경로 추종 전방 주시 거리 [m]
         self.declare_parameter('goal_tolerance', 0.35)  # 도착 판정 반경 [m]
         self.declare_parameter('slow_radius', 1.5)      # 목표점 접근 감속 반경 [m]
