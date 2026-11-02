@@ -34,6 +34,8 @@ MONITOR_TOPICS = (
     '/real_avoid_test/markers',
     '/real_avoid_test/dri',
     '/real_avoid_test/status',
+    '/manual_dri/dri',
+    '/manual_dri/status',
     '/straight_drive/markers',
     '/bspline_test/path',
     '/bspline_test/markers',

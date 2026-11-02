@@ -7,6 +7,7 @@ sllidar_node:
     frame_id: shore_laser_frame
     inverted: false
     angle_compensate: true
-    # Standard(4 kHz)는 한 바퀴 실측 약 110점이라 수조 먼 쪽 판에 점이 2~3개뿐이다.
-    # Sensitivity(16 kHz)는 약 630점(1800빔 출력)이고 이 노트북에서 13.4 Hz로 동작했다.
-    scan_mode: Sensitivity
+    # Standard(4 kHz)는 수조 먼 쪽 판의 점 개수가 부족했다.
+    # Sensitivity(16 kHz)는 이 장치에서 시작 시간 초과 또는 스캔 미발행이 발생했다.
+    # Boost도 16 kHz이며, 이 노트북에서 /shore/scan 약 12.8 Hz를 확인했다.
+    scan_mode: Boost

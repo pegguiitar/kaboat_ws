@@ -1,0 +1,106 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+    Tree Height: 580
+  - Class: rviz_common/Views
+    Name: Views
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: "1 m 좌표 격자"
+      Enabled: true
+      Alpha: 0.35
+      Cell Size: 1
+      Plane: XY
+      Plane Cell Count: 20
+      Reference Frame: odom
+      Value: true
+    - Class: rviz_default_plugins/Map
+      Name: "라이다 점유 지도"
+      Enabled: true
+      Alpha: 0.65
+      Color Scheme: map
+      Draw Behind: true
+      Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /occupancy_grid
+      Value: true
+    - Class: rviz_default_plugins/Map
+      Name: "DRI 위험도"
+      Enabled: true
+      Alpha: 0.5
+      Color Scheme: costmap
+      Draw Behind: false
+      Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /manual_dri/dri
+      Value: true
+    - Class: rviz_default_plugins/LaserScan
+      Name: "선체 라이다 /scan"
+      Enabled: true
+      Alpha: 0.9
+      Color: 255; 70; 70
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Position Transformer: XYZ
+      Queue Size: 10
+      Size (Pixels): 4
+      Style: Points
+      Topic:
+        Depth: 10
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /scan
+      Use Fixed Frame: true
+      Value: true
+    - Class: rviz_default_plugins/Odometry
+      Name: "배 위치 /odom"
+      Enabled: true
+      Keep: 1
+      Topic:
+        Depth: 10
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /odom
+      Value: true
+    - Class: rviz_default_plugins/TF
+      Name: TF
+      Enabled: true
+      Value: true
+  Enabled: true
+  Global Options:
+    Background Color: 24; 26; 32
+    Fixed Frame: odom
+    Frame Rate: 30
+  Name: root
+  Tools:
+    - Class: rviz_default_plugins/Interact
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+  Views:
+    Current:
+      Class: rviz_default_plugins/ThirdPersonFollower
+      Distance: 5.0
+      Focal Point:
+        X: 0.0
+        Y: 0.0
+        Z: 0.0
+      Name: 배 뒤 추적 시점
+      Pitch: 0.6
+      Target Frame: base_link
+      Yaw: 3.14159265
+    Saved: ~
+Window Geometry:
+  Height: 900
+  Width: 1250
+  X: 100
+  Y: 60

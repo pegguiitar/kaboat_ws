@@ -1,57 +1,268 @@
-"""gate_follower — 항로추종 behavior. 게이트(빨강-초록 쌍) 중점 통과.
+"""Gate behavior: LiDAR grid -> DRI -> paired posts -> shared LOS follower.
 
-skeleton — 로직 우선순위:
-  1) 전방 시야에 red + green 부표가 같이 보이면, 그중 **거리가 가장 비슷한
-     빨강-초록 조합**을 같은 게이트 쌍으로 간주해 그 둘의 방위 중점으로 조향.
-     부표는 전역(odom) 좌표 부표맵으로 오므로, 거리·방위는 base 의
-     visible_buoys() 가 자기 odom 으로 계산한다(전방 ±50°·15m 필터로
-     "지금 보이는" 것만 — 부표맵은 뒤 것·먼 것도 보관하기 때문).
-  2) 안 보이면 goal 웨이포인트를 향해 주행 (waypoint, 헤딩 자유)
-  항상 obstacle_avoidance_utils 로 회피 보정.
-
-TODO(팀): 통과 판정, 쌍 매칭에 거리 임계값(너무 다르면 애초에 페어 아님으로
-          간주하고 위치 웨이포인트로 폴백) 추가
+Each aperture supplies a mandatory centre crossing. The free-form obstacle
+avoidance planner is not used because it can route around a gate.
 """
-import rclpy
-from geometry_msgs.msg import Twist
 
-from .behavior_base import BehaviorBase, MAX_THRUST
-from .obstacle_avoidance_utils import apply_repulsion
+import dataclasses
+import math
+import time
+
+import rclpy
+from geometry_msgs.msg import PoseStamped, Twist
+from nav_msgs.msg import OccupancyGrid, Path
+from rclpy.qos import qos_profile_sensor_data
+from sensor_msgs.msg import LaserScan
+from std_msgs.msg import String
+from visualization_msgs.msg import Marker, MarkerArray
+
+from .behavior_base import BehaviorBase, yaw_from_quaternion
+from .dri import DriParams, build_dri
+from .gate_corridor import (
+    GateParams, crossed_gate, lookahead_chord_safe, make_gate_path,
+    pair_observed, path_safe, points_observed, points_safe, scan_hits_world,
+    select_gate_pair)
 
 
 class GateFollower(BehaviorBase):
     STATE_NAME = 'gate'
     CMD_TOPIC = '/cmd/gate'
 
+    def __init__(self):
+        super().__init__()
+        self.gate_params = self._params_from('gate', GateParams)
+        self.dri_params = self._params_from('dri', DriParams)
+        self.declare_parameter('gate.thrust_ratio', 0.5)
+        self.declare_parameter('gate.motion_enabled', False)
+        self.declare_parameter('gate.scan_timeout_sec', 0.7)
+        self.declare_parameter('gate.grid_timeout_sec', 0.7)
+        self.thrust_ratio = float(self.get_parameter('gate.thrust_ratio').value)
+        self.motion_enabled = bool(self.get_parameter('gate.motion_enabled').value)
+        self.scan_timeout = float(self.get_parameter('gate.scan_timeout_sec').value)
+        self.grid_timeout = float(self.get_parameter('gate.grid_timeout_sec').value)
+        if (not math.isfinite(self.thrust_ratio)
+                or not 0.0 <= self.thrust_ratio <= 1.0
+                or not math.isfinite(self.scan_timeout) or self.scan_timeout <= 0
+                or not math.isfinite(self.grid_timeout) or self.grid_timeout <= 0):
+            raise ValueError('invalid gate thrust ratio or sensor timeout')
+
+        self._scan_at = None
+        self._scan_hits = None
+        self._grid_at = None
+        self._pair = None
+        self._path = None
+        self._previous_xy = None
+        self._crossed = False
+        self._passed_midpoints = []
+        self._status_text = None
+
+        self.path_pub = self.create_publisher(Path, '/gate/path', 1)
+        self.pair_pub = self.create_publisher(MarkerArray, '/gate/pairs', 1)
+        self.status_pub = self.create_publisher(String, '/gate/status', 10)
+        self.preview_pub = self.create_publisher(Twist, '/gate/cmd_preview', 10)
+        self.create_subscription(LaserScan, '/scan', self._on_scan,
+                                 qos_profile_sensor_data)
+        self.get_logger().info(
+            f'gate LiDAR/DRI: required_pairs={self.gate_params.required_pairs}, '
+            f'thrust_ratio={self.thrust_ratio:.2f}, '
+            f'motion_enabled={self.motion_enabled}')
+
+    def _params_from(self, prefix, cls):
+        defaults = cls()
+        values = {}
+        for field in dataclasses.fields(cls):
+            name = f'{prefix}.{field.name}'
+            self.declare_parameter(name, getattr(defaults, field.name))
+            values[field.name] = self.get_parameter(name).value
+        return cls(**values)
+
+    def on_activate(self):
+        self._pair = None
+        self._path = None
+        self._previous_xy = None
+        self._crossed = False
+        self._passed_midpoints = []
+        self._status_text = None
+
+    def on_deactivate(self):
+        self._pair = None
+        self._path = None
+        self._previous_xy = None
+        self._crossed = False
+
+    def _on_grid(self, msg: OccupancyGrid):
+        super()._on_grid(msg)
+        self._grid_at = time.monotonic()
+
+    def _on_scan(self, msg: LaserScan):
+        if self.waypoint_odom_ready():
+            pose = self.odom.pose.pose
+            hits = scan_hits_world(
+                msg, (pose.position.x, pose.position.y),
+                yaw_from_quaternion(pose.orientation))
+            if len(hits) == 0:
+                return
+            self._scan_hits = hits
+            self._scan_at = time.monotonic()
+
+    def _status(self, value):
+        if value != self._status_text:
+            self._status_text = value
+            self.status_pub.publish(String(data=value))
+            self.get_logger().info(f'gate: {value}')
+
+    def _stop(self, reason):
+        self._previous_xy = None  # no crossing is inferred across sensor gaps
+        self._status(reason)
+        self._publish_debug()
+        self.preview_pub.publish(Twist())
+        return Twist()
+
+    def _output(self, cmd):
+        self.preview_pub.publish(cmd)
+        return cmd if self.motion_enabled else Twist()
+
+    def _publish_debug(self):
+        path = Path()
+        path.header.frame_id = 'odom'
+        path.header.stamp = self.get_clock().now().to_msg()
+        if self._path is not None:
+            for x, y in self._path.samples:
+                pose = PoseStamped()
+                pose.header = path.header
+                pose.pose.position.x = float(x)
+                pose.pose.position.y = float(y)
+                pose.pose.position.z = 0.2
+                pose.pose.orientation.w = 1.0
+                path.poses.append(pose)
+        self.path_pub.publish(path)
+
+        marks = MarkerArray()
+        clear = Marker()
+        clear.action = Marker.DELETEALL
+        marks.markers.append(clear)
+        if self._pair is not None:
+            for i, point in enumerate((self._pair.left, self._pair.right,
+                                       self._pair.midpoint)):
+                marker = Marker()
+                marker.header = path.header
+                marker.ns, marker.id = 'gate_pair', i
+                marker.type, marker.action = Marker.SPHERE, Marker.ADD
+                marker.pose.position.x = point[0]
+                marker.pose.position.y = point[1]
+                marker.pose.position.z = 0.3
+                marker.pose.orientation.w = 1.0
+                marker.scale.x = marker.scale.y = marker.scale.z = 0.3
+                marker.color.a = 1.0
+                marker.color.g = 1.0 if i == 2 else 0.3
+                marker.color.r = 0.1 if i == 2 else 1.0
+                marks.markers.append(marker)
+        self.pair_pub.publish(marks)
+
+    def _goal_leg_safe(self, dri, grid, boat_xy, goal_xy):
+        dx = goal_xy[0] - boat_xy[0]
+        dy = goal_xy[1] - boat_xy[1]
+        distance = math.hypot(dx, dy)
+        if distance > self.gate_params.max_goal_after_gates:
+            return False
+        length = min(2.0, distance)
+        n = max(2, int(math.ceil(length / self.gate_params.sample_spacing)) + 1)
+        points = [(boat_xy[0] + t * dx / max(distance, 1e-9),
+                   boat_xy[1] + t * dy / max(distance, 1e-9))
+                  for t in (length * k / (n - 1) for k in range(n))]
+        return (points_safe(dri, points, self.gate_params)
+                and points_observed(grid, points))
+
     def compute_cmd(self):
+        now = time.monotonic()
         if (self.goal is None or self.goal.header.frame_id != 'odom'
                 or not self.waypoint_odom_ready()):
-            return Twist()
-        # 현재 skeleton 의 gate 완료 정의는 채널 출구 waypoint 2m 이내 진입.
-        # mission_manager 도 독립적으로 같은 2m 위치 조건을 확인한다.
-        if self.distance_to_goal() <= 2.0:
-            self.report_complete()
+            return self._stop('WAIT_ODOM_OR_GOAL')
+        if (self.occupancy_grid is None
+                or self.occupancy_grid.header.frame_id != 'odom'
+                or self._grid_at is None
+                or now - self._grid_at > self.grid_timeout):
+            return self._stop('GRID_TIMEOUT_OR_FRAME')
+        if self._scan_at is None or now - self._scan_at > self.scan_timeout:
+            return self._stop('SCAN_TIMEOUT')
 
-        # visible_buoys('red') → [(buoy, 거리[m], 방위[rad,좌+]), ...] (가까운 순).
-        # buoy 는 kaboat_msgs/Buoy (id·color·position(odom좌표)·confidence).
-        reds = self.visible_buoys('red')
-        greens = self.visible_buoys('green')
+        grid = self.occupancy_grid
+        if (grid.info.resolution <= 0
+                or len(grid.data) != grid.info.width * grid.info.height):
+            return self._stop('INVALID_GRID')
+        pose = self.odom.pose.pose
+        boat = (pose.position.x, pose.position.y)
+        goal = (self.goal.pose.position.x, self.goal.pose.position.y)
+        yaw = yaw_from_quaternion(pose.orientation)
+        dri = build_dri(grid, boat, yaw, self.dri_params)
 
-        if reds and greens:
-            # 거리가 가장 비슷한 빨강-초록 조합 = 같은 게이트 쌍 (모듈 docstring 참고)
-            r, g = min(((r, g) for r in reds for g in greens),
-                       key=lambda rg: abs(rg[0][1] - rg[1][1]))   # [1]=거리
-            mid_bearing = (r[2] + g[2]) / 2.0                     # [2]=방위
-            cmd = Twist()
-            # 게이트 중점 우선 조향 — 오차 1rad 당 차동 60N (구 게인 1.0 동등)
-            cmd.angular.z = (60.0 / MAX_THRUST) * mid_bearing
-            cmd.linear.x = self.max_linear * 0.8
-        else:
-            point = self.goal.pose.position
-            cmd, _ = self.waypoint(point.x, point.y,
+        if len(self._passed_midpoints) >= self.gate_params.required_pairs:
+            if self.distance_to_goal() <= 2.0:
+                self.report_complete()
+                self._status('COMPLETE')
+                self._publish_debug()
+                return self._output(Twist())
+            if not self._goal_leg_safe(dri, grid, boat, goal):
+                return self._stop('GOAL_LEG_UNSAFE_OR_TOO_FAR')
+            cmd, _ = self.waypoint(*goal, thrust_ratio=self.thrust_ratio,
                                    slow_radius=3.0)
+            self._status('GOAL_APPROACH')
+            self._publish_debug()
+            return self._output(cmd)
 
-        return apply_repulsion(cmd, self.occupancy_grid, self.odom)
+        if self._path is None:
+            pair = select_gate_pair(
+                grid, boat, goal, self._passed_midpoints, self.gate_params)
+            if pair is None or not pair_observed(
+                    pair, self._scan_hits, self.gate_params):
+                return self._stop('WAIT_GATE_PAIR')
+            self._pair = pair
+            self._path = make_gate_path(boat, pair, self.gate_params)
+            self._previous_xy = boat
+            self._crossed = False
+            self._los_follower.reset()
+
+        if not self._crossed and not pair_observed(
+                self._pair, self._scan_hits, self.gate_params):
+            return self._stop('GATE_POSTS_NOT_VISIBLE')
+
+        progress = self._los_follower.progress_idx or 0
+        if not path_safe(dri, self._path, self.gate_params, progress):
+            return self._stop('PATH_UNSAFE')
+        if not points_observed(
+                grid, self._path.samples[max(0, progress - 2):]):
+            return self._stop('PATH_UNOBSERVED')
+        cmd, reached = self.los(self._path, self.thrust_ratio)
+        progress = self._los_follower.progress_idx or 0
+        if not lookahead_chord_safe(
+                dri, boat, self._path, progress,
+                self._los_follower.params.lookahead, self.gate_params, grid):
+            return self._stop('LOOKAHEAD_UNSAFE')
+
+        if (not self._crossed and self._previous_xy is not None
+                and crossed_gate(self._previous_xy, boat,
+                                 self._pair, self.gate_params)):
+            self._crossed = True
+        self._previous_xy = boat
+
+        if reached:
+            if not self._crossed:
+                return self._stop('GATE_NOT_CROSSED')
+            self._passed_midpoints.append(self._pair.midpoint)
+            passed = len(self._passed_midpoints)
+            self._pair = None
+            self._path = None
+            self._previous_xy = None
+            self._crossed = False
+            self._los_follower.reset()
+            self._status(f'GATE_{passed}/{self.gate_params.required_pairs}_PASSED')
+            self._publish_debug()
+            return self._output(Twist())
+
+        self._status(f'FOLLOW_GATE_{len(self._passed_midpoints) + 1}/'
+                     f'{self.gate_params.required_pairs}')
+        self._publish_debug()
+        return self._output(cmd)
 
 
 def main(args=None):

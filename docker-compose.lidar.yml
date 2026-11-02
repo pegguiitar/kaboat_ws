@@ -15,6 +15,7 @@ services:
     # Keep USB serial devices visible even when they are plugged in later.
     volumes:
       - ./src:/workspace/kaboat_ws/src
+      - ./scripts/bash_aliases_display.sh:/root/.bash_aliases:ro
       - kaboat_lidar_build:/workspace/kaboat_ws/build
       - kaboat_lidar_install:/workspace/kaboat_ws/install
       - kaboat_lidar_log:/workspace/kaboat_ws/log

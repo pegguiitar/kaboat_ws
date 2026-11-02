@@ -1,0 +1,117 @@
+"""Three ordered LiDAR gate pairs and DRI clearance without YOLO colours."""
+
+import math
+from types import SimpleNamespace
+
+import numpy as np
+import pytest
+
+from kaboat_behaviors.dri import DriParams, build_dri
+from kaboat_behaviors.gate_corridor import (
+    GateParams, crossed_gate, lookahead_chord_safe, make_gate_path,
+    pair_observed, path_safe, points_observed, select_gate_pair)
+
+
+def gate_grid(posts=None):
+    res, size = 0.2, 100
+    origin = (-5.0, -10.0)
+    data = np.zeros((size, size), dtype=np.int8)
+    if posts is None:
+        posts = [(x, y) for x in (3.0, 5.0, 7.0) for y in (-1.5, 1.5)]
+    for x, y in posts:
+        ix = int(math.floor((x - origin[0]) / res))
+        iy = int(math.floor((y - origin[1]) / res))
+        data[iy:iy + 2, ix:ix + 2] = 100
+    info = SimpleNamespace(
+        resolution=res, width=size, height=size,
+        origin=SimpleNamespace(position=SimpleNamespace(x=origin[0], y=origin[1])))
+    return SimpleNamespace(info=info, data=data.ravel().tolist())
+
+
+def test_three_pairs_selected_in_order_and_beyond_count_is_configurable():
+    grid = gate_grid()
+    params = GateParams(required_pairs=3)
+    passed = []
+    boat = (0.0, 0.0)
+    goal = (9.0, 0.0)
+    for expected_x in (3.2, 5.2, 7.2):
+        pair = select_gate_pair(grid, boat, goal, passed, params)
+        assert pair is not None
+        assert pair.midpoint[0] == pytest.approx(expected_x)
+        assert pair.midpoint[1] == pytest.approx(0.1)
+        assert pair.width == pytest.approx(3.0, abs=0.1)
+        passed.append(pair.midpoint)
+        boat = (expected_x + 0.9, 0.1)
+    assert select_gate_pair(grid, boat, goal, passed, params) is None
+    assert GateParams(required_pairs=5).required_pairs == 5
+
+
+def test_gate_path_passes_midpoint_and_dri_rejects_obstacle_on_it():
+    p = GateParams()
+    grid = gate_grid()
+    pair = select_gate_pair(grid, (0.0, 0.0), (9.0, 0.0), [], p)
+    path = make_gate_path((0.0, 0.0), pair, p)
+    assert np.min(np.linalg.norm(path.samples - pair.midpoint, axis=1)) < 0.03
+    dri = build_dri(grid, (0.0, 0.0), 0.0, DriParams())
+    assert path_safe(dri, path, p)
+
+    blocked = gate_grid(posts=[(3.0, -1.5), (3.0, 1.5), (1.5, 0.0)])
+    blocked_dri = build_dri(blocked, (0.0, 0.0), 0.0, DriParams())
+    assert not path_safe(blocked_dri, path, p)
+
+
+def test_crossing_requires_going_between_posts():
+    pair = select_gate_pair(gate_grid(), (0.0, 0.0), (9.0, 0.0), [],
+                            GateParams())
+    assert crossed_gate((2.8, 0.1), (3.4, 0.1), pair, GateParams())
+    assert not crossed_gate((2.8, 1.4), (3.4, 1.4), pair, GateParams())
+    assert not crossed_gate((3.4, 0.1), (2.8, 0.1), pair, GateParams())
+
+
+def test_live_scan_must_show_both_posts_even_if_old_map_keeps_them():
+    p = GateParams()
+    pair = select_gate_pair(gate_grid(), (0.0, 0.0), (9.0, 0.0), [], p)
+    assert pair_observed(pair, [pair.left, pair.right], p)
+    assert not pair_observed(pair, [pair.left], p)
+
+
+def test_missing_post_or_wall_is_not_a_gate():
+    p = GateParams()
+    one_post = gate_grid(posts=[(3.0, -1.5)])
+    assert select_gate_pair(one_post, (0.0, 0.0), (9.0, 0.0), [], p) is None
+    wall = gate_grid(posts=[(3.0, 1.5)])
+    # A long wall cannot substitute for the missing post.
+    data = np.asarray(wall.data).reshape(100, 100)
+    data[40:65, 40:42] = 100
+    wall.data = data.ravel().tolist()
+    assert select_gate_pair(wall, (0.0, 0.0), (9.0, 0.0), [], p) is None
+
+
+def test_unobserved_cells_block_the_gate_path():
+    grid = gate_grid()
+    pair = select_gate_pair(grid, (0.0, 0.0), (9.0, 0.0), [], GateParams())
+    path = make_gate_path((0.0, 0.0), pair, GateParams())
+    assert points_observed(grid, path.samples)
+    ix = int(math.floor((1.0 - grid.info.origin.position.x) / grid.info.resolution))
+    iy = int(math.floor((0.0 - grid.info.origin.position.y) / grid.info.resolution))
+    data = np.asarray(grid.data).reshape(100, 100)
+    data[iy - 2:iy + 3, ix - 2:ix + 3] = -1
+    grid.data = data.ravel().tolist()
+    assert not points_observed(grid, path.samples)
+
+
+def test_lookahead_safety_checks_the_goal_when_follower_targets_it():
+    # follow_cmd switches to the endpoint when it lies inside lookahead.
+    # A path sample farther ahead would miss this obstacle on the goal chord.
+    path = SimpleNamespace(
+        samples=np.asarray([(0.0, y * 0.1) for y in range(21)] + [(0.8, 0.0)]),
+        spacing=0.1)
+
+    class Risk:
+        occ_xy = np.empty((0, 2))
+
+        def risk_at_many(self, xs, ys):
+            return np.where((xs > 0.35) & (xs < 0.45) & (abs(ys) < 0.1), 2.0, 0.0)
+
+    assert not lookahead_chord_safe(
+        Risk(), (0.0, 0.0), path, 0, 1.0, GateParams())

@@ -50,3 +50,71 @@ LOS는 현재 위치에서 경로의 최근접 진행점을 단조 갱신하고,
 아니거나 odom이 0.5초 이상 지연되면 명령은 0이다. 이 함수는 장애물
 회피 경로를 만들지 않는다. 속도와 추력의 변환값은 기존 시험 코드의
 교정값이므로 실물 로그로 확인해야 한다.
+
+## 수조에서 두 경로 시험
+
+`/odom` 발행 노드가 있는 컴퓨터의 ROS 환경에서 새 실행 파일을 빌드한다.
+노트북 컨테이너라면 `/workspace/kaboat_ws`, 젯슨이면 실제로 클론한
+워크스페이스 경로에서 실행한다. 두 장치의 `ROS_DOMAIN_ID`는 각각 현재
+운용 중인 값을 유지한다.
+
+```bash
+cd /workspace/kaboat_ws
+source /opt/ros/humble/setup.bash
+colcon build --symlink-install --packages-up-to kaboat_hardware
+source install/setup.bash
+ros2 topic info /odom
+```
+
+센서와 `/odom`을 먼저 실행한 뒤 아래 둘 중 하나만 실행한다. 두 명령은
+기본적으로 `/cmd_vel`을 발행하지 않고 `/los_test/path`,
+`/los_test/cmd_preview`, `/los_test/status`만 발행한다. RViz에서
+고정 프레임 `odom`으로 설정하고 `Path` 표시를 `/los_test/path`에
+연결하면 목표 경로를 볼 수 있다.
+
+```bash
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+ros2 launch kaboat_hardware los_path_test.launch.py path_kind:=bspline
+```
+
+```bash
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+ros2 launch kaboat_hardware los_path_test.launch.py path_kind:=circle \
+  center_x:=5.0 center_y:=2.5 radius:=1.2 direction:=ccw target_laps:=2.0
+```
+
+각 테스트는 시작 명령을 받기 전에는 정지 명령만 미리보기에 낸다. 다른
+터미널에서 같은 컨테이너와 `ROS_DOMAIN_ID`로 다음을 실행한다.
+
+```bash
+ros2 service call /los_test/start std_srvs/srv/Trigger '{}'
+ros2 topic echo /los_test/status
+ros2 topic echo /los_test/cmd_preview
+```
+
+실제 구동 시험은 다른 `/cmd_vel` 발행 노드가 없는 상태에서
+`motion_enabled:=true`를 명시한다. 이때도 시작 서비스 호출 전에는
+정지 명령을 낸다. `thrust_ratio:=0.5`가 기본이며 이는 기존 안전
+추력 상한의 50%다. 비상 정지는 `/emergency_stop`에 `true`를 발행한다.
+
+```bash
+ros2 launch kaboat_hardware los_path_test.launch.py \
+  path_kind:=circle thrust_ratio:=0.3 motion_enabled:=true
+# 다른 터미널에서 시작
+ros2 service call /los_test/start std_srvs/srv/Trigger '{}'
+# 중지
+ros2 topic pub --once /emergency_stop std_msgs/msg/Bool '{data: true}'
+```
+
+`/odom`이 0.5초 넘게 멈추거나 발행자가 둘 이상이면 정지한다. B-spline
+제어점은 `test_coordinates.py`의 `BSPLINE_TRACK`, 원의 기본값은
+`CIRCLE_DRIVE`에서 가져온다. 테스트 노드는 수조 외부로 나가는 경로
+설정을 시작 시 거부한다.
+
+기존 탐색 behavior의 색상별 원형 선회는 `circle_path()`와 `self.los()`를
+사용한다. 장애물 회피 behavior는 가변 B-spline 경로의 검사·수리·재생성을
+`AvoidFsm`에서 처리하고, 추종 명령은 LOS와 같은 `follow_cmd()`로 계산한다.
+기존 독립 `bspline_track_test`와 `circle_drive_test`는 별도 시험 노드이며,
+이 새 테스트 파일은 공통 LOS 경로 생성·추종 코드를 시험한다.

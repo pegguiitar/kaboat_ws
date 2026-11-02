@@ -22,6 +22,7 @@ from launch_ros.parameter_descriptions import ParameterValue
 def generate_launch_description():
     bringup_share = get_package_share_directory('kaboat_bringup')
     mission_params = os.path.join(bringup_share, 'config', 'mission_params.yaml')
+    gate_params = os.path.join(bringup_share, 'config', 'gate_params.yaml')
 
     use_sim_time_value = LaunchConfiguration('use_sim_time')
     common_params = {'use_sim_time': use_sim_time_value}
@@ -46,9 +47,15 @@ def generate_launch_description():
     behaviors = [
         Node(package='kaboat_behaviors', executable=exe,
              name=exe, output='screen', parameters=[common_params])
-        for exe in ['gate_follower', 'station_keeper',
-                    'search_circler', 'obstacle_planner']
+        for exe in ['station_keeper', 'search_circler', 'obstacle_planner']
     ]
+    behaviors.append(Node(
+        package='kaboat_behaviors', executable='gate_follower',
+        name='gate_follower', output='screen',
+        parameters=[LaunchConfiguration('gate_params_file'), common_params, {
+            'gate.motion_enabled': ParameterValue(
+                LaunchConfiguration('gate_motion_enabled'), value_type=bool),
+        }]))
     behaviors.append(Node(
         package='kaboat_behaviors', executable='docking_ctrl',
         name='docking_ctrl', output='screen',
@@ -69,7 +76,7 @@ def generate_launch_description():
     mission = [
         Node(package='kaboat_mission', executable='mission_manager',
              name='mission_manager', output='screen',
-             parameters=[mission_params, common_params]),
+             parameters=[LaunchConfiguration('mission_params_file'), common_params]),
     ]
 
     return LaunchDescription([
@@ -79,6 +86,15 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'use_sim_actuator', default_value='false',
             description='Gazebo용 twist2thrust 실행 여부; 실물에서는 false'),
+        DeclareLaunchArgument(
+            'mission_params_file', default_value=mission_params,
+            description='미션 목표 좌표 YAML; 수조 시험에서는 실측 좌표 파일 지정'),
+        DeclareLaunchArgument(
+            'gate_params_file', default_value=gate_params,
+            description='게이트 쌍 수와 라이다/DRI 임계값 YAML'),
+        DeclareLaunchArgument(
+            'gate_motion_enabled', default_value='false',
+            description='기본값 false: gate 경로/명령 미리보기만 수행'),
         DeclareLaunchArgument(
             'dock_weights', default_value='',
             description='검증된 YOLO26n-seg .pt 절대 경로; 비워두면 검출 fail-closed'),

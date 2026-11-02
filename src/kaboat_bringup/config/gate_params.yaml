@@ -1,0 +1,27 @@
+gate_follower:
+  ros__parameters:
+    # 실내 수조 시험: 세 쌍. 실외 4쌍 이상이면 실제 개수로 변경.
+    gate.required_pairs: 3
+    # 경로 명령은 기본적으로 미리보기만 발행한다.
+    gate.motion_enabled: false
+    gate.thrust_ratio: 0.5
+    gate.occ_threshold: 95
+    gate.min_cluster_cells: 2
+    gate.max_cluster_extent: 1.2
+    gate.min_gate_width: 1.5
+    gate.max_gate_width: 7.0
+    gate.max_pair_along_error: 0.75
+    gate.min_gate_forward: 0.3
+    gate.max_gate_forward: 9.0
+    gate.max_midpoint_lateral: 2.5
+    gate.passed_pair_exclusion: 1.0
+    gate.min_pair_advance: 0.8
+    gate.max_midpoint_shift: 1.5
+    gate.exit_distance: 1.0
+    gate.sample_spacing: 0.05
+    gate.min_clearance: 0.5
+    gate.safe_threshold: 1.0
+    gate.max_goal_after_gates: 4.0
+    gate.scan_match_radius: 0.7
+    gate.scan_timeout_sec: 0.7
+    gate.grid_timeout_sec: 0.7

@@ -22,7 +22,8 @@ Jetson ROS_DOMAIN_ID=42 ── Zenoh bridge ── Tailscale ── Zenoh bridge
 젯슨 → 노트북 허용 토픽: `/scan`, `/scan/raw`, `/odom`, `/tf`, `/tf_static`,
 `/occupancy_grid`, `/avoid/plan`, `/avoid/cps`, `/avoid/dri`,
 `/real_avoid_test/path`, `/real_avoid_test/markers`, `/real_avoid_test/dri`,
-`/real_avoid_test/status`, `/straight_drive/markers`, `/bspline_test/path`,
+`/real_avoid_test/status`, `/manual_dri/dri`, `/manual_dri/status`,
+`/straight_drive/markers`, `/bspline_test/path`,
 `/bspline_test/markers`, `/circle_drive/markers`, `/station_keeping/markers`,
 `/dock/waypoints`, `/dock/entrance_base`,
 `/dock/marker_base`, `/dock/detection_status`, `/mission/state`,
@@ -32,6 +33,8 @@ Jetson ROS_DOMAIN_ID=42 ── Zenoh bridge ── Tailscale ── Zenoh bridge
 `/dock/waypoints`는 현재 작업 트리의 `docking_ctrl.py`가 발행하는
 `nav_msgs/Path`입니다. 해당 변경을 젯슨에 복사·빌드하기 전에는 토픽이
 나오지 않습니다. 선체 라이다를 장착하지 않으면 `/scan`도 나오지 않습니다.
+무선 조종 중 DRI만 관찰하는 실행법은 [MANUAL_DRI_TEST.md](MANUAL_DRI_TEST.md)에
+정리했습니다. 이 모드에서도 조종 입력은 Zenoh 브리지를 통과하지 않습니다.
 
 ## 한 번 설치
 

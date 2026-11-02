@@ -58,7 +58,7 @@ ros2 launch kaboat_hardware lidar_boat_tracker.launch.py \
 라이다를 옮긴 뒤에는 기존 추적기 프로세스를 종료하고 이 명령으로 다시 실행해야 새 설치 좌표가 적용됩니다.
 별도 Docker 터미널에서 `ros2 topic hz /shore/scan`, `ros2 topic echo /shore/scan --once --field header`, `ros2 topic echo /boat_pose --once`로 확인할 수 있습니다. 스캔의 `header.frame_id`는 `shore_laser_frame`이어야 합니다. 수조 `(9.0, 2.5)m`에 놓은 물체가 RViz 스캔에서 그 부근에 보이는지도 확인합니다. 기본 설치값은 `(10.0, 2.5)m`, 스캔 0° 방향 `180°`입니다. 실제 장착값이 다르면 런치 명령에 `lidar_pos_x:=... lidar_pos_y:=... lidar_yaw_deg:=...`를 실측값으로 추가하세요. [`lidar_tracker.yaml`](src/kaboat_hardware/config/lidar_tracker.yaml)도 기본값으로 사용할 수 있습니다. `/boat_pose`의 위치·방향이 실물과 맞는지 확인하기 전에는 **배 추진 모터**를 켜지 않습니다.
 배의 0.60m 횡단 판을 수조 안의 **실측한 위치**에 놓고 `/boat_pose`가 그 좌표 근처에서 연속으로 발행되는지 확인하세요. A3M1은 실측 720빔으로 이전 TG-50보다 스캔 점이 적으므로, 검출이 끊기면 RViz의 `/lidar_tracker/filtered_scan`에서 판에 최소 6점이 남는지 먼저 확인합니다. 판이 없는데도 `/boat_pose`가 나오면 다른 직선 물체를 잘못 고른 것이므로 그 상태로 젯슨의 IMU 보정·주행을 진행하지 마세요.
-드라이버가 장치 정보와 `health status : OK`를 표시해도 `/shore/scan`이 나오지 않으면 회전부와 USB 연결을 확인하세요. 이 노트북의 A3M1은 공식 ROS 드라이버의 기존 `Standard` 경로에서 시간 초과됐지만, Docker 이미지의 표준 스캔 함수 패치 적용 후 `/shore/scan`을 약 12.7Hz로 발행했습니다. 이미지가 오래됐다면 `docker compose -f docker-compose.lidar.yml up -d --build --force-recreate`로 갱신하고, 같은 장치를 쓰는 스캔 전용 런치가 남아 있지 않은지 확인하세요. USB 재연결로 `/dev/ttyUSB*` 번호가 바뀌어도 같은 장치의 `by-id` 경로는 유지됩니다.
+드라이버가 장치 정보와 `health status : OK`를 표시해도 `/shore/scan`이 나오지 않으면 **모드 시작 로그와 실제 토픽 주기**를 둘 다 확인하세요. 이 노트북의 A3M1에서는 `Sensitivity`가 시작 시간 초과 또는 스캔 미발행을 보였고, 같은 16 kHz의 `Boost`는 `/shore/scan`을 약 12.8Hz로 발행했습니다. 현재 기본 모드는 [`sllidar_a3.yaml`](src/kaboat_hardware/config/sllidar_a3.yaml)의 `Boost`입니다. 이미지가 오래됐다면 `docker compose -f docker-compose.lidar.yml up -d --build --force-recreate`로 갱신하고, 같은 장치를 쓰는 스캔 전용 런치가 남아 있지 않은지 확인하세요. USB 재연결로 `/dev/ttyUSB*` 번호가 바뀌어도 같은 장치의 `by-id` 경로는 유지됩니다.
 
 **호스트 터미널 2** — Docker 밖에서 Zenoh 브리지를 켭니다. 젯슨의 `tailscale ip -4` 출력값을 물음에 입력하세요. 라이다가 먼저 실행돼 있어도 브리지를 나중에 켜면 연결되며, 이 터미널은 계속 열어 둡니다.
 
@@ -75,15 +75,31 @@ python3 scripts/zenoh_monitor_link.py laptop --jetson-ip "$JETSON_TAILSCALE_IP"
 
 Zenoh는 호스트의 도메인 43에서 Docker 라이다의 `/boat_pose`를 발견합니다. 이 브리지는 `/start_mission`, `/emergency_stop`, `/cmd_vel`을 젯슨에 전달하지 않습니다.
 
-**호스트의 그래픽 데스크톱 터미널 3** — 고정 경로 추종용 RViz 창을 별도로 엽니다. 컨테이너의
-root 사용자에게 X11 화면 접근을 허용해야 합니다. SSH 터미널이 아닌 노트북
-화면에서 실행합니다.
+**호스트의 그래픽 데스크톱 터미널 3** — 수조 위치 검출 RViz를 엽니다.
+새 터미널에서 아래 별칭을 실행하면 X11 접근을 허용하고 **Humble 컨테이너 안의 RViz**를 시작합니다.
+`~/.zshrc`를 수정한 직후 같은 터미널을 쓰는 경우에만 `source ~/.zshrc`를 먼저 실행하세요.
 
 ```bash
-xhost +si:localuser:root
-docker exec -it -e DISPLAY="$DISPLAY" kaboat_lidar bash -lc \
-  'source /workspace/kaboat_ws/install/setup.bash && ros2 run rviz2 rviz2 -d /workspace/kaboat_ws/install/kaboat_bringup/share/kaboat_bringup/rviz/tank_tracking.rviz'
+rviz_tank
 ```
+
+별칭을 사용하지 않는 다른 노트북에서는 [`scripts/rviz_tank.sh`](scripts/rviz_tank.sh)를 직접 실행할 수 있습니다.
+배가 수조에 없으면 `/boat_pose`와 배 마커가 보이지 않는 것은 정상입니다. 그 경우에도 `/shore/scan` 점은 보여야 합니다.
+격자만 보이면 **컨테이너 안의 실제 수신 주기**부터 확인하세요.
+
+```bash
+docker exec kaboat_lidar bash -lc 'source /opt/ros/humble/setup.bash; ROS_DOMAIN_ID=43 timeout 8s ros2 topic hz /shore/scan'
+ls -l /dev/serial/by-id/
+journalctl -k --since '10 minutes ago' --no-pager | grep -Ei 'usb|cp210x|ttyUSB|disconnect'
+```
+
+2026-11-02 시험에서는 USB 허브가 장치를 끊었다가 다시 연결하면서 포트가 `/dev/ttyUSB1`에서
+`/dev/ttyUSB0`으로 바뀌었습니다. 기존 라이다 노드는 삭제된 포트를 계속 열고 있어서
+토픽 이름은 보였지만 새 스캔이 오지 않았습니다. 이때는 **추적기 실행 터미널에서 `Ctrl+C`로 종료한 뒤**
+위의 `lidar_boat_tracker.launch.py` 명령을 다시 실행해야 합니다. `by-id` 경로가 같은 장치를 가리켜도
+이미 실행 중인 드라이버는 새 포트를 자동으로 다시 열지 않습니다. 같은 현상이 반복되면 허브·케이블·전원 연결을 점검하세요.
+이번 시험에서 노트북 호스트의 Jazzy RViz는 토픽을 발견했지만 스캔 메시지를 수신하지 못했고,
+컨테이너의 Humble RViz에서는 표시됐습니다. 수조 화면은 위의 `rviz_tank`를 사용하세요.
 
 장애물 회피 경로를 볼 때는 노트북의 **새 그래픽 데스크톱 터미널**에서 다음 전용 화면을 엽니다. 이 화면은 배 뒤에서 `base_link`를 따라 움직이는 3인칭 시점이며, 선체 `/scan`은 빨간 점, 생성한 경로는 청록색 선, 배 자세는 주황색 화살표로 표시합니다. 두 RViz 창은 동시에 실행할 수 있습니다.
 
@@ -191,11 +207,19 @@ ros2 launch kaboat_hardware bspline_track_test.launch.py wait_for_start:=true
 `/odom`을 준비한 뒤 `ros2 launch kaboat_hardware indoor_waypoint.launch.py
 x:=5.0 y:=2.5 angle:=180.0 thrust_ratio:=0.5 motion_enabled:=false`로 목표와 계산 명령을
 확인합니다. 다른 주행 테스트와 동시에 `/cmd_vel`을 발행하지 않습니다.
+5개 목표를 순서대로 시험할 때는 [WAYPOINT_SEQUENCE_TEST.md](WAYPOINT_SEQUENCE_TEST.md)의
+설정 파일과 실행 명령을 사용합니다.
 
 ### 공통 B-spline·원 경로 LOS 추종
 
 behavior에서 `los(path, thrust_ratio)`로 호출하는 공통 추종 함수와 경로
 생성법은 [LOS_PATH.md](LOS_PATH.md)를 참고합니다.
+
+라이다로 3쌍의 게이트 기둥을 판별해 중앙 경로를 미리보는 방법은
+[GATE_LIDAR.md](GATE_LIDAR.md)에 정리했습니다.
+
+자율운항 대신 별도 무선 조종기로 배를 움직이면서 DRI 지도만 노트북
+RViz에서 보는 시험은 [MANUAL_DRI_TEST.md](MANUAL_DRI_TEST.md)를 따릅니다.
 
 ## 4. 장애물 회피 경로 생성과 RViz 미리보기
 

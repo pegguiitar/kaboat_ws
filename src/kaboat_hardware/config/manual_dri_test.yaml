@@ -1,0 +1,14 @@
+manual_dri_monitor:
+  ros__parameters:
+    # RViz OccupancyGrid is a visualization of DRI / this value * 100.
+    viz_dri_scale: 4.0
+    odom_timeout_sec: 0.5
+    scan_timeout_sec: 0.7
+    grid_timeout_sec: 0.7
+    dri.occ_threshold: 95
+    dri.sigma: 0.5
+    dri.dist_falloff: 4.0
+    dri.k_dist: 0.3
+    dri.k_head: 0.3
+    dri.a_dist: 1.0
+    dri.a_head: 0.7

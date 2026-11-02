@@ -35,10 +35,13 @@ setup(
             'straight_line_test = kaboat_hardware.straight_line_test:main',
             'bspline_track_test = kaboat_hardware.bspline_track_test:main',
             'real_obstacle_avoid_test = kaboat_hardware.real_obstacle_avoid_test:main',
+            'manual_dri_monitor = kaboat_hardware.manual_dri_monitor:main',
             'onboard_scan_filter = kaboat_hardware.onboard_scan_filter:main',
             'circle_drive_test = kaboat_hardware.circle_drive_test:main',
             'station_keeping_test = kaboat_hardware.station_keeping_test:main',
             'indoor_waypoint = kaboat_hardware.indoor_waypoint:main',
+            'los_path_test = kaboat_hardware.los_path_test:main',
+            'waypoint_sequence_test = kaboat_hardware.waypoint_sequence_test:main',
         ],
     },
 )
