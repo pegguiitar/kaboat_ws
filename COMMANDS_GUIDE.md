@@ -93,7 +93,7 @@ source ~/.bashrc
 | **`run_tank`** | `ros2 launch kaboat_hardware indoor_tank.launch.py enable_thrusters:=false` | **실내 센서 및 오도메트리(`/odom`) 가동** (GQ7 IMU + 외벽 라이다 `/boat_pose` 융합) |
 | **`run_boat_lidar`** | `... enable_onboard_lidar:=true onboard_lidar_port:=/dev/ttyUSB0` | 젯슨에 장착한 선체 TG-50 라이다까지 켜는 명령. 수조 외벽 라이다는 노트북에서 실행 |
 | **`cal_imu`** | `ros2 run kaboat_hardware calibrate_indoor_imu` | **[필수] 정지 상태 IMU 방향 180° 분기 보정** |
-| **`run_motor`** | 현재 `/dev/ttyUSB0`을 지정하는 모터 드라이버 실행 | 실제 젯슨의 모터 포트가 확인될 때까지 사용하지 말고 [수조 가이드](TANK_TESTS_GUIDE.md#3-젯슨-imu-보정과-모터테스트-시작)의 포트 확인 절차를 따르세요 |
+| **`run_motor`** | `ros2 launch kaboat_hardware thrusters.launch.py hardware_type:=serial port:=/dev/ttyCH341USB0 allow_port_scan:=false` | **아두이노(CH340) 모터 드라이버 가동** |
 | **`run_zenoh`** | `python3 scripts/zenoh_monitor_link.py jetson` | **노트북과의 원격 모니터링 통신 브리지 가동** |
 | **`view_pitch`** | `python3 scripts/view_roll_pitch.py` | 실시간 롤/피치 자세 각도 모니터링 |
 | **`test_bspline`**| `ros2 launch kaboat_hardware bspline_track_test.launch.py wait_for_start:=false` | B-Spline 곡선 자율주행 즉시 시작 |

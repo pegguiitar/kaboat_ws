@@ -7,7 +7,7 @@ thruster_driver:
     # 'serial'  : 아두이노/ESP32 USB 시리얼 연결 (고정 8자리 정수 LLLLRRRR\n 형식)
     # 'pca9685' : Jetson I2C 버스 직결 PCA9685 16채널 PWM 모듈
     hardware_type: "dummy"
-    port: "/dev/ttyUSB0"
+    port: "/dev/ttyCH341USB0"
     baudrate: 115200
     # false: 지정 port만 사용. LiDAR/GQ7 오선택 방지를 위해 실물에서는 false 유지.
     allow_port_scan: false

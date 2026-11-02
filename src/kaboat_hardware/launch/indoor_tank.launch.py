@@ -129,8 +129,8 @@ def generate_launch_description():
             'thruster_hardware_type', default_value='serial',
             description="스러스터 하드웨어 타입 ('serial' | 'dummy' | 'pca9685')"),
         DeclareLaunchArgument(
-            'thruster_port', default_value='/dev/ttyUSB0',
-            description='스러스터 시리얼 포트 경로 (기본값: /dev/ttyUSB0)'),
+            'thruster_port', default_value='/dev/ttyCH341USB0',
+            description='스러스터 시리얼 포트 경로 (아두이노 CH340: /dev/ttyCH341USB0)'),
         DeclareLaunchArgument(
             'tank_config_file', default_value=default_config,
             description='indoor_lidar_odom 파라미터 (수조 실측 설정값)'),

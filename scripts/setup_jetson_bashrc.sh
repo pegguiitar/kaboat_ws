@@ -57,8 +57,8 @@ alias run_boat_lidar="ros2 launch kaboat_hardware indoor_tank.launch.py enable_t
 # IMU 정지 보정
 alias cal_imu="ros2 run kaboat_hardware calibrate_indoor_imu"
 
-# 모터 제어기 실행
-alias run_motor="ros2 launch kaboat_hardware thrusters.launch.py hardware_type:=serial port:=/dev/ttyUSB0 allow_port_scan:=false"
+# 모터 제어기 실행 (아두이노 CH340: /dev/ttyCH341USB0)
+alias run_motor="ros2 launch kaboat_hardware thrusters.launch.py hardware_type:=serial port:=/dev/ttyCH341USB0 allow_port_scan:=false"
 
 # 노트북 원격 모니터링 통신 (Zenoh 브리지)
 alias run_zenoh="python3 scripts/zenoh_monitor_link.py jetson"

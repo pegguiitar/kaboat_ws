@@ -23,8 +23,8 @@ def generate_launch_description():
             'hardware_type', default_value='dummy',
             description="하드웨어 백엔드 타입 ('dummy' | 'serial' | 'pca9685')"),
         DeclareLaunchArgument(
-            'port', default_value='/dev/ttyUSB0',
-            description='아두이노/ESP32 시리얼 포트 경로 (기본값: /dev/ttyUSB0)'),
+            'port', default_value='/dev/ttyCH341USB0',
+            description='아두이노/ESP32 시리얼 포트 경로 (CH340 아두이노: /dev/ttyCH341USB0, CP2102: /dev/ttyUSB*)'),
         DeclareLaunchArgument(
             'allow_port_scan', default_value='false',
             description='지정 포트 실패 시 다른 USB serial 포트 자동 탐색 여부'),

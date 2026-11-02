@@ -207,7 +207,12 @@ class SerialBackend(BaseThrusterBackend):
 
         if self.allow_port_scan:
             for p in (glob.glob('/dev/serial/by-id/*CP210*')
-                      + glob.glob('/dev/serial/by-id/*UART*')):
+                      + glob.glob('/dev/serial/by-id/*UART*')
+                      + glob.glob('/dev/ttyCH341*')):
+                if p not in candidate_ports:
+                    candidate_ports.append(p)
+
+            for p in sorted(glob.glob('/dev/ttyCH341*')):
                 if p not in candidate_ports:
                     candidate_ports.append(p)
 
