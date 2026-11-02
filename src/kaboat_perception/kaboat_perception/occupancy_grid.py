@@ -117,6 +117,10 @@ class OccupancyGridNode(Node):
         # 최대 1s → 0.1s 로 줄인다. 10Hz 넘게 올려도 스캔이 10Hz 라 무의미.
         self.declare_parameter('enable_tilt_gate', True)  # 실내 수조 시험은 false
         self.declare_parameter('tilt_threshold_deg', 3.0)  # [deg] 기울기 게이트 임계
+        self.declare_parameter('pitch_min_deg', -3.0)      # [deg] 피치 하한
+        self.declare_parameter('pitch_max_deg', 1.0)       # [deg] 피치 상한
+        self.declare_parameter('roll_min_deg', -3.0)       # [deg] 롤 하한
+        self.declare_parameter('roll_max_deg', 3.0)        # [deg] 롤 상한
         self.declare_parameter('hit_dedup', True)    # 히트를 스캔당 셀당 1회로 캡
         # 같은 스캔의 이웃 빔은 독립 관측이 아니므로 중복 누적하면 증거 과대계상 —
         # 수면 반사 노이즈가 한 스캔에 검정(97)까지 튀는 원인이었다(베이즈 독립성 교정).
@@ -135,6 +139,15 @@ class OccupancyGridNode(Node):
         self.hit_dedup = bool(self.get_parameter('hit_dedup').value)
         self.enable_tilt_gate = bool(self.get_parameter('enable_tilt_gate').value)
         self.tilt_threshold_deg = float(self.get_parameter('tilt_threshold_deg').value)
+        self.pitch_min_deg = float(self.get_parameter('pitch_min_deg').value)
+        self.pitch_max_deg = float(self.get_parameter('pitch_max_deg').value)
+        self.roll_min_deg = float(self.get_parameter('roll_min_deg').value)
+        self.roll_max_deg = float(self.get_parameter('roll_max_deg').value)
+
+        self.pitch_min_rad = math.radians(self.pitch_min_deg)
+        self.pitch_max_rad = math.radians(self.pitch_max_deg)
+        self.roll_min_rad = math.radians(self.roll_min_deg)
+        self.roll_max_rad = math.radians(self.roll_max_deg)
         self.tilt_max = math.radians(self.tilt_threshold_deg)
         self.cam_stride = int(self.get_parameter('cam_stride').value)
         self.cam_height = float(self.get_parameter('cam_height').value)
@@ -165,14 +178,16 @@ class OccupancyGridNode(Node):
         self.get_logger().info(
             f'occupancy_grid 시작 — {self.cells}×{self.cells}셀 @ {self.resolution}m '
             f'→ /occupancy_grid (기울기 차단: {self.enable_tilt_gate}, '
-            f'임계={self.tilt_threshold_deg:.1f}°)')
+            f'pitch=[{self.pitch_min_deg:.1f}°, {self.pitch_max_deg:.1f}°], '
+            f'roll=[{self.roll_min_deg:.1f}°, {self.roll_max_deg:.1f}°])')
 
     def _on_odom(self, msg: Odometry):
         self.odom = msg
 
     def _on_imu(self, msg: Imu):
         roll, pitch = _roll_pitch(msg.orientation)
-        self.tilted = abs(roll) > self.tilt_max or abs(pitch) > self.tilt_max
+        self.tilted = not (self.pitch_min_rad <= pitch <= self.pitch_max_rad) or \
+                      not (self.roll_min_rad <= roll <= self.roll_max_rad)
 
     def _cell(self, x: float, y: float):
         return (math.floor(x / self.resolution), math.floor(y / self.resolution))

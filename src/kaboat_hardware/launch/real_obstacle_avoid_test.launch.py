@@ -39,6 +39,14 @@ def generate_launch_description():
                               description='Use IMU roll/pitch to reject scans (default: true)'),
         DeclareLaunchArgument('tilt_threshold_deg', default_value='3.0',
                               description='Tilt gate threshold [deg] (default: 3.0)'),
+        DeclareLaunchArgument('pitch_min_deg', default_value='-3.0',
+                              description='Pitch lower bound for tilt gate [deg] (default: -3.0)'),
+        DeclareLaunchArgument('pitch_max_deg', default_value='1.0',
+                              description='Pitch upper bound for tilt gate [deg] (default: 1.0)'),
+        DeclareLaunchArgument('roll_min_deg', default_value='-3.0',
+                              description='Roll lower bound for tilt gate [deg] (default: -3.0)'),
+        DeclareLaunchArgument('roll_max_deg', default_value='3.0',
+                              description='Roll upper bound for tilt gate [deg] (default: 3.0)'),
         DeclareLaunchArgument('publish_scan_tf', default_value='true',
                               description='Publish identity base_link -> onboard_laser_frame for RViz'),
         DeclareLaunchArgument('enable_rviz', default_value='false',
@@ -55,6 +63,14 @@ def generate_launch_description():
                     LaunchConfiguration('enable_tilt_gate'), value_type=bool),
                 'tilt_threshold_deg': ParameterValue(
                     LaunchConfiguration('tilt_threshold_deg'), value_type=float),
+                'pitch_min_deg': ParameterValue(
+                    LaunchConfiguration('pitch_min_deg'), value_type=float),
+                'pitch_max_deg': ParameterValue(
+                    LaunchConfiguration('pitch_max_deg'), value_type=float),
+                'roll_min_deg': ParameterValue(
+                    LaunchConfiguration('roll_min_deg'), value_type=float),
+                'roll_max_deg': ParameterValue(
+                    LaunchConfiguration('roll_max_deg'), value_type=float),
                 'use_sim_time': False,
             }],
             condition=IfCondition(LaunchConfiguration('start_occupancy_grid')),

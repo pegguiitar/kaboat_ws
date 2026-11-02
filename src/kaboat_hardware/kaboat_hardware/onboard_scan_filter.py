@@ -4,9 +4,9 @@ Angles are measured in the published LaserScan frame, counterclockwise from
 its +X axis. The default 120..240 degree sector equals +120..+180 and -180..-120
 degrees (rear/stern sector) in a scan whose angle range is -180..180 degrees.
 
-IMU tilt filter rejects scans when boat roll or pitch exceeds tilt_threshold_deg
-(default: 3.0 degrees), preventing surface reflections or sky points from corrupting
-downstream occupancy and DRI maps.
+IMU tilt filter rejects scans when boat pitch or roll falls outside allowed limits
+(default: pitch between -3.0° and +1.0°, roll between -3.0° and +3.0°),
+preventing surface reflections or sky points from corrupting downstream occupancy and DRI maps.
 """
 
 import copy
@@ -29,9 +29,34 @@ def quaternion_to_roll_pitch(x: float, y: float, z: float, w: float):
     return roll, pitch
 
 
-def is_tilted(roll: float, pitch: float, threshold_rad: float) -> bool:
-    """Return True if roll or pitch magnitude exceeds threshold_rad."""
-    return abs(roll) > threshold_rad or abs(pitch) > threshold_rad
+def is_tilted(
+    roll: float,
+    pitch: float,
+    threshold_or_pitch_min_rad: float,
+    pitch_max_rad: float = None,
+    roll_min_rad: float = None,
+    roll_max_rad: float = None,
+) -> bool:
+    """Return True if roll or pitch is outside allowed limits.
+
+    If pitch_max_rad is None, threshold_or_pitch_min_rad is treated as a symmetric
+    threshold_rad: returns True if abs(roll) > thresh or abs(pitch) > thresh.
+    Otherwise, returns True if pitch not in [pitch_min_rad, pitch_max_rad] or
+    roll not in [roll_min_rad, roll_max_rad].
+    """
+    if pitch_max_rad is None:
+        thresh = threshold_or_pitch_min_rad
+        return abs(roll) > thresh or abs(pitch) > thresh
+
+    pitch_min = threshold_or_pitch_min_rad
+    roll_min = roll_min_rad if roll_min_rad is not None else -math.radians(3.0)
+    roll_max = roll_max_rad if roll_max_rad is not None else math.radians(3.0)
+
+    if not (pitch_min <= pitch <= pitch_max_rad):
+        return True
+    if not (roll_min <= roll <= roll_max):
+        return True
+    return False
 
 
 def mask_sector(scan: LaserScan, start_deg: float, end_deg: float) -> LaserScan:
@@ -71,6 +96,10 @@ class OnboardScanFilter(Node):
         # IMU tilt filter parameters
         self.declare_parameter('enable_imu_filter', True)
         self.declare_parameter('tilt_threshold_deg', 3.0)
+        self.declare_parameter('pitch_min_deg', -3.0)
+        self.declare_parameter('pitch_max_deg', 1.0)
+        self.declare_parameter('roll_min_deg', -3.0)
+        self.declare_parameter('roll_max_deg', 3.0)
         self.declare_parameter('imu_timeout_sec', 1.0)
         self.declare_parameter('tilt_action', 'drop')  # 'drop' or 'invalidate'
 
@@ -80,6 +109,15 @@ class OnboardScanFilter(Node):
 
         self.enable_imu_filter = bool(self.get_parameter('enable_imu_filter').value)
         self.tilt_threshold_deg = float(self.get_parameter('tilt_threshold_deg').value)
+        self.pitch_min_deg = float(self.get_parameter('pitch_min_deg').value)
+        self.pitch_max_deg = float(self.get_parameter('pitch_max_deg').value)
+        self.roll_min_deg = float(self.get_parameter('roll_min_deg').value)
+        self.roll_max_deg = float(self.get_parameter('roll_max_deg').value)
+
+        self.pitch_min_rad = math.radians(self.pitch_min_deg)
+        self.pitch_max_rad = math.radians(self.pitch_max_deg)
+        self.roll_min_rad = math.radians(self.roll_min_deg)
+        self.roll_max_rad = math.radians(self.roll_max_deg)
         self.threshold_rad = math.radians(self.tilt_threshold_deg)
         self.imu_timeout_sec = float(self.get_parameter('imu_timeout_sec').value)
         self.tilt_action = str(self.get_parameter('tilt_action').value).lower()
@@ -89,8 +127,11 @@ class OnboardScanFilter(Node):
                     and 0.0 <= self.start_deg < self.end_deg <= 360.0):
                 raise ValueError('invalid onboard scan mask angles')
 
-        if not (math.isfinite(self.tilt_threshold_deg) and self.tilt_threshold_deg > 0.0):
-            raise ValueError('tilt_threshold_deg must be positive and finite')
+        if self.pitch_min_deg >= self.pitch_max_deg:
+            raise ValueError('pitch_min_deg must be less than pitch_max_deg')
+
+        if self.roll_min_deg >= self.roll_max_deg:
+            raise ValueError('roll_min_deg must be less than roll_max_deg')
 
         if self.tilt_action not in ('drop', 'invalidate'):
             raise ValueError("tilt_action must be either 'drop' or 'invalidate'")
@@ -114,13 +155,21 @@ class OnboardScanFilter(Node):
         self.get_logger().info(
             f'OnboardScanFilter ready | Sector mask: {self.enable_sector_mask} '
             f'({self.start_deg:.1f}°..{self.end_deg:.1f}°) | '
-            f'IMU tilt filter: {self.enable_imu_filter} (threshold={self.tilt_threshold_deg:.1f}°, '
+            f'IMU tilt filter: {self.enable_imu_filter} '
+            f'(pitch=[{self.pitch_min_deg:.1f}°..{self.pitch_max_deg:.1f}°], '
+            f'roll=[{self.roll_min_deg:.1f}°..{self.roll_max_deg:.1f}°], '
             f'action={self.tilt_action})')
 
     def _on_imu(self, msg: Imu):
         q = msg.orientation
         self.roll, self.pitch = quaternion_to_roll_pitch(q.x, q.y, q.z, q.w)
-        self.tilted = is_tilted(self.roll, self.pitch, self.threshold_rad)
+        self.tilted = is_tilted(
+            self.roll, self.pitch,
+            threshold_or_pitch_min_rad=self.pitch_min_rad,
+            pitch_max_rad=self.pitch_max_rad,
+            roll_min_rad=self.roll_min_rad,
+            roll_max_rad=self.roll_max_rad,
+        )
         self.latest_imu = msg
         self.latest_imu_time = time.monotonic()
 
@@ -140,8 +189,8 @@ class OnboardScanFilter(Node):
                 r_deg = math.degrees(self.roll)
                 p_deg = math.degrees(self.pitch)
                 self.get_logger().warn(
-                    f'배 기울기 임계 초과로 스캔 차단: roll={r_deg:.1f}°, pitch={p_deg:.1f}° '
-                    f'(임계={self.tilt_threshold_deg:.1f}°)',
+                    f'배 기울기 임계 초과로 스캔 차단: roll={r_deg:.2f}° (허용 [{self.roll_min_deg:.1f}°, {self.roll_max_deg:.1f}°]), '
+                    f'pitch={p_deg:.2f}° (허용 [{self.pitch_min_deg:.1f}°, {self.pitch_max_deg:.1f}°])',
                     throttle_duration_sec=1.0)
                 if self.tilt_action == 'drop':
                     return

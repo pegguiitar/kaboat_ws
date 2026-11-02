@@ -10,7 +10,10 @@ from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import Imu
 
-THRESHOLD_DEG = 3.0
+PITCH_MIN_DEG = -3.0
+PITCH_MAX_DEG = 1.0
+ROLL_MIN_DEG = -3.0
+ROLL_MAX_DEG = 3.0
 
 
 def quaternion_to_euler(x: float, y: float, z: float, w: float):
@@ -46,8 +49,19 @@ class RollPitchViewer(Node):
         self.msg_count += 1
         self.last_msg_time = time.monotonic()
 
-        tilted = abs(roll) > THRESHOLD_DEG or abs(pitch) > THRESHOLD_DEG
-        status = "\033[91m[ ⚠️ TILTED > 3° (스캔 차단됨) ]\033[0m" if tilted else "\033[92m[ OK (정상 주행) ]\033[0m"
+        pitch_tilted = not (PITCH_MIN_DEG <= pitch <= PITCH_MAX_DEG)
+        roll_tilted = not (ROLL_MIN_DEG <= roll <= ROLL_MAX_DEG)
+        tilted = pitch_tilted or roll_tilted
+
+        if tilted:
+            reasons = []
+            if pitch_tilted:
+                reasons.append(f"Pitch {pitch:+.2f}° ∉ [{PITCH_MIN_DEG:+.1f}°, {PITCH_MAX_DEG:+.1f}°]")
+            if roll_tilted:
+                reasons.append(f"Roll {roll:+.2f}° ∉ [{ROLL_MIN_DEG:+.1f}°, {ROLL_MAX_DEG:+.1f}°]")
+            status = f"\033[91m[ ⚠️ TILTED ({', '.join(reasons)}) (스캔 차단됨) ]\033[0m"
+        else:
+            status = "\033[92m[ OK (정상 주행) ]\033[0m"
 
         output = (f"\r\033[K"
                   f"Roll: {roll:+6.2f}° | "

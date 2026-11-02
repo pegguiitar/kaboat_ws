@@ -44,7 +44,7 @@
 |---|---|---|
 | **`rviz_tank`** | **수조 추적 RViz 실행** | [`scripts/rviz_tank.sh`](scripts/rviz_tank.sh)를 통해 Humble 컨테이너 RViz 실행. `/shore/scan`과 `/boat_pose` 표시 |
 | **`rviz_remote`** | **원격 자율주행 RViz 실행** | 선체 라이다(`/scan`), 점유격자, 회피/LOS 경로, 오도메트리 시각화 |
-| **`view_pitch`** | **실시간 롤/피치 각도 확인** | 배의 롤/피치 각도 및 ±3.0° 스캔 차단 임계값 상태 터미널 출력 |
+| **`view_pitch`** | **실시간 롤/피치 각도 확인** | 배의 롤/피치 각도 및 Pitch [-3.0°, +1.0°], Roll ±3.0° 스캔 차단 상태 터미널 출력 |
 
 ---
 

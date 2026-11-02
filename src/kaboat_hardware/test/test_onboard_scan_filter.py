@@ -79,6 +79,25 @@ class TestOnboardScanFilter(unittest.TestCase):
         self.assertTrue(is_tilted(math.radians(0.0), math.radians(-3.1), thresh))
         self.assertTrue(is_tilted(math.radians(4.0), math.radians(4.0), thresh))
 
+    def test_is_tilted_asymmetric_pitch_minus_3_to_plus_1(self):
+        p_min = math.radians(-3.0)
+        p_max = math.radians(1.0)
+        r_min = math.radians(-3.0)
+        r_max = math.radians(3.0)
+
+        # Inside allowable pitch range (-2.2 deg like boat rest pose)
+        self.assertFalse(is_tilted(math.radians(0.0), math.radians(-2.2), p_min, p_max, r_min, r_max))
+        self.assertFalse(is_tilted(math.radians(0.0), math.radians(0.5), p_min, p_max, r_min, r_max))
+        self.assertFalse(is_tilted(math.radians(-2.9), math.radians(-2.9), p_min, p_max, r_min, r_max))
+
+        # Outside allowable pitch range (< -3.0 or > 1.0)
+        self.assertTrue(is_tilted(math.radians(0.0), math.radians(-3.1), p_min, p_max, r_min, r_max))
+        self.assertTrue(is_tilted(math.radians(0.0), math.radians(1.1), p_min, p_max, r_min, r_max))
+
+        # Outside allowable roll range
+        self.assertTrue(is_tilted(math.radians(3.1), math.radians(-1.0), p_min, p_max, r_min, r_max))
+        self.assertTrue(is_tilted(math.radians(-3.1), math.radians(-1.0), p_min, p_max, r_min, r_max))
+
     def test_invalidate_all_ranges(self):
         raw = LaserScan()
         raw.ranges = [1.0, 2.0, 3.0]

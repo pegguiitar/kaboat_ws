@@ -36,7 +36,19 @@ def generate_launch_description():
             description='Filter scans when boat roll or pitch exceeds threshold (default: true)'),
         DeclareLaunchArgument(
             'tilt_threshold_deg', default_value='3.0',
-            description='Boat tilt threshold for scan filtering [deg] (default: 3.0)'),
+            description='Boat tilt threshold fallback [deg] (default: 3.0)'),
+        DeclareLaunchArgument(
+            'pitch_min_deg', default_value='-3.0',
+            description='Boat pitch lower bound for scan filtering [deg] (default: -3.0)'),
+        DeclareLaunchArgument(
+            'pitch_max_deg', default_value='1.0',
+            description='Boat pitch upper bound for scan filtering [deg] (default: 1.0)'),
+        DeclareLaunchArgument(
+            'roll_min_deg', default_value='-3.0',
+            description='Boat roll lower bound for scan filtering [deg] (default: -3.0)'),
+        DeclareLaunchArgument(
+            'roll_max_deg', default_value='3.0',
+            description='Boat roll upper bound for scan filtering [deg] (default: 3.0)'),
         DeclareLaunchArgument(
             'tilt_action', default_value='drop',
             description='Action when tilted: "drop" (skip message) or "invalidate" (all inf)'),
@@ -66,6 +78,14 @@ def generate_launch_description():
                     LaunchConfiguration('enable_imu_filter'), value_type=bool),
                 'tilt_threshold_deg': ParameterValue(
                     LaunchConfiguration('tilt_threshold_deg'), value_type=float),
+                'pitch_min_deg': ParameterValue(
+                    LaunchConfiguration('pitch_min_deg'), value_type=float),
+                'pitch_max_deg': ParameterValue(
+                    LaunchConfiguration('pitch_max_deg'), value_type=float),
+                'roll_min_deg': ParameterValue(
+                    LaunchConfiguration('roll_min_deg'), value_type=float),
+                'roll_max_deg': ParameterValue(
+                    LaunchConfiguration('roll_max_deg'), value_type=float),
                 'tilt_action': ParameterValue(
                     LaunchConfiguration('tilt_action'), value_type=str),
             }],

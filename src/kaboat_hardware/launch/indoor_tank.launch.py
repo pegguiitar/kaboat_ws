@@ -80,6 +80,10 @@ def generate_launch_description():
             'mask_start_deg': LaunchConfiguration('onboard_lidar_mask_start_deg'),
             'mask_end_deg': LaunchConfiguration('onboard_lidar_mask_end_deg'),
             'tilt_threshold_deg': LaunchConfiguration('onboard_lidar_tilt_threshold_deg'),
+            'pitch_min_deg': LaunchConfiguration('onboard_lidar_pitch_min_deg'),
+            'pitch_max_deg': LaunchConfiguration('onboard_lidar_pitch_max_deg'),
+            'roll_min_deg': LaunchConfiguration('onboard_lidar_roll_min_deg'),
+            'roll_max_deg': LaunchConfiguration('onboard_lidar_roll_max_deg'),
         }.items(),
         condition=IfCondition(enable_onboard_lidar),
     )
@@ -109,6 +113,18 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'onboard_lidar_tilt_threshold_deg', default_value='3.0',
             description='선체 롤/피치 기울기 스캔 차단 임계값 [deg] (기본: 3.0)'),
+        DeclareLaunchArgument(
+            'onboard_lidar_pitch_min_deg', default_value='-3.0',
+            description='선체 피치 하한 스캔 차단 임계값 [deg] (기본: -3.0)'),
+        DeclareLaunchArgument(
+            'onboard_lidar_pitch_max_deg', default_value='1.0',
+            description='선체 피치 상한 스캔 차단 임계값 [deg] (기본: 1.0)'),
+        DeclareLaunchArgument(
+            'onboard_lidar_roll_min_deg', default_value='-3.0',
+            description='선체 롤 하한 스캔 차단 임계값 [deg] (기본: -3.0)'),
+        DeclareLaunchArgument(
+            'onboard_lidar_roll_max_deg', default_value='3.0',
+            description='선체 롤 상한 스캔 차단 임계값 [deg] (기본: 3.0)'),
         DeclareLaunchArgument(
             'thruster_hardware_type', default_value='serial',
             description="스러스터 하드웨어 타입 ('serial' | 'dummy' | 'pca9685')"),
