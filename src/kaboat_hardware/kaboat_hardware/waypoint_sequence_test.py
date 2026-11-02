@@ -16,7 +16,7 @@ from std_msgs.msg import Bool, String
 from std_srvs.srv import Trigger
 
 from kaboat_behaviors.waypoint_controller import (
-    WaypointController, waypoint)
+    WaypointController, WaypointParams, waypoint)
 
 
 DEFAULT_X = [8.5, 7.0, 5.0, 3.0, 1.5]
@@ -59,6 +59,12 @@ class WaypointSequenceTest(Node):
             'waypoints_use_heading': DEFAULT_USE_HEADING,
             'thrust_ratio': 0.5,
             'motion_enabled': False,
+            'max_linear': 12.0 / 118.6,
+            'max_angular': 3.0 / 118.6,
+            'yaw_kp': 18.0 / 118.6,
+            'yaw_kd': 9.0 / 118.6,
+            'slow_radius': 1.5,
+            'wait_for_start': True,
             'tank_size_x': 10.0,
             'tank_size_y': 5.0,
             'tank_margin': 0.25,
@@ -83,13 +89,24 @@ class WaypointSequenceTest(Node):
             p('waypoints_use_heading'), p('thrust_ratio'),
             self.size_x, self.size_y, self.margin)
         self.motion_enabled = bool(p('motion_enabled'))
-        self.controller = WaypointController()
+        tuning = WaypointParams(
+            max_linear=float(p('max_linear')),
+            max_angular=float(p('max_angular')),
+            yaw_kp=float(p('yaw_kp')),
+            yaw_kd=float(p('yaw_kd')),
+            slow_radius=float(p('slow_radius')),
+            position_tolerance=0.35,
+            heading_tolerance_deg=8.0,
+            settle_time=0.5,
+        )
+        self.controller = WaypointController(tuning)
         self.index = 0
         self.controller.set_goal(self.targets[self.index])
         self.odom = None
         self.last_odom_time = None
         self.estop = False
-        self.started = False
+        self.wait_for_start = bool(p('wait_for_start'))
+        self.started = not self.wait_for_start
         self.completed = False
         self._hold_since = None
         self._now = time.monotonic
@@ -113,7 +130,10 @@ class WaypointSequenceTest(Node):
         self.create_timer(0.5, self._publish_path)
         self._publish_path()
         self._publish_goal()
-        self._status('WAIT_START')
+        if self.started:
+            self._status('WAYPOINT_1/5_APPROACH')
+        else:
+            self._status('WAIT_START')
         self.get_logger().info(
             f'five-waypoint test ready; ratio={self.targets[0].thrust_ratio:.2f}; '
             f'hold={self.hold_duration:.1f}s; motion_enabled={self.motion_enabled}')

@@ -6,3 +6,11 @@ waypoint_sequence_test:
     # true인 목표에서만 최종 헤딩을 맞춘다. 단위: 도(0=+X, 90=+Y).
     waypoints_angle_deg: [0.0, 0.0, 0.0, 0.0, 0.0]
     waypoints_use_heading: [false, false, false, false, false]
+
+    # 실물 스러스터 제어 파라미터 (정규화 상한 1.0 -> thrust_ratio가 실제 모터 출력비 [0..1]로 동작)
+    max_linear: 1.0           # 기본 전진 정규화 상한
+    max_angular: 1.0          # 기본 회전 정규화 상한
+    yaw_kp: 1.2               # 헤딩 P 게인
+    yaw_kd: 0.15              # 요레이트 D 게인
+    slow_radius: 1.5          # 목표점 접근 감속 반경 [m]
+    wait_for_start: false     # 외부 서비스 시작 대기 없이 즉시 시작 (기본: false)
