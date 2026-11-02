@@ -57,7 +57,7 @@ def to_hold(fsm):
 def test_approach_uses_global_staging_goal():
     out = tick(DockingFsm(), 0.0, staging=4.0, plan=None)
     assert out.state == DockState.APPROACH
-    assert out.seek_goal and out.use_repulsion
+    assert out.use_waypoint and out.use_repulsion
 
 
 def test_acquire_requires_plan_and_times_out():

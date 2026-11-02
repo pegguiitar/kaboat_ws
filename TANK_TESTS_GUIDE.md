@@ -184,6 +184,19 @@ ros2 launch kaboat_hardware bspline_track_test.launch.py wait_for_start:=true
 다른 코스를 시험할 때는 젯슨 터미널 5에서 위 명령 대신 `ros2 launch kaboat_hardware tank_tests.launch.py test:=straight`처럼 실행합니다. `test` 값은 `straight`, `bspline`, `circle`, `station_keeping` 중 하나입니다. **주행 테스트 노드는 한 번에 하나만** 실행합니다.
 [`tank_tests.yaml`](src/kaboat_hardware/config/tank_tests.yaml)은 현재 런처가 자동으로 읽지 않으므로 실제 노드 기본값과 런처 인자를 확인해 조정합니다.
 
+### 공통 수조 waypoint(x, y, angle=None, thrust_ratio=1.0)
+
+미션에서 재사용하는 목표 위치·헤딩 제어와 단독 preview/주행 명령은
+[INDOOR_WAYPOINT.md](INDOOR_WAYPOINT.md)를 따릅니다. 예를 들어 젯슨에서
+`/odom`을 준비한 뒤 `ros2 launch kaboat_hardware indoor_waypoint.launch.py
+x:=5.0 y:=2.5 angle:=180.0 thrust_ratio:=0.5 motion_enabled:=false`로 목표와 계산 명령을
+확인합니다. 다른 주행 테스트와 동시에 `/cmd_vel`을 발행하지 않습니다.
+
+### 공통 B-spline·원 경로 LOS 추종
+
+behavior에서 `los(path, thrust_ratio)`로 호출하는 공통 추종 함수와 경로
+생성법은 [LOS_PATH.md](LOS_PATH.md)를 참고합니다.
+
 ## 4. 장애물 회피 경로 생성과 RViz 미리보기
 
 **2절의 선체 TG-50 포함 명령**으로 `/scan`과 `/odom`을 먼저 준비합니다. 모터 드라이버와 다른 주행 테스트 노드는 켜지 않습니다. 젯슨의 새 터미널에서 준비 명령을 실행한 뒤 아래 런처를 시작합니다.

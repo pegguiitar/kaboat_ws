@@ -38,7 +38,7 @@ class FsmParams:
     v_min: float = 0.3            # 📝 곡률 감속 하한 [m/s]
     v_max: float = 1.4            # 📝 현재 회피 추종 상한 [m/s] (교정 전속은 v_full)
     omega_max: float = 0.52       # ✅ 실측 최대 요레이트 [rad/s] — v = ω_max/κ
-    slow_radius: float = 3.0      # seek_goal 과 동일 — waypoint 근접 감속 반경 [m]
+    slow_radius: float = 3.0      # 위치 waypoint 와 동일 — 목표 근접 감속 반경 [m]
     t_backstop: float = 3.0       # 📝 재생성 트리거 (c) 주기 [s]
     d_panic: float = 3.0          # 📝 위반까지 경로거리 이 값 미만이면 즉시 ESCAPE [m]
     #   근거: 전속 1.48 에서 타력 감쇠 실측(3s 에 0.11 로) → 제동거리 ~2m + 여유
@@ -92,25 +92,35 @@ def follow_cmd(plan: Plan | SampledPlan, boat_xy, yaw: float, yaw_rate: float, w
                ) -> tuple[float, float]:
     """경로 추종 명령 (linear_x, angular_z) — PD 조향 + 곡률 feedforward 감속.
 
-    조향은 seek_goal() 과 같은 PD(게인도 노드가 같은 값 주입), 목표점만
+    조향은 공통 waypoint 와 같은 PD(게인도 노드가 같은 값 주입), 목표점만
     경로 위 lookahead 점. 감속은 전방 창 max κ 로 v = clamp(ω_max/κ, v_min,
     v_max) — κ_avail = ω/v 라 교정 전속(1.48)에선 0.35, 현재 회피 상한
     1.1m/s에서도 0.47뿐인데 경로는 κ 0.9~1.2가 필요해(실측) 조향만으론
     물리적으로 못 따라간다.
-    heading 오차 비례 감속 항은 v1 제외 — seek_goal 의 이산 규칙(오차 >60°
+    heading 오차 비례 감속 항은 v1 제외 — 위치 waypoint 의 이산 규칙(오차 >60°
     면 저속)만 재사용한다 (제자리 급회전 = 전복 위험 차단, SKELETON §6).
     """
     boat = np.asarray(boat_xy, dtype=np.float64)
-    wp = np.asarray(wp_xy, dtype=np.float64)
-    wp_dist = float(np.hypot(*(wp - boat)))
+    closed = isinstance(plan, SampledPlan) and plan.closed
+    if closed:
+        wp_scale = 1.0
+    else:
+        wp = np.asarray(wp_xy, dtype=np.float64)
+        wp_dist = float(np.hypot(*(wp - boat)))
 
     # 목표점: 진행 위치 + lookahead 호길이 앞 샘플. waypoint 근접 시 wp 로
     # 캡 — r_end 가 min_horizon 으로 클램프돼 경로가 wp 를 지나쳐 뻗는 문제
     # 차단 (도착·완료 보고는 obstacle_planner/mission_manager 담당).
-    if wp_dist <= fsm.lookahead:
+    if closed:
+        steps = min(max(1, int(round(fsm.lookahead / plan.spacing))),
+                    max(1, len(plan.samples) // 4))
+        idx = (plan.progress_idx + steps) \
+              % len(plan.samples)
+        target = plan.samples[idx]
+    elif wp_dist <= fsm.lookahead:
         target = wp
     else:
-        idx = min(plan.progress_idx + int(round(fsm.lookahead / plan.spacing)),
+        idx = min(plan.progress_idx + max(1, int(round(fsm.lookahead / plan.spacing))),
                   len(plan.samples) - 1)
         target = plan.samples[idx]
         if float(np.hypot(*(target - boat))) < 0.3:
@@ -121,8 +131,9 @@ def follow_cmd(plan: Plan | SampledPlan, boat_xy, yaw: float, yaw_rate: float, w
     kappa = curvature_ahead(plan, fsm.kappa_window)
     v = fsm.v_max if kappa < 1e-6 else min(max(fsm.omega_max / kappa,
                                                fsm.v_min), fsm.v_max)
-    wp_scale = min(wp_dist / fsm.slow_radius, 1.0)
-    v *= wp_scale  # waypoint 근접 감속 (seek_goal 규칙)
+    if not closed:
+        wp_scale = min(wp_dist / fsm.slow_radius, 1.0)
+    v *= wp_scale  # waypoint 근접 감속
 
     direction = target - boat
     norm = float(np.hypot(*direction))

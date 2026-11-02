@@ -2,7 +2,7 @@
 
 AprilTag 는 프레임마다 자세(pose)만 준다 — 속도는 없다. 그런데 스택은
 `/odom` 의 twist 를 실제로 쓴다:
-  - behavior_base.seek_goal() 의 yaw PD D항 (없으면 P 제어만 남아 요 발진 →
+  - behavior_base.waypoint() 의 yaw PD D항 (없으면 P 제어만 남아 요 발진 →
     전복. SKELETON §6 의 실측 사고 2건 중 하나)
   - obstacle_planner 가 avoid FSM 에 넘기는 속도벡터
 

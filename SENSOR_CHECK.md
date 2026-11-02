@@ -196,7 +196,7 @@ ros2 topic echo /imu/data --field angular_velocity.z
 
 > **반시계(좌회전)로 돌렸을 때 값이 양수여야 한다.**
 
-부호가 반대면 `seek_goal()` 의 D항이 감쇠가 아니라 **발진 방향으로 작용**한다
+부호가 반대면 `waypoint()` 의 D항이 감쇠가 아니라 **발진 방향으로 작용**한다
 — SKELETON §6 에 기록된 전복 사고 2건 중 하나가 정확히 요 발진이다.
 반대면 `indoor_lidar_odom` 의 `yaw_rate_sign: -1.0` 으로 뒤집는다 (src/kaboat_hardware/config/indoor_tank.yaml 참조).
 
@@ -289,7 +289,7 @@ GNSS 신호는 지표면 도달 세기가 잡음 수준이라(≈−130 dBm), �
 |---|---|
 | `pose.pose.position.x/y` | occupancy_grid 좌표변환, mission_manager 전환 판정 |
 | `pose.pose.orientation` | occupancy_grid yaw, behavior 방위 계산 |
-| **`twist.twist.angular.z`** | `seek_goal()` D항 — **전복 방지의 핵심** |
+| **`twist.twist.angular.z`** | `waypoint()` D항 — **전복 방지의 핵심** |
 | `twist.twist.linear.x/y` | avoid FSM 속도벡터 (**body frame**) |
 | **`header.stamp`** | **avoid FSM·buoy_tracker 의 시계** |
 | `child_frame_id` | health monitor (비면 WARN) |

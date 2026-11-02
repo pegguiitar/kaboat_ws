@@ -158,10 +158,10 @@ cell 과 구분되는 "좌표 랜드마크". 극좌표는 소비자가 자기 od
 
 ### `kaboat_behaviors` — 골격, 판단 로직은 대부분 placeholder
 - **`behavior_base.py`**: 모든 behavior 공통 base. `/mission/state`로 active
-  판단, PD 제어(`YAW_KP=0.3`, `YAW_KD=0.15`)로 목표점 추종하는 `seek_goal()`
-  제공. 명령 상한 `max_linear=0.20`, `max_angular=0.05`. ⚠️ 이 값들은 실측
-  안전값 — 함부로 올리지 마세요(이유는 §6). **m/s 가 아니라 추력 명령**이라는
-  점도 주의(0.20 → 실제 약 1.5 m/s, §6). 부표는 `BuoyArray`(전역 좌표)로
+  판단하고, 위치와 선택적 최종 헤딩을 PD 제어로 추종하는 `waypoint()`를
+  제공한다. 기본 상한은 `max_linear=12/118.6`, `max_angular=3/118.6`이다.
+  ⚠️ 이 값들은 실측 안전값 — 함부로 올리지 마세요(이유는 §6).
+  **m/s 가 아니라 최대추력 대비 명령 비율**이라는 점도 주의. 부표는 `BuoyArray`(전역 좌표)로
   구독하고, `buoy_range_bearing()`·`visible_buoys()`가 자기 odom 으로 배 기준
   거리·방위를 계산해준다(부표맵은 뒤·먼 것도 보관하므로 전방 ±50°·15m 필터).
 - **`obstacle_avoidance_utils.py`**: 단순 반발 회피(`apply_repulsion`).

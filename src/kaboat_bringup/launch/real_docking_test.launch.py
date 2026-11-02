@@ -20,13 +20,16 @@ def _nodes(context):
     mission_params = os.path.join(bringup_share, 'config', 'mission_params.yaml')
     staging = [float(LaunchConfiguration(name).perform(context))
                for name in ('staging_x', 'staging_y')]
+    heading_text = LaunchConfiguration('staging_angle_deg').perform(context).strip()
+    staging_heading_enabled = bool(heading_text)
+    staging_heading = float(heading_text) if heading_text else 0.0
     wall_to_mouth = float(LaunchConfiguration('wall_to_mouth_m').perform(context))
     pre_entry_offset = float(
         LaunchConfiguration('pre_entry_offset_m').perform(context))
     hull_length = float(LaunchConfiguration('hull_length_m').perform(context))
     exit_clearance = float(LaunchConfiguration('exit_clearance_m').perform(context))
     if not all(math.isfinite(value) for value in
-               (*staging, wall_to_mouth, pre_entry_offset,
+               (*staging, staging_heading, wall_to_mouth, pre_entry_offset,
                 hull_length, exit_clearance)):
         raise ValueError('docking dimensions and staging coordinates must be finite')
     if wall_to_mouth <= 0 or pre_entry_offset <= 0 or hull_length <= 0 or exit_clearance < 0:
@@ -53,6 +56,8 @@ def _nodes(context):
                  'use_sim_time': False,
                  'dock.motion_enabled': ParameterValue(
                      LaunchConfiguration('dock_motion_enabled'), value_type=bool),
+                 'dock.staging_heading_enabled': staging_heading_enabled,
+                 'dock.staging_angle_deg': staging_heading,
                  'dock.berth_distance': 1.0,
                  'dock.pre_entry_offset': ParameterValue(
                      LaunchConfiguration('pre_entry_offset_m'), value_type=float),
@@ -74,6 +79,8 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('staging_x', description='실측 odom 정렬점 X [m]'),
         DeclareLaunchArgument('staging_y', description='실측 odom 정렬점 Y [m]'),
+        DeclareLaunchArgument('staging_angle_deg', default_value='',
+                              description='정렬점 도착 선수각 [deg]; 비우면 기존 위치 접근'),
         DeclareLaunchArgument('dock_weights', description='Jetson의 YOLO .pt 절대 경로'),
         DeclareLaunchArgument('dock_target_class',
                               description='red_triangle / green_circle / blue_square'),

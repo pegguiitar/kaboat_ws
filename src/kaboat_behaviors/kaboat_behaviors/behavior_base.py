@@ -15,6 +15,7 @@
 명령만 통과시키고, 300ms 워치독으로 끊김을 감지해 정지시킨다.
 """
 import math
+import time
 
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, DurabilityPolicy
@@ -24,6 +25,10 @@ from geometry_msgs.msg import Twist, PoseStamped
 from nav_msgs.msg import Odometry, OccupancyGrid
 
 from kaboat_msgs.msg import BuoyArray
+from .waypoint_controller import (
+    WaypointController, WaypointParams, waypoint as make_waypoint)
+from .los_controller import LosFollower
+from .bspline_planner import SampledPlan
 
 # 부표맵은 뒤쪽·먼 것까지 보관하므로, "지금 카메라에 보이는" 것만 쓰려는
 # behavior 는 전방 시야로 걸러 쓴다 (buoy_range_bearing/visible_buoys).
@@ -74,6 +79,14 @@ class BehaviorBase(Node):
         self._completion_sent = False
         self.goal = None          # PoseStamped | None
         self.odom = None          # Odometry | None
+        self._last_odom_received = None
+        self._waypoint_controller = WaypointController(WaypointParams(
+            max_linear=self.max_linear, max_angular=self.max_angular,
+            yaw_kp=YAW_KP, yaw_kd=YAW_KD))
+        self._los_follower = LosFollower(
+            max_linear=self.max_linear, max_angular=self.max_angular,
+            yaw_kp=YAW_KP, yaw_kd=YAW_KD)
+        self._command_thrust_ratio = None
         self.buoys = []           # list[kaboat_msgs.Buoy] — 전역(odom) 좌표 부표맵
         self.occupancy_grid = None  # OccupancyGrid | None — 회피(apply_repulsion) 소비처
 
@@ -103,8 +116,12 @@ class BehaviorBase(Node):
         is_active = self.active
         if not was_active and is_active:
             self._completion_sent = False
+            self._waypoint_controller.reset()
+            self._los_follower.reset()
             self.on_activate()
         elif was_active and not is_active:
+            self._waypoint_controller.reset()
+            self._los_follower.reset()
             self.on_deactivate()
 
     def _on_goal(self, msg: PoseStamped):
@@ -112,6 +129,7 @@ class BehaviorBase(Node):
 
     def _on_odom(self, msg: Odometry):
         self.odom = msg
+        self._last_odom_received = time.monotonic()
 
     def _on_buoys(self, msg: BuoyArray):
         self.buoys = list(msg.buoys)
@@ -127,11 +145,19 @@ class BehaviorBase(Node):
     def _tick(self):
         if not self.active:
             return
+        self._command_thrust_ratio = None
         cmd = self.compute_cmd() # cmd는 속도 명령 표준화 명령어
         if cmd is None:
             return
         cmd.linear.x = max(-self.max_linear, min(self.max_linear, cmd.linear.x))
         cmd.angular.z = max(-self.max_angular, min(self.max_angular, cmd.angular.z))
+        if self._command_thrust_ratio is not None:
+            # Repulsion may run after waypoint()/los(); cap the published command
+            # as well, so it cannot undo a caller's lower thrust setting.
+            linear_limit = self.max_linear * self._command_thrust_ratio
+            angular_limit = self.max_angular * self._command_thrust_ratio
+            cmd.linear.x = max(-linear_limit, min(linear_limit, cmd.linear.x))
+            cmd.angular.z = max(-angular_limit, min(angular_limit, cmd.angular.z))
         self.cmd_pub.publish(cmd)
         # 배는 전진/후진 속도(x 방향)과 좌우 회전 속도(z축 기준)만 필요하기 때문
     def compute_cmd(self):
@@ -166,16 +192,6 @@ class BehaviorBase(Node):
         dx = self.goal.pose.position.x - self.odom.pose.pose.position.x
         dy = self.goal.pose.position.y - self.odom.pose.pose.position.y
         return math.hypot(dx, dy)
-
-    def heading_error_to_goal(self) -> float:
-        """목표 방향 − 현재 선수각 (좌회전 양수)."""
-        if self.odom is None or self.goal is None:
-            return 0.0
-        dx = self.goal.pose.position.x - self.odom.pose.pose.position.x
-        dy = self.goal.pose.position.y - self.odom.pose.pose.position.y
-        target_yaw = math.atan2(dy, dx)
-        yaw = yaw_from_quaternion(self.odom.pose.pose.orientation)
-        return normalize_angle(target_yaw - yaw)
 
     # ── 부표맵 헬퍼 (월드 좌표 → 배 기준 상대 기하) ──────────────
 
@@ -216,22 +232,70 @@ class BehaviorBase(Node):
         out.sort(key=lambda t: t[1])
         return out
 
-    def seek_goal(self, slow_radius: float = 3.0) -> Twist:
-        """goal 을 향한 PD 제어 Twist. 모든 behavior 의 이동 기본기.
+    def waypoint_odom_ready(self) -> bool:
+        """Whether odom can safely drive an odom-frame waypoint."""
+        if (self.odom is None or self._last_odom_received is None
+                or time.monotonic() - self._last_odom_received > 0.5
+                or self.odom.header.frame_id != 'odom'):
+            return False
+        pose = self.odom.pose.pose
+        q = pose.orientation
+        values = (q.x, q.y, q.z, q.w, pose.position.x, pose.position.y,
+                  self.odom.twist.twist.angular.z)
+        return (all(math.isfinite(v) for v in values)
+                and abs(q.x*q.x + q.y*q.y + q.z*q.z + q.w*q.w - 1.0) <= 0.1)
 
-        D항(요레이트 감쇠)이 필수 — P 만 쓰면 민첩한 축소 선체가 발진해 전복한다.
+    def waypoint(self, x: float, y: float, angle: float | None = None,
+                 thrust_ratio: float = 1.0, *,
+                 slow_radius: float | None = None) -> tuple[Twist, bool]:
+        """Return (command, arrived) for an odom-frame target.
+
+        X/Y are metres; the optional final heading is degrees. Missions call
+        this every tick and return ``cmd`` through their /cmd/<mission> route.
+        When angle is omitted, reaching the position alone completes the goal.
+        ``thrust_ratio`` scales the configured safe linear/angular limits, 0..1.
+        ``slow_radius`` overrides the default approach slowdown distance.
+        A missing, stale or invalid odom always returns a zero command.
         """
+        target = make_waypoint(x, y, angle, thrust_ratio)
+        self._waypoint_controller.set_goal(target)
+        self._command_thrust_ratio = target.thrust_ratio
         cmd = Twist()
-        if self.odom is None or self.goal is None:
-            return cmd  # 데이터 없으면 정지
-        err = self.heading_error_to_goal()
-        dist = self.distance_to_goal()
-        yaw_rate = self.odom.twist.twist.angular.z
-        cmd.angular.z = YAW_KP * err - YAW_KD * yaw_rate
-        # 목표를 크게 벗어난 방향이면 회전 우선, 가까워지면 감속
-        if abs(err) < math.pi / 3:
-            cmd.linear.x = self.max_linear * min(dist / slow_radius, 1.0)
-        else:
-            # 회전 중에도 저속 전진 유지 — 제자리 급회전(전복 위험)을 피한다
-            cmd.linear.x = self.max_linear * 0.3
-        return cmd
+        if not self.waypoint_odom_ready():
+            self._waypoint_controller.reset_progress()
+            return cmd, False
+        pose = self.odom.pose.pose
+        q = pose.orientation
+        step = self._waypoint_controller.step(
+            pose.position.x, pose.position.y, yaw_from_quaternion(q),
+            self.odom.twist.twist.angular.z, time.monotonic(),
+            slow_radius=slow_radius)
+        cmd.linear.x = step.linear
+        cmd.angular.z = step.angular
+        return cmd, step.reached
+
+    def los(self, path: SampledPlan,
+            thrust_ratio: float = 1.0) -> tuple[Twist, bool]:
+        """Follow an odom-frame sampled B-spline/circle path.
+
+        Prepare the path once with ``bspline_path()``, ``circle_path()`` or
+        ``sampled_path()`` and pass that same object on each control tick.
+        Returns (command, reached); a continuous circle never reaches.
+        """
+        ratio = float(thrust_ratio)
+        if not math.isfinite(ratio) or not 0.0 <= ratio <= 1.0:
+            raise ValueError('thrust_ratio must be between 0 and 1')
+        if not isinstance(path, SampledPlan):
+            raise TypeError('path must be built with sampled_path, bspline_path or circle_path')
+        self._command_thrust_ratio = ratio
+        cmd = Twist()
+        if not self.waypoint_odom_ready() or path.frame_id != 'odom':
+            return cmd, False
+        pose = self.odom.pose.pose
+        step = self._los_follower.step(
+            path, (pose.position.x, pose.position.y),
+            yaw_from_quaternion(pose.orientation),
+            self.odom.twist.twist.angular.z, ratio)
+        cmd.linear.x = step.linear
+        cmd.angular.z = step.angular
+        return cmd, step.reached

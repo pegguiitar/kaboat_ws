@@ -96,11 +96,17 @@ RGB·정렬된 depth·camera_info, 정확한 `base_link→카메라` TF를 준�
 ```bash
 ros2 launch kaboat_bringup real_docking_test.launch.py \
   staging_x:=<실측_odom_X> staging_y:=<실측_odom_Y> \
+  staging_angle_deg:=<도착_선수각_deg> \
   dock_weights:=/absolute/path/dock_sequence_v3_yolo26n_best.pt \
   dock_target_class:=red_triangle wall_to_mouth_m:=<실측_m> \
   pre_entry_offset_m:=1.5 hull_length_m:=<실측_m> \
   dock_device:=cpu dock_motion_enabled:=false
 ```
+
+`staging_angle_deg`를 지정하면 공통
+[`waypoint(x, y, angle)`](INDOOR_WAYPOINT.md) 제어로 대기점 위치와
+선수각을 모두 맞춘 뒤 표식 탐색 단계로 넘어간다. 각도를 생략하면 기존
+위치만 사용하는 대기점 접근을 유지한다.
 
 이 런처가 실행 중일 때 다른 터미널에서 `ros2 topic echo /dock/waypoints`
 또는 RViz의 Path 표시로 W1·W2·W3 위치를 확인한다.
@@ -123,8 +129,8 @@ ros2 launch kaboat_bringup real_docking_test.launch.py \
 - 그 후에만 단일 도킹 런처의 `dock_motion_enabled:=true`를 검토한다.
   기본값은 **false**다.
 
-도킹 FSM의 `APPROACH`는 mission waypoint까지의 `seek_goal`을 그대로
-사용한다. 이후 W1·W2·W3는 현재 `base_link`에서 매 검출마다 갱신하는
+도킹 FSM의 `APPROACH`는 mission waypoint까지 공통 `waypoint()`를
+사용한다. 대기점 헤딩을 지정하지 않으면 위치만 맞춘다. 이후 W1·W2·W3는 현재 `base_link`에서 매 검출마다 갱신하는
 로컬 목표다. 현재 코드는 양쪽 슬롯 벽의 간격이나 선체 폭을 검사하지 않는다.
 전체 항로의 장애물 회피 planner도 도킹 입구까지 연결되지 않았으므로,
 staging waypoint와 진입 경로의 안전성은 실물 시험 전에 별도로 검증해야 한다.

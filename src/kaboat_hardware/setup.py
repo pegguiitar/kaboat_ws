@@ -38,6 +38,7 @@ setup(
             'onboard_scan_filter = kaboat_hardware.onboard_scan_filter:main',
             'circle_drive_test = kaboat_hardware.circle_drive_test:main',
             'station_keeping_test = kaboat_hardware.station_keeping_test:main',
+            'indoor_waypoint = kaboat_hardware.indoor_waypoint:main',
         ],
     },
 )

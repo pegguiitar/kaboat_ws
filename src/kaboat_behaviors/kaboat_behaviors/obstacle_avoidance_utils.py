@@ -31,7 +31,9 @@ def apply_repulsion(cmd: Twist, occupancy_grid, odom) -> Twist:
     occupancy_grid  nav_msgs/OccupancyGrid (frame_id='odom', 점유확률 0~100/-1)
     odom            nav_msgs/Odometry (현재 위치/자세) — 선체 기준 변환에 필요
     """
-    if odom is None or occupancy_grid is None:
+    # A reached waypoint or failed odom check must remain a stop command.
+    if (cmd.linear.x == 0.0 and cmd.angular.z == 0.0
+            or odom is None or occupancy_grid is None):
         return cmd
 
     info = occupancy_grid.info

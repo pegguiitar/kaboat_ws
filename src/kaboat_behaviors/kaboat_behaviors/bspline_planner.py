@@ -106,6 +106,9 @@ class SampledPlan:
     curvatures: np.ndarray
     spacing: float
     progress_idx: int = 0
+    closed: bool = False
+    target_laps: float | None = None
+    frame_id: str = 'odom'
 
 
 def _wrap(a):
@@ -339,6 +342,12 @@ def curvature_ahead(plan: Plan | SampledPlan, window: float) -> float:
     if isinstance(plan, SampledPlan):
         # 고정 시험 코스는 제어점 개수/차수가 가변이므로 생성 때 계산한
         # 해석적 곡률 샘플을 사용한다. 현재 점만이 아니라 전방 창의 최대값.
+        if plan.closed:
+            count = max(1, int(math.ceil(window / plan.spacing))) + 1
+            count = min(count, len(plan.curvatures))
+            indices = ((plan.progress_idx + np.arange(count))
+                       % len(plan.curvatures))
+            return float(np.max(np.abs(plan.curvatures[indices])))
         start = min(plan.progress_idx, len(plan.curvatures) - 1)
         end = min(len(plan.curvatures),
                   start + max(1, int(math.ceil(window / plan.spacing))) + 1)

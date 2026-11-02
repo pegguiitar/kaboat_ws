@@ -6,13 +6,14 @@ skeleton — 로직 우선순위:
      부표는 전역(odom) 좌표 부표맵으로 오므로, 거리·방위는 base 의
      visible_buoys() 가 자기 odom 으로 계산한다(전방 ±50°·15m 필터로
      "지금 보이는" 것만 — 부표맵은 뒤 것·먼 것도 보관하기 때문).
-  2) 안 보이면 goal 웨이포인트를 향해 주행 (seek_goal)
+  2) 안 보이면 goal 웨이포인트를 향해 주행 (waypoint, 헤딩 자유)
   항상 obstacle_avoidance_utils 로 회피 보정.
 
 TODO(팀): 통과 판정, 쌍 매칭에 거리 임계값(너무 다르면 애초에 페어 아님으로
-          간주하고 seek_goal 로 폴백) 추가
+          간주하고 위치 웨이포인트로 폴백) 추가
 """
 import rclpy
+from geometry_msgs.msg import Twist
 
 from .behavior_base import BehaviorBase, MAX_THRUST
 from .obstacle_avoidance_utils import apply_repulsion
@@ -23,6 +24,9 @@ class GateFollower(BehaviorBase):
     CMD_TOPIC = '/cmd/gate'
 
     def compute_cmd(self):
+        if (self.goal is None or self.goal.header.frame_id != 'odom'
+                or not self.waypoint_odom_ready()):
+            return Twist()
         # 현재 skeleton 의 gate 완료 정의는 채널 출구 waypoint 2m 이내 진입.
         # mission_manager 도 독립적으로 같은 2m 위치 조건을 확인한다.
         if self.distance_to_goal() <= 2.0:
@@ -38,12 +42,14 @@ class GateFollower(BehaviorBase):
             r, g = min(((r, g) for r in reds for g in greens),
                        key=lambda rg: abs(rg[0][1] - rg[1][1]))   # [1]=거리
             mid_bearing = (r[2] + g[2]) / 2.0                     # [2]=방위
-            cmd = self.seek_goal()          # 기본 전진 성분
+            cmd = Twist()
             # 게이트 중점 우선 조향 — 오차 1rad 당 차동 60N (구 게인 1.0 동등)
             cmd.angular.z = (60.0 / MAX_THRUST) * mid_bearing
             cmd.linear.x = self.max_linear * 0.8
         else:
-            cmd = self.seek_goal()
+            point = self.goal.pose.position
+            cmd, _ = self.waypoint(point.x, point.y,
+                                   slow_radius=3.0)
 
         return apply_repulsion(cmd, self.occupancy_grid, self.odom)
 

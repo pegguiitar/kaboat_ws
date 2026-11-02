@@ -38,6 +38,8 @@ class DockingCtrl(BehaviorBase):
         self.declare_parameter('dock.max_entrance_range_m', 12.0)
         self.declare_parameter('dock.base_frame', 'base_link')
         self.declare_parameter('dock.odom_freshness_s', 0.5)
+        self.declare_parameter('dock.staging_heading_enabled', False)
+        self.declare_parameter('dock.staging_angle_deg', 0.0)
         self.motion_enabled = bool(self.get_parameter('dock.motion_enabled').value)
         self.entrance_freshness = float(
             self.get_parameter('dock.entrance_freshness_s').value)
@@ -48,6 +50,12 @@ class DockingCtrl(BehaviorBase):
         self.base_frame = str(self.get_parameter('dock.base_frame').value)
         self.odom_freshness = float(
             self.get_parameter('dock.odom_freshness_s').value)
+        self.staging_heading_enabled = bool(
+            self.get_parameter('dock.staging_heading_enabled').value)
+        self.staging_angle_deg = float(
+            self.get_parameter('dock.staging_angle_deg').value)
+        if not math.isfinite(self.staging_angle_deg):
+            raise ValueError('dock.staging_angle_deg must be finite')
 
         defaults = DockParams()
         values = {}
@@ -167,7 +175,8 @@ class DockingCtrl(BehaviorBase):
         if not self.motion_enabled:
             return Twist()
         if (self._odom_received_at is None
-                or now - self._odom_received_at > self.odom_freshness):
+                or now - self._odom_received_at > self.odom_freshness
+                or not self.waypoint_odom_ready()):
             return Twist()
         reverse_distance = 0.0
         if self._reverse_origin is not None and self.odom is not None:
@@ -175,7 +184,22 @@ class DockingCtrl(BehaviorBase):
             reverse_distance = math.hypot(
                 position.x - self._reverse_origin[0],
                 position.y - self._reverse_origin[1])
-        out = self.fsm.step(now, self.distance_to_goal(), plan,
+        staging_distance = self.distance_to_goal()
+        staging_cmd = None
+        if self.fsm.state == DockState.APPROACH:
+            if self.goal is None or self.goal.header.frame_id != 'odom':
+                staging_distance = math.inf
+                staging_cmd = Twist()
+            else:
+                point = self.goal.pose.position
+                staging_cmd, staging_reached = self.waypoint(
+                    point.x, point.y,
+                    self.staging_angle_deg if self.staging_heading_enabled else None,
+                    slow_radius=(None if self.staging_heading_enabled else 3.0))
+                # When heading is requested, wait until both errors settle.
+                if self.staging_heading_enabled and not staging_reached:
+                    staging_distance = math.inf
+        out = self.fsm.step(now, staging_distance, plan,
                             reverse_distance=reverse_distance)
         if out.event is not None:
             self.get_logger().info(f'도킹 FSM: {out.event}')
@@ -187,8 +211,8 @@ class DockingCtrl(BehaviorBase):
         if out.complete:
             self.report_complete()
 
-        if out.seek_goal:
-            cmd = self.seek_goal(slow_radius=3.0)
+        if out.use_waypoint:
+            cmd = staging_cmd if staging_cmd is not None else Twist()
         else:
             cmd = Twist()
             cmd.linear.x = self.max_linear * out.linear

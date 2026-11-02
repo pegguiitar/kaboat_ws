@@ -5,7 +5,7 @@
   APPROACH → ACQUIRE → PRE_ENTRY → ALIGN → TO_MOUTH → TO_BERTH
   → BERTH_VERIFY → HOLD → REVERSE → COMPLETE.
 
-APPROACH는 mission waypoint까지 기존 seek_goal 제어를 사용한다. 표식을
+APPROACH는 mission waypoint까지 공통 위치/헤딩 제어를 사용한다. 표식을
 획득·정렬한 뒤 슬롯 안으로 저속 진입하고, 잠시 정지한 다음 같은 선수각으로
 후진한다. REVERSE가 waypoint 반경 안에 도달해야 COMPLETE가 되므로
 mission_manager의 별도 2m 전환 조건과 모순되지 않는다.
@@ -78,7 +78,7 @@ class DockOutput:
     state: DockState
     linear: float = 0.0    # behavior max_linear 대비 비율 [-1, 1]
     angular: float = 0.0   # behavior max_angular 대비 비율 [-1, 1]
-    seek_goal: bool = False
+    use_waypoint: bool = False
     use_repulsion: bool = False
     complete: bool = False
     event: str | None = None
@@ -126,7 +126,7 @@ class DockingFsm:
                     self.state, angular=self.p.scan_angular,
                     use_repulsion=True, event=event)
             return DockOutput(
-                self.state, seek_goal=True, use_repulsion=True)
+                self.state, use_waypoint=True, use_repulsion=True)
 
         if self.state == DockState.ACQUIRE:
             if plan is not None:

@@ -7,6 +7,7 @@ skeleton:
 TODO(팀): 규정의 정확한 선회 방향/횟수 반영, 선회 반경 제어
 """
 import rclpy
+from geometry_msgs.msg import Twist
 
 from .behavior_base import BehaviorBase
 from .obstacle_avoidance_utils import apply_repulsion
@@ -29,16 +30,19 @@ class SearchCircler(BehaviorBase):
         self._circle_since = None
 
     def compute_cmd(self):
+        if (self.goal is None or self.goal.header.frame_id != 'odom'
+                or not self.waypoint_odom_ready()):
+            return Twist()
         # 아직 구역 밖이면 접근부터
         if self.distance_to_goal() > ARRIVE_RADIUS:
             self._circle_since = None
-            cmd = self.seek_goal()
+            point = self.goal.pose.position
+            cmd, _ = self.waypoint(point.x, point.y, slow_radius=3.0)
             return apply_repulsion(cmd, self.occupancy_grid, self.odom)
 
         # 구역 안 — 색 따라 선회 (skeleton 규칙: green 좌선회, red 우선회)
         # 부표맵은 뒤 것·먼 것도 보관하므로 전방 시야(visible_buoys)로 걸러
         # "지금 보이는" 색만 본다.
-        from geometry_msgs.msg import Twist
         cmd = Twist()
         now = self.get_clock().now()
         if self._circle_since is None:

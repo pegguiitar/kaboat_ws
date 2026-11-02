@@ -8,6 +8,7 @@ skeleton:
 TODO(팀): 바람/파도 드리프트 보상 (heading 유지 포함 station keeping)
 """
 import rclpy
+from geometry_msgs.msg import Twist
 
 from .behavior_base import BehaviorBase
 from .obstacle_avoidance_utils import apply_repulsion
@@ -30,6 +31,9 @@ class StationKeeper(BehaviorBase):
         self._reported = False
 
     def compute_cmd(self):
+        if (self.goal is None or self.goal.header.frame_id != 'odom'
+                or not self.waypoint_odom_ready()):
+            return Twist()
         dist = self.distance_to_goal()
 
         # 5m/5s 유지 완료를 보고한다 (최종 전환은 mission_manager 몫).
@@ -45,7 +49,8 @@ class StationKeeper(BehaviorBase):
         else:
             self._inside_since = None
 
-        cmd = self.seek_goal(slow_radius=5.0)
+        point = self.goal.pose.position
+        cmd, _ = self.waypoint(point.x, point.y, slow_radius=5.0)
         return apply_repulsion(cmd, self.occupancy_grid, self.odom)
 
 
