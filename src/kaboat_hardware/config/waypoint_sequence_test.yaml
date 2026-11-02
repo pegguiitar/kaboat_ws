@@ -8,6 +8,8 @@ waypoint_sequence_test:
     waypoints_use_heading: [false, false, false, false, false]
 
     # 실물 스러스터 제어 파라미터 (정규화 상한 1.0 -> thrust_ratio가 실제 모터 출력비 [0..1]로 동작)
+    thrust_ratio: 0.3         # 기본 추력 출력비 30%
+    motion_enabled: true      # /cmd_vel 모터 구동 활성화
     max_linear: 1.0           # 기본 전진 정규화 상한
     max_angular: 1.0          # 기본 회전 정규화 상한
     yaw_kp: 1.2               # 헤딩 P 게인

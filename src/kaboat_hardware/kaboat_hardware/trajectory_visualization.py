@@ -116,6 +116,7 @@ def create_trail_marker(
     marker.id = marker_id
     marker.type = Marker.LINE_STRIP
     marker.action = Marker.ADD
+    marker.pose.orientation.w = 1.0
     marker.scale.x = float(line_width)
 
     marker.color.r = float(color[0])
@@ -164,6 +165,7 @@ def create_goal_tolerance_marker(
     marker.id = marker_id
     marker.type = Marker.LINE_STRIP
     marker.action = Marker.ADD
+    marker.pose.orientation.w = 1.0
     marker.scale.x = float(line_width)
 
     marker.color.r = float(color[0])

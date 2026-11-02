@@ -295,6 +295,7 @@ class StraightLineTest(Node):
         m_line.type = Marker.LINE_STRIP
         m_line.action = Marker.ADD
         m_line.scale.x = 0.06  # 선 두께
+        m_line.pose.orientation.w = 1.0
         m_line.color.r = 0.0
         m_line.color.g = 1.0
         m_line.color.b = 0.5
@@ -315,6 +316,7 @@ class StraightLineTest(Node):
         m_start.pose.position.x = self.start_x
         m_start.pose.position.y = self.start_y
         m_start.pose.position.z = 0.1
+        m_start.pose.orientation.w = 1.0
         m_start.scale.x = 0.3
         m_start.scale.y = 0.3
         m_start.scale.z = 0.1
@@ -335,6 +337,7 @@ class StraightLineTest(Node):
         m_goal.pose.position.x = self.goal_x
         m_goal.pose.position.y = self.goal_y
         m_goal.pose.position.z = 0.1
+        m_goal.pose.orientation.w = 1.0
         m_goal.scale.x = 0.4
         m_goal.scale.y = 0.4
         m_goal.scale.z = 0.1

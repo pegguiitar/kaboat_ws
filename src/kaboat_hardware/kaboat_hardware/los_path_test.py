@@ -44,9 +44,14 @@ class LosPathTest(Node):
             'direction': str(CIRCLE_DRIVE['direction']),
             'target_laps': float(CIRCLE_DRIVE['target_laps']),
             'sample_spacing': 0.05,
-            'thrust_ratio': 0.5,
+            'thrust_ratio': 0.3,
             'motion_enabled': False,
             'wait_for_start': False,
+            'max_linear': DEFAULT_MAX_LINEAR,
+            'max_angular': DEFAULT_MAX_ANGULAR,
+            'yaw_kp': 18.0 / 118.6,
+            'yaw_kd': 9.0 / 118.6,
+            'goal_tolerance': 0.4,
             'tank_size_x': 10.0,
             'tank_size_y': 5.0,
             'tank_margin': 0.25,
@@ -80,8 +85,13 @@ class LosPathTest(Node):
                            for x, y in self.path.samples)):
             raise ValueError('LOS path or settings are outside the measured tank bounds')
 
-        self.follower = LosFollower(max_linear=DEFAULT_MAX_LINEAR,
-                                    max_angular=DEFAULT_MAX_ANGULAR)
+        self.follower = LosFollower(
+            max_linear=float(p('max_linear')),
+            max_angular=float(p('max_angular')),
+            yaw_kp=float(p('yaw_kp')),
+            yaw_kd=float(p('yaw_kd')),
+            goal_tolerance=float(p('goal_tolerance')),
+        )
         self.odom = None
         self.last_odom_time = None
         self.wait_for_start = bool(p('wait_for_start'))
@@ -103,7 +113,10 @@ class LosPathTest(Node):
         self.create_timer(0.1, self._tick)
         self.create_timer(0.5, self._publish_path)
         self._publish_path()
-        self._status('WAIT_START')
+        if self.started:
+            self._status(('' if self.motion_enabled else 'PREVIEW_') + 'WAIT_ODOM')
+        else:
+            self._status('WAIT_START')
         self.get_logger().info(
             f'LOS {p("path_kind")}: {len(self.path.samples)} samples; '
             f'thrust_ratio={self.ratio:.2f}; motion_enabled={self.motion_enabled}')

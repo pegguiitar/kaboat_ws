@@ -57,7 +57,7 @@ class WaypointSequenceTest(Node):
             'waypoints_y': DEFAULT_Y,
             'waypoints_angle_deg': DEFAULT_ANGLES,
             'waypoints_use_heading': DEFAULT_USE_HEADING,
-            'thrust_ratio': 0.5,
+            'thrust_ratio': 0.3,
             'motion_enabled': False,
             'max_linear': 12.0 / 118.6,
             'max_angular': 3.0 / 118.6,

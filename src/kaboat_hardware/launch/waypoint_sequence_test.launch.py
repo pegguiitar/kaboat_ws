@@ -17,7 +17,7 @@ def generate_launch_description():
                               description='YAML file with five tank waypoints'),
         DeclareLaunchArgument('thrust_ratio', default_value='0.3',
                               description='Ratio of motor thrust output [0..1] (0.3 = 30%)'),
-        DeclareLaunchArgument('motion_enabled', default_value='false',
+        DeclareLaunchArgument('motion_enabled', default_value='true',
                               description='false: preview only; true: publish /cmd_vel'),
         DeclareLaunchArgument('wait_for_start', default_value='false',
                               description='false: start immediately; true: wait for /waypoint_sequence/start service'),

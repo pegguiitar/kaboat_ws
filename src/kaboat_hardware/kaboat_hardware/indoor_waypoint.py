@@ -29,7 +29,7 @@ class IndoorWaypoint(Node):
         super().__init__('indoor_waypoint')
         defaults = {
             'target_x': 5.0, 'target_y': 2.5, 'target_angle_deg': 0.0,
-            'thrust_ratio': 1.0,
+            'thrust_ratio': 0.3,
             'motion_enabled': False,
             'tank_size_x': 10.0, 'tank_size_y': 5.0,
             'tank_margin': 0.25,
