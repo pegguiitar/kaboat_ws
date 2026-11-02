@@ -14,7 +14,7 @@ from kaboat_hardware.onboard_scan_filter import (
 
 
 class TestOnboardScanFilter(unittest.TestCase):
-    def test_130_to_230_in_published_scan_frame(self):
+    def test_120_to_240_in_published_scan_frame(self):
         raw = LaserScan()
         raw.header.frame_id = 'onboard_laser_frame'
         raw.angle_min = -math.pi
@@ -22,10 +22,10 @@ class TestOnboardScanFilter(unittest.TestCase):
         raw.ranges = [2.0] * 361
         raw.intensities = [9.0] * 361
 
-        filtered = mask_sector(raw, 130.0, 230.0)
-        for bearing in (129, 130, 180, 230, 231):
+        filtered = mask_sector(raw, 120.0, 240.0)
+        for bearing in (119, 120, 180, 240, 241):
             index = (bearing + 180) % 360
-            if 130 <= bearing <= 230:
+            if 120 <= bearing <= 240:
                 self.assertTrue(math.isinf(filtered.ranges[index]))
                 self.assertEqual(filtered.intensities[index], 0.0)
             else:
@@ -44,7 +44,7 @@ class TestOnboardScanFilter(unittest.TestCase):
         raw.angle_increment = -math.radians(1.0)
         raw.ranges = [2.0] * 361
 
-        filtered = mask_sector(raw, 130.0, 230.0)
+        filtered = mask_sector(raw, 120.0, 240.0)
         self.assertTrue(math.isinf(filtered.ranges[180 - 180]))  # 180 deg (rear) is masked
         self.assertEqual(filtered.ranges[180], 2.0)  # 0 deg remains valid
         self.assertEqual(len(filtered.intensities), 0)

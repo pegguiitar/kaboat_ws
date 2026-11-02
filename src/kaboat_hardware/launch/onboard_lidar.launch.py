@@ -26,10 +26,10 @@ def generate_launch_description():
             'enable_sector_mask', default_value='true',
             description='Mask boat structure returns (default: true)'),
         DeclareLaunchArgument(
-            'mask_start_deg', default_value='130.0',
+            'mask_start_deg', default_value='120.0',
             description='First boat-structure bearing to discard [deg, 0..360]'),
         DeclareLaunchArgument(
-            'mask_end_deg', default_value='230.0',
+            'mask_end_deg', default_value='240.0',
             description='Last boat-structure bearing to discard [deg, 0..360]'),
         DeclareLaunchArgument(
             'enable_imu_filter', default_value='true',

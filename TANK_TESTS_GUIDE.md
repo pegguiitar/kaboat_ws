@@ -156,7 +156,7 @@ read -r ONBOARD_LIDAR_PORT
 ros2 launch kaboat_hardware indoor_tank.launch.py enable_thrusters:=false enable_onboard_lidar:=true onboard_lidar_port:="$ONBOARD_LIDAR_PORT"
 ```
 
-선체 라이다 드라이버 원본은 `/scan/raw`, 지도·회피·RViz가 사용하는 필터 결과는 `/scan`입니다. 배 후방 구조물이 보이는 130°~230°(선미 ±50° 후방 영역) 값은 `/scan`에서 `inf`로 무효화하고, **IMU roll/pitch 기울기 필터(기본 임계값: ±3.0°)**가 함께 적용됩니다. 배가 3° 이상 기울면 수면 반사나 하늘을 훑는 노이즈를 방지하기 위해 스캔 발행을 차단(`drop`)합니다. 젯슨 터미널에서 `python3 scripts/view_roll_pitch.py`를 실행하여 실시간 자세 각도 및 필터 통과 여부를 모니터링할 수 있습니다. 육상/벤치 테스트에서 기울기 필터를 끄려면 `enable_imu_filter:=false`를 지정합니다. /shore/scan은 그대로 둡니다. 장애물 회피 RViz에서 기본으로 꺼진 `/scan/raw` 레이어를 켜 실제 구조물 방향과 비교하세요. 필요하면 `indoor_tank.launch.py`에 `onboard_lidar_mask_start_deg:=... onboard_lidar_mask_end_deg:=...`를 지정합니다. 이전 구조물 셀이 점유 지도에 남아 있다면 장애물 시험 런처도 재시작합니다.
+선체 라이다 드라이버 원본은 `/scan/raw`, 지도·회피·RViz가 사용하는 필터 결과는 `/scan`입니다. 배 후방 구조물이 보이는 120°~240°(선미 ±60° 후방 영역) 값은 `/scan`에서 `inf`로 무효화하고, **IMU roll/pitch 기울기 필터(기본 임계값: ±3.0°)**가 함께 적용됩니다. 배가 3° 이상 기울면 수면 반사나 하늘을 훑는 노이즈를 방지하기 위해 스캔 발행을 차단(`drop`)합니다. 젯슨 터미널에서 `python3 scripts/view_roll_pitch.py`를 실행하여 실시간 자세 각도 및 필터 통과 여부를 모니터링할 수 있습니다. 육상/벤치 테스트에서 기울기 필터를 끄려면 `enable_imu_filter:=false`를 지정합니다. /shore/scan은 그대로 둡니다. 장애물 회피 RViz에서 기본으로 꺼진 `/scan/raw` 레이어를 켜 실제 구조물 방향과 비교하세요. 필요하면 `indoor_tank.launch.py`에 `onboard_lidar_mask_start_deg:=... onboard_lidar_mask_end_deg:=...`를 지정합니다. 이전 구조물 셀이 점유 지도에 남아 있다면 장애물 시험 런처도 재시작합니다.
 선체 TG-50의 0.40m 최소 거리 컷오프는 센서 원점 기준입니다. 구조물이 더 멀리 보이면 장착 위치를 실측하고 [`tg50_onboard.yaml`](src/kaboat_hardware/config/tg50_onboard.yaml)의 `range_min`과 `base_link → onboard_laser_frame` 변환을 확인하세요.
 
 ## 3. 젯슨: IMU 보정과 모터·테스트 시작
@@ -235,7 +235,7 @@ ros2 launch kaboat_hardware real_obstacle_avoid_test.launch.py
 
 | RViz 표시 | 토픽 | 확인할 내용 |
 | --- | --- | --- |
-| 선체 스캔 | `/scan` | 130°~230° 가림 적용 |
+| 선체 스캔 | `/scan` | 120°~240° 가림 적용 |
 | 위치·방향 | `/odom` | 실제 배 위치와 선수 방향 |
 | 점유 지도 | `/occupancy_grid` | 수조 벽과 장애물 |
 | 위험도 지도 | `/real_avoid_test/dri` | 경로 생성기 입력 |

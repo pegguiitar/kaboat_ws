@@ -101,10 +101,10 @@ def generate_launch_description():
             'onboard_lidar_port', default_value='/dev/ttyUSB0',
             description='선체 TG-50 포트; /dev/serial/by-id/... 명시 권장'),
         DeclareLaunchArgument(
-            'onboard_lidar_mask_start_deg', default_value='130.0',
+            'onboard_lidar_mask_start_deg', default_value='120.0',
             description='선체 구조물로 가릴 스캔 시작각 [deg]'),
         DeclareLaunchArgument(
-            'onboard_lidar_mask_end_deg', default_value='230.0',
+            'onboard_lidar_mask_end_deg', default_value='240.0',
             description='선체 구조물로 가릴 스캔 끝각 [deg]'),
         DeclareLaunchArgument(
             'onboard_lidar_tilt_threshold_deg', default_value='3.0',
