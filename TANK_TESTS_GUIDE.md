@@ -156,7 +156,7 @@ read -r ONBOARD_LIDAR_PORT
 ros2 launch kaboat_hardware indoor_tank.launch.py enable_thrusters:=false enable_onboard_lidar:=true onboard_lidar_port:="$ONBOARD_LIDAR_PORT"
 ```
 
-선체 라이다 드라이버 원본은 `/scan/raw`, 지도·회피·RViz가 사용하는 필터 결과는 `/scan`입니다. 배 후방 구조물이 보이는 120°~240°(선미 ±60° 후방 영역) 값은 `/scan`에서 `inf`로 무효화하고, **IMU roll/pitch 기울기 필터(기본 임계값: Pitch [-3.0°, +1.0°], Roll ±3.0°)**가 함께 적용됩니다. 배의 피치 또는 롤이 허용 범위를 벗어나면 수면 반사나 하늘을 훑는 노이즈를 방지하기 위해 스캔 발행을 차단(`drop`)합니다. 젯슨 터미널에서 `python3 scripts/view_roll_pitch.py`를 실행하여 실시간 자세 각도 및 필터 통과 여부를 모니터링할 수 있습니다. 육상/벤치 테스트에서 기울기 필터를 끄려면 `enable_imu_filter:=false`를 지정합니다. /shore/scan은 그대로 둡니다. 장애물 회피 RViz에서 기본으로 꺼진 `/scan/raw` 레이어를 켜 실제 구조물 방향과 비교하세요. 필요하면 `indoor_tank.launch.py`에 `onboard_lidar_mask_start_deg:=... onboard_lidar_mask_end_deg:=...`를 지정합니다. 이전 구조물 셀이 점유 지도에 남아 있다면 장애물 시험 런처도 재시작합니다.
+선체 라이다 드라이버 원본은 `/scan/raw`, 지도·회피·RViz가 사용하는 필터 결과는 `/scan`입니다. 배 후방 구조물이 보이는 120°~240°(선미 ±60° 후방 영역) 값은 `/scan`에서 `inf`로 무효화하고, **IMU roll/pitch 기울기 필터(기본 임계값: Pitch [-4.0°, +1.0°], Roll ±3.0°)**가 함께 적용됩니다. 배의 피치 또는 롤이 허용 범위를 벗어나면 수면 반사나 하늘을 훑는 노이즈를 방지하기 위해 스캔 발행을 차단(`drop`)합니다. 젯슨 터미널에서 `python3 scripts/view_roll_pitch.py`를 실행하여 실시간 자세 각도 및 필터 통과 여부를 모니터링할 수 있습니다. 육상/벤치 테스트에서 기울기 필터를 끄려면 `enable_imu_filter:=false`를 지정합니다. /shore/scan은 그대로 둡니다. 장애물 회피 RViz에서 기본으로 꺼진 `/scan/raw` 레이어를 켜 실제 구조물 방향과 비교하세요. 필요하면 `indoor_tank.launch.py`에 `onboard_lidar_mask_start_deg:=... onboard_lidar_mask_end_deg:=...`를 지정합니다. 이전 구조물 셀이 점유 지도에 남아 있다면 장애물 시험 런처도 재시작합니다.
 선체 TG-50의 0.40m 최소 거리 컷오프는 센서 원점 기준입니다. 구조물이 더 멀리 보이면 장착 위치를 실측하고 [`tg50_onboard.yaml`](src/kaboat_hardware/config/tg50_onboard.yaml)의 `range_min`과 `base_link → onboard_laser_frame` 변환을 확인하세요.
 
 ## 3. 젯슨: IMU 보정과 모터·테스트 시작
@@ -231,7 +231,7 @@ ros2 launch kaboat_hardware real_obstacle_avoid_test.launch.py
 
 기본 `drive_enabled:=false`에서는 `/cmd_vel`을 발행하지 않습니다. `/scan` → 점유 지도 → DRI → B-Spline 생성·검사 → `AvoidFsm`을 실행하고 경로와 제어 미리보기를 발행합니다. 목표는 출발 순간 선수 방향 `goal_distance`(기본 3m) 앞에 고정되며, 지도 변화에 따라 경로를 갱신합니다. 노트북에서는 **1절의 장애물 회피 전용 RViz**를 엽니다. Fixed Frame은 `odom`, 3인칭 카메라의 Target Frame은 `base_link`입니다. 화면이 배를 따라가지 않거나 스캔이 보이지 않으면 `odom → base_link → onboard_laser_frame` TF가 연결됐는지 확인합니다.
 
-이 시험 런처는 배의 수면 반사 및 이상 기울기 노이즈를 방지하기 위해 점유 지도 노드의 IMU roll·pitch 기반 스캔 차단이 기본 활성화(`enable_tilt_gate:=true`, 기본 허용 범위: Pitch `[-3.0°, +1.0°]`, Roll `±3.0°`)되어 있습니다. 배의 자세가 이 범위를 벗어나면 해당 스캔은 격자 지도 갱신에서 제외됩니다. 만약 육상 테스트나 센서 장착 각도로 인해 스캔이 반영되지 않으면 `enable_tilt_gate:=false`로 인수를 주어 실행합니다. `/odom`을 만드는 GQ7·외벽 라이다 절차는 그대로 필요합니다. 이미 별도의 점유 지도 노드를 실행해 `start_occupancy_grid:=false`로 지정했다면, 그 노드에도 파라미터를 맞추어야 합니다.
+이 시험 런처는 배의 수면 반사 및 이상 기울기 노이즈를 방지하기 위해 점유 지도 노드의 IMU roll·pitch 기반 스캔 차단이 기본 활성화(`enable_tilt_gate:=true`, 기본 허용 범위: Pitch `[-4.0°, +1.0°]`, Roll `±3.0°`)되어 있습니다. 배의 자세가 이 범위를 벗어나면 해당 스캔은 격자 지도 갱신에서 제외됩니다. 만약 육상 테스트나 센서 장착 각도로 인해 스캔이 반영되지 않으면 `enable_tilt_gate:=false`로 인수를 주어 실행합니다. `/odom`을 만드는 GQ7·외벽 라이다 절차는 그대로 필요합니다. 이미 별도의 점유 지도 노드를 실행해 `start_occupancy_grid:=false`로 지정했다면, 그 노드에도 파라미터를 맞추어야 합니다.
 
 | RViz 표시 | 토픽 | 확인할 내용 |
 | --- | --- | --- |

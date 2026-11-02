@@ -117,7 +117,7 @@ class OccupancyGridNode(Node):
         # 최대 1s → 0.1s 로 줄인다. 10Hz 넘게 올려도 스캔이 10Hz 라 무의미.
         self.declare_parameter('enable_tilt_gate', True)  # 실내 수조 시험은 false
         self.declare_parameter('tilt_threshold_deg', 3.0)  # [deg] 기울기 게이트 임계
-        self.declare_parameter('pitch_min_deg', -3.0)      # [deg] 피치 하한
+        self.declare_parameter('pitch_min_deg', -4.0)      # [deg] 피치 하한
         self.declare_parameter('pitch_max_deg', 1.0)       # [deg] 피치 상한
         self.declare_parameter('roll_min_deg', -3.0)       # [deg] 롤 하한
         self.declare_parameter('roll_max_deg', 3.0)        # [deg] 롤 상한

@@ -10,7 +10,7 @@ from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import Imu
 
-PITCH_MIN_DEG = -3.0
+PITCH_MIN_DEG = -4.0
 PITCH_MAX_DEG = 1.0
 ROLL_MIN_DEG = -3.0
 ROLL_MAX_DEG = 3.0

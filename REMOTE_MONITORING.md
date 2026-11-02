@@ -120,10 +120,10 @@ source /opt/ros/humble/setup.bash
 source install/setup.bash
 export ROS_DOMAIN_ID=42
 
-# 실시간 롤/피치 기울기 및 스캔 차단 상태 확인 (허용: Pitch -3.0°~+1.0°, Roll ±3.0°)
+# 실시간 롤/피치 기울기 및 스캔 차단 상태 확인 (허용: Pitch -4.0°~+1.0°, Roll ±3.0°)
 python3 scripts/view_roll_pitch.py
 
-# 선체 TG-50 라이다 단독 실행 (IMU Pitch -3°~+1° 기울기 필터 + 선체 후방 120°~240° 가림 적용)
+# 선체 TG-50 라이다 단독 실행 (IMU Pitch -4°~+1° 기울기 필터 + 선체 후방 120°~240° 가림 적용)
 ros2 launch kaboat_hardware onboard_lidar.launch.py port:=/dev/ttyUSB0
 
 # 육상/책상 테스트 등 센서가 기울어진 상태에서 필터를 끄고 스캔만 볼 때:
@@ -215,7 +215,7 @@ rviz2 -d /home/jiwoo/Projects/KABOAT/kaboat_ws/scripts/remote_monitor.rviz
 
 2. **`/scan` 토픽이 발행되지 않거나 데이터가 안 들어올 때**
    * 증상: `ros2 topic hz /scan`이 0Hz이거나 메시지가 수신되지 않음.
-   * 원인: 젯슨의 IMU 기울기 필터가 활성화된 상태에서 보트의 Pitch가 [-3.0°, +1.0°] 범위를 벗어났거나 Roll이 ±3.0° 이상 기울어져 있어 스캔을 차단(`drop`)하는 중일 가능성이 높습니다.
+   * 원인: 젯슨의 IMU 기울기 필터가 활성화된 상태에서 보트의 Pitch가 [-4.0°, +1.0°] 범위를 벗어났거나 Roll이 ±3.0° 이상 기울어져 있어 스캔을 차단(`drop`)하는 중일 가능성이 높습니다.
    * 확인: 젯슨에서 `python3 scripts/view_roll_pitch.py`를 실행하여 Roll / Pitch 각도와 `[ ⚠️ TILTED ... (스캔 차단됨) ]` 경고가 뜨는지 확인합니다.
    * 조치: 센서의 수평을 맞추거나, 육상/벤치 테스트인 경우 `enable_imu_filter:=false` 옵션을 주어 실행합니다.
 
