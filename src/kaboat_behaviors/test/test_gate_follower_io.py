@@ -75,6 +75,19 @@ def test_grid_in_wrong_frame_stops(make_node):
     assert cmd.linear.x == cmd.angular.z == 0.0
 
 
+@pytest.mark.check('A')
+def test_first_path_goes_through_nearest_gate_midpoint(make_node):
+    node = make_node()
+    node.compute_cmd()
+    assert node._status_text == 'FOLLOW_GATE_1/3'
+    mid = node._pair.midpoint
+    assert mid[0] == pytest.approx(3.2, abs=0.1) and abs(mid[1]) < 0.2   # x = 3 m 기둥 쌍 중앙
+    samples = node._path.samples
+    nearest = min(((x - mid[0]) ** 2 + (y - mid[1]) ** 2) ** 0.5 for x, y in samples)
+    assert nearest < 0.1                           # 경로가 중앙점을 지난다
+    assert samples[-1][0] > mid[0]                 # 게이트 너머에서 끝난다
+
+
 @pytest.mark.check('D')
 def test_motion_enabled_publishes_same_command_as_preview(make_node):
     node = make_node('gate.motion_enabled:=true')

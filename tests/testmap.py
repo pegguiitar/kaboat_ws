@@ -33,11 +33,14 @@ TEST_FILES = {
     # ── behavior 공통 ──
     'test_behavior_buoys':        ('unit', 'common', '부표맵 상대 기하 (behavior_base)'),
     'test_obstacle_avoidance_utils': ('unit', 'common', '반발 조향 (apply_repulsion)'),
+    'test_behavior_buoys_extra':  ('unit', 'common', '부표맵 상대 기하 (behavior_base)'),
     'test_waypoint_controller':   ('unit', 'common', 'waypoint 제어'),
     'test_los_controller':        ('unit', 'common', 'LOS 경로 추종'),
+    'test_los_controller_extra':  ('unit', 'common', 'LOS 경로 추종'),
     'test_motion_controller':     ('unit', 'common', '속도 벡터 제어'),
     # ── Gate ──
     'test_gate_corridor':         ('unit', 'gate', '게이트 통로 선택'),
+    'test_gate_corridor_extra':   ('unit', 'gate', '게이트 통로 선택'),
     'test_gate_follower':         ('unit', 'gate', '게이트 노드 (gate_follower)'),
     'test_gate_follower_io':      ('unit', 'gate', '게이트 노드 (gate_follower)'),
     # ── Dock ──
@@ -73,11 +76,20 @@ TEST_FILES = {
     'test_yaw_bias_ekf':          ('unit', 'localization', 'yaw bias EKF'),
     'test_imu_dead_reckoning':    ('unit', 'localization', 'IMU 추측 항법'),
     'test_onboard_scan_filter':   ('unit', 'localization', '선체 라이다 스캔 필터'),
+    'test_onboard_scan_filter_extra': ('unit', 'localization', '선체 라이다 스캔 필터'),
+    'test_imu_dead_reckoning_extra': ('unit', 'localization', 'IMU 추측 항법'),
+    'test_lidar_panel_pose_extra': ('unit', 'localization', '판 자세 추정'),
+    'test_yaw_bias_ekf_extra':    ('unit', 'localization', 'yaw bias EKF'),
+    'test_lidar_sail_pose_extra': ('unit', 'localization', '┛ 판 자세 추정'),
+    'test_lidar_boat_tracker_extra': ('unit', 'localization', '외벽 라이다 선체 추적'),
+    'test_lidar_marker_pose_extra': ('unit', 'localization', '마커 자세 추정'),
     # ── 제어 ──
     'test_thruster_backend':      ('unit', 'control', '추진기 출력 변환'),
     'test_thruster_driver_teleop': ('unit', 'control', '추진기 드라이버·원격 조종'),
     'test_thruster_driver':       ('unit', 'control', '추진기 드라이버·원격 조종'),
     'test_health':                ('unit', 'control', '센서 상태 판정'),
+    'test_health_extra':          ('unit', 'control', '센서 상태 판정'),
+    'test_thruster_backend_safety': ('unit', 'control', '추진기 출력 변환'),
     # ── 수조 시험 도구 — 보고서 범위 밖 (수조·Gazebo 시험은 현재 단계에서 제외) ──
     'test_straight_line_test':    ('excluded', 'tank_tools', '직진 시험 노드'),
     'test_bspline_track_test':    ('excluded', 'tank_tools', 'B-spline 추종 시험 노드'),

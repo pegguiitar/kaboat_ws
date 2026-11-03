@@ -45,7 +45,7 @@ L2와 L3는 여러 패키지를 함께 쓰기 때문에 저장소 루트의 `tes
 
 | 항목 | 기준 |
 |---|---|
-| 기능당 시험 수 | 최소는 체크리스트 항목 수(3~4개), 권장 4~10개 |
+| 기능당 시험 수 | 최소 기준: A·B·C 각 2개 이상, D 는 노드만 1개 이상 (순수 함수 6개, 노드 7개). 권장 6~10개 |
 | 상한 | 한 기능이 15개를 넘으면 `pytest.mark.parametrize`로 묶거나 기능을 나눌 수 있는지 검토한다. 다만 기존 시험을 줄이지는 않는다 |
 | 시험 1개 실행 시간 | 0.1 s 이하 (성능 시험 제외) |
 | 입력 데이터 | 손으로 계산 가능한 작은 장면을 쓴다. 난수를 쓰면 seed를 고정한다 |
@@ -116,18 +116,20 @@ L3는 `mission_manager`, 5개 미션 behavior와 `mission_approach`, `cmd_mux`�
 루트 `conftest.py`가 이 표를 읽어 marker(`level_unit`, `group_avoid` 등)와 junit 속성을 붙인다.
 분류표에 없는 시험 파일은 `unclassified`로 표시되어, 새 시험을 추가할 때 분류를 빠뜨리지 않게 한다.
 
+보고서에는 L1 기능 시험만 넣는다.
+L2·L3는 성공·실패 기준과 시험 조건을 미션마다 하나하나 맞추기 어려워 보고서에서 제외하였다.
+다만 L2·L3 시험 코드는 저장소에 남겨 두고 실행도 계속한다.
+
 집계는 `scripts/test_report.py`가 맡는다.
-이 스크립트는 junit XML과 L2 궤적 데이터를 읽어 `test_output/report/`에 Table 4의 결과물을 만든다.
-Docker 이미지에는 한글 글꼴이 없으므로, 시험 실행 중에는 궤적 데이터(JSON)만 남기고 그림은 호스트에서 그린다.
+이 스크립트는 junit XML을 읽어 `test_output/report/`에 Table 4의 결과물을 만든다.
+Docker 이미지에는 한글 글꼴이 없으므로 그림은 호스트에서 그린다.
 
 **Table 4. 집계 결과물**
 
 | 파일 | 내용 |
 |---|---|
-| `summary.md` | 단별 통과·실패, L1 기능 × 체크리스트, L2 미션 × 시나리오, L3 시험, 실패 목록 |
-| `fig_L1_checklist.png` | 기능 38개 × A~D 시험 수 |
-| `fig_L2_results.png` | 미션 5개 × S1·S2(seed 5개)·S3 통과·실패 |
-| `fig_L2_traj_<미션>.png` | 미션별 S1·S2 궤적 겹쳐 그리기 (실패한 회차는 빨간 점선과 끝 위치 ×) |
+| `summary.md` | L1 기능 × A~D 시험 수, 합계, 결과(통과·실패), 실패한 시험 목록 |
+| `fig_L1_checklist.png` | 같은 표의 그림 — 최소 기준 미달 칸은 빨간 테두리 |
 
 ## 7. 실행
 
@@ -135,8 +137,7 @@ Docker 이미지에는 한글 글꼴이 없으므로, 시험 실행 중에는 �
 scripts/run_tests.sh            # L1~L3 전체, Docker
 scripts/run_tests.sh -m level_unit      # L1만 (level_mission: L2, level_system: L3)
 scripts/run_tests.sh -m "not level_excluded"   # 보고서 범위 안만
-KABOAT_TEST_FIGURES=1 scripts/run_tests.sh     # L2 궤적 데이터도 저장
-python scripts/test_report.py                  # 표·그림 → test_output/report/
+python scripts/test_report.py                  # L1 표·그림 → test_output/report/
 ```
 
 ROS 없는 L1은 Windows Python에서도 `python -m pytest src/<package>/test`로 돌릴 수 있다.

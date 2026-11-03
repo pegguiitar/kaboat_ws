@@ -54,6 +54,21 @@ def test_min_pixels_boundary():
     assert estimate_marker(mask, depth, F, F, CX, CY, min_pixels=101) is None
 
 
+@pytest.mark.check('C')
+@pytest.mark.parametrize('case', ['shape_mismatch', 'bad_focal', 'nan_depth'])
+def test_unusable_inputs_fail_closed(case):
+    depth = _plane_depth()
+    mask = _mask()
+    fx = F
+    if case == 'shape_mismatch':
+        mask = mask[:, :100]
+    elif case == 'bad_focal':
+        fx = 0.0
+    else:
+        depth = np.full_like(depth, np.nan)
+    assert estimate_marker(mask, depth, fx, F, CX, CY) is None
+
+
 @pytest.mark.check('B')
 def test_entrance_distance_zero_and_negative():
     np.testing.assert_allclose(project_entrance_xy([4, -1, 1.0], [-1, 0, 0], 0.0), [4, -1, 0])

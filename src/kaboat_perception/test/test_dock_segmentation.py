@@ -71,6 +71,15 @@ def test_keeps_one_detection_per_class_sorted_by_confidence(monkeypatch):
     assert out[0].mask[15, 15] and not out[0].mask[5, 5]
 
 
+@pytest.mark.check('A')
+def test_one_marker_of_each_class_is_returned(monkeypatch):
+    _install_fake_yolo(monkeypatch, CLASS_NAMES, [
+        (2, 0.55, (0, 10, 0, 10)), (0, 0.80, (10, 20, 0, 10)), (1, 0.65, (20, 30, 0, 10))])
+    out = DockSegmenter('fake.pt').predict(_image())
+    assert [d.class_name for d in out] == ['red_triangle', 'green_circle', 'blue_square']
+    assert all(d.mask.shape == (48, 64) and d.mask.any() for d in out)
+
+
 @pytest.mark.check('B')
 def test_mask_is_resized_to_image_size(monkeypatch):
     _install_fake_yolo(monkeypatch, CLASS_NAMES, [(1, 0.8, (0, 24, 0, 32))], mask_shape=(48, 64))

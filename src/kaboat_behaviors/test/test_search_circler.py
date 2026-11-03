@@ -95,6 +95,18 @@ def test_stale_odom_or_wrong_goal_frame_gives_stop(h):
     assert is_stop(h.tick())
 
 
+@pytest.mark.check('C')
+def test_missing_goal_gives_stop(monkeypatch):
+    h = BehaviorHarness(SearchCircler, monkeypatch)
+    try:
+        h.activate()                                # 목표(/mission/goal) 없이 활성화
+        h.set_pose(5.0, 0.0)
+        assert is_stop(h.tick(10))
+        assert h.completions == []
+    finally:
+        h.close()
+
+
 @pytest.mark.check('D')
 def test_completion_once_per_activation(h):
     h.set_pose(5.0, 0.0)

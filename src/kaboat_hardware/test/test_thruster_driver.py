@@ -87,6 +87,13 @@ def test_emergency_stop_forces_neutral_until_released(make_driver):
     assert node.active_mode == 'auto' and left > node.config.neutral_pwm
 
 
+@pytest.mark.check('C')
+def test_nan_autonomy_command_is_neutral(make_driver):
+    node = make_driver()
+    left, right = _drive(node, _twist(float('nan'), 0.0))
+    assert left == right == node.config.neutral_pwm
+
+
 @pytest.mark.check('B')
 def test_rc_override_beats_auto_then_hands_back(make_driver):
     node = make_driver()
