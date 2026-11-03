@@ -17,6 +17,8 @@ Panels:
         - /B-Spline 목표 경로 (/bspline_test/path)1
         - /원형 선회 테스트 마커 (/circle_drive/markers)1
         - /정점 유지 테스트 마커 (/station_keeping/markers)1
+        - /수조 테스트 목표 경로 (/tank_test/target_path)1
+        - /수조 테스트 실제 궤적 (/tank_test/actual_path)1
       Splitter Ratio: 0.5
     Tree Height: 480
   - Class: rviz_common/Views
@@ -252,6 +254,60 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /station_keeping/markers
+      Value: true
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz_default_plugins/Path
+      Color: 0; 255; 100
+      Enabled: true
+      Head Diameter: 0.3
+      Head Length: 0.2
+      Length: 0.3
+      Line Style: Lines
+      Line Width: 0.06
+      Name: "수조 테스트 목표 경로 (/tank_test/target_path)"
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Pose Style: None
+      Radius: 0.03
+      Shaft Diameter: 0.1
+      Shaft Length: 0.1
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /tank_test/target_path
+      Value: true
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz_default_plugins/Path
+      Color: 255; 110; 0
+      Enabled: true
+      Head Diameter: 0.3
+      Head Length: 0.2
+      Length: 0.3
+      Line Style: Lines
+      Line Width: 0.08
+      Name: "수조 테스트 실제 궤적 (/tank_test/actual_path)"
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Pose Style: None
+      Radius: 0.03
+      Shaft Diameter: 0.1
+      Shaft Length: 0.1
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /tank_test/actual_path
       Value: true
   Enabled: true
   Global Options:

@@ -140,6 +140,26 @@ def create_trail_marker(
     return marker
 
 
+def create_trajectory_path(points, frame_id="odom", stamp=None, z_offset=0.0):
+    """Build a bounded odometry trail as nav_msgs/Path for remote RViz."""
+    from geometry_msgs.msg import PoseStamped
+    from nav_msgs.msg import Path
+
+    path = Path()
+    path.header.frame_id = frame_id
+    if stamp is not None:
+        path.header.stamp = stamp
+    for x, y, z in points:
+        pose = PoseStamped()
+        pose.header = path.header
+        pose.pose.position.x = float(x)
+        pose.pose.position.y = float(y)
+        pose.pose.position.z = float(z) + float(z_offset)
+        pose.pose.orientation.w = 1.0
+        path.poses.append(pose)
+    return path
+
+
 def create_goal_tolerance_marker(
     center_x: float,
     center_y: float,

@@ -42,8 +42,9 @@
 ### 2-3. 모니터링 & 시각화 단축어
 | 명령어 | 기능 | 상세 내용 |
 |---|---|---|
-| **`rviz_tank`** | **수조 추적 RViz 실행** | [`scripts/rviz_tank.sh`](scripts/rviz_tank.sh)를 통해 Humble 컨테이너 RViz 실행. `/shore/scan`과 `/boat_pose` 표시 |
-| **`rviz_remote`** | **원격 자율주행 RViz 실행** | 선체 라이다(`/scan`), 점유격자, 회피/LOS 경로, 오도메트리 시각화 |
+| **`rviz_tank [시험종류]`** | **수조 추적·경로 비교 RViz 실행** | [`scripts/rviz_tank.sh`](scripts/rviz_tank.sh)로 Humble 컨테이너 RViz와 로컬 궤적 표시 노드를 함께 실행. 예: `rviz_tank straight`, `rviz_tank bspline`, `rviz_tank circle`, `rviz_tank los`, `rviz_tank waypoint`. 인자를 생략하면 목표 경로 없이 추적 화면과 실제 궤적만 표시 |
+| **`rviz_remote`** | **선체 라이다 스캔 RViz 실행** | [`scripts/rviz_remote.sh`](scripts/rviz_remote.sh)가 `/scan`을 `onboard_laser_frame` 기준으로 표시. 전체 지도·경로 화면은 [`remote_monitor.rviz`](scripts/remote_monitor.rviz)를 직접 실행 |
+| **`python3 scripts/teleop_laptop.py`** | **노트북 WASD 텔레옵** | 노트북 호스트에서 키 누름·해제를 감지하는 조종 창 실행. `W+A`, `W+D`, `S+A`, `S+D` 지원. [실행 가이드](KEYBOARD_TELEOP.md) |
 | **`view_pitch`** | **실시간 롤/피치 각도 확인** | 배의 롤/피치 각도 및 Pitch [-4.0°, +1.0°], Roll ±3.0° 스캔 차단 상태 터미널 출력 |
 
 ---
@@ -75,6 +76,9 @@ docker compose up -d
 
 ## ⚡ 4. 선체 젯슨 (Jetson)
 
+노트북 WASD 텔레옵으로 자율주행 명령을 일시적으로 대체하려면
+[`KEYBOARD_TELEOP.md`](KEYBOARD_TELEOP.md)를 따르세요.
+
 실제 보트 위에서 **센서 수집, EKF 오도메트리 생성, 모터 제어**를 담당합니다.
 
 ### 4-1. 젯슨 1회 설치 (젯슨 터미널에서 최초 1회만)
@@ -90,8 +94,7 @@ source ~/.bashrc
 |---|---|---|
 | **`cb`** | `colcon build --symlink-install` | 젯슨 워크스페이스 빌드 |
 | **`sb`** | `source install/setup.bash` | 빌드 환경 리로드 |
-| **`run_tank`** | `ros2 launch kaboat_hardware indoor_tank.launch.py enable_thrusters:=false` | **실내 센서 및 오도메트리(`/odom`) 가동** (GQ7 IMU + 외벽 라이다 `/boat_pose` 융합) |
-| **`run_boat_lidar`** | `... enable_onboard_lidar:=true onboard_lidar_port:=/dev/ttyUSB0` | 젯슨에 장착한 선체 TG-50 라이다까지 켜는 명령. 수조 외벽 라이다는 노트북에서 실행 |
+| **`run_boat_lidar`** | `ros2 launch kaboat_hardware indoor_tank.launch.py enable_thrusters:=false enable_onboard_lidar:=true onboard_lidar_port:=/dev/ttyUSB0` | GQ7·실내 `/odom` 및 선체 TG-50 라이다를 한 번에 실행. 수조 외벽 라이다와 모터는 별도 |
 | **`cal_imu`** | `ros2 run kaboat_hardware calibrate_indoor_imu` | **[필수] 정지 상태 IMU 방향 180° 분기 보정** |
 | **`run_motor`** | `ros2 launch kaboat_hardware thrusters.launch.py hardware_type:=serial port:=/dev/ttyCH341USB0 allow_port_scan:=false` | **아두이노(CH340) 모터 드라이버 가동** |
 | **`run_zenoh`** | `python3 scripts/zenoh_monitor_link.py jetson` | **노트북과의 원격 모니터링 통신 브리지 가동** |
@@ -105,7 +108,7 @@ source ~/.bashrc
 
 > **팁**: 모든 자율주행 테스트 단축어 및 런처는 기본적으로 외부 시작 신호(`/start_mission`) 없이 **실행 즉시 시작(`wait_for_start:=false`)**됩니다. 출발 명령을 기다리게 하려면 `wait_for_start:=true`를 인자로 넘겨주면 됩니다.
 
-`run_boat_lidar`는 `run_tank` 전체 센서·오도메트리 스택에 **선체 TG-50**을 추가해 실행합니다. 두 명령을 동시에 실행하지 마세요. 현재 단축 명령의 TG-50 포트는 `/dev/ttyUSB0`으로 고정돼 있으므로 젯슨에서 실제 포트를 확인한 뒤 사용해야 합니다.
+`run_boat_lidar`는 실내 센서·오도메트리 스택과 **선체 TG-50**을 함께 실행합니다. 센서 런처를 중복 실행하면 `/odom` 발행자가 둘이 되므로 한 번만 실행하세요. 현재 단축 명령의 TG-50 포트는 `/dev/ttyUSB0`으로 고정돼 있으므로 젯슨에서 실제 포트를 확인한 뒤 사용해야 합니다. 선체 라이다 없이 시험할 때는 별칭 대신 `ros2 launch kaboat_hardware indoor_tank.launch.py enable_thrusters:=false`를 직접 실행합니다.
 
 ---
 
@@ -121,8 +124,10 @@ source ~/.bashrc
 * **[노트북 터미널 2]** 노트북 화면에 컨테이너 수조 RViz 띄우기:
   ```zsh
   set_kaboat
-  rviz_tank
+  rviz_tank los
   ```
+  아래 3단계의 `test_los` 예시에 맞춘 화면입니다. 다른 테스트를 실행할 때는
+  `los` 대신 `straight`, `bspline`, `circle`, `waypoint` 등을 입력하세요.
 
 ---
 
@@ -131,9 +136,9 @@ source ~/.bashrc
   ```bash
   run_zenoh
   ```
-* **[젯슨 터미널 2]** 실내 오도메트리 가동:
+* **[젯슨 터미널 2]** 실내 오도메트리와 선체 라이다 가동:
   ```bash
-  run_tank
+  run_boat_lidar
   ```
 * **[젯슨 터미널 3]** 선수를 -X(180°) 방향으로 정지한 상태에서 IMU 보정:
   ```bash
@@ -144,7 +149,7 @@ source ~/.bashrc
 ---
 
 ### 3단계: 주행 테스트 및 제어
-* **[젯슨 터미널 4]** 모터 드라이버 가동 (주행할 때만). 현재 `run_motor`의 `/dev/ttyUSB0`은 수조 가이드의 모터 포트와 다릅니다. 젯슨에서 포트를 확인하고 [수조 가이드](TANK_TESTS_GUIDE.md#3-젯슨-imu-보정과-모터테스트-시작)의 명시적 명령을 사용하세요:
+* **[젯슨 터미널 4]** 모터 드라이버 가동 (주행할 때만). `run_motor` 별칭과 아래 명령은 모두 `/dev/ttyCH341USB0`을 사용합니다. 젯슨에서 실제 모터 포트를 확인하고 [수조 가이드](TANK_TESTS_GUIDE.md#3-젯슨-imu-보정과-모터테스트-시작)의 절차를 따르세요:
   ```bash
   ls -l /dev/ttyCH341USB0
   ros2 launch kaboat_hardware thrusters.launch.py hardware_type:=serial port:=/dev/ttyCH341USB0 allow_port_scan:=false
@@ -161,4 +166,4 @@ source ~/.bashrc
   # 비상 정지
   ros2 topic pub --once /emergency_stop std_msgs/msg/Bool '{data: true}'
   ```
-  현재 Zenoh 모니터링 브리지는 노트북에서 젯슨으로 `/boat_pose`만 전달합니다. 위 제어 토픽은 노트북에서 발행해도 젯슨에 도착하지 않습니다.
+  현재 Zenoh 브리지는 노트북에서 젯슨으로 `/boat_pose`, `/teleop/enable`, `/teleop/cmd_vel`만 전달합니다. 위의 `/start_mission`과 `/emergency_stop`은 노트북에서 발행해도 젯슨에 도착하지 않습니다.

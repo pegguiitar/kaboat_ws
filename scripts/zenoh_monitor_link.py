@@ -2,7 +2,8 @@
 """Run a narrowly scoped ROS 2 DDS bridge over the two hosts' Tailscale link.
 
 Jetson ROS domain 42 -> laptop ROS domain 43 carries monitoring topics.
-The only laptop -> Jetson route is /boat_pose for the indoor shore LiDAR.
+Laptop -> Jetson carries the indoor /boat_pose and explicit keyboard teleop
+enable/command topics. /cmd_vel itself is never bridged.
 """
 
 import argparse
@@ -19,7 +20,7 @@ import tempfile
 TAILSCALE_RANGE = ipaddress.ip_network('100.64.0.0/10')
 PORT = 7447
 
-# These are exact ROS interface names. Images and motor commands are excluded.
+# These are exact ROS interface names. /cmd_vel and raw motor commands are excluded.
 MONITOR_TOPICS = (
     '/scan',
     '/scan/raw',
@@ -52,6 +53,13 @@ MONITOR_TOPICS = (
     '/gnss_1/velocity',
     '/ekf/status',
     '/ekf/odometry_map',
+    '/teleop/status',
+)
+
+LAPTOP_TO_JETSON_TOPICS = (
+    '/boat_pose',
+    '/teleop/enable',
+    '/teleop/cmd_vel',
 )
 
 
@@ -99,9 +107,9 @@ def build_config(role, local_ip, jetson_ip=None, domain=None):
 
     allowed = {
         'publishers': [exact(topic) for topic in (
-            MONITOR_TOPICS if role == 'jetson' else ('/boat_pose',))],
+            MONITOR_TOPICS if role == 'jetson' else LAPTOP_TO_JETSON_TOPICS)],
         'subscribers': [exact(topic) for topic in (
-            ('/boat_pose',) if role == 'jetson' else MONITOR_TOPICS)],
+            LAPTOP_TO_JETSON_TOPICS if role == 'jetson' else MONITOR_TOPICS)],
         'service_servers': [],
         'service_clients': [],
         'action_servers': [],
@@ -158,7 +166,10 @@ def main(argv=None):
         if not binary:
             raise RuntimeError('zenoh-bridge-ros2dds is not installed on this host')
 
-        env = dict(os.environ, ROS_DOMAIN_ID=str(domain))
+        # Match each bridge's local ROS distribution. The Jetson is Humble,
+        # while the laptop teleop/RViz host is Jazzy. DDS GID sizes differ.
+        ros_distro = 'humble' if args.role == 'jetson' else 'jazzy'
+        env = dict(os.environ, ROS_DOMAIN_ID=str(domain), ROS_DISTRO=ros_distro)
         if args.role == 'jetson':
             print(f'Jetson: listening on Tailscale {local_ip}:{PORT}; ROS domain {domain}',
                   flush=True)

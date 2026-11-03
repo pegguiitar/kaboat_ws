@@ -15,7 +15,7 @@ from .los_controller import circle_path
 from .obstacle_avoidance_utils import apply_repulsion
 
 # 탐색은 목표점 0.8m 이내에서 시작한다. 따라서 완료 신호가 발생할 때
-# mission_manager 의 별도 2m 웨이포인트 조건도 함께 만족한다.
+# mission_manager 의 별도 4m 웨이포인트 조건도 함께 만족한다.
 ARRIVE_RADIUS = 0.8
 SEARCH_TIME = 5.0
 SEARCH_CIRCLE_RADIUS = 1.2
@@ -42,7 +42,7 @@ class SearchCircler(BehaviorBase):
                 or not self.waypoint_odom_ready()):
             return Twist()
         # 일단 원 주행을 시작하면 목표 반경보다 큰 원호에서도 추종을 유지한다.
-        # 미션 완료 판정 반경(2m) 밖으로 벗어난 경우에만 다시 접근한다.
+        # 탐색 유지 반경(2m) 밖으로 벗어난 경우에만 다시 접근한다.
         distance = self.distance_to_goal()
         if ((self._circle_since is None and distance > ARRIVE_RADIUS)
                 or distance > 2.0):

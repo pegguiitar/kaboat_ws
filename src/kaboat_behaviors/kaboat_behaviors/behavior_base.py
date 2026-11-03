@@ -116,6 +116,9 @@ class BehaviorBase(Node):
         is_active = self.active
         if not was_active and is_active:
             self._completion_sent = False
+            # The manager republishes each active goal. Do not run a new
+            # mission on the previous mission's latched /mission/goal.
+            self.goal = None
             self._waypoint_controller.reset()
             self._los_follower.reset()
             self.on_activate()

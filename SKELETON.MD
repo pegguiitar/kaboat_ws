@@ -50,15 +50,17 @@
   docking_ctrl    → /cmd/dock      (도킹 — dock_marks)
   search_circler  → /cmd/search    (탐색 — buoys)
   obstacle_planner→ /cmd/avoid     (장애물 회피 — 위험도 지도 + 곡선 경로, 완성)
-  (5개 전부 상주 — 비활성 상태에도 노드는 떠있고 compute_cmd() 만 안 돌림)
+  mission_approach→ /cmd/approach  (각 미션 시작 위치·선수각 접근)
+  (6개 전부 상주 — 비활성 상태에도 노드는 떠있고 compute_cmd() 만 안 돌림)
 
 제어 ──────────────────────────────────────────────────────
   cmd_mux (현재 state 것만 통과 + 300ms 워치독) → /cmd_vel
   twist2thrust (kaboat_sim 기존 노드 재사용)     → 좌우 추력
 
 관리 ──────────────────────────────────────────────────────
-  mission_manager: behavior 완료 신호 + 목표좌표 거리 ≤ 2m → 다음 미션 전환
-                   gate → station → dock → search → avoid → done
+  mission_manager: behavior 완료 신호 + 목표좌표 거리 ≤ 4m → 다음 미션 전환
+                   approach → gate → approach → station → approach → dock
+                   → approach → search → approach → avoid → done
                    /detector/enable (Bool, latched) — dock state 에서만 true
                    → dock_mark_detector 의 YOLO 추론 게이팅
 ```
@@ -177,7 +179,7 @@ cell 과 구분되는 "좌표 랜드마크". 극좌표는 소비자가 자기 od
   `APPROACH → ACQUIRE → ALIGN → ENTER → HOLD → REVERSE → COMPLETE`.
   waypoint에서 지정 색/모양 표식을 획득하고 방위 오차 5° 이내 정렬, 표식
   1m까지 저속 접안, 3초 정지 후 후진한다. waypoint 반경 1.8m로 복귀한
-  시점에만 완료 신호를 보내므로 mission_manager의 2m 조건과 함께 만족한다.
+  시점에만 완료 신호를 보내므로 mission_manager의 4m 조건과 함께 만족한다.
   `/detections/dock_marks`를 단독 구독하고 0.5초 넘은 관측은 버린다.
   순수 FSM은 `test/test_docking_fsm.py`에서 전이·표식 유실·완료 조건을 검증한다.
 - **`search_circler.py`**: 구역 도착 후 마크 색 따라 좌/우 선회. TODO(팀): 규정에 맞는 선회 방향/횟수.
@@ -203,8 +205,11 @@ cell 과 구분되는 "좌표 랜드마크". 극좌표는 소비자가 자기 od
 
 ### `kaboat_mission` — 완성 (규칙은 팀 합의로 확정)
 - **`mission_manager.py`**: `/odom`과 목표좌표(`kaboat_bringup/config/mission_params.yaml`)
-  거리가 `transition_radius`(기본 2.0m) 이내이고, 현재 behavior가
+  거리가 `transition_radius`(기본 4.0m) 이내이고, 현재 behavior가
   `/mission/complete`에 자기 state 이름을 보낸 경우에만 다음 미션으로 전환한다.
+  각 미션 시작 전에는 `entry_waypoints.<state>=[x,y,angle_deg]`로 접근하고
+  위치·선수각이 안정된 뒤 해당 behavior를 활성화한다. 미설정 항목은 `idle`로
+  정지한다. `approach.motion_enabled`는 기본 false다.
   완료 신호가 먼저 오면 현재 미션 동안 기억하며, 다른 state 이름의 신호는
   무시한다. 순서 `gate → station → dock → search → avoid → done`
   고정(`MISSION_ORDER`). 전이마다 `/detector/enable`(latched)도 발행 — `dock`
@@ -218,11 +223,11 @@ cell 과 구분되는 "좌표 랜드마크". 극좌표는 소비자가 자기 od
   실제 로직을 갖추면 그때 통합 회귀를 한다.
 
 ### `kaboat_bringup` — 완성
-- **`launch/autonomy.launch.py`**: 상시 인식 + behavior 5개 + `cmd_mux` +
+- **`launch/autonomy.launch.py`**: 상시 인식 + behavior 5개와 접근 노드 + `cmd_mux` +
   `twist2thrust`(kaboat_sim 재사용) + `mission_manager` 를 한 번에 실행.
-- **`config/mission_params.yaml`**: 미션별 목표좌표. 기본값은 근거리 사각 경로
-  (스모크 테스트용), 주석에 실제 `kaboat_2026_comprehensive_mission` 경기장
-  좌표 예시 — 실전 검증 시 교체.
+- **`config/mission_params.yaml`**: 미션별 시작 자세와 종료 목표좌표.
+  시작 자세는 실측 전이라 모두 `entry_ready=false`이며, 값을 입력하고 각
+  항목을 true로 바꾸기 전까지 종합임무는 출발하지 않는다.
 - **`config/ekf.yaml`**: **실물 전용 placeholder**. sim 은 Gazebo ground-truth
   `/odom` 을 쓰므로 미사용. 실물 전환 시 `robot_localization` 의
   `ekf_node`+`navsat_transform_node` 를 이 설정으로 띄우면 `/odom` 유지, 상위 노드 변경 불필요.
@@ -243,6 +248,11 @@ docker exec -it kaboat_sim_container bash
 source /opt/ros/humble/setup.bash && source /workspace/kaboat_ws/install/setup.bash
 ros2 launch kaboat_bringup autonomy.launch.py
 ```
+
+출발 전 `config/mission_params.yaml`의 다섯 `entry_waypoints`에 실측
+`[x, y, angle_deg]`를 넣고 대응하는 `entry_ready`를 true로 설정한다.
+접근 추력을 실제로 내보내려면 launch에 `approach_motion_enabled:=true`를
+명시한다. gate/dock의 운동 허용 설정은 각각 별도로 적용된다.
 
 미션 진행은 `mission_manager` 로그로 확인:
 ```

@@ -14,7 +14,7 @@ setup(
     zip_safe=True,
     maintainer='kaboat',
     maintainer_email='taekwon3611@gmail.com',
-    description='미션별 behavior 노드 5개 + 공통 회피-보정 라이브러리',
+    description='미션별 behavior 노드 5개 + 시작 자세 접근 노드 + 공통 제어 라이브러리',
     license='Apache-2.0',
     entry_points={
         'console_scripts': [
@@ -23,6 +23,7 @@ setup(
             'docking_ctrl = kaboat_behaviors.docking_ctrl:main',
             'search_circler = kaboat_behaviors.search_circler:main',
             'obstacle_planner = kaboat_behaviors.obstacle_planner:main',
+            'mission_approach = kaboat_behaviors.mission_approach:main',
         ],
     },
 )

@@ -101,7 +101,7 @@ def test_follow_large_heading_error_slow_forward():
 
 
 def test_follow_slows_near_waypoint():
-    """slow_radius 안 — 도착 감속 (mission_manager 2m 전환 전 과속 방지)."""
+    """slow_radius 안 — 도착 감속 (mission_manager 4m 전환 전 과속 방지)."""
     fsm = make_fsm()
     wp = (2.0, 0.0)
     plan = acquire(fsm, dri_of([]), wp=wp).plan

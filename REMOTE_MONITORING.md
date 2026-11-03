@@ -9,15 +9,16 @@ RViz와 `sensor_check/boat_attitude.py`에서 읽도록 연결합니다. 서로 
 
 ```text
 Jetson ROS_DOMAIN_ID=42 ── Zenoh bridge ── Tailscale ── Zenoh bridge ── 노트북 ROS_DOMAIN_ID=43
-     /scan, /odom, 회피·도킹 경로, GQ7 상태  ──────────────────────────────→  RViz / 자세 화면
-     indoor_lidar_odom 이 쓰는 /boat_pose       ←──────────────────────────────  외벽 RPLIDAR A3M1
+     /scan, /odom, 회피·도킹 경로, GQ7·조종 상태 ─────────────────────────→  RViz / 자세 화면 / 조종 창
+     /boat_pose, /teleop/enable, /teleop/cmd_vel  ←────────────────────────  외벽 라이다 / 키보드 조종 창
 ```
 
 두 ROS 도메인을 달리해 같은 와이파이에서 DDS 직통 경로가 생겨도 Zenoh와
-중복되지 않게 합니다. 노트북에서 젯슨으로 가는 유일한 허용 ROS 토픽은
-실내 수조의 `/boat_pose`입니다. `/cmd_vel`, `/cmd/*`, 서비스, 액션, 카메라
-원본 영상은 전달하지 않습니다. 실외에서는 `/boat_pose` 발행자가 없으므로
-반대 방향으로 실제 데이터가 흐르지 않습니다.
+중복되지 않게 합니다. 노트북에서 젯슨으로 허용한 토픽은 실내 수조의
+`/boat_pose`와 명시적인 키보드 조종용 `/teleop/enable`, `/teleop/cmd_vel`입니다.
+`/cmd_vel`, `/cmd/*`, `/start_mission`, `/emergency_stop`, 서비스, 액션,
+카메라 원본 영상은 전달하지 않습니다. 실외에서는 `/boat_pose` 발행자가
+없지만 키보드 조종 창을 실행하면 `/teleop/*` 토픽은 전달할 수 있습니다.
 
 젯슨 → 노트북 허용 토픽: `/scan`, `/scan/raw`, `/odom`, `/tf`, `/tf_static`,
 `/occupancy_grid`, `/avoid/plan`, `/avoid/cps`, `/avoid/dri`,
@@ -28,13 +29,15 @@ Jetson ROS_DOMAIN_ID=42 ── Zenoh bridge ── Tailscale ── Zenoh bridge
 `/dock/waypoints`, `/dock/entrance_base`,
 `/dock/marker_base`, `/dock/detection_status`, `/mission/state`,
 `/mission/goal`, `/imu/data`, `/gps/fix`, `/gnss_1/velocity`,
-`/ekf/status`, `/ekf/odometry_map`.
+`/ekf/status`, `/ekf/odometry_map`, `/teleop/status`.
 
 `/dock/waypoints`는 현재 작업 트리의 `docking_ctrl.py`가 발행하는
 `nav_msgs/Path`입니다. 해당 변경을 젯슨에 복사·빌드하기 전에는 토픽이
 나오지 않습니다. 선체 라이다를 장착하지 않으면 `/scan`도 나오지 않습니다.
 무선 조종 중 DRI만 관찰하는 실행법은 [MANUAL_DRI_TEST.md](MANUAL_DRI_TEST.md)에
-정리했습니다. 이 모드에서도 조종 입력은 Zenoh 브리지를 통과하지 않습니다.
+정리했습니다. 그 문서의 물리 RC 조종 입력은 Zenoh 브리지를 통과하지
+않습니다. 별도의 노트북 키보드 조종은 [KEYBOARD_TELEOP.md](KEYBOARD_TELEOP.md)를
+따릅니다.
 
 ## 한 번 설치
 
@@ -200,7 +203,9 @@ export ROS_DOMAIN_ID=43
 rviz2 -d /home/jiwoo/Projects/KABOAT/kaboat_ws/scripts/remote_monitor.rviz
 ```
 
-이 설정에는 `/scan`, `/odom`, `/avoid/plan`, `/real_avoid_test/path`,
+위 명령은 전체 모니터링 화면입니다. 노트북의 `rviz_remote` 별칭은 별도로
+`/scan` 단독 화면을 `onboard_laser_frame` 기준으로 엽니다.
+이 전체 설정에는 `/scan`, `/odom`, `/avoid/plan`, `/real_avoid_test/path`,
 `/dock/waypoints`, 회피 마커가 들어 있습니다. 기본 `Fixed Frame`은 `odom`입니다.
 실외 GQ7 출력의 실제 프레임이 `map`이면 RViz에서 그에 맞게 바꾸고,
 `base_link`까지 필요한 TF가 이어지는지 확인합니다. 프레임 이름만 바꾸는 것은

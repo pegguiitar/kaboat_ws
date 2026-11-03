@@ -50,6 +50,12 @@ def generate_launch_description():
         for exe in ['station_keeper', 'search_circler', 'obstacle_planner']
     ]
     behaviors.append(Node(
+        package='kaboat_behaviors', executable='mission_approach',
+        name='mission_approach', output='screen', parameters=[common_params, {
+            'approach.motion_enabled': ParameterValue(
+                LaunchConfiguration('approach_motion_enabled'), value_type=bool),
+        }]))
+    behaviors.append(Node(
         package='kaboat_behaviors', executable='gate_follower',
         name='gate_follower', output='screen',
         parameters=[LaunchConfiguration('gate_params_file'), common_params, {
@@ -95,6 +101,9 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'gate_motion_enabled', default_value='false',
             description='기본값 false: gate 경로/명령 미리보기만 수행'),
+        DeclareLaunchArgument(
+            'approach_motion_enabled', default_value='false',
+            description='기본값 false: 미션 시작 위치/방향 접근은 미리보기만 수행'),
         DeclareLaunchArgument(
             'dock_weights', default_value='',
             description='검증된 YOLO26n-seg .pt 절대 경로; 비워두면 검출 fail-closed'),

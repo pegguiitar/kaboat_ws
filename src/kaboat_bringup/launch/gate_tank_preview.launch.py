@@ -36,6 +36,8 @@ def _nodes(context):
                 'auto_start': True,
                 'start_state': 'gate',
                 'single_mission': True,
+                # Read-only gate preview has no measured entry pose or actuator.
+                'entry_required': False,
                 'waypoints.gate': [goal_x, goal_y],
                 'use_sim_time': False,
             }],

@@ -6,7 +6,13 @@ if [[ -z "${DISPLAY:-}" ]]; then
     exit 1
 fi
 
+test_kind="${1:-none}"
+case "$test_kind" in
+    none|straight|bspline|circle|los|los_circle|waypoint|station) ;;
+    *) echo "사용법: rviz_tank [none|straight|bspline|circle|los|los_circle|waypoint|station]" >&2; exit 2 ;;
+esac
+
 # Use the same ROS environment as the shore LiDAR tracker.
 xhost +si:localuser:root >/dev/null
 exec docker exec -it -e DISPLAY="$DISPLAY" kaboat_lidar bash -lc \
-    'source /opt/ros/humble/setup.bash && source /workspace/kaboat_ws/install/setup.bash && export ROS_DOMAIN_ID=43 ROS_LOCALHOST_ONLY=0 && exec rviz2 -d /workspace/kaboat_ws/src/kaboat_bringup/rviz/tank_tracking.rviz'
+    'source /opt/ros/humble/setup.bash && source /workspace/kaboat_ws/install/setup.bash && export ROS_DOMAIN_ID=43 ROS_LOCALHOST_ONLY=0 && exec ros2 launch kaboat_hardware tank_test_visualization.launch.py test_kind:='"$test_kind"

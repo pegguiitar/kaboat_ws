@@ -3,18 +3,22 @@
 입력:
   /cmd_vel (geometry_msgs/msg/Twist)       — 정규화된 자율주행 추력 비율 [-1.0, 1.0]
   /rc/cmd_vel (geometry_msgs/msg/Twist)    — RC 수동 조종기 오버라이드 명령 (옵션)
+  /teleop/enable (std_msgs/msg/Bool)        — 노트북 키보드 수동 모드
+  /teleop/cmd_vel (geometry_msgs/msg/Twist) — 노트북 WASD 명령
   /emergency_stop (std_msgs/msg/Bool)      — 비상 정지 신호 (true 시 즉시 PWM 중립)
 
 출력:
   하드웨어 PWM (시리얼/PCA9685/더미)
   /diagnostics (diagnostic_msgs/msg/DiagnosticArray) — 모터 동작 상태 진단
+  /teleop/status (std_msgs/msg/String) — 현재 제어 모드
 """
 
+import math
 import time
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, String
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 
 from kaboat_hardware.thruster_backend import (
@@ -54,6 +58,13 @@ class ThrusterDriver(Node):
         self.declare_parameter('timeout_sec', 0.3)        # /cmd_vel 타임아웃 [s]
         self.declare_parameter('enable_rc_override', True)
         self.declare_parameter('rc_timeout_sec', 0.5)
+        self.declare_parameter('enable_laptop_teleop', True)
+        self.declare_parameter('teleop_timeout_sec', 0.5)
+        # Low default limits match the existing tank keyboard test's 12/6/3 N
+        # normalized commands. The Jetson enforces them independently of the PC.
+        self.declare_parameter('teleop_max_forward', 12.0 / 118.6)
+        self.declare_parameter('teleop_max_reverse', 6.0 / 118.6)
+        self.declare_parameter('teleop_max_angular', 3.0 / 118.6)
 
         hw_type = str(self.get_parameter('hardware_type').value).lower()
         self.port = str(self.get_parameter('port').value)
@@ -63,6 +74,17 @@ class ThrusterDriver(Node):
         self.update_rate_hz = float(self.get_parameter('update_rate_hz').value)
         self.enable_rc = bool(self.get_parameter('enable_rc_override').value)
         self.rc_timeout_sec = float(self.get_parameter('rc_timeout_sec').value)
+        self.enable_laptop_teleop = bool(self.get_parameter('enable_laptop_teleop').value)
+        self.teleop_timeout_sec = float(self.get_parameter('teleop_timeout_sec').value)
+        self.teleop_max_forward = float(self.get_parameter('teleop_max_forward').value)
+        self.teleop_max_reverse = float(self.get_parameter('teleop_max_reverse').value)
+        self.teleop_max_angular = float(self.get_parameter('teleop_max_angular').value)
+        if (not math.isfinite(self.teleop_timeout_sec)
+                or not 0.1 <= self.teleop_timeout_sec <= 2.0
+                or not all(math.isfinite(v) and 0.0 <= v <= 1.0 for v in (
+                    self.teleop_max_forward, self.teleop_max_reverse,
+                    self.teleop_max_angular))):
+            raise ValueError('invalid laptop teleop timeout or output limits')
 
         # 설정 및 믹서 생성
         self.config = ThrusterConfig(
@@ -96,8 +118,11 @@ class ThrusterDriver(Node):
         self.last_rc_time: float = 0.0
         self.current_cmd = Twist()
         self.current_rc_cmd = Twist()
+        self.teleop_enabled = False
+        self.last_teleop_cmd_time: float = 0.0
+        self.current_teleop_cmd = Twist()
         self.emergency_stopped = False
-        self.active_mode = 'idle'   # 'auto', 'rc_override', 'estop', 'timeout', 'idle'
+        self.active_mode = 'idle'
         self.last_left_pwm = self.config.neutral_pwm
         self.last_right_pwm = self.config.neutral_pwm
         self.last_send_ok = False
@@ -108,14 +133,19 @@ class ThrusterDriver(Node):
         self.create_subscription(Bool, '/emergency_stop', self._on_estop, 10)
         if self.enable_rc:
             self.create_subscription(Twist, '/rc/cmd_vel', self._on_rc_cmd, 10)
+        if self.enable_laptop_teleop:
+            self.create_subscription(Bool, '/teleop/enable', self._on_teleop_enable, 10)
+            self.create_subscription(Twist, '/teleop/cmd_vel', self._on_teleop_cmd, 10)
 
         # 진단 퍼블리셔
         self.diag_pub = self.create_publisher(DiagnosticArray, '/diagnostics', 10)
+        self.teleop_status_pub = self.create_publisher(String, '/teleop/status', 10)
 
         # 50Hz 주기 제어 타이머
         timer_period = 1.0 / max(1.0, self.update_rate_hz)
         self.create_timer(timer_period, self._control_loop)
         self.create_timer(1.0, self._publish_diagnostics)
+        self.create_timer(0.2, self._publish_teleop_status)
 
         self.get_logger().info(
             f"thruster_driver 시작 (백엔드={hw_type}, 중립={self.config.neutral_pwm}us, "
@@ -147,6 +177,38 @@ class ThrusterDriver(Node):
         self.current_rc_cmd = msg
         self.last_rc_time = time.monotonic()
 
+    def _on_teleop_enable(self, msg: Bool):
+        enabled = bool(msg.data)
+        if enabled == self.teleop_enabled:
+            return
+        self.teleop_enabled = enabled
+        self.current_teleop_cmd = Twist()
+        self.last_teleop_cmd_time = 0.0
+        self.mixer.reset()
+        if not enabled:
+            # A fresh autonomous command is required after explicit handback.
+            self.current_cmd = Twist()
+            self.last_cmd_time = 0.0
+        self.get_logger().warn(
+            '노트북 텔레옵 진입' if enabled else '노트북 텔레옵 해제 — 자율주행 복귀')
+
+    def _on_teleop_cmd(self, msg: Twist):
+        if not self.teleop_enabled:
+            return
+        linear = float(msg.linear.x)
+        angular = float(msg.angular.z)
+        if not (math.isfinite(linear) and math.isfinite(angular)):
+            self.current_teleop_cmd = Twist()
+            self.last_teleop_cmd_time = 0.0
+            return
+        cmd = Twist()
+        cmd.linear.x = max(-self.teleop_max_reverse,
+                           min(self.teleop_max_forward, linear))
+        cmd.angular.z = max(-self.teleop_max_angular,
+                            min(self.teleop_max_angular, angular))
+        self.current_teleop_cmd = cmd
+        self.last_teleop_cmd_time = time.monotonic()
+
     def _on_estop(self, msg: Bool):
         if msg.data and not self.emergency_stopped:
             self.get_logger().warn('비상 정지(E-Stop) 발동! 모터 출력 즉각 차단.')
@@ -176,7 +238,18 @@ class ThrusterDriver(Node):
             self.active_mode = 'rc_override'
             target_linear = self.current_rc_cmd.linear.x
             target_angular = self.current_rc_cmd.angular.z
-        # 3. 자율주행 명령 및 워치독 확인
+        # 3. 노트북 텔레옵 모드. 링크가 끊기면 자동주행으로 돌아가지 않고 중립.
+        elif self.teleop_enabled:
+            if now - self.last_teleop_cmd_time <= self.teleop_timeout_sec:
+                self.active_mode = 'teleop'
+                target_linear = self.current_teleop_cmd.linear.x
+                target_angular = self.current_teleop_cmd.angular.z
+            else:
+                self.active_mode = 'teleop_timeout'
+                target_linear = 0.0
+                target_angular = 0.0
+                self.mixer.reset()
+        # 4. 자율주행 명령 및 워치독 확인
         elif (now - self.last_cmd_time <= self.timeout_sec):
             self.active_mode = 'auto'
             target_linear = self.current_cmd.linear.x
@@ -223,6 +296,12 @@ class ThrusterDriver(Node):
         elif self.active_mode == 'rc_override':
             status.level = DiagnosticStatus.OK
             status.message = 'RC Manual Override Active'
+        elif self.active_mode == 'teleop_timeout':
+            status.level = DiagnosticStatus.WARN
+            status.message = 'Laptop Teleop Link Timeout (Neutral PWM)'
+        elif self.active_mode == 'teleop':
+            status.level = DiagnosticStatus.OK
+            status.message = 'Laptop Keyboard Teleop Active'
         else:
             status.level = DiagnosticStatus.OK
             status.message = 'Autonomous Drive Active'
@@ -236,10 +315,18 @@ class ThrusterDriver(Node):
             KeyValue(key='send_fail_count', value=str(self.send_fail_count)),
             KeyValue(key='linear_cmd', value=f"{self.current_cmd.linear.x:.3f}"),
             KeyValue(key='angular_cmd', value=f"{self.current_cmd.angular.z:.3f}"),
+            KeyValue(key='teleop_enabled', value=str(self.teleop_enabled)),
+            KeyValue(key='teleop_linear_cmd', value=f"{self.current_teleop_cmd.linear.x:.3f}"),
+            KeyValue(key='teleop_angular_cmd', value=f"{self.current_teleop_cmd.angular.z:.3f}"),
         ]
 
         diag_arr.status.append(status)
         self.diag_pub.publish(diag_arr)
+
+    def _publish_teleop_status(self):
+        backend_ok = bool(getattr(self.backend, 'is_open', False)) and self.last_send_ok
+        mode = self.active_mode.upper() if backend_ok else 'BACKEND_ERROR'
+        self.teleop_status_pub.publish(String(data=mode))
 
     def destroy_node(self):
         # 종료 시 모터 중립 안전 정지

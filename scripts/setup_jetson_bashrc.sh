@@ -50,8 +50,6 @@ alias cb="colcon build --symlink-install"
 alias sb="[ -n \"$KABOAT_WS\" ] && source \"$KABOAT_WS/install/setup.bash\" && echo '🔄 install 환경 리로드 완료'"
 
 # 센서 / 오도메트리 실행
-alias run_tank="ros2 launch kaboat_hardware indoor_tank.launch.py enable_thrusters:=false"
-unalias run_tank_lidar 2>/dev/null || true
 alias run_boat_lidar="ros2 launch kaboat_hardware indoor_tank.launch.py enable_thrusters:=false enable_onboard_lidar:=true onboard_lidar_port:=/dev/ttyUSB0"
 
 # IMU 정지 보정
@@ -77,7 +75,6 @@ alias test_avoid="ros2 launch kaboat_hardware real_obstacle_avoid_test.launch.py
 
 echo "🤖 [KABOAT Jetson] 환경 세팅 완료 (DOMAIN: $ROS_DOMAIN_ID | WS: ${KABOAT_WS:-미탐색})"
 echo "   - run_boat_lidar: 선체 TG-50 포함 센서/오도메트리 가동 (cal_imu 불필요, 즉시 /odom 생성)"
-echo "   - run_tank      : 선체 TG-50 제외 기본 센서/오도메트리 가동"
 echo "   - run_motor     : 모터 제어기 가동"
 echo "   - cal_imu       : [선택] IMU 정지 수동 보정 (수조 라이다 Truth 모드에서는 생략 가능)"
 echo "   - test_bspline  : B-Spline 곡선 자율주행 (출력 30%, 즉시 시작)"

@@ -83,6 +83,20 @@ Zenoh는 호스트의 도메인 43에서 Docker 라이다의 `/boat_pose`를 발
 rviz_tank
 ```
 
+주행 테스트에서는 해당 시험 이름을 붙여 같은 창에 **초록색 기본 목표 경로**와
+수조 외벽 라이다의 `/boat_pose`로 기록한 **주황색 실제 이동 경로**를 함께 표시합니다.
+`rviz_tank straight`, `rviz_tank bspline`, `rviz_tank circle`, `rviz_tank los`,
+`rviz_tank los_circle`, `rviz_tank waypoint`, `rviz_tank station`을 사용할 수 있습니다.
+기본 경로는 노트북의 `test_coordinates.py`와 기본 웨이포인트 설정에서 생성하므로,
+젯슨 테스트의 좌표 파라미터를 바꿨다면 노트북에도 같은 경로 설정을 적용해야 합니다.
+현재 열려 있는 RViz는 이전 설정을 자동으로 다시 읽지 않으므로 창을 닫고 다시 실행하세요.
+시험 전에 해당 `rviz_tank` 창을 먼저 열고, 시험이 끝난 뒤 창을 닫으면 궤적 기록 노드도 종료됩니다.
+다음 시험은 `rviz_tank circle`처럼 새 이름으로 열면 빈 실제 궤적에서 시작합니다.
+실제 궤적이 쌓이지 않으면 먼저 `/boat_pose` 발행을 확인하세요.
+다음 시험 전에 궤적을 지우려면 컨테이너에서
+`ros2 service call /tank_test/clear_trajectory std_srvs/srv/Trigger '{}'`를 실행합니다.
+이 화면은 모터 명령을 발행하지 않습니다.
+
 별칭을 사용하지 않는 다른 노트북에서는 [`scripts/rviz_tank.sh`](scripts/rviz_tank.sh)를 직접 실행할 수 있습니다.
 배가 수조에 없으면 `/boat_pose`와 배 마커가 보이지 않는 것은 정상입니다. 그 경우에도 `/shore/scan` 점은 보여야 합니다.
 격자만 보이면 **컨테이너 안의 실제 수신 주기**부터 확인하세요.
@@ -274,6 +288,67 @@ ros2 service call /real_avoid_test/start std_srvs/srv/Trigger '{}'
 ```
 
 기본 주행 명령 상한은 전진 0.10, 회전 0.06이고 후진 탈출은 꺼져 있습니다. 센서 입력 끊김, 경로에서 0.7m 이상 이탈, 탈출 후진 요청은 시험을 중지합니다. [`real_obstacle_avoid_test.yaml`](src/kaboat_hardware/config/real_obstacle_avoid_test.yaml)의 `fsm.lookahead`, `fsm.cmd_full`, `fsm.v_full`, `fsm.cmd_exp` 등은 실물에서 조정해야 합니다. 속도→추력 기본 계수는 시뮬레이션 값입니다. 현재 DRI는 경로 점을 검사하며 선체 폭을 포함한 충돌 예측이나 미관측 셀 차단은 하지 않으므로 RViz에서 물리적 여유를 직접 확인합니다.
+
+## 5A. 실제 gate·avoid 미션 단독 수조 시험
+
+아래 두 런치는 각각 생산용 `gate_follower`와 `obstacle_planner`를 실행한다.
+`real_obstacle_avoid_test.launch.py`의 별도 시험 노드와는 다르다. 2절의
+`indoor_tank.launch.py`에서 `/odom`과 선체 TG-50의 `/scan`을 먼저 준비한다.
+모터 드라이버는 이 런치가 시작하지 않는다. 수조에 이미 `/occupancy_grid`
+발행자가 있다면 `start_occupancy_grid:=false`를 추가한다.
+
+젯슨 워크스페이스에서 `kaboat_behaviors`, `kaboat_control`,
+`kaboat_mission`, `kaboat_perception`, `kaboat_hardware`를 빌드·source한 뒤, 수조 `odom`
+좌표로 실측한 시작 자세와 종료 목표점을 입력한다. 각 좌표는 기본 10×5m
+수조의 벽에서 0.5m 이상 떨어져야 한다. 선수각은 도 단위이며 0°가 +X,
+180°가 -X이다. 시작 자세와 목표점은 2m보다 멀어야 한다.
+
+```bash
+printf '시작 X Y 선수각(deg) 종료 X Y: '
+read -r ENTRY_X ENTRY_Y ENTRY_ANGLE GOAL_X GOAL_Y
+
+# 게이트 3쌍 경로 통과: 먼저 명령·경로 미리보기
+ros2 launch kaboat_hardware tank_gate_mission.launch.py \
+  entry_x:="$ENTRY_X" entry_y:="$ENTRY_Y" entry_angle_deg:="$ENTRY_ANGLE" \
+  goal_x:="$GOAL_X" goal_y:="$GOAL_Y" required_pairs:=3
+
+# 장애물 회피: 별도 시험에서는 위 런치를 종료하고 이것을 실행
+ros2 launch kaboat_hardware tank_avoid_mission.launch.py \
+  entry_x:="$ENTRY_X" entry_y:="$ENTRY_Y" entry_angle_deg:="$ENTRY_ANGLE" \
+  goal_x:="$GOAL_X" goal_y:="$GOAL_Y"
+```
+
+미리보기에서는 `cmd_mux`가 고른 명령이 `/tank_mission/cmd_raw`에 나오지만,
+출력 가드는 `/cmd_vel` 발행자를 만들지 않는다. gate는 `/gate/status`,
+`/gate/path`, `/gate/pairs`를, avoid는 `/avoid/plan`, `/avoid/dri`,
+`/avoid/cps`를 확인한다. 공통 상태는 `/mission/state`와
+`/tank_mission/status`로 본다. 실제 주행 전에는 다른 `/cmd_vel` 발행
+테스트를 종료하고 `/odom` 발행자가 1개인지 확인한다.
+
+실제 주행은 미리보기 런치를 종료한 뒤 **같은 실측 좌표**와
+`drive_enabled:=true`를 넣어 재실행한다. 이때도 `/cmd_vel`에는 0 명령만
+나가며, `/tank_mission/start` 서비스가 성공해야 움직인다. 서비스는 최근
+`/odom`, `/scan`, `/occupancy_grid`, 원시 명령과 올바른 `odom` 프레임을
+확인한다. 입력이 끊기거나 `/emergency_stop`이 true가 되면 정지하고
+재시작 서비스를 다시 요구한다. 후진은 기본 차단이다.
+
+```bash
+# 위 launch 명령 끝에 drive_enabled:=true 추가 후, 별도 젯슨 터미널에서
+ros2 topic hz /odom
+ros2 topic hz /scan
+ros2 topic hz /occupancy_grid
+ros2 topic echo /tank_mission/status
+ros2 service call /tank_mission/start std_srvs/srv/Trigger '{}'
+
+# 시험 중 중지
+ros2 service call /tank_mission/stop std_srvs/srv/Trigger '{}'
+```
+
+주행 모드에서는 먼저 공통 `waypoint()`로 시작 위치·선수각에 정렬한 뒤 해당
+미션이 활성화된다. 미리보기 모드만 시작 자세 접근을 생략한다. 시작 자세까지
+직선 접근에는 장애물 회피가 적용되지 않으므로 그 구간을 비워 둔다.
+`tank_avoid_mission.yaml`은 짧은 수조 경로에 맞춰 lookahead와 속도 상한을
+낮춘 설정이며 실제 선체 속도 보정은 별도로 확인해야 한다.
 
 ## 6. 공통 출발·정지·종료
 

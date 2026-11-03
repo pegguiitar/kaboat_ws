@@ -1,0 +1,9 @@
+# Production obstacle_planner tuning for a short indoor tank course.
+# Other DRI/planner/FSM parameters retain their code defaults until measured.
+obstacle_planner:
+  ros__parameters:
+    fsm.lookahead: 0.8
+    fsm.kappa_window: 1.0
+    fsm.v_min: 0.2
+    fsm.v_max: 0.5
+    fsm.slow_radius: 1.5

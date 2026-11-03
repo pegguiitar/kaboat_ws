@@ -42,6 +42,8 @@ setup(
             'indoor_waypoint = kaboat_hardware.indoor_waypoint:main',
             'los_path_test = kaboat_hardware.los_path_test:main',
             'waypoint_sequence_test = kaboat_hardware.waypoint_sequence_test:main',
+            'tank_test_visualization = kaboat_hardware.tank_test_visualization:main',
+            'tank_mission_guard = kaboat_hardware.tank_mission_guard:main',
         ],
     },
 )

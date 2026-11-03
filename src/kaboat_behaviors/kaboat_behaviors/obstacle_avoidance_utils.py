@@ -1,17 +1,16 @@
 """obstacle_avoidance_utils — 공통 회피-보정 함수 라이브러리 (노드 아님).
 
-규정 5.2(7) "장애물 회피 상시 작동" 대응 — 각 behavior 는 자기 주행 명령을
-만든 뒤 이 함수로 /occupancy_grid(v5 의 단일 장애물 표현)를 반영해 회피
-보정한다. 5개 behavior 에 각자 구현하면 미묘하게 다른 회피 동작이 생기므로
-반드시 이 모듈을 공유해서 쓸 것.
+station/search 는 주행 명령에 이 함수를 적용하고, dock 은 APPROACH·
+ACQUIRE(표식 탐색 중)·PRE_ENTRY 에서만 적용한다. gate/avoid 는 자체 DRI
+판단을 사용하고 미션 시작 자세로 이동하는 approach 는 이 함수를 호출하지 않는다.
 
-skeleton — 격자 점유 셀 기반 단순 반발(repulsion) 조향:
-  occupancy_grid 에서 점유(occupied) 셀을 전방 부채꼴로 훑어 거리 반비례
-  가중치로 반대쪽 조향을 더한다. **지금은 occupancy_grid 가 빈 격자(-1)라
-  자연히 무동작** — occupancy_grid 노드가 log-odds 로 채워지면 코드 변경
-  없이 바로 회피가 살아난다.
+점유 격자 기반 단순 반발(repulsion) 조향:
+  occupancy_grid 노드는 LiDAR hit/free 를 log-odds 로 누적해 관측 셀을
+  확률(0~100), 미관측 셀을 -1 로 발행한다. 이 함수는 확률 50 이상인
+  전방 ±45°·4m 이내 셀마다 거리 선형 가중치를 합산해 반대쪽으로 조향한다.
+  가장 가까운 셀이 1.5m 미만이면 전진 명령을 줄인다.
 
-TODO(팀): VFH(valley 탐색) / DRI 기반으로 교체, 후진/정지 판단 추가
+이 함수 자체는 격자의 frame/stamp 를 검사하거나 정지·후진을 결정하지 않는다.
 """
 import math
 
@@ -19,7 +18,7 @@ from geometry_msgs.msg import Twist
 
 from .behavior_base import MAX_THRUST
 
-AVOID_RANGE = 6.0        # 이 거리 안의 점유 셀만 고려 [m]
+AVOID_RANGE = 4.0        # 이 거리 안의 점유 셀만 고려 [m]
 AVOID_FOV = math.pi / 2  # 전방 ±45° 부채꼴만 고려
 GAIN = 30.0 / MAX_THRUST  # 반발 조향 게인 — steer 1 당 차동 30N (구 0.5 동등)
 OCC_THRESHOLD = 50       # 점유 확률[0~100] 이 값 이상인 셀만 장애물로 취급

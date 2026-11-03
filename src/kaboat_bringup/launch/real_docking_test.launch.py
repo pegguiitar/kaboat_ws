@@ -1,7 +1,8 @@
 """Single real-boat docking mission; requires separately running sensors/odom.
 
 No motor driver is started. Dock motion is disabled unless explicitly enabled.
-The staging waypoint, YOLO model and wall-to-mouth offset are required inputs.
+The staging pose (position and heading), YOLO model and wall-to-mouth offset
+are required inputs. Approach motion is disabled unless explicitly enabled.
 """
 
 import math
@@ -21,8 +22,7 @@ def _nodes(context):
     staging = [float(LaunchConfiguration(name).perform(context))
                for name in ('staging_x', 'staging_y')]
     heading_text = LaunchConfiguration('staging_angle_deg').perform(context).strip()
-    staging_heading_enabled = bool(heading_text)
-    staging_heading = float(heading_text) if heading_text else 0.0
+    staging_heading = float(heading_text)
     wall_to_mouth = float(LaunchConfiguration('wall_to_mouth_m').perform(context))
     pre_entry_offset = float(
         LaunchConfiguration('pre_entry_offset_m').perform(context))
@@ -43,6 +43,13 @@ def _nodes(context):
         raise FileNotFoundError(f'dock_weights file not found: {weights}')
 
     return [
+        Node(package='kaboat_behaviors', executable='mission_approach',
+             name='mission_approach', output='screen', parameters=[{
+                 'use_sim_time': False,
+                 'approach.motion_enabled': ParameterValue(
+                     LaunchConfiguration('approach_motion_enabled'),
+                     value_type=bool),
+             }]),
         Node(package='kaboat_perception', executable='dock_mark_detector',
              name='dock_mark_detector', output='screen', parameters=[{
                  'use_sim_time': False,
@@ -56,7 +63,7 @@ def _nodes(context):
                  'use_sim_time': False,
                  'dock.motion_enabled': ParameterValue(
                      LaunchConfiguration('dock_motion_enabled'), value_type=bool),
-                 'dock.staging_heading_enabled': staging_heading_enabled,
+                 'dock.staging_heading_enabled': True,
                  'dock.staging_angle_deg': staging_heading,
                  'dock.berth_distance': 1.0,
                  'dock.pre_entry_offset': ParameterValue(
@@ -70,6 +77,8 @@ def _nodes(context):
                  mission_params,
                  {'use_sim_time': False, 'start_state': 'dock',
                   'single_mission': True, 'auto_start': True,
+                  'entry_waypoints.dock': [*staging, staging_heading],
+                  'entry_ready.dock': True,
                   'waypoints.dock': staging},
              ]),
     ]
@@ -79,8 +88,8 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('staging_x', description='실측 odom 정렬점 X [m]'),
         DeclareLaunchArgument('staging_y', description='실측 odom 정렬점 Y [m]'),
-        DeclareLaunchArgument('staging_angle_deg', default_value='',
-                              description='정렬점 도착 선수각 [deg]; 비우면 기존 위치 접근'),
+        DeclareLaunchArgument('staging_angle_deg',
+                              description='정렬점 도착 선수각 [deg]'),
         DeclareLaunchArgument('dock_weights', description='Jetson의 YOLO .pt 절대 경로'),
         DeclareLaunchArgument('dock_target_class',
                               description='red_triangle / green_circle / blue_square'),
@@ -96,5 +105,7 @@ def generate_launch_description():
                               description='Ultralytics device: cpu 또는 0'),
         DeclareLaunchArgument('dock_motion_enabled', default_value='false',
                               description='기본 false: 센서 점검 뒤 명시적으로 true'),
+        DeclareLaunchArgument('approach_motion_enabled', default_value='false',
+                              description='기본 false: 시작 자세 접근은 미리보기만 수행'),
         OpaqueFunction(function=_nodes),
     ])

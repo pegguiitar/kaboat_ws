@@ -17,9 +17,26 @@
 
 mission_manager:
   ros__parameters:
-    transition_radius: 2.0   # [m] behavior 완료 신호 + 목표점 이내 진입 시 전환
+    transition_radius: 4.0   # [m] behavior 완료 신호 + 목표점 이내 진입 시 전환
     auto_start: true
 
+    # 각 미션 시작 자세 [odom x(m), y(m), 선수각(deg)]. 값이 미정이라
+    # entry_ready=false 로 둔다. 실측값을 넣고 해당 항목을 true 로 바꿔야
+    # 접근 단계가 시작된다. 0도=+X, 90도=+Y, 반시계 방향이 양수.
+    entry_waypoints:
+      gate:    [0.0, 0.0, 0.0]
+      station: [0.0, 0.0, 0.0]
+      dock:    [0.0, 0.0, 0.0]
+      search:  [0.0, 0.0, 0.0]
+      avoid:   [0.0, 0.0, 0.0]
+    entry_ready:
+      gate:    false
+      station: false
+      dock:    false
+      search:  false
+      avoid:   false
+
+    # 아래는 각 behavior 가 완료를 보고할 때까지 사용하는 종료 목표점 [x, y].
     waypoints:
       gate:    [27.0, 63.0]   # 하단 빨강/초록 채널(x=5~25, y=0.5~5.5) 오른쪽 끝 통과
       station: [15.0, 73.0]   # 좌측 구역 중심부 (오렌지 장애물 밭 안쪽 — 회피 겸용 경로)
