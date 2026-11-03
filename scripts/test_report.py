@@ -248,7 +248,7 @@ def fig_l2_results(plt, cases, out):
     ax.set_xlim(-1.3, len(cols) + 0.9)
     ax.set_ylim(-0.1, len(MISSIONS) + 0.7)
     ax.axis('off')
-    fig.text(0.01, 0.01, 'S1 기본, S2 외란(seed 별), S3 실패 주입', fontsize=7, color=MUTED)
+    fig.text(0.01, 0.01, 'S1 기본, S2 잡음·조류(seed 별), S3 실패 주입', fontsize=7, color=MUTED)
     fig.tight_layout()
     path = out / 'fig_L2_results.png'
     fig.savefig(path, dpi=200)
@@ -305,11 +305,11 @@ def fig_l2_trajectory(plt, cases, runs_dir, mission, title, out):
                 ax.plot(xs[-1], ys[-1], marker='x', ms=9, mew=2.2, color=SERIES_1, zorder=5)
         elif passed:
             h, = ax.plot(xs, ys, color=MUTED, lw=1.0, zorder=3)
-            key = 'S2 외란 · 통과'
+            key = 'S2 잡음·조류 (통과)'
         else:
             h, = ax.plot(xs, ys, color=CRITICAL, lw=1.2, ls=(0, (4, 2)), zorder=3)
             ax.plot(xs[-1], ys[-1], marker='x', ms=8, mew=2, color=CRITICAL, zorder=4)
-            key = 'S2 외란 · 실패 (× 끝 위치)'
+            key = 'S2 잡음·조류 (실패, × 끝 위치)'
         if not name.endswith('_S1') or key not in handles:
             handles.setdefault(key, h)
         ax.plot(xs[0], ys[0], marker='o', ms=5, color=h.get_color(), zorder=4)
@@ -330,8 +330,8 @@ def fig_l2_trajectory(plt, cases, runs_dir, mission, title, out):
     for side in ('top', 'right'):
         ax.spines[side].set_visible(False)
     ax.set_title(f'{title} 미션 궤적', fontsize=10, color=INK, loc='left')
-    order = [k for k in ('S1 기본', 'S1 기본 (실패, × 끝 위치)', 'S2 외란 · 통과',
-                         'S2 외란 · 실패 (× 끝 위치)', '목표') if k in handles]
+    order = [k for k in ('S1 기본', 'S1 기본 (실패, × 끝 위치)', 'S2 잡음·조류 (통과)',
+                         'S2 잡음·조류 (실패, × 끝 위치)', '목표') if k in handles]
     ax.legend([handles[k] for k in order], order, fontsize=8, frameon=False,
               loc='upper center', bbox_to_anchor=(0.5, -0.26), ncol=min(len(order), 3))
     path = out / f'fig_L2_traj_{mission}.png'

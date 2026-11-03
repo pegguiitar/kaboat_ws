@@ -6,7 +6,7 @@
       좌 = (linear − angular) × max_thrust, 우 = (linear + angular) × max_thrust
     좌우 추진기 간격은 ±1.03·s 이다.
 added mass 는 Gazebo 와 같이 0 으로 둔다. 파도·바람은 넣지 않고,
-외란은 일정 조류(current)와 odom 잡음으로만 표현한다.
+파도·바람은 넣지 않고, 일정 조류(current)와 odom 잡음만 넣는다.
 """
 from dataclasses import dataclass, field
 import math
