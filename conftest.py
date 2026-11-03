@@ -8,6 +8,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
+from tests.checkmap import lookup as lookup_check  # noqa: E402
 from tests.testmap import GROUPS, LEVELS, TEST_FILES  # noqa: E402
 
 
@@ -35,18 +36,35 @@ def pytest_collection_modifyitems(config, items):
         item.user_properties.append(('level', level))
         item.user_properties.append(('group', group))
         item.user_properties.append(('function', function))
-        check = item.get_closest_marker('check')
-        if check is not None and check.args:
-            item.user_properties.append(('check', str(check.args[0])))
+        # 체크리스트 항목: 시험 함수의 marker 가 우선, 없으면 tests/checkmap.py
+        marker = item.get_closest_marker('check')
+        if marker is not None and marker.args:
+            check = str(marker.args[0])
+        else:
+            check = lookup_check(name, getattr(item, 'originalname', None) or item.name)
+        item.user_properties.append(('check', check or 'untagged'))
+
+
+def _reports_with(stats, key, value):
+    return sorted({
+        f'{os.path.basename(str(r.fspath))}::{r.head_line}' if value == 'untagged'
+        else os.path.basename(str(r.fspath))
+        for outcome in ('passed', 'failed', 'skipped')
+        for r in stats.get(outcome, [])
+        if (key, value) in getattr(r, 'user_properties', [])
+    })
 
 
 def pytest_terminal_summary(terminalreporter):
     stats = terminalreporter.stats
-    unclassified = sorted({
-        os.path.basename(str(r.fspath)) for key in ('passed', 'failed', 'skipped')
-        for r in stats.get(key, [])
-        if any(k == 'level' and v == 'unclassified' for k, v in getattr(r, 'user_properties', []))
-    })
+    unclassified = _reports_with(stats, 'level', 'unclassified')
     if unclassified:
         terminalreporter.write_line(
             'tests/testmap.py 에 분류되지 않은 시험 파일: ' + ', '.join(unclassified), yellow=True)
+    untagged = _reports_with(stats, 'check', 'untagged')
+    if untagged:
+        terminalreporter.write_line(
+            f'체크리스트 항목(A~D)이 없는 시험 {len(untagged)}개 — '
+            '@pytest.mark.check 또는 tests/checkmap.py 에 추가:', yellow=True)
+        for line in untagged:
+            terminalreporter.write_line('  ' + line, yellow=True)
