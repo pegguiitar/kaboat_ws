@@ -102,7 +102,7 @@ L2는 가짜 센서 입력부터 추진 명령까지 실제 코드를 이어 붙
 
 ## 5. L3 전체 흐름 시험 기준
 
-L3는 `mission_manager`, 5개 behavior, `cmd_mux`를 함께 띄우고 미션 순서를 확인한다.
+L3는 `mission_manager`, 5개 미션 behavior와 `mission_approach`, `cmd_mux`를 함께 띄우고 미션 순서를 확인한다.
 각 behavior의 내부 판단은 L1·L2에서 이미 확인했기 때문에, L3에서는 완료 신호를 직접 넣어 전환만 확인한다.
 
 - **순서:** gate → station → dock → search → avoid → done 순서로 전환되는지 확인한다.
@@ -126,7 +126,8 @@ L3는 `mission_manager`, 5개 behavior, `cmd_mux`를 함께 띄우고 미션 순
 
 ```bash
 scripts/run_tests.sh            # L1~L3 전체, Docker
-scripts/run_tests.sh -m unit    # L1만
+scripts/run_tests.sh -m level_unit      # L1만 (level_mission: L2, level_system: L3)
+scripts/run_tests.sh -m "not level_excluded"   # 보고서 범위 안만
 ```
 
 ROS 없는 L1은 Windows Python에서도 `python -m pytest src/<package>/test`로 돌릴 수 있다.
@@ -161,7 +162,24 @@ L2는 35회(미션 5개 × S1 1회, S2 5회, S3 1회) 중 24회 통과하고 11�
 - **Avoid S3:** `obstacle_planner`는 odom 갱신 시각을 확인하지 않는다. 따라서 odom이 끊겨도 마지막 odom 기준으로 추력 명령을 계속 낸다.
 - **Dock S1·S2:** 두 가지 원인이 겹친다. 첫째, PRE_ENTRY의 반발 조향이 점유 격자에 잡힌 슬롯 벽을 밀어내 선수각이 53°까지 돌아가고, 표식이 카메라 시야(±43.5°) 밖으로 나가 중단된다. 둘째, 반발 조향을 빼도 TO_BERTH에서 항상 중단된다. 접안점이 표식에서 1.0 m 지점이므로, 접안점 0.15 m 이내 조건이 표식 거리 1.0 m 이하 조건보다 항상 먼저 성립하기 때문이다.
 
-## 10. 범위에서 제외하는 것
+## 10. L3 전체 흐름 시험 결과 (2026-11-03)
+
+L3는 6개 시험을 모두 통과하였다.
+`mission_manager`, behavior 6개(`mission_approach` 포함), `cmd_mux`를 가짜 토픽 버스(`tests/system/bus.py`)로 연결하였다.
+미션 완료는 `/mission/complete`를 직접 넣고 배 위치는 목표 근처로 옮겼으며, 시작 자세 접근만은 `mission_approach`가 실제로 도달을 판정하게 하였다.
+
+**Table 3. L3 전체 흐름 시험 결과**
+
+| 항목 | 확인 내용 | 결과 |
+|---|---|---|
+| 순서 | approach → gate → approach → station → … → avoid → done | 통과 |
+| 명령 선택 | 매 주기 활성 behavior 하나만 발행하고, `/cmd_vel`은 그 명령이거나 정지 명령이다 | 통과 |
+| 전환 조건 | 목표 8 m 밖의 완료 신호로는 전환하지 않고, 3 m 이내로 들어오면 기억된 완료 신호로 전환한다 | 통과 |
+| 정지 | 활성 behavior가 0.4 s 침묵하면 `cmd_mux`가 정지 명령을 낸다 | 통과 |
+| 비활성 완료 | 비활성 behavior의 완료 요청은 발행되지 않고 미션이 바뀌지 않는다 | 통과 |
+| YOLO 게이팅·종료 | `/detector/enable`은 dock 중에만 켜지고, done 이후 정지 명령만 나간다 | 통과 |
+
+## 11. 범위에서 제외하는 것
 
 수조 시험과 Gazebo 시험은 현재 단계에서 제외한다.
 따라서 수조 주행 시험용 노드(`straight_line_test`, `bspline_track_test`, `circle_drive_test`, `los_path_test`, `waypoint_sequence_test`, `station_keeping_test`, `real_obstacle_avoid_test`, `manual_dri_monitor`, `tank_mission_guard`)와 그 보조 모듈(`test_coordinates`, `trajectory_visualization`)의 시험은 분류표에서 `excluded`로 둔다.

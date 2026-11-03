@@ -96,6 +96,8 @@ TEST_FILES = {
     'test_mission_dock':          ('mission', 'dock', 'Dock 미션'),
     'test_mission_search':        ('mission', 'search', 'Search 미션'),
     'test_mission_avoid':         ('mission', 'avoid', 'Avoid 미션'),
+    # ── L3 전체 흐름 ──
+    'test_mission_flow':          ('system', 'mission_mgmt', '전체 미션 흐름'),
     # ── 시험 기반 (선체 모델·가짜 센서 자체 검증) ──
     'test_sim_helpers':           ('tool', 'test_infra', '시험용 선체 모델·가짜 센서'),
 }
