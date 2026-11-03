@@ -200,45 +200,26 @@ def close(*nodes):
         rclpy.shutdown()
 
 
-def save_figure(name, rec, world=None, goal=None, extra=None):
-    """KABOAT_TEST_FIGURES 가 있을 때만 궤적 그림을 저장한다."""
+def save_run(name, rec, world=None, goal=None):
+    """KABOAT_TEST_FIGURES 가 있을 때만 궤적 데이터를 JSON 으로 저장한다.
+
+    그림은 Windows 에서 scripts/test_report.py 가 한글 글꼴로 그린다
+    (Docker 이미지에는 한글 글꼴이 없어서 여기서는 데이터만 남긴다).
+    """
     out = figure_dir()
     if out is None:
         return None
-    import matplotlib
-    matplotlib.use('Agg')
-    import matplotlib.pyplot as plt
-    fig, ax = plt.subplots(figsize=(6, 5))
-    if world is not None:
-        for c in world.circles:
-            ax.add_patch(plt.Circle((c.x, c.y), c.radius, color='0.35'))
-        for s in world.segments:
-            ax.plot([s.x0, s.x1], [s.y0, s.y1], color='0.2', lw=2)
-    xs = [s.x for s in rec.samples]
-    ys = [s.y for s in rec.samples]
-    ax.plot(xs, ys, color='tab:blue', lw=1.5, label='boat')
-    ax.plot(xs[0], ys[0], 'o', color='tab:blue')
-    if goal is not None:
-        ax.plot(*goal, '*', color='tab:green', ms=12, label='goal')
-    done = rec.first_event_time('complete')
-    if done is not None:
-        k = min(range(len(rec.samples)), key=lambda i: abs(rec.samples[i].t - done))
-        ax.plot(xs[k], ys[k], 'x', color='tab:red', ms=10, label=f'complete {done:.1f}s')
-    if extra is not None:
-        extra(ax)
-    ax.set_aspect('equal', adjustable='datalim')
-    ax.autoscale_view()
-    (x0, x1), (y0, y1) = ax.get_xlim(), ax.get_ylim()
-    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
-    half = max(x1 - x0, y1 - y0, 6.0) / 2 + 0.5     # 한 변 최소 6 m — 직선 궤적도 납작하지 않게
-    ax.set_xlim(cx - half, cx + half)
-    ax.set_ylim(cy - half, cy + half)
-    ax.set_xlabel('x [m]')
-    ax.set_ylabel('y [m]')
-    ax.legend(loc='best', fontsize=8)
-    ax.grid(alpha=0.3)
-    path = out / f'{name}.png'
-    fig.tight_layout()
-    fig.savefig(path, dpi=150)
-    plt.close(fig)
+    import json
+    data = {
+        'name': name,
+        'goal': list(goal) if goal is not None else None,
+        'complete': rec.first_event_time('complete'),
+        'samples': [[round(s.t, 2), round(s.x, 3), round(s.y, 3), round(s.yaw, 3), s.status]
+                    for s in rec.samples],
+        'circles': [[c.x, c.y, c.radius] for c in world.circles] if world else [],
+        'segments': [[g.x0, g.y0, g.x1, g.y1] for g in world.segments] if world else [],
+        'bounds': list(world.bounds) if world is not None and world.bounds else None,
+    }
+    path = out / f'{name}.json'
+    path.write_text(json.dumps(data), encoding='utf-8')
     return path

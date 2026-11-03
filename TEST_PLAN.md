@@ -116,11 +116,18 @@ L3는 `mission_manager`, 5개 미션 behavior와 `mission_approach`, `cmd_mux`�
 루트 `conftest.py`가 이 표를 읽어 marker(`level_unit`, `group_avoid` 등)와 junit 속성을 붙인다.
 분류표에 없는 시험 파일은 `unclassified`로 표시되어, 새 시험을 추가할 때 분류를 빠뜨리지 않게 한다.
 
-| 결과물 | 생성 방법 |
+집계는 `scripts/test_report.py`가 맡는다.
+이 스크립트는 junit XML과 L2 궤적 데이터를 읽어 `test_output/report/`에 Table 4의 결과물을 만든다.
+Docker 이미지에는 한글 글꼴이 없으므로, 시험 실행 중에는 궤적 데이터(JSON)만 남기고 그림은 호스트에서 그린다.
+
+**Table 4. 집계 결과물**
+
+| 파일 | 내용 |
 |---|---|
-| 기능 × 체크리스트 표 | junit XML → 집계 스크립트 |
-| 미션 × 항목 표, S2 성공률 | junit XML → 집계 스크립트 |
-| 그림 | `KABOAT_TEST_FIGURES=<dir>`를 지정했을 때만 저장한다. 평소 실행은 그림을 만들지 않는다 |
+| `summary.md` | 단별 통과·실패, L1 기능 × 체크리스트, L2 미션 × 시나리오, L3 시험, 실패 목록 |
+| `fig_L1_checklist.png` | 기능 38개 × A~D 시험 수 |
+| `fig_L2_results.png` | 미션 5개 × S1·S2(seed 5개)·S3 통과·실패 |
+| `fig_L2_traj_<미션>.png` | 미션별 S1·S2 궤적 겹쳐 그리기 (실패한 회차는 빨간 점선과 끝 위치 ×) |
 
 ## 7. 실행
 
@@ -128,6 +135,8 @@ L3는 `mission_manager`, 5개 미션 behavior와 `mission_approach`, `cmd_mux`�
 scripts/run_tests.sh            # L1~L3 전체, Docker
 scripts/run_tests.sh -m level_unit      # L1만 (level_mission: L2, level_system: L3)
 scripts/run_tests.sh -m "not level_excluded"   # 보고서 범위 안만
+KABOAT_TEST_FIGURES=1 scripts/run_tests.sh     # L2 궤적 데이터도 저장
+python scripts/test_report.py                  # 표·그림 → test_output/report/
 ```
 
 ROS 없는 L1은 Windows Python에서도 `python -m pytest src/<package>/test`로 돌릴 수 있다.

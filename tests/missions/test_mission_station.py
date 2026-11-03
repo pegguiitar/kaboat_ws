@@ -7,7 +7,7 @@ import math
 import pytest
 
 from kaboat_behaviors.station_keeper import HOLD_RADIUS, StationKeeper
-from tests.missions.harness import MissionSim, Scenario, close, make_node, save_figure, seeds
+from tests.missions.harness import MissionSim, Scenario, close, make_node, save_run, seeds
 from tests.sim.boat_model import BoatState
 from tests.sim.fake_sensors import World
 from tests.sim.ros_adapters import FakeClock
@@ -51,16 +51,16 @@ def _check_mission(sim):
 @pytest.mark.check('S1')
 def test_station_nominal(monkeypatch):
     sim = _run(monkeypatch, Scenario.nominal())
-    done, worst = _check_mission(sim)
-    save_figure('L2_station_S1', sim.rec, WORLD, GOAL)
+    save_run('L2_station_S1', sim.rec, WORLD, GOAL)
+    _check_mission(sim)
 
 
 @pytest.mark.check('S2')
 @pytest.mark.parametrize('seed', seeds())
 def test_station_disturbed(monkeypatch, seed):
     sim = _run(monkeypatch, Scenario.disturbed(seed))
+    save_run(f'L2_station_S2_seed{seed}', sim.rec, WORLD, GOAL)
     _check_mission(sim)
-    save_figure(f'L2_station_S2_seed{seed}', sim.rec, WORLD, GOAL)
 
 
 @pytest.mark.check('S3')

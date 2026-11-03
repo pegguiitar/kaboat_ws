@@ -6,7 +6,7 @@ import pytest
 
 from kaboat_behaviors.obstacle_planner import ObstaclePlanner
 from tests.missions.harness import (
-    LidarGrid, MissionSim, Scenario, close, make_node, save_figure, seeds, tank_walls)
+    LidarGrid, MissionSim, Scenario, close, make_node, save_run, seeds, tank_walls)
 from tests.sim.boat_model import BoatState
 from tests.sim.fake_sensors import Circle, World
 from tests.sim.ros_adapters import FakeClock
@@ -53,7 +53,7 @@ def _check_mission(sim):
 @pytest.mark.check('S1')
 def test_avoid_nominal(monkeypatch):
     sim = _run(monkeypatch, Scenario.nominal())
-    save_figure('L2_avoid_S1', sim.rec, WORLD, GOAL)
+    save_run('L2_avoid_S1', sim.rec, WORLD, GOAL)
     _check_mission(sim)
 
 
@@ -61,7 +61,7 @@ def test_avoid_nominal(monkeypatch):
 @pytest.mark.parametrize('seed', seeds())
 def test_avoid_disturbed(monkeypatch, seed):
     sim = _run(monkeypatch, Scenario.disturbed(seed))
-    save_figure(f'L2_avoid_S2_seed{seed}', sim.rec, WORLD, GOAL)
+    save_run(f'L2_avoid_S2_seed{seed}', sim.rec, WORLD, GOAL)
     _check_mission(sim)
 
 

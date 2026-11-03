@@ -14,7 +14,7 @@ from geometry_msgs.msg import PointStamped
 from kaboat_behaviors.docking_ctrl import DockingCtrl
 from kaboat_behaviors.docking_fsm import DockState
 from tests.missions.harness import (
-    LidarGrid, MissionSim, Scenario, close, make_node, save_figure, seeds, tank_walls)
+    LidarGrid, MissionSim, Scenario, close, make_node, save_run, seeds, tank_walls)
 from tests.sim.boat_model import BoatState
 from tests.sim.fake_sensors import Segment, World
 
@@ -113,7 +113,7 @@ def _check_mission(sim):
 @pytest.mark.check('S1')
 def test_dock_nominal(monkeypatch):
     sim = _run(monkeypatch, Scenario.nominal())
-    save_figure('L2_dock_S1', sim.rec, WORLD, STAGING)
+    save_run('L2_dock_S1', sim.rec, WORLD, STAGING)
     _check_mission(sim)
 
 
@@ -121,7 +121,7 @@ def test_dock_nominal(monkeypatch):
 @pytest.mark.parametrize('seed', seeds())
 def test_dock_disturbed(monkeypatch, seed):
     sim = _run(monkeypatch, Scenario.disturbed(seed))
-    save_figure(f'L2_dock_S2_seed{seed}', sim.rec, WORLD, STAGING)
+    save_run(f'L2_dock_S2_seed{seed}', sim.rec, WORLD, STAGING)
     _check_mission(sim)
 
 
