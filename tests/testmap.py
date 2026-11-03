@@ -90,6 +90,12 @@ TEST_FILES = {
     'test_tank_mission_guard':    ('excluded', 'tank_tools', '수조 미션 보호 장치'),
     'test_test_coordinates':      ('excluded', 'tank_tools', '수조 시험 좌표'),
     'test_trajectory_visualization': ('excluded', 'tank_tools', '궤적 시각화'),
+    # ── L2 미션 시험 ──
+    'test_mission_gate':          ('mission', 'gate', 'Gate 미션'),
+    'test_mission_station':       ('mission', 'station', 'Station 미션'),
+    'test_mission_dock':          ('mission', 'dock', 'Dock 미션'),
+    'test_mission_search':        ('mission', 'search', 'Search 미션'),
+    'test_mission_avoid':         ('mission', 'avoid', 'Avoid 미션'),
     # ── 시험 기반 (선체 모델·가짜 센서 자체 검증) ──
     'test_sim_helpers':           ('tool', 'test_infra', '시험용 선체 모델·가짜 센서'),
 }

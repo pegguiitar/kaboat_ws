@@ -139,7 +139,29 @@ ROS 없는 L1은 Windows Python에서도 `python -m pytest src/<package>/test`�
 4. L3 전체 흐름 시험
 5. 집계 스크립트와 그림
 
-## 9. 범위에서 제외하는 것
+## 9. L2 미션 시험 결과 (2026-11-03)
+
+L2는 35회(미션 5개 × S1 1회, S2 5회, S3 1회) 중 24회 통과하고 11회 실패하였다.
+실패한 시험은 시험 조건을 바꾸거나 예외로 표시하지 않고 실패로 남겨 둔다.
+
+**Table 2. L2 미션 시험 결과**
+
+| 미션 | S1 기본 | S2 외란 | S3 실패 주입 |
+|---|---|---|---|
+| Station | 통과 (8.6 s 완료) | 5/5 통과 | 통과 (odom 끊김 → 정지) |
+| Search | 통과 (9.3 s 완료) | 5/5 통과 | 통과 (odom 끊김 → 정지) |
+| Gate | 통과 (11.7 s 완료) | 2/5 통과 | 통과 (라이다 끊김 → 정지) |
+| Avoid | 통과 (13.3 s 완료) | 4/5 통과 | 실패 |
+| Dock | 실패 | 0/5 통과 | 통과 (표식 끊김 → 중단·정지) |
+
+실패 원인은 다음과 같다.
+
+- **Gate S2:** 0.05~0.10 m/s 조류에서 배가 게이트 경로 끝점을 지나친 뒤, 끝점 허용 오차 안으로 돌아오지 못하고 저속으로 멈춘다. seed 2는 조류를 빼면 27.5 s에 완료한다. 조류가 없어도 seed 3·4는 게이트 1~2개를 지난 뒤 `WAIT_GATE_PAIR`에서 멈춘다.
+- **Avoid S2 (seed 3):** 마지막 부표와 표면 기준 0.30 m까지 접근하였다. 기준은 0.4 m이다.
+- **Avoid S3:** `obstacle_planner`는 odom 갱신 시각을 확인하지 않는다. 따라서 odom이 끊겨도 마지막 odom 기준으로 추력 명령을 계속 낸다.
+- **Dock S1·S2:** 두 가지 원인이 겹친다. 첫째, PRE_ENTRY의 반발 조향이 점유 격자에 잡힌 슬롯 벽을 밀어내 선수각이 53°까지 돌아가고, 표식이 카메라 시야(±43.5°) 밖으로 나가 중단된다. 둘째, 반발 조향을 빼도 TO_BERTH에서 항상 중단된다. 접안점이 표식에서 1.0 m 지점이므로, 접안점 0.15 m 이내 조건이 표식 거리 1.0 m 이하 조건보다 항상 먼저 성립하기 때문이다.
+
+## 10. 범위에서 제외하는 것
 
 수조 시험과 Gazebo 시험은 현재 단계에서 제외한다.
 따라서 수조 주행 시험용 노드(`straight_line_test`, `bspline_track_test`, `circle_drive_test`, `los_path_test`, `waypoint_sequence_test`, `station_keeping_test`, `real_obstacle_avoid_test`, `manual_dri_monitor`, `tank_mission_guard`)와 그 보조 모듈(`test_coordinates`, `trajectory_visualization`)의 시험은 분류표에서 `excluded`로 둔다.
