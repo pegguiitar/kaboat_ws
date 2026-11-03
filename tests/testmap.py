@@ -39,6 +39,7 @@ TEST_FILES = {
     # ── Gate ──
     'test_gate_corridor':         ('unit', 'gate', '게이트 통로 선택'),
     'test_gate_follower':         ('unit', 'gate', '게이트 노드 (gate_follower)'),
+    'test_gate_follower_io':      ('unit', 'gate', '게이트 노드 (gate_follower)'),
     # ── Dock ──
     'test_dock_target':           ('unit', 'dock', '도킹 진입 경로 계산'),
     'test_docking_fsm':           ('unit', 'dock', '도킹 FSM'),
@@ -59,7 +60,9 @@ TEST_FILES = {
     'test_occupancy_grid':        ('unit', 'perception', '점유 격자 (occupancy_grid)'),
     'test_dock_segmentation':     ('unit', 'perception', '도킹 표식 분할 뒤처리'),
     'test_depth_utils':           ('unit', 'perception', '깊이 영상 변환'),
+    'test_depth_utils_bounds':    ('unit', 'perception', '깊이 영상 변환'),
     'test_dock_geometry':         ('unit', 'perception', '도킹 입구 추정'),
+    'test_dock_geometry_bounds':  ('unit', 'perception', '도킹 입구 추정'),
     # ── 위치 추정 ──
     'test_indoor_lidar_odom':     ('unit', 'localization', '실내 라이다 odom'),
     'test_lidar_boat_tracker':    ('unit', 'localization', '외벽 라이다 선체 추적'),
@@ -73,6 +76,7 @@ TEST_FILES = {
     # ── 제어 ──
     'test_thruster_backend':      ('unit', 'control', '추진기 출력 변환'),
     'test_thruster_driver_teleop': ('unit', 'control', '추진기 드라이버·원격 조종'),
+    'test_thruster_driver':       ('unit', 'control', '추진기 드라이버·원격 조종'),
     'test_health':                ('unit', 'control', '센서 상태 판정'),
     # ── 수조 시험 도구 — 보고서 범위 밖 (수조·Gazebo 시험은 현재 단계에서 제외) ──
     'test_straight_line_test':    ('excluded', 'tank_tools', '직진 시험 노드'),

@@ -4,6 +4,7 @@ L2/L3 판정이 이 도구들에 기대므로, 손으로 계산 가능한 값과
 """
 import math
 
+import numpy as np
 import pytest
 
 from tests.sim.boat_model import (
@@ -115,6 +116,22 @@ def test_recorder_metrics():
     assert rec.stopped_after(0.2)
     assert not rec.stopped_after(0.0)
     assert rec.final_distance_to(3.0, 0.0) == pytest.approx(0.0)
+
+
+@pytest.mark.check('C')
+def test_out_of_range_returns_are_reported_as_no_return():
+    cfg = ScanConfig(range_max=10.0)
+    world = World(circles=[Circle(15.0, 0.0, 0.2)])
+    ranges = scan_ranges(0.0, 0.0, 0.0, world, cfg)
+    assert np.all(np.isinf(ranges))          # 최대 거리 밖 반사는 무반사(inf)로 처리
+
+
+@pytest.mark.check('C')
+def test_stop_judgement_fails_closed_without_samples():
+    rec = Recorder()
+    rec.record(0.0, BoatState(), 0.0, 0.0)
+    assert not rec.stopped_after(1.0)        # 판정 구간에 기록이 없으면 '정지함'으로 보지 않는다
+    assert rec.first_event_time('complete') is None
 
 
 # ── ROS 메시지 변환 (rclpy 가 있는 Docker 에서만) ─────────────
