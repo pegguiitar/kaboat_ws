@@ -4,6 +4,7 @@
 새 시험 파일을 추가하면 여기에도 한 줄 추가한다. 빠지면 'unclassified' 로 표시된다.
 
 level  : unit(L1 기능) / mission(L2 미션) / system(L3 전체 흐름) / tool(시험 도구 자체 검증)
+         / excluded(보고서 범위 밖 — 수조·Gazebo 시험용 노드. 실행은 계속하지만 표에서 뺀다)
 group  : 보고서 표의 행 묶음
 function: 보고서에서 한 문단으로 설명하는 기능 이름
 """
@@ -73,20 +74,20 @@ TEST_FILES = {
     'test_thruster_backend':      ('unit', 'control', '추진기 출력 변환'),
     'test_thruster_driver_teleop': ('unit', 'control', '추진기 드라이버·원격 조종'),
     'test_health':                ('unit', 'control', '센서 상태 판정'),
-    # ── 수조 시험 도구 (실제 미션이 아니라 수조 주행 시험용 노드) ──
-    'test_straight_line_test':    ('unit', 'tank_tools', '직진 시험 노드'),
-    'test_bspline_track_test':    ('unit', 'tank_tools', 'B-spline 추종 시험 노드'),
-    'test_circle_drive_test':     ('unit', 'tank_tools', '원 주행 시험 노드'),
-    'test_los_path_test':         ('unit', 'tank_tools', 'LOS 경로 시험 노드'),
-    'test_waypoint_sequence_test': ('unit', 'tank_tools', 'waypoint 순차 시험 노드'),
-    'test_station_keeping_test':  ('unit', 'tank_tools', '위치유지 시험 노드'),
-    'test_real_obstacle_avoid_test': ('unit', 'tank_tools', '실물 회피 시험 노드'),
-    'test_manual_dri_monitor':    ('unit', 'tank_tools', 'DRI 수동 모니터'),
-    'test_tank_mission_guard':    ('unit', 'tank_tools', '수조 미션 보호 장치'),
-    'test_test_coordinates':      ('unit', 'tank_tools', '수조 시험 좌표'),
-    'test_trajectory_visualization': ('unit', 'tank_tools', '궤적 시각화'),
+    # ── 수조 시험 도구 — 보고서 범위 밖 (수조·Gazebo 시험은 현재 단계에서 제외) ──
+    'test_straight_line_test':    ('excluded', 'tank_tools', '직진 시험 노드'),
+    'test_bspline_track_test':    ('excluded', 'tank_tools', 'B-spline 추종 시험 노드'),
+    'test_circle_drive_test':     ('excluded', 'tank_tools', '원 주행 시험 노드'),
+    'test_los_path_test':         ('excluded', 'tank_tools', 'LOS 경로 시험 노드'),
+    'test_waypoint_sequence_test': ('excluded', 'tank_tools', 'waypoint 순차 시험 노드'),
+    'test_station_keeping_test':  ('excluded', 'tank_tools', '위치유지 시험 노드'),
+    'test_real_obstacle_avoid_test': ('excluded', 'tank_tools', '실물 회피 시험 노드'),
+    'test_manual_dri_monitor':    ('excluded', 'tank_tools', 'DRI 수동 모니터'),
+    'test_tank_mission_guard':    ('excluded', 'tank_tools', '수조 미션 보호 장치'),
+    'test_test_coordinates':      ('excluded', 'tank_tools', '수조 시험 좌표'),
+    'test_trajectory_visualization': ('excluded', 'tank_tools', '궤적 시각화'),
     # ── 시험 기반 (선체 모델·가짜 센서 자체 검증) ──
     'test_sim_helpers':           ('tool', 'test_infra', '시험용 선체 모델·가짜 센서'),
 }
 
-LEVELS = ('unit', 'mission', 'system', 'tool')
+LEVELS = ('unit', 'mission', 'system', 'tool', 'excluded')

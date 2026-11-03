@@ -139,6 +139,12 @@ ROS 없는 L1은 Windows Python에서도 `python -m pytest src/<package>/test`�
 4. L3 전체 흐름 시험
 5. 집계 스크립트와 그림
 
-범위에서 제외하는 것은 YOLO 검출 노드(`dock_mark_detector`)뿐이다.
+## 9. 범위에서 제외하는 것
+
+수조 시험과 Gazebo 시험은 현재 단계에서 제외한다.
+따라서 수조 주행 시험용 노드(`straight_line_test`, `bspline_track_test`, `circle_drive_test`, `los_path_test`, `waypoint_sequence_test`, `station_keeping_test`, `real_obstacle_avoid_test`, `manual_dri_monitor`, `tank_mission_guard`)와 그 보조 모듈(`test_coordinates`, `trajectory_visualization`)의 시험은 분류표에서 `excluded`로 둔다.
+이 시험들은 회귀 확인을 위해 계속 실행하지만, 체크리스트 표와 보고서 집계에는 넣지 않는다.
+
+YOLO 검출 노드(`dock_mark_detector`)도 제외한다.
 이 노드는 실제 영상과 학습된 모델이 필요하기 때문이다.
 `buoy_detector`는 학습 없는 HSV 색 검출이므로, 색 원을 그린 합성 영상과 합성 depth 영상으로 시험한다.
