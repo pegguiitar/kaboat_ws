@@ -1,12 +1,136 @@
 # 센서 토픽 점검 명령 모음
 
-현장에서 센서가 제대로 들어오는지 확인하는 명령과 판정 기준. 배선·bringup
-절차는 [REAL_HARDWARE.md](REAL_HARDWARE.md), 스택 구조는
-[SKELETON.MD](SKELETON.MD) 를 본다.
+젯슨 실물 센서 bringup 절차와, 현장에서 센서가 제대로 들어오는지 확인하는
+명령·판정 기준. 실내 수조 시험 절차는 [TANK_TESTS_GUIDE.md](TANK_TESTS_GUIDE.md),
+스택 구조는 [SKELETON.MD](SKELETON.MD) 를 본다.
 
 > **판정 원칙**: "토픽이 있다" 는 합격이 아니다. ① 발행률 ② 최신성
 > ③ frame_id ④ 데이터 유효성 ⑤ **부호·방향** 까지 봐야 한다.
 > 특히 ⑤ 는 모터를 붙이기 전에 확인해야 한다 — 부호가 틀리면 전복한다.
+
+---
+
+## 센서 bringup (젯슨, 모터 없이)
+
+첫 단계는 **모터를 구동하지 않고 센서 입력만 확인**하는 것이다.
+`real_sensors.launch.py`는 ESC/추력 노드를 실행하지 않는다. 실내 수조에서는 이
+launch 대신 `indoor_tank.launch.py`를 쓴다([TANK_TESTS_GUIDE.md](TANK_TESTS_GUIDE.md#3-젯슨-센서와-오도메트리)).
+
+### 센서 토픽 계약
+
+| 장치 | ROS 2 타입 | KABOAT 표준 토픽 | 필수 frame_id 예시 |
+|---|---|---|---|
+| D455 RGB | `sensor_msgs/Image` | `/camera/color/image_raw` | `camera_color_optical_frame` |
+| D455 aligned depth | `sensor_msgs/Image` | `/camera/depth/image_raw` | `camera_color_optical_frame` |
+| D455 calibration | `sensor_msgs/CameraInfo` | `/camera/camera_info` | `camera_color_optical_frame` |
+| 2D LiDAR | `sensor_msgs/LaserScan` | `/scan` | `laser_frame` |
+| GQ7 IMU | `sensor_msgs/Imu` | `/imu/data` | `imu_link` |
+| GQ7 GNSS 1 | `sensor_msgs/NavSatFix` | `/gps/fix` | `gnss_1_antenna_link` |
+| GQ7 GNSS 2 | `sensor_msgs/NavSatFix` | `/gps/fix_secondary` | `gnss_2_antenna_link` |
+| GQ7 onboard INS | `nav_msgs/Odometry` | `/odom` | `map` |
+
+TG-50 등 제조사 드라이버가 다른 토픽을 발행하면
+[`sensors.yaml`](src/kaboat_hardware/config/sensors.yaml)의 `topic`을 바꾸거나,
+드라이버 launch에서 위 표준 이름으로 remap한다. IMU는 토픽명뿐 아니라
+축 방향(ROS REP-103 ENU), 단위, orientation covariance를 반드시 확인해야 한다(§4).
+
+### 2026-08-10 Jetson 연결 확인 결과
+
+| 장치 | USB 식별자/장치 노드 | 확인 결과 |
+|---|---|---|
+| Intel RealSense D455 | `8086:0b5c` | USB 3.x, `5000M`로 연결 확인 |
+| TG-50 2D LiDAR | `10c4:ea60`, `/dev/ttyUSB0` | CP210x 시리얼, `512000` baud에서 TG50 모델 응답 및 health 정상 확인 |
+| HBK MicroStrain 3DM-GQ7-GNSS/INS | `0483:5740`, `/dev/ttyACM0` | `cdc_acm` 드라이버, 모델 `3DM-GQ7`, serial `6284.176046`, firmware `1.1.04` 확인 |
+
+GQ7 공식 드라이버 실측 결과 `/imu/data`는 약 `100 Hz`, `/gps/fix`는
+약 `2 Hz`로 수신됐다. 실내에서는 GNSS status가 no-fix일 수 있으며(§5), 이는
+USB/드라이버 인식 실패와 다르다. `/odom`은 토픽과 타입까지 생성되지만 현재 GQ7
+장치에 저장된 출력 구성에서는 EKF 스트림이 나오지 않아 수신 0건이었다(§6.5).
+안테나 위치와 장착 자세를 실측한 뒤 EKF 출력 설정을 안전하게 적용하는 작업이 남아 있다.
+
+```bash
+lsusb
+lsusb -t
+ls -l /dev/ttyUSB* /dev/ttyACM* /dev/microstrain* 2>/dev/null
+udevadm info --query=property --name=/dev/ttyACM0
+```
+
+### 빌드
+
+```bash
+cd ~/Desktop/kaboat_ws/repo
+source /opt/ros/humble/setup.bash
+rosdep install --from-paths src --ignore-src -r -y
+colcon build --symlink-install
+source install/setup.bash
+```
+
+`realsense2_camera`가 아직 설치되지 않았다면 D455 드라이버를 끈 기본 실행은
+가능하다. 단, 전체 `rosdep` 단계에서는 해당 패키지를 설치하려고 시도한다.
+
+### 센서 연결 전 코드 확인
+
+```bash
+export ROS_DOMAIN_ID=42
+ros2 launch kaboat_hardware real_sensors.launch.py
+ros2 topic echo /diagnostics
+```
+
+10초의 시작 유예시간 뒤 연결되지 않은 센서는 `no messages`로 표시된다. 이는
+이 단계에서 정상이다. 같은 상태가 `/diagnostics`에도 발행된다.
+
+### D455 연결 후
+
+```bash
+ros2 launch kaboat_hardware real_sensors.launch.py enable_d455:=true
+```
+
+초기값은 Jetson의 USB/CPU 부하를 낮추기 위해 RGB/depth `640x480@15Hz`,
+point cloud 비활성이다. 필요하면 다음처럼 바꾼다.
+
+```bash
+ros2 launch kaboat_bringup d455.launch.py \
+  color_profile:=640x480x30 depth_profile:=640x480x30 \
+  enable_pointcloud:=true
+```
+
+### GQ7 연결 후
+
+```bash
+sudo apt-get update
+sudo apt-get install -y ros-humble-microstrain-inertial-driver
+ls -l /dev/ttyACM0 /dev/microstrain_main
+ros2 launch kaboat_hardware real_sensors.launch.py
+```
+
+재연결하면 udev rule이 GQ7 main port를 `/dev/microstrain_main`으로 만든다.
+드라이버를 설치할 때 GQ7이 이미 연결돼 있었다면 별칭이 아직 없을 수 있으니
+USB 케이블을 한 번 뺐다 꽂는다.
+
+[`gq7.yaml`](src/kaboat_hardware/config/gq7.yaml)은 초기 검증 중 장치의 기존
+보정값을 보호하기 위해 `device_setup: false`, `save_settings: false`로 두었다.
+GQ7 설치 방향과 두 GNSS 안테나의 lever arm을 실측하기 전에는 이 값을
+`true`로 바꾸거나 예시 오프셋을 입력하지 않는다.
+
+| GQ7 공식 드라이버 출력 | KABOAT 입력 |
+|---|---|
+| `/imu/data` | `/imu/data` (변경 없음) |
+| `/gnss_1/llh_position` | `/gps/fix` |
+| `/gnss_2/llh_position` | `/gps/fix_secondary` |
+| `/ekf/odometry_map` | `/odom` |
+
+`sensor_health_monitor`(`/diagnostics`)의 정상 판정은 토픽 존재가 아니라 다음을 모두 본다.
+
+- 설정한 최소 수신률 이상인지
+- 마지막 메시지가 timeout보다 오래되지 않았는지
+- `header.frame_id`가 비어 있지 않은지
+- 이미지/스캔이 비어 있지 않은지
+- IMU quaternion norm이 유효하고 orientation이 제공되는지
+- GNSS fix 상태와 좌표가 유효한지
+- GQ7 INS odometry의 위치/속도가 유한하고 child frame이 존재하는지
+
+모터 드라이버(`thrusters.launch.py`) 실행과 안전 기능은
+[TANK_TESTS_GUIDE.md](TANK_TESTS_GUIDE.md#4-젯슨-모터-드라이버)를 본다.
 
 ---
 
@@ -17,11 +141,13 @@ source /opt/ros/humble/setup.bash
 source ~/kaboat_ws/install/setup.bash      # 실제 워크스페이스 경로로
 ```
 
-여러 PC(외부 LiDAR 노트북 ↔ Jetson)를 쓰면 양쪽이 같아야 한다:
+도메인은 젯슨 42, 외벽 라이다 노트북 43으로 **일부러 다르게** 쓴다. 두 기기는
+DDS로 직접 보이지 않고 Zenoh 브리지가 정해진 토픽만 전달한다
+([COMMANDS_GUIDE.md](COMMANDS_GUIDE.md#1-전체-통신-및-환경-구조)).
 
 ```bash
-echo $ROS_DOMAIN_ID          # 두 기기가 같은 값이어야 서로 보인다
-ros2 node list               # 상대편 노드가 보이는지로 확인
+echo $ROS_DOMAIN_ID          # 젯슨 42 / 노트북 43
+ros2 topic list              # 상대편 토픽은 브리지 허용 목록에 있는 것만 보인다
 ```
 
 ---
@@ -205,23 +331,27 @@ ros2 topic echo /imu/data --field angular_velocity.z
 가만히 두고 `angular_velocity.z` 를 본다. **0.01 rad/s 이하면 무시해도 된다**
 (D항 기여가 `max_angular` 의 1.5% 수준). 크면 `gyro_bias_z` 에 넣어 뺀다.
 
-### 4.4 실내 주행 전 gyro 및 LiDAR heading 확인
+### 4.4 실내 주행 전 LiDAR heading 확인
 
-GQ7의 GNSS fix가 실내에서 실패하는 것은 정상이다. 실내 융합 노드는 GQ7의
-절대 orientation 대신 `/imu/data.angular_velocity.z`를 사용하고, 외부 LiDAR가
-횡단 판의 기울기로 계산한 `/boat_pose` yaw의 180° 두 후보 중 IMU 예측에 가까운 방향을
-고른다. 유효한 판 선분이 들어올 때마다 `/odom` 위치와 헤딩을 갱신한다.
+GQ7의 GNSS fix가 실내에서 실패하는 것은 정상이다. 실내 `indoor_lidar_odom`은
+기본 설정(`indoor_tank.yaml`의 `use_lidar_yaw_truth: true`)에서 외벽 라이다가
+ㄱ자 판 모양으로 계산한 `/boat_pose` yaw를 그대로 `/odom` 헤딩으로 쓰며, IMU는
+헤딩에 쓰지 않는다.
 
 ```bash
-ros2 topic echo /imu/data --once --field angular_velocity --qos-reliability best_effort
 ros2 topic echo /boat_pose --once
+ros2 topic echo /odom --once --field twist.twist.angular.z
 ```
 
 배를 손으로 반시계 방향으로 돌렸을 때 `/odom` yaw와
-`twist.twist.angular.z`가 모두 양의 방향으로 변하는지 확인한다. 반대로 변하면
-`indoor_tank.yaml`의 `yaw_rate_sign`을 `-1.0`으로 바꾼다. 판만 보이는
-`/boat_pose` yaw는 선수 앞뒤가 180° 모호하다. 정지한 배의 최종 `/odom` yaw가
-선수 방향과 반대라면 -X 방향 초기 보정을 다시 확인한다.
+`twist.twist.angular.z`가 모두 양의 방향으로 변하는지, 정지한 배의 `/odom`
+yaw가 실제 선수 방향과 맞는지 확인한다. 틀리면 외벽 라이다 설치 각도
+(`lidar_yaw_deg`)와 판 검출을 먼저 확인한다.
+
+`use_lidar_yaw_truth: false`(라이다 yaw + IMU gyro 융합)로 쓸 때는 반시계
+회전에서 `/imu/data.angular_velocity.z`가 양수인지도 확인하고, 반대면
+`yaw_rate_sign`을 바꾼다. 이 모드는 선수를 -X(180°)로 두고 `cal_imu`로 보정해야
+`/odom`이 나온다.
 
 ### 4.5 실시간 Roll / Pitch 및 스캔 차단 상태 확인 (신규)
 
@@ -399,9 +529,7 @@ RViz는 시각화만 하므로 TF를 만들지 않는다.
 ros2 launch kaboat_hardware real_sensors.launch.py
 ros2 launch kaboat_bringup rviz.launch.py
 
-# 실내 수조 — 외부 LiDAR 노트북에서 추적기와 전용 RViz를 함께 실행
-ros2 launch kaboat_hardware lidar_boat_tracker.launch.py \
-  port:=/dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0
+# 실내 수조 — 노트북에서 rviz_tank (TANK_TESTS_GUIDE.md 2절)
 
 # sim (Gazebo 가 clock/TF 를 모두 준다)
 ros2 launch kaboat_bringup rviz.launch.py use_sim_time:=true
@@ -417,73 +545,11 @@ Map `/occupancy_grid` · LaserScan `/scan` · Odometry `/odom` 이 뜬다.
 
 ---
 
-## 10. 실내 수조 모드 (외부 TG-50 라이다 + 선체 GQ7 IMU)
+## 10. 실내 수조 모드
 
-실내에서는 GNSS 신호를 수신할 수 없으므로, 수조 외벽의 YDLIDAR TG-50(`/shore/scan`)이 선체 좌우를 잇는 0.60m 횡단 판의 선분으로 배의 pose(`/boat_pose`)를 계산합니다. 판의 중점은 `base_link` 원점과 일치해야 합니다. 선택 장착하는 선체 TG-50은 0.40m 이내 반사를 무효화한 `/scan`을 발행합니다. `indoor_lidar_odom`은 판의 중점과 기울기를 `/odom` 위치·헤딩의 주 입력으로 사용합니다. 판만으로 구분할 수 없는 180° 방향은 초기 -X 보정과 IMU gyro 예측으로 선택합니다. LiDAR 선분이 끊기면 1초 뒤 `/odom` 발행을 중단합니다.
-
-### 10.1 실행 (2대 기기 분담)
-
-```bash
-# 1. 수조 외벽 노트북 (외부 고정 TG-50 라이다 + 배 위치 추적기 + RViz2)
-ros2 launch kaboat_hardware lidar_boat_tracker.launch.py \
-  port:=/dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0
-
-# 2. 배 (Jetson — GQ7 + indoor_lidar_odom, 선체 TG-50 미장착, 모터 비활성화)
-ros2 launch kaboat_hardware indoor_tank.launch.py enable_thrusters:=false
-
-# 선체 TG-50 장착 시에는 위 명령 대신 다음 명령 사용
-ros2 launch kaboat_hardware indoor_tank.launch.py \
-  enable_thrusters:=false enable_onboard_lidar:=true \
-  onboard_lidar_port:=/dev/serial/by-id/<선체-TG-50-장치명>
-```
-
-### 10.2 토픽 확인 및 판정 기준
-
-```bash
-# 외부 라이다 배 pose (10 Hz PoseWithCovarianceStamped)
-ros2 topic hz /shore/scan
-ros2 topic hz /scan  # 선체 라이다 장착 시에만 확인
-ros2 topic hz /boat_pose
-ros2 topic echo /boat_pose --once
-
-# 선체 GQ7 IMU (50~100 Hz)
-ros2 topic hz /imu/data
-
-# indoor_lidar_odom 융합 오도메트리 (30 Hz)
-ros2 topic hz /odom
-ros2 topic echo /odom --once
-ros2 topic echo /odom --once --field twist.twist.angular.z
-
-# TF 변환 확인 (odom -> base_link)
-ros2 run tf2_ros tf2_echo odom base_link
-```
-
-노드 로그로 상태를 읽는다:
-
-| 로그 | 뜻 |
-|---|---|
-| `[indoor_lidar_odom] LiDAR 판 yaw 주측정 + IMU gyro 방향 선택 시작` | 정상 시작 |
-| `판 yaw가 직전 방향 기준 gate를 넘어...` | IMU 예측 또는 직전 LiDAR 방향과 가장 가까운 후보도 45° 이상 차이 나 측정 거부 |
-| `LiDAR pose 유실` | 횡단 판 pose 미수신(1.0s 초과)으로 `/odom`·TF 발행 중단 |
-| `IMU gyro 유실` | 새 IMU 분기 예측을 중단하고 직전 LiDAR 방향 분기로 `/odom` 유지 |
-
-LiDAR pose가 1초 넘게 끊기면 오래된 위치·헤딩을 새 측정처럼 발행하지
-않습니다. 다시 유효한 판 선분이 들어오면 위치와 헤딩을 갱신합니다.
-`/boat_pose` 수신 상태를 함께 확인합니다. IMU가 끊겨도 이전에 확정한
-180° 방향 분기가 유지되는 동안에는 LiDAR pose로 `/odom`을 발행합니다.
-LiDAR pose가 끊겨 `/odom`이 중단되면 테스트 노드의 odom 타임아웃과
-`thruster_driver` 워치독이 적용됩니다.
-
-### ⚠️ `/odom` 발행자 중복 주의
-
-`indoor_tank.launch.py`는 GQ7의 EKF $\to$ `/odom` remap과 실외용 TF
-broadcaster를 자동으로 끕니다. 실내에서 `real_sensors.launch.py`를 별도로
-실행하지 말고 `indoor_tank.launch.py` 하나를 사용합니다. 수동 구성이 꼭
-필요하다면 `enable_odom_remap:=false publish_tf:=false`를 모두 지정합니다.
-
-```bash
-ros2 topic info /odom --verbose | grep "Publisher count"   # 반드시 1이어야 함
-```
+실내 수조(외벽 RPLIDAR `/boat_pose` + 선체 GQ7 → `indoor_lidar_odom` `/odom`)의
+실행 명령, 토픽 확인, `/odom` 발행자 중복 주의는
+[TANK_TESTS_GUIDE.md 3절](TANK_TESTS_GUIDE.md#3-젯슨-센서와-오도메트리)로 옮겼다.
 
 ---
 
@@ -557,7 +623,7 @@ ps -ef | grep -E "gz sim|ros2 launch|parameter_bridge|robot_state_publisher" \
 | `/gps/fix` **배선** | ✅ 검증 가능 | 2 Hz + `status: -1` ← **정상 결과** |
 | `/gps/fix` **좌표** | ❌ | 실외 필요 |
 | `/odom` (GQ7 EKF) | ❌ | 실외 + 이동 필요 |
-| `/odom` (실내 라이다+IMU) | ✅ | 30 Hz, LiDAR yaw + gyro bias EKF, §10 |
+| `/odom` (실내 외벽 라이다) | ✅ | 30 Hz, 외벽 라이다 yaw 직접 사용, §10 |
 
 ---
 

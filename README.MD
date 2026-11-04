@@ -11,7 +11,7 @@ OSRF VRX 오픈소스 기반 WAM-V 선박의 통합 자율주행 알고리즘 �
 > **[TANK_TESTS_GUIDE.md](TANK_TESTS_GUIDE.md)** 를 따릅니다.
 >
 > 서로 다른 핫스팟에서 젯슨 토픽을 노트북 RViz로 확인하는 절차는
-> **[REMOTE_MONITORING.md](REMOTE_MONITORING.md)** 를 참고하세요.
+> **[COMMANDS_GUIDE.md](COMMANDS_GUIDE.md)** 를 참고하세요.
 
 ---
 

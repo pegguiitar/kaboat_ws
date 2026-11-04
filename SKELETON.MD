@@ -73,6 +73,49 @@
 > **공유 버스**는 별도 노드가 아니라 `behavior_base.py` 가 일괄 구독하는 표준
 > 토픽 묶음을 뜻합니다(ROS 2 는 토픽 자체가 버스 — rqt_graph 엔 토픽 화살표로 보임).
 
+### 실물 수조 데이터 흐름
+
+실내 수조에서는 GNSS 대신 외벽 라이다가 배 위치를 재고, 명령은 세 경로 중
+**하나만** `/cmd_vel`로 나갑니다. 실행 명령은
+[TANK_TESTS_GUIDE.md](TANK_TESTS_GUIDE.md), 원격 연결은
+[COMMANDS_GUIDE.md](COMMANDS_GUIDE.md)를 봅니다.
+
+```
+[노트북 DOMAIN 43]
+  RPLIDAR A3M1 ─/shore/scan─▶ lidar_boat_tracker (ㄱ자 판 검출) ─/boat_pose─┐
+                                                                (Zenoh)  │
+[젯슨 DOMAIN 42]                                                          ▼
+  GQ7 ─/imu/data─▶ indoor_lidar_odom ◀─────────────────────────── /boat_pose
+                     │  (기본: /boat_pose yaw 직접 사용, 1s 끊기면 발행 중단)
+                     ▼ /odom 30Hz + TF odom→base_link
+  선체 TG-50 ─/scan/raw─▶ onboard_scan_filter (후방 가림·기울기 차단) ─/scan─▶ occupancy_grid
+                     │
+       ┌─────────────┼──────────────────────────────┐
+       ▼             ▼                              ▼
+  A. 단독 시험 노드   B. 미션 단독 시험                C. 종합 미션 (autonomy.launch.py)
+  (straight/bspline/  behavior → cmd_mux             behavior → cmd_mux → /cmd_vel
+   circle/station/    → /tank_mission/cmd_raw
+   waypoint/los/      → tank_mission_guard
+   avoid_test)          (start 서비스·입력 신선도·
+   → /cmd_vel 직접       출력 상한 검사) → /cmd_vel
+       └─────────────┬──────────────────────────────┘
+                     ▼ /cmd_vel
+  thruster_driver ◀─ /emergency_stop > /rc/cmd_vel > /teleop/* > /cmd_vel (우선순위)
+   (차동 믹싱, 슬루 2.0/s, 0.3s 워치독)
+                     ▼ 시리얼 "LLLLRRRR\n" (/dev/ttyCH341USB0)
+  아두이노 CH340 ─ 50Hz PWM 1100~1900µs ─▶ 좌/우 ESC·스러스터
+```
+
+| 노드 | 주요 입력 | 주요 출력 | 비고 |
+|---|---|---|---|
+| `lidar_boat_tracker` (노트북) | `/shore/scan` | `/boat_pose`, `/lidar_tracker/*` | 횡단 판+세로판 모양으로 x, y, yaw 계산 |
+| `indoor_lidar_odom` | `/boat_pose`, `/imu/data` | `/odom`, TF | `use_lidar_yaw_truth: false`면 IMU gyro로 180° 분기 선택(`cal_imu` 필요) |
+| 단독 시험 노드 | `/odom`, `/start_mission`, `/emergency_stop` | `/cmd_vel` | `/odom` 0.5s 끊기면 0 명령. 벽면 자동 정지 없음 |
+| `tank_mission_guard` | `/tank_mission/cmd_raw`, `/odom`, `/scan`, `/occupancy_grid` | `/cmd_vel` | `drive_enabled:=true`일 때만 발행, 입력 끊기면 해제 |
+| `thruster_driver` | `/cmd_vel`, `/rc/cmd_vel`, `/teleop/*`, `/emergency_stop` | 시리얼 PWM, `/diagnostics`, `/teleop/status` | 노드 기본 백엔드 `dummy` |
+
+⚠️ 세 경로는 모두 최종적으로 `/cmd_vel`을 쓰므로 동시에 실행하면 안 됩니다.
+
 ---
 
 ## 3. 센서 토픽 인터페이스 (sim ↔ 실물 공통 계약)
@@ -171,9 +214,18 @@ cell 과 구분되는 "좌표 랜드마크". 극좌표는 소비자가 자기 od
   위험도 지도 + 곡선 경로 플래너를 쓰고, 나머지 4개 behavior 는 아직 이
   반발 조향을 쓴다. 특히 `station_keeper` 의 목표(15, 73)는 부표 밭 안쪽이라
   회피가 필요한 구간이다. TODO(팀): 나머지도 플래너로 통일할지 결정.
-- **`gate_follower.py`**: 전방 시야에 red+green 이 같이 보이면(`visible_buoys`)
-  거리 가장 비슷한 쌍의 중점 방위로 조향, 아니면 goal. TODO(팀): 쌍 매칭 거리
-  임계(너무 다르면 페어 아님), 통과 판정.
+- **`gate_follower.py` / `gate_corridor.py`**: 라이다 게이트 통과(YOLO 색 분류
+  미사용). `/occupancy_grid`의 작은 점유 물체를 묶어 전진 방향으로 비슷한 거리의
+  두 물체를 한 쌍으로 고르고, 배 위치→게이트 중앙→출구를 잇는 2차 B-spline을
+  공통 `los()`로 추종한다. 한 쌍씩 통과한 뒤 다음 쌍을 찾고, 기본 완료 조건은
+  `gate.required_pairs`(수조 3쌍) 통과 + 최종 `/mission/goal` 2m 이내다. 경로와
+  LOS 주시 선분을 `build_dri()` 위험도·점유 셀과의 최소 거리로 검사하고, 미관측
+  (`-1`) 셀이 있거나 최신 `/scan`에서 양쪽 기둥이 안 보이면 정지한다(점유 지도에
+  시간 감쇠가 없기 때문). 마지막 게이트 출구에서 목표까지 4m를 넘으면
+  `GOAL_LEG_UNSAFE_OR_TOO_FAR`. 라이다 원점=`base_link` 가정이라 실물 장착
+  오프셋은 먼저 보정해야 한다. 파라미터는 `kaboat_bringup/config/gate_params.yaml`
+  (기본 `gate.motion_enabled: false`, `gate.thrust_ratio: 0.5`,
+  `gate.occ_threshold: 95`). 현재 검증은 합성 지도와 ROS 미리보기까지.
 - **`station_keeper.py`**: goal 접근 + 5m/5초 체류 판정. TODO(팀): 바람/파도 드리프트 보상.
 - **`docking_fsm.py` / `docking_ctrl.py`**: ROS 비의존 상태기계
   `APPROACH → ACQUIRE → ALIGN → ENTER → HOLD → REVERSE → COMPLETE`.
@@ -197,6 +249,81 @@ cell 과 구분되는 "좌표 랜드마크". 극좌표는 소비자가 자기 od
   [AVOIDANCE.MD](AVOIDANCE.MD).
   ⚠️ `build_dri` 는 매 tick(10Hz) 호출 — 위험도는 배 pose 의 함수라 격자
   주기(1Hz)에 묶으면 안 됨. 시간은 벽시계 말고 `/odom` 스탬프를 쓸 것.
+
+### 공통 주행 함수 waypoint()와 los()
+
+두 함수 모두 명령과 도착 여부를 **반환**만 하고 `/cmd_vel`을 직접 발행하지
+않는다. `BehaviorBase`가 반환된 명령을 각 미션의 `/cmd/<mission>`으로 발행한다.
+`thrust_ratio`는 0~1이며 `1.0`은 behavior의 안전 상한(기본 전진 `12/118.6`≈10.1%,
+회전 `3/118.6`≈2.5%) 그대로, `0.5`는 절반, `0.0`은 정지다. 수조 단독 시험은
+[TANK_TESTS_GUIDE.md](TANK_TESTS_GUIDE.md) 6~8절.
+
+**`waypoint(x, y, angle=None, thrust_ratio=1.0)`** —
+[`waypoint_controller.py`](src/kaboat_behaviors/kaboat_behaviors/waypoint_controller.py).
+`odom` 좌표 목표(m)와 선택적 최종 헤딩(도, 0°=+X, 90°=+Y, 180°=-X). 각도를 주면
+위치에 접근한 뒤 헤딩을 맞춘다. 기본 도착 조건은 위치 0.35m 이내, 각도를 준
+경우 헤딩 8° 이내가 0.5초 유지.
+
+```python
+def compute_cmd(self):
+    cmd, reached = self.waypoint(5.0, 2.5, 180.0, thrust_ratio=0.5)
+    if reached:
+        self.report_complete()
+    return cmd
+```
+
+최종 헤딩이 필요 없으면 `self.waypoint(5.0, 2.5, thrust_ratio=0.5)`, 위치 유지
+미션은 기존 감속 거리를 위해 `self.waypoint(5.0, 2.5, slow_radius=5.0)`을 쓴다.
+도킹 staging 지점도 `staging_angle_deg`를 주면 이 제어기를 쓰며, 위치와 헤딩이
+모두 맞아야 `APPROACH → ACQUIRE`로 넘어간다(각도를 생략하면 기존 위치 접근).
+카메라 기반 W1/W2/W3 슬롯 진입은 기존 도킹 FSM 그대로다.
+
+```bash
+ros2 launch kaboat_bringup real_docking_test.launch.py \
+  staging_x:=5.0 staging_y:=2.5 staging_angle_deg:=180.0 \
+  dock_weights:=/absolute/path/model.pt wall_to_mouth_m:=2.5 \
+  dock_motion_enabled:=false
+```
+
+**`los(path, thrust_ratio)`** —
+[`los_controller.py`](src/kaboat_behaviors/kaboat_behaviors/los_controller.py).
+`path`는 `odom` 좌표계의 샘플 경로이며 **미션 시작 시 한 번 만들고** 매 주기
+같은 객체를 넘긴다.
+
+```python
+from kaboat_behaviors.behavior_base import BehaviorBase
+from kaboat_behaviors.los_controller import bspline_path, circle_path
+
+class MyBehavior(BehaviorBase):
+    STATE_NAME = 'my_mission'
+    CMD_TOPIC = '/cmd/my_mission'
+
+    def on_activate(self):
+        self.path = bspline_path([(8.5, 2.0), (7.0, 3.5),
+                                  (5.0, 1.5), (1.5, 2.5)])
+
+    def compute_cmd(self):
+        cmd, reached = self.los(self.path, 0.5)
+        if reached:
+            self.report_complete()
+        return cmd
+```
+
+- 새 미션 이름을 쓰면 `mission_manager`의 `MISSION_ORDER`와 `cmd_mux`의
+  `STATE_TOPIC_MAP`에도 등록한다. 열린 경로의 첫 구간은 출발 위치 근처에 둔다.
+- 원 경로: `circle_path(5.0, 2.5, 1.2, direction='ccw', target_laps=2.0)`
+  (`'cw'`=시계방향, `target_laps=None`=무한 순회). 두 생성 함수 모두
+  [`SampledPlan`](src/kaboat_behaviors/kaboat_behaviors/bspline_planner.py)을 반환한다.
+  이미 등간격인 임의 경로는 `sampled_path(points, spacing=0.05, curvatures=...)`로
+  넘긴다. 곡률을 생략하면 샘플로 근사하므로 B-spline은 생성 함수의 해석적 곡률이 안정적이다.
+- 동작: 경로의 최근접 진행점을 단조 갱신하고 앞쪽 지점을 향해 PD로 조향한다.
+  전방 창의 최대 곡률 `κ`로 `v = clamp(ω_max / κ, v_min, v_max)` 감속하고, 열린
+  경로는 종점에서 정지, 원 경로는 바퀴 수를 센다. 계산은
+  [`bspline_track_test`](src/kaboat_hardware/kaboat_hardware/bspline_track_test.py)의
+  공통 `follow_cmd()`를 쓴다(장애물 회피 `AvoidFsm`도 같은 함수로 추종).
+- 경로 좌표계가 `odom`이 아니거나 odom이 0.5초 넘게 지연되면 0 명령. 장애물
+  회피 경로는 만들지 않는다. 속도↔추력 변환값은 시험 코드의 교정값이라 실물 로그로 확인해야 한다.
+- 탐색 behavior의 색상별 원형 선회는 `circle_path()`와 `self.los()`를 쓴다.
 
 ### `kaboat_control` — 완성
 - **`cmd_mux.py`**: `/mission/state`에 맞는 `/cmd/*` 만 `/cmd_vel`로 통과.
@@ -224,7 +351,10 @@ cell 과 구분되는 "좌표 랜드마크". 극좌표는 소비자가 자기 od
 
 ### `kaboat_bringup` — 완성
 - **`launch/autonomy.launch.py`**: 상시 인식 + behavior 5개와 접근 노드 + `cmd_mux` +
-  `twist2thrust`(kaboat_sim 재사용) + `mission_manager` 를 한 번에 실행.
+  `mission_manager` 를 한 번에 실행. 실물 안전 기본값으로 `use_sim_time:=false`,
+  `use_sim_actuator:=false`이며, Gazebo용 `twist2thrust`(kaboat_sim 재사용)는
+  `use_sim_actuator:=true`일 때만 뜬다. 실물 주행은 `thrusters.launch.py`를 따로
+  실행한다. 각 behavior의 `*_motion_enabled` 인자도 기본 false(미리보기)다.
 - **`config/mission_params.yaml`**: 미션별 시작 자세와 종료 목표좌표.
   시작 자세는 실측 전이라 모두 `entry_ready=false`이며, 값을 입력하고 각
   항목을 true로 바꾸기 전까지 종합임무는 출발하지 않는다.

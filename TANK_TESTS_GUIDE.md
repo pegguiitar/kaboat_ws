@@ -1,19 +1,51 @@
-# 실내 수조 실물 테스트: 노트북·젯슨 실행 명령
+# 실내 수조 실물 테스트 가이드
 
-이 문서에 실내 수조 시험의 실행 명령을 모았습니다. 수조 외벽 노트북에는 **고정 RPLIDAR A3M1**, 배 위 젯슨에는 **GQ7과 모터 제어기**를 연결합니다. 장애물 회피 시험에는 **선체 TG-50**도 연결합니다. 노트북은 `ROS_DOMAIN_ID=43`, 젯슨은 `ROS_DOMAIN_ID=42`를 사용합니다. 두 기기를 같은 Tailscale 네트워크에 연결하고 Zenoh 브리지를 각각 실행하면, 노트북의 `/boat_pose`가 젯슨에 전달되고 젯슨이 계산한 `/odom`이 노트북으로 돌아옵니다. 같은 와이파이에서도 두 ROS 도메인을 분리해 DDS 직접 전달과 Zenoh 전달이 중복되지 않게 합니다.
+수조 시험의 실행 명령 모음입니다. 환경 설정·단축어·Zenoh·텔레옵은
+[COMMANDS_GUIDE.md](COMMANDS_GUIDE.md), 센서 판정 기준은
+[SENSOR_CHECK.md](SENSOR_CHECK.md), 알고리즘·코드 API는
+[SKELETON.MD](SKELETON.MD)·[AVOIDANCE.MD](AVOIDANCE.MD)를 봅니다.
 
-고정 RPLIDAR의 기본 위치는 수조 절대좌표 `(10.0, 2.5)m`(오른쪽 벽 중앙)이며,
-스캔 0° 방향이 `-X`를 바라보도록 장착합니다. 새 센서의 실제 0° 방향을 먼저 확인하고 좌표와 각도는
-[`lidar_tracker.yaml`](src/kaboat_hardware/config/lidar_tracker.yaml)에서 설정합니다.
-배에는 좌우 두 봉을 잇는 길이 0.60m의 횡단 판을 부착하고, 그 중점이
-`base_link` 원점과 일치해야 합니다. 추적기는 판의 선분 기울기와 중점으로
-`/boat_pose`를 계산합니다.
+## 목차
 
-외벽 노트북의 고정 RPLIDAR은 확인된 `/dev/serial/by-id/...` 경로를, 젯슨의 아두이노 CH340 모터 제어기는 최신 가이드의 `/dev/ttyCH341USB0`을 아래 명령에 직접 지정했습니다. 선체 TG-50 포트는 젯슨에서 따로 확인해 입력하세요. 장치나 드라이버가 바뀌면 해당 기기에서 `/dev/serial/by-id/`, `/dev/serial/by-path/`, `/dev/ttyUSB*`, `/dev/ttyCH341*`를 다시 확인해야 합니다.
+- [0. 기본 규칙](#0-기본-규칙)
+- **준비**
+  - [1. 외벽 라이다 스캔만 확인](#1-외벽-라이다-스캔만-확인)
+  - [2. 노트북 라이다와 배 위치 추적](#2-노트북-라이다와-배-위치-추적)
+  - [3. 젯슨 센서와 오도메트리](#3-젯슨-센서와-오도메트리)
+  - [4. 젯슨 모터 드라이버](#4-젯슨-모터-드라이버)
+- **기본 주행 시험**
+  - [5. 고정 경로 주행](#5-고정-경로-주행)
+  - [6. 단일 waypoint](#6-단일-waypoint)
+  - [7. 5개 웨이포인트 순차](#7-5개-웨이포인트-순차)
+  - [8. LOS 경로](#8-los-경로)
+- **장애물 회피와 미션 시험**
+  - [9. 장애물 회피 미리보기](#9-장애물-회피-미리보기)
+  - [10. 장애물 회피 저속 주행](#10-장애물-회피-저속-주행)
+  - [11. 게이트 라이다 미리보기](#11-게이트-라이다-미리보기)
+  - [12. gate와 avoid 미션 단독 시험](#12-gate와-avoid-미션-단독-시험)
+  - [13. 무선 조종 중 DRI 모니터링](#13-무선-조종-중-dri-모니터링)
+- [14. 출발 정지 종료](#14-출발-정지-종료)
+- [15. 문제 해결](#15-문제-해결)
 
-## 수조 밖에서 외벽 라이다 스캔만 확인
+## 0. 기본 규칙
 
-이 런치는 RPLIDAR A3M1의 `/shore/scan`과 RViz만 실행하며 `/boat_pose` 추적기는 켜지 않습니다. 노트북의 그래픽 데스크톱 터미널에서 실행하세요.
+| 항목 | 값 |
+|---|---|
+| 노트북 | 외벽 RPLIDAR A3M1, `ROS_DOMAIN_ID=43` |
+| 젯슨 | GQ7, 모터 제어기, (선택) 선체 TG-50, `ROS_DOMAIN_ID=42` |
+| 수조 좌표 | `odom`, 10 × 5m, 0°=+X, 90°=+Y, 180°=-X |
+| 외벽 라이다 | `(10.0, 2.5)m`, 스캔 0°가 -X 방향 ([`lidar_tracker.yaml`](src/kaboat_hardware/config/lidar_tracker.yaml)) |
+| 모터 제어기 포트 | `/dev/ttyCH341USB0` (아두이노 CH340) |
+| 선체 TG-50 포트 | 보통 `/dev/ttyUSB0` — **모터 포트로 쓰면 안 됨** |
+
+- `/cmd_vel` 발행 노드는 **한 번에 하나만** 실행합니다(시험 노드, `cmd_mux`, 미션 가드).
+- `/odom` 발행자는 **반드시 1개**입니다.
+- 항상 미리보기(`motion_enabled:=false` / `drive_enabled:=false`)를 먼저 확인합니다.
+- 출발·정지·비상 정지는 브리지를 통과하지 않으므로 **젯슨에서** 실행합니다.
+
+## 1. 외벽 라이다 스캔만 확인
+
+추적기 없이 `/shore/scan`과 RViz만 띄웁니다. 노트북 그래픽 터미널에서:
 
 ```bash
 cd ~/Projects/KABOAT/kaboat_ws
@@ -21,375 +53,362 @@ ROS_DOMAIN_ID=43 docker compose -f docker-compose.lidar.yml up -d --build
 xhost +si:localuser:root
 docker exec -it -e DISPLAY="$DISPLAY" kaboat_lidar bash
 # Docker 내부
-cd /workspace/kaboat_ws
-source /opt/ros/humble/setup.bash
-source /opt/sllidar_ws/install/setup.bash
-colcon build --symlink-install --packages-select kaboat_hardware
-source install/setup.bash
+colcon build --symlink-install --packages-select kaboat_hardware && source install/setup.bash
 ros2 launch kaboat_hardware shore_lidar_scan.launch.py
 ```
 
-RViz의 Fixed Frame은 `shore_laser_frame`, 표시 토픽은 `/shore/scan`입니다. 다른 Docker 터미널에서 `ros2 topic hz /shore/scan`으로 수신 주기를 확인합니다. 수조 위치 추적 런처를 시작하기 전 이 스캔 전용 런치를 `Ctrl+C`로 종료하세요. 한 장치를 두 드라이버가 동시에 열 수 없습니다.
+- RViz Fixed Frame `shore_laser_frame`, 토픽 `/shore/scan`.
+- 2절로 넘어가기 전에 `Ctrl+C`로 종료합니다(한 장치를 두 드라이버가 못 엶).
 
-## 1. 수조 외벽 노트북: 라이다와 배 위치 추적
+## 2. 노트북 라이다와 배 위치 추적
 
-**호스트 터미널 1** — Docker 시작. Docker 권한이 현재 터미널에만 반영되지 않았다면 `newgrp docker` 후 재실행합니다. Compose는 호스트 네트워크와 `/dev`를 공유하며 기본 Domain ID가 43입니다. 이전의 도메인 42 컨테이너를 사용했다면 `--force-recreate`로 새 환경을 적용합니다. Tailscale·Zenoh의 양쪽 기기 설치 명령은 [REMOTE_MONITORING.md](REMOTE_MONITORING.md#한-번-설치)를 따릅니다.
+**호스트 터미널 1 → Docker 내부**
 
 ```bash
 cd ~/Projects/KABOAT/kaboat_ws
 ROS_DOMAIN_ID=43 docker compose -f docker-compose.lidar.yml up -d --build --force-recreate
 docker exec -it kaboat_lidar bash
-```
-
-**같은 터미널, Docker 내부** — 코드 빌드 후 고정 라이다 실행. 이미 빌드했고 소스가 바뀌지 않았다면 `colcon build`를 생략할 수 있습니다.
-
-```bash
-cd /workspace/kaboat_ws
-source /opt/ros/humble/setup.bash
-source /opt/sllidar_ws/install/setup.bash
-colcon build --symlink-install --packages-up-to kaboat_hardware
-source install/setup.bash
+# Docker 내부 (kaboat_lidar 별칭 + tracker 별칭으로 대체 가능)
+colcon build --symlink-install --packages-up-to kaboat_hardware && source install/setup.bash
 ros2 launch kaboat_hardware lidar_boat_tracker.launch.py \
   port:=/dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_344ff5135095724097887d9c6d4b91ce-if00-port0 \
   enable_rviz:=false
+# 설치 위치가 다르면: lidar_pos_x:=... lidar_pos_y:=... lidar_yaw_deg:=...
 ```
 
-이 터미널은 켜 둡니다. 고정 라이다는 `/shore/scan`, 배 위치 추적기는 `/boat_pose`를 노트북 도메인 43에 발행합니다. `/boat_pose`만 Zenoh를 통해 젯슨 도메인 42로 전달됩니다. 외벽 라이다가 `/odom`을 젯슨에 직접 발행하지는 않습니다.
-라이다를 옮긴 뒤에는 기존 추적기 프로세스를 종료하고 이 명령으로 다시 실행해야 새 설치 좌표가 적용됩니다.
-별도 Docker 터미널에서 `ros2 topic hz /shore/scan`, `ros2 topic echo /shore/scan --once --field header`, `ros2 topic echo /boat_pose --once`로 확인할 수 있습니다. 스캔의 `header.frame_id`는 `shore_laser_frame`이어야 합니다. 수조 `(9.0, 2.5)m`에 놓은 물체가 RViz 스캔에서 그 부근에 보이는지도 확인합니다. 기본 설치값은 `(10.0, 2.5)m`, 스캔 0° 방향 `180°`입니다. 실제 장착값이 다르면 런치 명령에 `lidar_pos_x:=... lidar_pos_y:=... lidar_yaw_deg:=...`를 실측값으로 추가하세요. [`lidar_tracker.yaml`](src/kaboat_hardware/config/lidar_tracker.yaml)도 기본값으로 사용할 수 있습니다. `/boat_pose`의 위치·방향이 실물과 맞는지 확인하기 전에는 **배 추진 모터**를 켜지 않습니다.
-배의 ㄱ자 판(횡단 판 좌현 0.45m·우현 0.30m, 우현 끝의 선미 방향 세로판 0.45m)을 수조 안의 **실측한 위치**에 놓고 `/boat_pose`가 그 좌표 근처에서 연속으로 발행되는지 확인하세요. 검출이 끊기면 RViz의 `/lidar_tracker/filtered_scan`에서 판에 점이 남는지 확인합니다. 현재 추적기는 판 점 최소 3개와 직선 RMS 오차 0.03m 이하를 기준으로 사용합니다. 판이 없는데도 `/boat_pose`가 나오거나 위치·yaw가 실물과 다르면 다른 물체를 잘못 고른 것이므로 그 상태로 젯슨의 IMU 보정·주행을 진행하지 마세요.
-드라이버가 장치 정보와 `health status : OK`를 표시해도 `/shore/scan`이 나오지 않으면 **실제 스캔 모드 로그와 토픽 주기**를 둘 다 확인하세요. 현재 기본 설정은 [`sllidar_a3.yaml`](src/kaboat_hardware/config/sllidar_a3.yaml)의 `Sensitivity`입니다. 이 장치에서 명시적 `startScanExpress` 호출은 `80008002`로 실패했지만, 드라이버 패치가 SDK의 기본 스캔 시작 경로를 사용하면 실제 `Sensitivity` 16 kHz로 시작됐고 2026-11-02 시험에서 `/shore/scan` 약 13.5 Hz와 `/boat_pose` 발행을 확인했습니다. 패치를 바꾼 뒤에는 `docker compose -f docker-compose.lidar.yml up -d --build`로 이미지를 다시 만드세요. USB 허브 재연결도 반복됐으므로 모드 오류만으로 원인을 단정하지 않습니다. 같은 장치를 쓰는 스캔 전용 런치가 남아 있지 않은지 확인하고, USB 재연결로 `/dev/ttyUSB*` 번호가 바뀌면 실행 중인 추적기를 종료한 뒤 다시 시작하세요. `by-id` 경로는 같은 장치를 계속 가리킵니다.
-
-**호스트 터미널 2** — Docker 밖에서 Zenoh 브리지를 켭니다. 젯슨의 `tailscale ip -4` 출력값을 물음에 입력하세요. 라이다가 먼저 실행돼 있어도 브리지를 나중에 켜면 연결되며, 이 터미널은 계속 열어 둡니다.
+확인(다른 Docker 터미널):
 
 ```bash
-cd ~/Projects/KABOAT/kaboat_ws
+ros2 topic hz /shore/scan                            # 약 13 Hz
+ros2 topic echo /shore/scan --once --field header    # frame_id: shore_laser_frame
+ros2 topic echo /boat_pose --once
+```
+
+- 배의 ㄱ자 판을 실측 위치에 두고 `/boat_pose`가 그 좌표로 나오는지 확인하기 전에는 **모터를 켜지 않습니다**.
+
+**호스트 터미널 2 — Zenoh 브리지** (`set_kaboat`로 대체 가능)
+
+```bash
 source /opt/ros/jazzy/setup.zsh
-export ROS_DOMAIN_ID=43
-export ROS_LOCALHOST_ONLY=0
-printf '젯슨 Tailscale IP: '
-read -r JETSON_TAILSCALE_IP
+export ROS_DOMAIN_ID=43 ROS_LOCALHOST_ONLY=0
+read -r "JETSON_TAILSCALE_IP?젯슨 Tailscale IP: "
 tailscale ping "$JETSON_TAILSCALE_IP"
-python3 scripts/zenoh_monitor_link.py laptop --jetson-ip "$JETSON_TAILSCALE_IP"
+python3 ~/Projects/KABOAT/kaboat_ws/scripts/zenoh_monitor_link.py laptop --jetson-ip "$JETSON_TAILSCALE_IP"
 ```
 
-Zenoh는 호스트의 도메인 43에서 Docker 라이다의 `/boat_pose`를 발견합니다. 이 브리지는 `/start_mission`, `/emergency_stop`, `/cmd_vel`을 젯슨에 전달하지 않습니다.
-
-**호스트의 그래픽 데스크톱 터미널 3** — 수조 위치 검출 RViz를 엽니다.
-새 터미널에서 아래 별칭을 실행하면 X11 접근을 허용하고 **Humble 컨테이너 안의 RViz**를 시작합니다.
-`~/.zshrc`를 수정한 직후 같은 터미널을 쓰는 경우에만 `source ~/.zshrc`를 먼저 실행하세요.
+**호스트 그래픽 터미널 3 — RViz**
 
 ```bash
-rviz_tank
-```
-
-주행 테스트에서는 해당 시험 이름을 붙여 같은 창에 **초록색 기본 목표 경로**와
-수조 외벽 라이다의 `/boat_pose`로 기록한 **주황색 실제 이동 경로**를 함께 표시합니다.
-`rviz_tank straight`, `rviz_tank bspline`, `rviz_tank circle`, `rviz_tank los`,
-`rviz_tank los_circle`, `rviz_tank waypoint`, `rviz_tank station`을 사용할 수 있습니다.
-기본 경로는 노트북의 `test_coordinates.py`와 기본 웨이포인트 설정에서 생성하므로,
-젯슨 테스트의 좌표 파라미터를 바꿨다면 노트북에도 같은 경로 설정을 적용해야 합니다.
-현재 열려 있는 RViz는 이전 설정을 자동으로 다시 읽지 않으므로 창을 닫고 다시 실행하세요.
-시험 전에 해당 `rviz_tank` 창을 먼저 열고, 시험이 끝난 뒤 창을 닫으면 궤적 기록 노드도 종료됩니다.
-다음 시험은 `rviz_tank circle`처럼 새 이름으로 열면 빈 실제 궤적에서 시작합니다.
-실제 궤적이 쌓이지 않으면 먼저 `/boat_pose` 발행을 확인하세요.
-다음 시험 전에 궤적을 지우려면 컨테이너에서
-`ros2 service call /tank_test/clear_trajectory std_srvs/srv/Trigger '{}'`를 실행합니다.
-이 화면은 모터 명령을 발행하지 않습니다.
-
-별칭을 사용하지 않는 다른 노트북에서는 [`scripts/rviz_tank.sh`](scripts/rviz_tank.sh)를 직접 실행할 수 있습니다.
-배가 수조에 없으면 `/boat_pose`와 배 마커가 보이지 않는 것은 정상입니다. 그 경우에도 `/shore/scan` 점은 보여야 합니다.
-격자만 보이면 **컨테이너 안의 실제 수신 주기**부터 확인하세요.
-
-```bash
-docker exec kaboat_lidar bash -lc 'source /opt/ros/humble/setup.bash; ROS_DOMAIN_ID=43 timeout 8s ros2 topic hz /shore/scan'
-ls -l /dev/serial/by-id/
-journalctl -k --since '10 minutes ago' --no-pager | grep -Ei 'usb|cp210x|ttyUSB|disconnect'
-```
-
-2026-11-02 시험에서는 USB 허브가 장치를 끊었다가 다시 연결하면서 포트가 `/dev/ttyUSB1`에서
-`/dev/ttyUSB0`으로 바뀌었습니다. 기존 라이다 노드는 삭제된 포트를 계속 열고 있어서
-토픽 이름은 보였지만 새 스캔이 오지 않았습니다. 이때는 **추적기 실행 터미널에서 `Ctrl+C`로 종료한 뒤**
-위의 `lidar_boat_tracker.launch.py` 명령을 다시 실행해야 합니다. `by-id` 경로가 같은 장치를 가리켜도
-이미 실행 중인 드라이버는 새 포트를 자동으로 다시 열지 않습니다. 같은 현상이 반복되면 허브·케이블·전원 연결을 점검하세요.
-이번 시험에서 노트북 호스트의 Jazzy RViz는 토픽을 발견했지만 스캔 메시지를 수신하지 못했고,
-컨테이너의 Humble RViz에서는 표시됐습니다. 수조 화면은 위의 `rviz_tank`를 사용하세요.
-
-장애물 회피 경로를 볼 때는 노트북의 **새 그래픽 데스크톱 터미널**에서 다음 전용 화면을 엽니다. 이 화면은 배 뒤에서 `base_link`를 따라 움직이는 3인칭 시점이며, 선체 `/scan`은 빨간 점, 생성한 경로는 청록색 선, 배 자세는 주황색 화살표로 표시합니다. 두 RViz 창은 동시에 실행할 수 있습니다.
-
-```bash
+rviz_tank                 # 위치 추적만
+rviz_tank <시험이름>       # straight | bspline | circle | los | los_circle | waypoint | station
+# 장애물 회피 3인칭 화면 (동시 실행 가능)
 docker exec -it -e DISPLAY="$DISPLAY" kaboat_lidar bash -lc \
   'source /workspace/kaboat_ws/install/setup.bash && ros2 launch kaboat_hardware real_obstacle_avoid_rviz.launch.py'
+# 실제 궤적 지우기 (컨테이너에서)
+ros2 service call /tank_test/clear_trajectory std_srvs/srv/Trigger '{}'
 ```
 
-화면 연결 오류가 나면 **노트북 그래픽 데스크톱 터미널**에서 `echo "$DISPLAY"`가 비어 있지 않은지, `xhost`를 실행했는지 확인합니다. RViz를 닫은 뒤 접근 권한을 해제하려면 `xhost -si:localuser:root`를 실행합니다.
+- 젯슨 시험 좌표를 바꿨다면 노트북에도 같은 설정을 적용하고 RViz를 다시 엽니다.
 
-## 2. 젯슨: 센서와 오도메트리
+## 3. 젯슨 센서와 오도메트리
 
-젯슨에 코드를 새로 받았거나 수정했다면 **처음 한 번** 빌드합니다. 첫 줄의 경로는 젯슨에 클론한 워크스페이스 경로로 바꾸세요.
+**최초 1회 빌드**
 
 ```bash
 cd ~/Desktop/kaboat_ws/repo
 source /opt/ros/humble/setup.bash
 colcon build --symlink-install --packages-up-to kaboat_hardware
+# 11·12절까지 하려면: --packages-up-to kaboat_hardware kaboat_bringup
 ```
 
-젯슨의 **새 터미널마다** 먼저 아래 명령을 실행합니다. (`install/setup.bash`를 빠뜨리면 `Package 'kaboat_hardware' not found` 오류가 납니다.)
+**새 터미널마다 준비 명령** (`setup_jetson_bashrc.sh` 설치 시 앞 4줄 자동)
 
 ```bash
 cd ~/Desktop/kaboat_ws/repo
-source /opt/ros/humble/setup.bash
-source install/setup.bash
-export ROS_DOMAIN_ID=42
-export ROS_LOCALHOST_ONLY=0
-
-# FastDDS UDP 버퍼 확대 (TG-50 라이다 역직렬화 에러 방지)
-sudo sysctl -w net.core.rmem_max=8388608
-sudo sysctl -w net.core.rmem_default=8388608
+source /opt/ros/humble/setup.bash && source install/setup.bash
+export ROS_DOMAIN_ID=42 ROS_LOCALHOST_ONLY=0
+sudo sysctl -w net.core.rmem_max=8388608 net.core.rmem_default=8388608   # 재부팅 후 1회
 ```
 
-**젯슨 터미널 1** — 젯슨의 Tailscale 주소를 확인하고 Zenoh 브리지를 시작합니다. 설치와 로그인은 [REMOTE_MONITORING.md](REMOTE_MONITORING.md#젯슨에서-추가로-할-일)를 따릅니다. 나온 주소를 노트북 호스트 터미널 2에 입력합니다. 이 브리지 터미널은 계속 열어 둡니다.
+**젯슨 터미널 1 — Zenoh 브리지** (`run_zenoh`)
 
 ```bash
-tailscale ip -4
+tailscale ip -4            # 노트북 터미널 2에 입력
 python3 scripts/zenoh_monitor_link.py jetson
 ```
 
-**젯슨 터미널 2** — 위의 새 터미널 준비 명령을 다시 실행한 뒤 GQ7과 실내 오도메트리를 시작합니다. 선체 라이다와 모터는 아직 켜지 않습니다.
+**젯슨 터미널 2 — GQ7 + 실내 /odom** (둘 중 하나만)
 
 ```bash
+# 선체 라이다 없이
 ros2 launch kaboat_hardware indoor_tank.launch.py enable_thrusters:=false
+
+# 선체 TG-50 포함 (포트가 /dev/ttyUSB0이면 run_boat_lidar)
+ls -l /dev/serial/by-id/ /dev/ttyUSB* 2>/dev/null
+ros2 launch kaboat_hardware indoor_tank.launch.py enable_thrusters:=false \
+  enable_onboard_lidar:=true onboard_lidar_port:=/dev/ttyUSB0
+# 육상/벤치에서 기울기 필터 끄기: enable_imu_filter:=false
 ```
 
-선체 TG-50을 장착했다면 **위 명령 대신** 실제 라이다 포트를 지정해 실행합니다.
-
-```bash
-ls -l /dev/serial/by-id/ /dev/serial/by-path/ /dev/ttyUSB* 2>/dev/null
-printf '선체 TG-50 포트 경로: '
-read -r ONBOARD_LIDAR_PORT
-ros2 launch kaboat_hardware indoor_tank.launch.py enable_thrusters:=false enable_onboard_lidar:=true onboard_lidar_port:="$ONBOARD_LIDAR_PORT"
-```
-
-선체 라이다 드라이버 원본은 `/scan/raw`, 지도·회피·RViz가 사용하는 필터 결과는 `/scan`입니다. 배 후방 구조물이 보이는 120°~240°(선미 ±60° 후방 영역) 값은 `/scan`에서 `inf`로 무효화하고, **IMU roll/pitch 기울기 필터(기본 임계값: Pitch [-4.0°, +1.0°], Roll ±3.0°)**가 함께 적용됩니다. 배의 피치 또는 롤이 허용 범위를 벗어나면 수면 반사나 하늘을 훑는 노이즈를 방지하기 위해 스캔 발행을 차단(`drop`)합니다. 젯슨 터미널에서 `python3 scripts/view_roll_pitch.py`를 실행하여 실시간 자세 각도 및 필터 통과 여부를 모니터링할 수 있습니다. 육상/벤치 테스트에서 기울기 필터를 끄려면 `enable_imu_filter:=false`를 지정합니다. /shore/scan은 그대로 둡니다. 장애물 회피 RViz에서 기본으로 꺼진 `/scan/raw` 레이어를 켜 실제 구조물 방향과 비교하세요. 필요하면 `indoor_tank.launch.py`에 `onboard_lidar_mask_start_deg:=... onboard_lidar_mask_end_deg:=...`를 지정합니다. 이전 구조물 셀이 점유 지도에 남아 있다면 장애물 시험 런처도 재시작합니다.
-선체 TG-50의 0.40m 최소 거리 컷오프는 센서 원점 기준입니다. 구조물이 더 멀리 보이면 장착 위치를 실측하고 [`tg50_onboard.yaml`](src/kaboat_hardware/config/tg50_onboard.yaml)의 `range_min`과 `base_link → onboard_laser_frame` 변환을 확인하세요.
-
-## 3. 젯슨: IMU 보정과 모터·테스트 시작
-
-선수를 수조 좌표계의 **-X 방향(180°)**으로 두고 배를 움직이지 마세요.
-외벽 라이다에 횡단 판이 충분한 길이의 한 선분으로 보여야 합니다. 판만으로는
-선수 앞뒤를 구분할 수 없어, 이 자세에서 IMU 초기 보정으로 방향을 확정합니다.
-
-**젯슨 터미널 3** — 위의 젯슨 새 터미널 준비 명령을 실행한 뒤, 젯슨 도메인 42에서 `/boat_pose`가 실제로 도착하는지 확인하고 IMU를 보정합니다:
+**젯슨 터미널 3 — 확인**
 
 ```bash
 ros2 topic echo /boat_pose --once
-ros2 run kaboat_hardware calibrate_indoor_imu
-ros2 topic hz /odom
+ros2 topic hz /odom                                          # 약 30 Hz
+ros2 topic info /odom --verbose | grep "Publisher count"     # 반드시 1
+ros2 run tf2_ros tf2_echo odom base_link
+ros2 topic hz /scan                                          # 선체 라이다 장착 시
+python3 scripts/view_roll_pitch.py                           # view_pitch, 스캔 차단 여부
 ```
 
-보정 성공 메시지와 `/odom` 발행을 확인하고 `ros2 topic hz`는 `Ctrl+C`로 종료합니다. 보정 실패 시 모터를 시작하지 마세요. GQ7 또는 `indoor_tank.launch.py`를 재시작했다면 다시 보정합니다.
-`ros2 topic info /odom --verbose`의 `Publisher count`도 **1**인지 확인합니다. 실내에서는 `real_sensors.launch.py`를 별도로 실행하지 않습니다.
+- 기본 설정(`use_lidar_yaw_truth: true`)은 외벽 라이다 yaw를 그대로 쓰므로 **IMU 보정(`cal_imu`)이 필요 없습니다**.
+  `use_lidar_yaw_truth: false`로 바꾼 경우에만 선수를 -X(180°)로 두고 정지한 채 `cal_imu`를 실행합니다.
+- `/boat_pose`가 1초 넘게 끊기면 `/odom`이 멈춥니다.
+- 실내에서 `real_sensors.launch.py`를 함께 실행하지 않습니다(`/odom` 발행자 중복).
+- 선체 `/scan`은 후방 120°~240°를 가리고, Pitch [-4°, +1°]·Roll ±3°를 벗어나면 차단됩니다. 원본은 `/scan/raw`.
 
-**젯슨 터미널 4** — 새 터미널 준비 명령을 실행한 뒤 모터 제어기 시작. 아두이노(CH340) 모터 제어기 포트는 최신 가이드에 지정된 `/dev/ttyCH341USB0`입니다. 젯슨에서 해당 장치가 실제로 등록됐는지 확인하세요.
+## 4. 젯슨 모터 드라이버
+
+**젯슨 터미널 4** (`run_motor`)
 
 ```bash
 ls -l /dev/ttyCH341USB0
 ros2 launch kaboat_hardware thrusters.launch.py hardware_type:=serial port:=/dev/ttyCH341USB0 allow_port_scan:=false
+
+# 저출력 bring-up
+ros2 launch kaboat_hardware thrusters.launch.py hardware_type:=serial port:=/dev/ttyCH341USB0 \
+  allow_port_scan:=false max_output_ratio:=0.2
+# 벤치(하드웨어 없음): hardware_type:=dummy / PCA9685: hardware_type:=pca9685
 ```
 
-**젯슨 터미널 5** — 새 터미널 준비 명령을 실행한 뒤 B-Spline 주행 노드 시작 (노트북 시작 신호 없이 실행 즉시 시작됩니다. 대기 모드로 실행하려면 `wait_for_start:=true`를 붙입니다).
+| 우선순위 | 입력 | 끊기면 |
+|---|---|---|
+| 1 | `/emergency_stop` true | 즉시 중립 |
+| 2 | `/rc/cmd_vel` (RC 조종기) | 0.5초 후 다음 순위 |
+| 3 | `/teleop/*` (노트북 WASD) | 0.5초 후 중립 (자율 복귀 안 함) |
+| 4 | `/cmd_vel` (자율주행) | 0.3초 후 중립 |
 
 ```bash
-ros2 launch kaboat_hardware bspline_track_test.launch.py wait_for_start:=false
-# 또는 간편 단축어:
-test_bspline
+ros2 topic echo /teleop/status   # AUTO | TIMEOUT | TELEOP | RC_OVERRIDE | ESTOP | BACKEND_ERROR
 ```
 
-이 테스트는 미리 지정한 B-Spline 코스를 따라가며, 회피 플래너의
-`follow_cmd()`와 같은 전방 곡률 감속·lookahead 조향을 사용합니다. 장애물을
-보고 새 경로를 생성하지는 않습니다. `cruise_speed`는 출력 상한이자
-`v_full` 속도에서의 기준 출력이며, 기본 `v_full`·`cmd_exp`는 시뮬레이션
-교정값입니다. 실물 속도 로그로 재교정한 뒤 `v_full:=... cmd_exp:=...`를
-지정하세요. 전방 곡률 판단 구간은 `kappa_window:=...`, 선회 한계는
-`omega_max:=...`로 조정합니다.
+## 5. 고정 경로 주행
 
-다른 코스를 시험할 때는 젯슨 터미널 5에서 위 명령 대신 `ros2 launch kaboat_hardware tank_tests.launch.py test:=straight`처럼 실행합니다. `test` 값은 `straight`, `bspline`, `circle`, `station_keeping` 중 하나입니다. **주행 테스트 노드는 한 번에 하나만** 실행합니다.
-[`tank_tests.yaml`](src/kaboat_hardware/config/tank_tests.yaml)은 현재 런처가 자동으로 읽지 않으므로 실제 노드 기본값과 런처 인자를 확인해 조정합니다.
+**젯슨 터미널 5** — 하나만 실행. 실행 즉시 출발하며, 대기하려면 `wait_for_start:=true`.
 
-### 공통 수조 waypoint(x, y, angle=None, thrust_ratio=1.0)
+```bash
+test_bspline     # bspline_track_test.launch.py wait_for_start:=false
+test_straight
+test_circle
+test_station
+# 또는
+ros2 launch kaboat_hardware tank_tests.launch.py test:=straight   # straight | bspline | circle | station_keeping
+```
 
-미션에서 재사용하는 목표 위치·헤딩 제어와 단독 preview/주행 명령은
-[INDOOR_WAYPOINT.md](INDOOR_WAYPOINT.md)를 따릅니다. 예를 들어 젯슨에서
-`/odom`을 준비한 뒤 `ros2 launch kaboat_hardware indoor_waypoint.launch.py
-x:=5.0 y:=2.5 angle:=180.0 thrust_ratio:=0.5 motion_enabled:=false`로 목표와 계산 명령을
-확인합니다. 다른 주행 테스트와 동시에 `/cmd_vel`을 발행하지 않습니다.
-5개 목표를 순서대로 시험할 때는 [WAYPOINT_SEQUENCE_TEST.md](WAYPOINT_SEQUENCE_TEST.md)의
-설정 파일과 실행 명령을 사용합니다.
+- B-spline 튜닝 인자: `v_full:=... cmd_exp:=... kappa_window:=... omega_max:=...` (기본값은 시뮬레이션 교정값)
+- 벽면 자동 정지가 없으므로 `/emergency_stop`을 준비해 둡니다.
 
-### 공통 B-spline·원 경로 LOS 추종
+## 6. 단일 waypoint
 
-behavior에서 `los(path, thrust_ratio)`로 호출하는 공통 추종 함수와 경로
-생성법은 [LOS_PATH.md](LOS_PATH.md)를 참고합니다.
+```bash
+# 미리보기 (/cmd_vel 발행 안 함)
+ros2 launch kaboat_hardware indoor_waypoint.launch.py \
+  x:=5.0 y:=2.5 angle:=180.0 thrust_ratio:=0.5 motion_enabled:=false
+ros2 topic echo /waypoint/status --once      # PREVIEW_APPROACH → PREVIEW_ALIGN → PREVIEW_REACHED
+ros2 topic echo /waypoint/cmd_preview --once
 
-라이다로 3쌍의 게이트 기둥을 판별해 중앙 경로를 미리보는 방법은
-[GATE_LIDAR.md](GATE_LIDAR.md)에 정리했습니다.
+# 실제 주행 (미리보기 종료, 4절 모터 드라이버 실행 후)
+ros2 launch kaboat_hardware indoor_waypoint.launch.py \
+  x:=5.0 y:=2.5 angle:=180.0 thrust_ratio:=0.5 motion_enabled:=true
+```
 
-자율운항 대신 별도 무선 조종기로 배를 움직이면서 DRI 지도만 노트북
-RViz에서 보는 시험은 [MANUAL_DRI_TEST.md](MANUAL_DRI_TEST.md)를 따릅니다.
+- 도착 조건: 0.35m 이내, 각도 지정 시 8° 이내를 0.5초 유지. 목표는 벽에서 0.25m 이상 안쪽.
+- 장애물 회피를 하지 않으므로 경로를 비워 둡니다.
 
-## 4. 장애물 회피 경로 생성과 RViz 미리보기
+## 7. 5개 웨이포인트 순차
 
-**2절의 선체 TG-50 포함 명령**으로 `/scan`과 `/odom`을 먼저 준비합니다. 모터 드라이버와 다른 주행 테스트 노드는 켜지 않습니다. 젯슨의 새 터미널에서 준비 명령을 실행한 뒤 아래 런처를 시작합니다.
+목표는 [`waypoint_sequence_test.yaml`](src/kaboat_hardware/config/waypoint_sequence_test.yaml)의
+`waypoints_x/y/angle_deg/use_heading`에 각각 정확히 5개씩 넣습니다.
+
+```bash
+# 미리보기
+ros2 launch kaboat_hardware waypoint_sequence_test.launch.py hold_duration_sec:=3.0
+# 실제 주행 (4절 모터 드라이버 실행 후; test_waypoint = 즉시 출발)
+ros2 launch kaboat_hardware waypoint_sequence_test.launch.py \
+  hold_duration_sec:=3.0 thrust_ratio:=0.3 motion_enabled:=true
+
+# 다른 터미널
+ros2 service call /waypoint_sequence/start std_srvs/srv/Trigger '{}'
+ros2 service call /waypoint_sequence/pause std_srvs/srv/Trigger '{}'
+ros2 topic echo /waypoint_sequence/status    # WAYPOINT_1/5 … WAYPOINT_5/5 → COMPLETE_HOLD
+```
+
+- 각 목표를 3초 연속 유지해야 다음으로 넘어갑니다. RViz Path: `/waypoint_sequence/path`.
+- 실제 배 주행은 아직 검증하지 않았습니다.
+
+## 8. LOS 경로
+
+```bash
+# 미리보기 (둘 중 하나)
+ros2 launch kaboat_hardware los_path_test.launch.py path_kind:=bspline
+ros2 launch kaboat_hardware los_path_test.launch.py path_kind:=circle \
+  center_x:=5.0 center_y:=2.5 radius:=1.2 direction:=ccw target_laps:=2.0
+
+# 실제 주행 (4절 모터 드라이버 실행 후; test_los = bspline, 출력 0.3, 즉시 출발)
+ros2 launch kaboat_hardware los_path_test.launch.py \
+  path_kind:=circle thrust_ratio:=0.3 motion_enabled:=true
+
+# 다른 터미널
+ros2 service call /los_test/start std_srvs/srv/Trigger '{}'
+ros2 topic echo /los_test/status
+```
+
+- RViz: `rviz_tank los` / `rviz_tank los_circle`, Path `/los_test/path`.
+- 수조 밖으로 나가는 경로는 시작 시 거부됩니다.
+
+## 9. 장애물 회피 미리보기
+
+3절의 **선체 TG-50 포함** 명령으로 `/scan`·`/odom`을 준비하고, 모터 드라이버는 켜지 않습니다.
 
 ```bash
 ros2 launch kaboat_hardware real_obstacle_avoid_test.launch.py
-```
+# 이미 /occupancy_grid가 있으면: start_occupancy_grid:=false
+# 실제 라이다 TF를 따로 발행 중이면: publish_scan_tf:=false
+# 육상 시험이면: enable_tilt_gate:=false
 
-기본 `drive_enabled:=false`에서는 `/cmd_vel`을 발행하지 않습니다. `/scan` → 점유 지도 → DRI → B-Spline 생성·검사 → `AvoidFsm`을 실행하고 경로와 제어 미리보기를 발행합니다. 목표는 출발 순간 선수 방향 `goal_distance`(기본 3m) 앞에 고정되며, 지도 변화에 따라 경로를 갱신합니다. 노트북에서는 **1절의 장애물 회피 전용 RViz**를 엽니다. Fixed Frame은 `odom`, 3인칭 카메라의 Target Frame은 `base_link`입니다. 화면이 배를 따라가지 않거나 스캔이 보이지 않으면 `odom → base_link → onboard_laser_frame` TF가 연결됐는지 확인합니다.
-
-이 시험 런처는 배의 수면 반사 및 이상 기울기 노이즈를 방지하기 위해 점유 지도 노드의 IMU roll·pitch 기반 스캔 차단이 기본 활성화(`enable_tilt_gate:=true`, 기본 허용 범위: Pitch `[-4.0°, +1.0°]`, Roll `±3.0°`)되어 있습니다. 배의 자세가 이 범위를 벗어나면 해당 스캔은 격자 지도 갱신에서 제외됩니다. 만약 육상 테스트나 센서 장착 각도로 인해 스캔이 반영되지 않으면 `enable_tilt_gate:=false`로 인수를 주어 실행합니다. `/odom`을 만드는 GQ7·외벽 라이다 절차는 그대로 필요합니다. 이미 별도의 점유 지도 노드를 실행해 `start_occupancy_grid:=false`로 지정했다면, 그 노드에도 파라미터를 맞추어야 합니다.
-
-| RViz 표시 | 토픽 | 확인할 내용 |
-| --- | --- | --- |
-| 선체 스캔 | `/scan` | 120°~240° 가림 적용 |
-| 위치·방향 | `/odom` | 실제 배 위치와 선수 방향 |
-| 점유 지도 | `/occupancy_grid` | 수조 벽과 장애물 |
-| 위험도 지도 | `/real_avoid_test/dri` | 경로 생성기 입력 |
-| 경로·표식 | `/real_avoid_test/path`, `/real_avoid_test/markers` | B-Spline, 목표, 제어점, 궤적 |
-
-젯슨의 **새 준비된 터미널**에서 스캔과 시험 상태를 확인합니다. `ros2 topic hz`는 확인 후 `Ctrl+C`로 종료하세요.
-
-```bash
 ros2 topic hz /scan
-ros2 topic echo /real_avoid_test/status
+ros2 topic echo /real_avoid_test/status     # PREVIEW 확인, NO PLAN이면 배치·목표·지도 점검
 ```
 
-`PREVIEW`이고 경로가 장애물과 벽을 피하는지 확인합니다. `NO PLAN`이면 장애물 배치, 목표 거리, 점유 지도·DRI 설정을 점검합니다. 시작 조건에는 최근 0.5초 이내 센서 입력, 유효한 경로, 선수 전방 중심선 좌우 1m 통로의 점유 장애물이 포함됩니다. 이미 `/occupancy_grid`가 실행 중이면 `start_occupancy_grid:=false`를 지정합니다. 런처는 RViz용 `base_link → onboard_laser_frame` 원점 일치 정적 TF를 발행합니다. 실제 장착 변환을 별도로 발행한다면 `publish_scan_tf:=false`로 중복을 막으세요. 센서 입력이 끊기면 이전 경로·표식을 지웁니다.
-수조 벽도 장애물로 잡힙니다. `d_panic`, `escape_radius`, `lookahead`, 목표 거리, 지도 크기 등 실외 기본값을 그대로 쓰지 말고 수조 실측 크기와 배 크기에 맞춰 조정합니다. 원점 일치 TF는 RViz 표시와 현재 점유 지도 계산의 가정일 뿐이므로, 선체 라이다가 `base_link`에서 떨어져 있으면 장착 변환과 지도 입력 처리도 실측에 맞게 보정해야 합니다.
+| RViz (2절 회피 화면) | 토픽 |
+|---|---|
+| 선체 스캔 | `/scan` (120°~240° 가림) |
+| 점유 지도 / 위험도 | `/occupancy_grid` / `/real_avoid_test/dri` |
+| 경로·표식 | `/real_avoid_test/path`, `/real_avoid_test/markers` |
 
-## 5. 장애물 회피 저속 주행
+- 목표는 출발 시 선수 앞 `goal_distance`(기본 3m). 수조 벽도 장애물로 잡히므로 `d_panic`, `escape_radius`, `lookahead`를 수조 크기에 맞춥니다.
 
-미리보기를 확인한 뒤 **4절의 테스트 런처를 종료**합니다. 다른 `/cmd_vel` 발행 노드는 함께 켜지 않습니다. 젯슨 터미널 4에서 모터 제어기를 3절과 같이 확인해 드라이버를 시작하고, 젯슨 터미널 5에서 새 터미널 준비 명령 후 주행 모드를 켭니다.
+## 10. 장애물 회피 저속 주행
+
+9절 런처를 종료한 뒤:
 
 ```bash
-# 젯슨 터미널 4: 아두이노(CH340) 모터 제어기 시작 (포트: /dev/ttyCH341USB0)
-ros2 launch kaboat_hardware thrusters.launch.py hardware_type:=serial port:=/dev/ttyCH341USB0 allow_port_scan:=false
-```
-
-```bash
-# 젯슨 터미널 5: 주행 모드
+# 젯슨 터미널 4: 4절 모터 드라이버
+# 젯슨 터미널 5 (test_avoid = 즉시 출발)
 ros2 launch kaboat_hardware real_obstacle_avoid_test.launch.py drive_enabled:=true
-```
-
-젯슨의 새 터미널에서 준비 명령을 실행하고 상태와 물리적 여유를 확인한 후 출발합니다.
-
-```bash
+# 다른 터미널
 ros2 service call /real_avoid_test/start std_srvs/srv/Trigger '{}'
 ```
 
-기본 주행 명령 상한은 전진 0.10, 회전 0.06이고 후진 탈출은 꺼져 있습니다. 센서 입력 끊김, 경로에서 0.7m 이상 이탈, 탈출 후진 요청은 시험을 중지합니다. [`real_obstacle_avoid_test.yaml`](src/kaboat_hardware/config/real_obstacle_avoid_test.yaml)의 `fsm.lookahead`, `fsm.cmd_full`, `fsm.v_full`, `fsm.cmd_exp` 등은 실물에서 조정해야 합니다. 속도→추력 기본 계수는 시뮬레이션 값입니다. 현재 DRI는 경로 점을 검사하며 선체 폭을 포함한 충돌 예측이나 미관측 셀 차단은 하지 않으므로 RViz에서 물리적 여유를 직접 확인합니다.
+- 상한 전진 0.10·회전 0.06, 후진 탈출 꺼짐. 센서 끊김, 경로 0.7m 이탈, 후진 요청 시 중지.
+- 실물 튜닝: [`real_obstacle_avoid_test.yaml`](src/kaboat_hardware/config/real_obstacle_avoid_test.yaml)의 `fsm.*`.
+- 선체 폭 충돌 예측은 없으므로 RViz에서 여유를 직접 확인합니다.
 
-## 5A. 실제 gate·avoid 미션 단독 수조 시험
+## 11. 게이트 라이다 미리보기
 
-아래 두 런치는 각각 생산용 `gate_follower`와 `obstacle_planner`를 실행한다.
-`real_obstacle_avoid_test.launch.py`의 별도 시험 노드와는 다르다. 2절의
-`indoor_tank.launch.py`에서 `/odom`과 선체 TG-50의 `/scan`을 먼저 준비한다.
-모터 드라이버는 이 런치가 시작하지 않는다. 수조에 이미 `/occupancy_grid`
-발행자가 있다면 `start_occupancy_grid:=false`를 추가한다.
-
-젯슨 워크스페이스에서 `kaboat_behaviors`, `kaboat_control`,
-`kaboat_mission`, `kaboat_perception`, `kaboat_hardware`를 빌드·source한 뒤, 수조 `odom`
-좌표로 실측한 시작 자세와 종료 목표점을 입력한다. 각 좌표는 기본 10×5m
-수조의 벽에서 0.5m 이상 떨어져야 한다. 선수각은 도 단위이며 0°가 +X,
-180°가 -X이다. 시작 자세와 목표점은 2m보다 멀어야 한다.
+3절로 `/odom`·선체 `/scan`을 준비합니다. `goal_x/y`는 **마지막 게이트 뒤쪽 실측 좌표**(출구에서 4m 이내).
 
 ```bash
-printf '시작 X Y 선수각(deg) 종료 X Y: '
-read -r ENTRY_X ENTRY_Y ENTRY_ANGLE GOAL_X GOAL_Y
+ros2 launch kaboat_bringup gate_tank_preview.launch.py \
+  goal_x:=9.0 goal_y:=2.5 required_pairs:=3 start_occupancy_grid:=true
+# 이미 /occupancy_grid가 있으면 start_occupancy_grid:=true를 뺍니다
 
-# 게이트 3쌍 경로 통과: 먼저 명령·경로 미리보기
+ros2 topic echo /gate/status
+ros2 topic echo /gate/cmd_preview
+```
+
+- `cmd_mux`·모터는 시작하지 않으며 `/cmd/gate`는 0입니다.
+- RViz: Fixed Frame `odom`, Path `/gate/path`, MarkerArray `/gate/pairs`(빨강=기둥, 초록=중앙).
+- 설정: [`gate_params.yaml`](src/kaboat_bringup/config/gate_params.yaml) (`required_pairs`, 게이트 폭, `min_clearance` 등).
+- 동작 원리는 [SKELETON.MD](SKELETON.MD)의 `gate_follower` 항목을 봅니다.
+
+## 12. gate와 avoid 미션 단독 시험
+
+생산용 `gate_follower`/`obstacle_planner`를 미션 가드(`tank_mission_guard`)와 함께 실행합니다.
+좌표는 벽에서 0.5m 이상, 시작–목표 거리 2m 초과.
+
+```bash
+read -rp '시작 X Y 선수각(deg) 종료 X Y: ' ENTRY_X ENTRY_Y ENTRY_ANGLE GOAL_X GOAL_Y
+
+# gate (미리보기)
 ros2 launch kaboat_hardware tank_gate_mission.launch.py \
   entry_x:="$ENTRY_X" entry_y:="$ENTRY_Y" entry_angle_deg:="$ENTRY_ANGLE" \
   goal_x:="$GOAL_X" goal_y:="$GOAL_Y" required_pairs:=3
 
-# 장애물 회피: 별도 시험에서는 위 런치를 종료하고 이것을 실행
+# avoid (미리보기, gate 런치 종료 후)
 ros2 launch kaboat_hardware tank_avoid_mission.launch.py \
   entry_x:="$ENTRY_X" entry_y:="$ENTRY_Y" entry_angle_deg:="$ENTRY_ANGLE" \
   goal_x:="$GOAL_X" goal_y:="$GOAL_Y"
-```
 
-미리보기에서는 `cmd_mux`가 고른 명령이 `/tank_mission/cmd_raw`에 나오지만,
-출력 가드는 `/cmd_vel` 발행자를 만들지 않는다. gate는 `/gate/status`,
-`/gate/path`, `/gate/pairs`를, avoid는 `/avoid/plan`, `/avoid/dri`,
-`/avoid/cps`를 확인한다. 공통 상태는 `/mission/state`와
-`/tank_mission/status`로 본다. 실제 주행 전에는 다른 `/cmd_vel` 발행
-테스트를 종료하고 `/odom` 발행자가 1개인지 확인한다.
-
-실제 주행은 미리보기 런치를 종료한 뒤 **같은 실측 좌표**와
-`drive_enabled:=true`를 넣어 재실행한다. 이때도 `/cmd_vel`에는 0 명령만
-나가며, `/tank_mission/start` 서비스가 성공해야 움직인다. 서비스는 최근
-`/odom`, `/scan`, `/occupancy_grid`, 원시 명령과 올바른 `odom` 프레임을
-확인한다. 입력이 끊기거나 `/emergency_stop`이 true가 되면 정지하고
-재시작 서비스를 다시 요구한다. 후진은 기본 차단이다.
-
-```bash
-# 위 launch 명령 끝에 drive_enabled:=true 추가 후, 별도 젯슨 터미널에서
-ros2 topic hz /odom
-ros2 topic hz /scan
-ros2 topic hz /occupancy_grid
+# 실제 주행: 4절 모터 드라이버 실행 후, 같은 명령 끝에 drive_enabled:=true
 ros2 topic echo /tank_mission/status
 ros2 service call /tank_mission/start std_srvs/srv/Trigger '{}'
-
-# 시험 중 중지
-ros2 service call /tank_mission/stop std_srvs/srv/Trigger '{}'
+ros2 service call /tank_mission/stop  std_srvs/srv/Trigger '{}'
 ```
 
-주행 모드에서는 먼저 공통 `waypoint()`로 시작 위치·선수각에 정렬한 뒤 해당
-미션이 활성화된다. 미리보기 모드만 시작 자세 접근을 생략한다. 시작 자세까지
-직선 접근에는 장애물 회피가 적용되지 않으므로 그 구간을 비워 둔다.
-`tank_avoid_mission.yaml`은 짧은 수조 경로에 맞춰 lookahead와 속도 상한을
-낮춘 설정이며 실제 선체 속도 보정은 별도로 확인해야 한다.
+- 확인 토픽: `/mission/state`, gate `/gate/status` `/gate/path`, avoid `/avoid/plan` `/avoid/dri`.
+- 주행 시 `start` 서비스가 성공해야 움직입니다. 입력이 끊기거나 E-Stop이면 정지 후 재시작을 요구합니다.
+- 상한 전진 0.05·회전 0.02, 후진 차단. 시작 자세까지의 직선 접근은 회피하지 않으므로 그 구간을 비웁니다.
+- 이미 `/occupancy_grid`가 있으면 `start_occupancy_grid:=false`.
 
-## 6. 공통 출발·정지·종료
+## 13. 무선 조종 중 DRI 모니터링
 
-**젯슨의 새 터미널** — 2절의 젯슨 새 터미널 준비 명령을 실행합니다. 출발·정지·비상 정지 명령은 브리지를 통과하지 않으므로 젯슨 도메인 42에서 실행합니다.
+배는 무선 조종기로 움직이고 ROS는 DRI만 계산합니다(모터 명령 없음). 2~3절(선체 TG-50 포함)을 먼저 준비합니다.
 
 ```bash
-cd /path/to/kaboat_ws
-source /opt/ros/humble/setup.bash
-source install/setup.bash
-export ROS_DOMAIN_ID=42
+# 젯슨
+ros2 launch kaboat_hardware manual_dri_test.launch.py
+# 옵션: start_occupancy_grid:=false / publish_scan_tf:=false
+ros2 topic echo /manual_dri/status            # READY 확인
+ros2 topic info /cmd_vel --verbose            # 발행자 0 확인
+
+# 노트북: 컨테이너에 새 코드 반영 후 RViz
+docker exec -it kaboat_lidar bash -lc \
+  'source /opt/ros/humble/setup.bash && colcon build --symlink-install --packages-up-to kaboat_hardware'
+docker exec -it -e DISPLAY="$DISPLAY" kaboat_lidar bash -lc \
+  'source /workspace/kaboat_ws/install/setup.bash && ros2 launch kaboat_hardware manual_dri_rviz.launch.py'
 ```
 
-먼저 젯슨에서 `/boat_pose`와 `/odom`이 모두 수신되는지 확인합니다. 노트북의 RViz에서도 `/odom`을 확인합니다. 고정 경로 추종은 아래 출발 신호를 사용합니다. 장애물 회피 주행은 5절의 서비스 호출 또는 같은 출발 신호를 사용합니다.
+- `WAIT_ODOM`/`WAIT_SCAN`/`WAIT_GRID`면 해당 입력을 확인합니다. 노트북에 DRI가 없으면 양쪽 Zenoh 스크립트가 최신인지 확인합니다.
+- 설정: [`manual_dri_test.yaml`](src/kaboat_hardware/config/manual_dri_test.yaml).
+
+## 14. 출발 정지 종료
+
+젯슨(도메인 42) 터미널에서:
 
 ```bash
-ros2 topic echo /boat_pose --once
-ros2 topic echo /odom --once
+ros2 topic pub --once /start_mission  std_msgs/msg/Bool '{data: true}'    # 출발 (5절, 10절)
+ros2 topic pub --once /start_mission  std_msgs/msg/Bool '{data: false}'   # 일시 정지 / 상태 재설정
+ros2 topic pub --once /emergency_stop std_msgs/msg/Bool '{data: true}'    # 비상 정지
+ros2 topic pub --once /emergency_stop std_msgs/msg/Bool '{data: false}'   # 원인 해결 후 해제
 ```
 
-**출발:**
-
-```bash
-ros2 topic pub --once /start_mission std_msgs/msg/Bool '{data: true}'
-```
-
-**일시 정지:**
-
-```bash
-ros2 topic pub --once /start_mission std_msgs/msg/Bool '{data: false}'
-```
-
-**비상 정지:**
-
-```bash
-ros2 topic pub --once /emergency_stop std_msgs/msg/Bool '{data: true}'
-```
-
-원인을 해결한 뒤 비상 정지를 해제할 때만 `{data: false}`를 발행합니다. 장애물 회피 시험을 완료한 뒤 다시 시작할 때도 `/start_mission`에 `{data: false}`를 발행해 상태를 재설정합니다. 테스트 종료 후 젯슨의 주행 노드·모터 드라이버·센서 런처와 노트북 라이다·RViz를 각 터미널에서 `Ctrl+C`로 종료합니다. 노트북 호스트에서 다음을 실행합니다.
+종료: 각 터미널 `Ctrl+C` 후 노트북 호스트에서
 
 ```bash
 xhost -si:localuser:root
-cd ~/Projects/KABOAT/kaboat_ws
-docker compose -f docker-compose.lidar.yml down
+cd ~/Projects/KABOAT/kaboat_ws && docker compose -f docker-compose.lidar.yml down
+```
+
+남은 프로세스 정리는 [SENSOR_CHECK.md](SENSOR_CHECK.md#12-프로세스-정리)를 봅니다.
+
+## 15. 문제 해결
+
+| 증상 | 조치 |
+|---|---|
+| `/shore/scan` 토픽은 있는데 데이터 없음 | USB 재연결로 포트 번호가 바뀐 경우. 추적기를 `Ctrl+C` 후 재실행. 반복되면 허브·케이블 점검 |
+| 드라이버는 `health OK`인데 스캔 없음 | 스캔 모드 로그와 `ros2 topic hz /shore/scan` 확인. 스캔 전용 런치가 남아 있는지 확인 |
+| RViz에 격자만 보임 | `docker exec kaboat_lidar bash -lc 'source /opt/ros/humble/setup.bash; ROS_DOMAIN_ID=43 timeout 8s ros2 topic hz /shore/scan'` |
+| 호스트 Jazzy RViz에 스캔 안 보임 | 컨테이너 Humble RViz(`rviz_tank`)를 사용 |
+| RViz 화면 연결 오류 | 그래픽 터미널에서 `echo "$DISPLAY"`, `xhost +si:localuser:root` 확인 |
+| `/boat_pose` 위치·yaw가 실물과 다름 | 다른 물체를 판으로 오인. RViz `/lidar_tracker/filtered_scan` 확인, 주행 중단 |
+| `/odom` 없음 | 노트북 `/boat_pose`와 Zenoh 연결 확인 |
+| 선체 `/scan` 0 Hz | 기울기 필터 차단 가능성. `view_pitch`로 확인, 벤치면 `enable_imu_filter:=false` |
+| `Package 'kaboat_hardware' not found` | `source install/setup.bash` 누락 |
+
+USB 진단:
+
+```bash
+ls -l /dev/serial/by-id/
+journalctl -k --since '10 minutes ago' --no-pager | grep -Ei 'usb|cp210x|ttyUSB|disconnect'
 ```

@@ -33,7 +33,7 @@ class ThrusterDriver(Node):
 
         # ── 하드웨어 통신 파라미터 ───────────────────────
         self.declare_parameter('hardware_type', 'dummy')  # 'dummy' | 'serial' | 'pca9685'
-        self.declare_parameter('port', '/dev/ttyUSB0')
+        self.declare_parameter('port', '/dev/ttyCH341USB0')  # 선체 라이다(/dev/ttyUSB0) 오선택 방지
         self.declare_parameter('baudrate', 115200)
         self.declare_parameter('allow_port_scan', False)
         self.declare_parameter('i2c_bus', 1)

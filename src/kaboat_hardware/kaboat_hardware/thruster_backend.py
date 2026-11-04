@@ -179,7 +179,7 @@ class SerialBackend(BaseThrusterBackend):
       - 뒤 4자리: 우측 스러스터 [1000~2000 µs]
     """
 
-    def __init__(self, port: str = '/dev/ttyUSB0', baudrate: int = 115200,
+    def __init__(self, port: str = '/dev/ttyCH341USB0', baudrate: int = 115200,
                  timeout: float = 0.1, allow_port_scan: bool = False):
         self.port = port
         self.baudrate = baudrate

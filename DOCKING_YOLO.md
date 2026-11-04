@@ -104,7 +104,7 @@ ros2 launch kaboat_bringup real_docking_test.launch.py \
 ```
 
 `staging_angle_deg`를 지정하면 공통
-[`waypoint(x, y, angle)`](INDOOR_WAYPOINT.md) 제어로 대기점 위치와
+[`waypoint(x, y, angle)`](SKELETON.MD#공통-주행-함수-waypoint와-los) 제어로 대기점 위치와
 선수각을 모두 맞춘 뒤 표식 탐색 단계로 넘어간다. 각도를 생략하면 기존
 위치만 사용하는 대기점 접근을 유지한다.
 
