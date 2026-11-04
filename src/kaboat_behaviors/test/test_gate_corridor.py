@@ -115,3 +115,21 @@ def test_lookahead_safety_checks_the_goal_when_follower_targets_it():
 
     assert not lookahead_chord_safe(
         Risk(), (0.0, 0.0), path, 0, 1.0, GateParams())
+
+
+def test_scan_hits_use_the_onboard_lidar_mount_offset():
+    """TG-50 은 판 중점(base_link)보다 선수 쪽 0.5 m. 앞 벽은 그만큼 더 멀리 찍혀야 한다."""
+    import math
+    from types import SimpleNamespace
+    from kaboat_behaviors.gate_corridor import scan_hits_world
+    scan = SimpleNamespace(ranges=[2.0], angle_min=0.0, angle_increment=0.1,
+                           range_min=0.1, range_max=20.0)
+    # 선수 +x: 라이다는 (5.5, 2.5), 빔 2 m → 벽 (7.5, 2.5)
+    (hit,) = scan_hits_world(scan, (5.0, 2.5), 0.0, (0.5, 0.0))
+    assert hit[0] == pytest.approx(7.5) and hit[1] == pytest.approx(2.5)
+    # 선수 -x: 라이다는 (4.5, 2.5), 빔 2 m → 벽 (2.5, 2.5)
+    (hit,) = scan_hits_world(scan, (5.0, 2.5), math.pi, (0.5, 0.0))
+    assert hit[0] == pytest.approx(2.5) and hit[1] == pytest.approx(2.5, abs=1e-9)
+    # 오프셋 생략 시 예전처럼 base_link 원점
+    (hit,) = scan_hits_world(scan, (5.0, 2.5), 0.0)
+    assert hit[0] == pytest.approx(7.0)

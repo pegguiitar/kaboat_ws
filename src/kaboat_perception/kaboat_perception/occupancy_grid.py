@@ -121,6 +121,11 @@ class OccupancyGridNode(Node):
         self.declare_parameter('pitch_max_deg', 1.0)       # [deg] 피치 상한
         self.declare_parameter('roll_min_deg', -3.0)       # [deg] 롤 하한
         self.declare_parameter('roll_max_deg', 3.0)        # [deg] 롤 상한
+        # 선체 라이다(TG-50) 장착 위치 — base_link(외벽 추적기의 판 중점) 기준 [m].
+        # 실측: 판보다 선수 쪽 0.5 m, 좌우 0 (2026-11-04). 0 이면 base_link 와 같다고 가정.
+        # gate_follower 의 lidar_offset_x/y, launch 의 base_link→onboard_laser_frame TF 와 같은 값.
+        self.declare_parameter('lidar_offset_x', 0.5)
+        self.declare_parameter('lidar_offset_y', 0.0)
         self.declare_parameter('hit_dedup', True)    # 히트를 스캔당 셀당 1회로 캡
         # 같은 스캔의 이웃 빔은 독립 관측이 아니므로 중복 누적하면 증거 과대계상 —
         # 수면 반사 노이즈가 한 스캔에 검정(97)까지 튀는 원인이었다(베이즈 독립성 교정).
@@ -137,6 +142,10 @@ class OccupancyGridNode(Node):
         rate = float(self.get_parameter('publish_rate').value)
         self.cells = int(self.size / self.resolution)
         self.hit_dedup = bool(self.get_parameter('hit_dedup').value)
+        self.lidar_offset_x = float(self.get_parameter('lidar_offset_x').value)
+        self.lidar_offset_y = float(self.get_parameter('lidar_offset_y').value)
+        if not (math.isfinite(self.lidar_offset_x) and math.isfinite(self.lidar_offset_y)):
+            raise ValueError('lidar_offset_x/y must be finite')
         self.enable_tilt_gate = bool(self.get_parameter('enable_tilt_gate').value)
         self.tilt_threshold_deg = float(self.get_parameter('tilt_threshold_deg').value)
         self.pitch_min_deg = float(self.get_parameter('pitch_min_deg').value)
@@ -238,12 +247,17 @@ class OccupancyGridNode(Node):
             return  # 기울면 이번 스캔은 통째로 버림 — 유령 장애물 방지
         self._recenter()
 
-        bx = self.odom.pose.pose.position.x
-        by = self.odom.pose.pose.position.y
         yaw = _yaw(self.odom.pose.pose.orientation)
+        # 빔의 원점은 base_link 가 아니라 선체 라이다 장착 위치다(선수 쪽 lidar_offset_x).
+        # 이를 빼먹으면 선수 방향 장애물이 그만큼 배 쪽으로 당겨져 찍힌다(수조 실측 0.5 m).
+        cy_, sy_ = math.cos(yaw), math.sin(yaw)
+        bx = (self.odom.pose.pose.position.x
+              + self.lidar_offset_x * cy_ - self.lidar_offset_y * sy_)
+        by = (self.odom.pose.pose.position.y
+              + self.lidar_offset_x * sy_ + self.lidar_offset_y * cy_)
         ax, ay = self.anchor
         c = self.cells
-        # 배의 배열 인덱스 — recenter 직후라 항상 중앙 근처
+        # 라이다의 배열 인덱스 — recenter 직후라 항상 중앙 근처 (자유공간 빔의 시작점)
         rx = math.floor(bx / self.resolution) - ax
         ry = math.floor(by / self.resolution) - ay
 

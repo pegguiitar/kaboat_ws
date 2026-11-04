@@ -99,8 +99,14 @@ def _clusters(grid, p: GateParams):
     return clusters
 
 
-def scan_hits_world(scan, boat_xy, yaw):
-    """Use the same base_link-aligned scan geometry as occupancy_grid.py."""
+def scan_hits_world(scan, boat_xy, yaw, lidar_offset=(0.0, 0.0)):
+    """Use the same scan geometry as occupancy_grid.py.
+
+    lidar_offset 은 base_link(판 중점) 기준 선체 라이다 위치 (선수, 좌현) [m].
+    """
+    c, s = math.cos(yaw), math.sin(yaw)
+    ox, oy = float(lidar_offset[0]), float(lidar_offset[1])
+    origin = (boat_xy[0] + ox * c - oy * s, boat_xy[1] + ox * s + oy * c)
     ranges = np.asarray(scan.ranges, dtype=float)
     angles = scan.angle_min + scan.angle_increment * np.arange(len(ranges))
     valid = (np.isfinite(ranges) & (ranges > scan.range_min)
@@ -109,8 +115,8 @@ def scan_hits_world(scan, boat_xy, yaw):
         return np.empty((0, 2), dtype=float)
     world_angles = yaw + angles[valid]
     return np.column_stack((
-        boat_xy[0] + ranges[valid] * np.cos(world_angles),
-        boat_xy[1] + ranges[valid] * np.sin(world_angles)))
+        origin[0] + ranges[valid] * np.cos(world_angles),
+        origin[1] + ranges[valid] * np.sin(world_angles)))
 
 
 def pair_observed(pair: GatePair, scan_hits, p: GateParams):

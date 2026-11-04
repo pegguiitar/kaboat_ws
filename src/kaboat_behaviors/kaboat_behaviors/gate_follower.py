@@ -36,12 +36,17 @@ class GateFollower(BehaviorBase):
         # LOS 경로 추종 구간: los_path_test 에서 검증된 값 0.3 (전진·회전 출력 상한).
         self.declare_parameter('gate.los_thrust_ratio', 0.3)
         self.declare_parameter('gate.motion_enabled', False)
+        # 선체 라이다 장착 위치(occupancy_grid 의 lidar_offset_x/y 와 같은 값, 실측 선수 0.5 m)
+        self.declare_parameter('lidar_offset_x', 0.5)
+        self.declare_parameter('lidar_offset_y', 0.0)
         self.declare_parameter('gate.scan_timeout_sec', 0.7)
         self.declare_parameter('gate.grid_timeout_sec', 0.7)
         self.thrust_ratio = float(self.get_parameter('gate.thrust_ratio').value)
         self.los_thrust_ratio = float(
             self.get_parameter('gate.los_thrust_ratio').value)
         self.motion_enabled = bool(self.get_parameter('gate.motion_enabled').value)
+        self.lidar_offset = (float(self.get_parameter('lidar_offset_x').value),
+                             float(self.get_parameter('lidar_offset_y').value))
         self.scan_timeout = float(self.get_parameter('gate.scan_timeout_sec').value)
         self.grid_timeout = float(self.get_parameter('gate.grid_timeout_sec').value)
         if (not math.isfinite(self.thrust_ratio)
@@ -106,7 +111,7 @@ class GateFollower(BehaviorBase):
             pose = self.odom.pose.pose
             hits = scan_hits_world(
                 msg, (pose.position.x, pose.position.y),
-                yaw_from_quaternion(pose.orientation))
+                yaw_from_quaternion(pose.orientation), self.lidar_offset)
             if len(hits) == 0:
                 return
             self._scan_hits = hits

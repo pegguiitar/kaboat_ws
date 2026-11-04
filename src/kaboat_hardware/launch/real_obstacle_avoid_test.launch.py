@@ -103,12 +103,12 @@ def generate_launch_description():
                 'use_sim_time': False,
             }],
         ),
-        # occupancy_grid assumes the onboard laser is at base_link. Match that
-        # assumption in RViz so /scan can be transformed into the odom frame.
+        # The onboard TG-50 sits 0.5 m ahead of base_link (shore-tracker panel
+        # midpoint); occupancy_grid uses the same lidar_offset_x for its rays.
         Node(
             package='tf2_ros', executable='static_transform_publisher',
             name='real_avoid_onboard_laser_tf', output='screen',
-            arguments=['--x', '0', '--y', '0', '--z', '0',
+            arguments=['--x', '0.5', '--y', '0', '--z', '0',   # TG-50: 판 중점보다 선수 0.5 m
                        '--roll', '0', '--pitch', '0', '--yaw', '0',
                        '--frame-id', 'base_link',
                        '--child-frame-id', 'onboard_laser_frame'],
