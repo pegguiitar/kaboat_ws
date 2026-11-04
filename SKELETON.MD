@@ -281,7 +281,7 @@ def compute_cmd(self):
 ```bash
 ros2 launch kaboat_bringup real_docking_test.launch.py \
   staging_x:=5.0 staging_y:=2.5 staging_angle_deg:=180.0 \
-  dock_weights:=/absolute/path/model.pt wall_to_mouth_m:=2.5 \
+  dock_weights:=/absolute/path/model.pt \
   dock_motion_enabled:=false
 ```
 

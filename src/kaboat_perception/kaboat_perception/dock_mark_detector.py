@@ -1,9 +1,11 @@
-"""Gated D455 YOLO26-seg detector and depth-based dock entrance estimator.
+"""Gated D455 YOLO26-seg detector and depth-based dock marker locator.
 
 Inputs: aligned color/depth/camera_info and latched /detector/enable.
-Outputs: /detections/dock_marks, /dock/marker_base (3D),
-         /dock/entrance_base (boat-local z=0), /dock/detection_status.
-No entrance is published without valid depth, a stable marker plane, and TF.
+Outputs: /detections/dock_marks, /dock/marker_base (3D, base_link),
+         /dock/detection_status.
+Only the marker position is estimated here. The dock axis / entrance comes
+from the lidar back-wall fit in docking_ctrl, not from a depth plane normal.
+No marker is published without valid depth and TF.
 """
 
 import json
@@ -29,7 +31,7 @@ from tf2_geometry_msgs import do_transform_point
 from tf2_ros import Buffer, TransformException, TransformListener
 
 from .depth_utils import depth_to_meters
-from .dock_geometry import estimate_marker, project_entrance_xy
+from .dock_geometry import estimate_marker
 from .dock_segmentation import CLASS_NAMES, CLASS_PARTS, DockSegmenter
 
 
@@ -38,10 +40,10 @@ class DockMarkDetector(Node):
         super().__init__('dock_mark_detector')
         for name, value in {
             'weights': '', 'target_class': 'red_triangle', 'base_frame': 'base_link',
-            'wall_to_mouth_m': 2.5, 'confidence': 0.45, 'image_size': 640,
+            'confidence': 0.45, 'image_size': 640,
             'device': 'cpu', 'min_depth_m': 0.25, 'max_depth_m': 12.0,
             'min_mask_pixels': 40, 'min_valid_fraction': 0.5,
-            'max_plane_rms_m': 0.08, 'sync_slop_s': 0.08,
+            'sync_slop_s': 0.08,
         }.items():
             self.declare_parameter(name, value)
         self.weights = str(self.get_parameter('weights').value)
@@ -49,9 +51,6 @@ class DockMarkDetector(Node):
         if self.target_class not in CLASS_NAMES:
             raise ValueError(f'target_class must be one of {CLASS_NAMES}')
         self.base_frame = str(self.get_parameter('base_frame').value)
-        self.wall_to_mouth = float(self.get_parameter('wall_to_mouth_m').value)
-        if not math.isfinite(self.wall_to_mouth) or self.wall_to_mouth < 0:
-            raise ValueError('wall_to_mouth_m must be finite and non-negative')
         self.enabled = False
         self.segmenter = None
         self.model_error = ''
@@ -60,7 +59,6 @@ class DockMarkDetector(Node):
         self.tf_listener = TransformListener(self.tf_buffer, self)
         self.marks_pub = self.create_publisher(MarkArray, '/detections/dock_marks', 10)
         self.marker_pub = self.create_publisher(PointStamped, '/dock/marker_base', 10)
-        self.entrance_pub = self.create_publisher(PointStamped, '/dock/entrance_base', 10)
         self.status_pub = self.create_publisher(String, '/dock/detection_status', 10)
         latched = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.create_subscription(Bool, '/detector/enable', self._on_enable, latched)
@@ -143,9 +141,8 @@ class DockMarkDetector(Node):
                     min_depth=float(self.get_parameter('min_depth_m').value),
                     max_depth=float(self.get_parameter('max_depth_m').value),
                     min_pixels=int(self.get_parameter('min_mask_pixels').value),
-                    max_plane_rms=float(self.get_parameter('max_plane_rms_m').value),
                     distortion=info_msg.d)
-            except (np.linalg.LinAlgError, cv2.error, ValueError) as exc:
+            except (cv2.error, ValueError) as exc:
                 self._status(False, 'marker_geometry_error', detail=str(exc))
                 return
             if estimate is None or estimate.valid_fraction < float(
@@ -174,29 +171,14 @@ class DockMarkDetector(Node):
                 self.base_frame, optical_frame, rclpy.time.Time.from_msg(stamp),
                 timeout=Duration(seconds=0.1))
             marker_optical = self._point(stamp, optical_frame, estimate.point_optical)
-            tip_optical = self._point(
-                stamp, optical_frame,
-                estimate.point_optical + estimate.outward_normal_optical)
             marker_base = do_transform_point(marker_optical, transform)
-            tip_base = do_transform_point(tip_optical, transform)
         except TransformException as exc:
             self._status(False, 'camera_to_base_tf_unavailable', detail=str(exc))
             return
-        marker_xyz = np.array([marker_base.point.x, marker_base.point.y,
-                               marker_base.point.z])
-        normal_xyz = np.array([tip_base.point.x, tip_base.point.y,
-                               tip_base.point.z]) - marker_xyz
-        entrance_xyz = project_entrance_xy(
-            marker_xyz, normal_xyz, self.wall_to_mouth)
-        if entrance_xyz is None:
-            self._status(False, 'invalid_wall_normal_or_offset')
-            return
         self.marker_pub.publish(marker_base)
-        self.entrance_pub.publish(self._point(stamp, self.base_frame, entrance_xyz))
         self._status(True, 'ok', confidence=detection.confidence,
                      depth_m=estimate.median_depth_m,
-                     valid_fraction=estimate.valid_fraction,
-                     plane_rms_m=estimate.plane_rms_m)
+                     valid_fraction=estimate.valid_fraction)
 
 
 def main(args=None):

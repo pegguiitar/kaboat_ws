@@ -31,8 +31,6 @@ def generate_launch_description():
         'weights': LaunchConfiguration('dock_weights'),
         'target_class': LaunchConfiguration('dock_target_class'),
         'device': LaunchConfiguration('dock_device'),
-        'wall_to_mouth_m': ParameterValue(
-            LaunchConfiguration('wall_to_mouth_m'), value_type=float),
     }
 
     perception = [
@@ -65,7 +63,7 @@ def generate_launch_description():
     behaviors.append(Node(
         package='kaboat_behaviors', executable='docking_ctrl',
         name='docking_ctrl', output='screen',
-        parameters=[common_params, {
+        parameters=[common_params, LaunchConfiguration('slot_config'), {
             'dock.motion_enabled': ParameterValue(
                 LaunchConfiguration('dock_motion_enabled'), value_type=bool),
         }]))
@@ -114,8 +112,9 @@ def generate_launch_description():
             'dock_device', default_value='cpu',
             description='Ultralytics device: cpu 또는 Jetson CUDA 0'),
         DeclareLaunchArgument(
-            'wall_to_mouth_m', default_value='2.5',
-            description='마커 벽에서 입구까지의 수평 거리; 현장 실측 필요'),
+            'slot_config',
+            default_value=os.path.join(bringup_share, 'config', 'dock_slot.yaml'),
+            description='도킹 슬롯·선체 치수 YAML; 슬롯 크기 값은 이 파일에서만 정한다'),
         DeclareLaunchArgument(
             'dock_motion_enabled', default_value='false',
             description='기본값 false; TF/오프셋/안전 검증 후에만 true'),

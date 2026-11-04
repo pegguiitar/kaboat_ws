@@ -1,8 +1,12 @@
 """Single real-boat docking mission; requires separately running sensors/odom.
 
 No motor driver is started. Dock motion is disabled unless explicitly enabled.
-The staging pose (position and heading), YOLO model and wall-to-mouth offset
-are required inputs. Approach motion is disabled unless explicitly enabled.
+The staging pose (position and heading) and YOLO model are required inputs.
+Slot and hull dimensions (wall-to-mouth, slot width, hull size, ...) are NOT
+launch arguments: they live in one file, config/dock_slot.yaml, chosen with
+`slot_config`. Approach motion is disabled unless explicitly enabled.
+An optional retry waypoint (retry_x/y/angle_deg) is visited once if the first
+ACQUIRE search fails; without it a failed search aborts.
 """
 
 import math
@@ -23,20 +27,28 @@ def _nodes(context):
                for name in ('staging_x', 'staging_y')]
     heading_text = LaunchConfiguration('staging_angle_deg').perform(context).strip()
     staging_heading = float(heading_text)
-    wall_to_mouth = float(LaunchConfiguration('wall_to_mouth_m').perform(context))
-    pre_entry_offset = float(
-        LaunchConfiguration('pre_entry_offset_m').perform(context))
-    hull_length = float(LaunchConfiguration('hull_length_m').perform(context))
-    exit_clearance = float(LaunchConfiguration('exit_clearance_m').perform(context))
-    if not all(math.isfinite(value) for value in
-               (*staging, staging_heading, wall_to_mouth, pre_entry_offset,
-                hull_length, exit_clearance)):
-        raise ValueError('docking dimensions and staging coordinates must be finite')
-    if wall_to_mouth <= 0 or pre_entry_offset <= 0 or hull_length <= 0 or exit_clearance < 0:
-        raise ValueError('dock lengths must be positive; '
-                         'exit_clearance_m must be non-negative')
-    reverse_distance = max(
-        0.5, wall_to_mouth + hull_length / 2 + exit_clearance - 1.0)
+    if not all(math.isfinite(value) for value in (*staging, staging_heading)):
+        raise ValueError('staging coordinates must be finite')
+
+    retry_text = [LaunchConfiguration(name).perform(context).strip()
+                  for name in ('retry_x', 'retry_y', 'retry_angle_deg')]
+    retry_enabled = any(retry_text)
+    retry_params = {'dock.retry_enabled': False}
+    if retry_enabled:
+        if not all(retry_text):
+            raise ValueError('retry_x, retry_y, retry_angle_deg must be '
+                             'given together (or all left empty)')
+        retry = [float(value) for value in retry_text]
+        if not all(math.isfinite(value) for value in retry):
+            raise ValueError('retry waypoint must be finite')
+        retry_params = {
+            'dock.retry_enabled': True, 'dock.retry_x': retry[0],
+            'dock.retry_y': retry[1], 'dock.retry_angle_deg': retry[2],
+        }
+
+    slot_config = LaunchConfiguration('slot_config').perform(context)
+    if not os.path.isfile(slot_config):
+        raise FileNotFoundError(f'slot_config file not found: {slot_config}')
 
     weights = LaunchConfiguration('dock_weights').perform(context)
     if not os.path.isfile(weights):
@@ -56,19 +68,15 @@ def _nodes(context):
                  'weights': weights,
                  'target_class': LaunchConfiguration('dock_target_class'),
                  'device': LaunchConfiguration('dock_device'),
-                 'wall_to_mouth_m': wall_to_mouth,
              }]),
         Node(package='kaboat_behaviors', executable='docking_ctrl',
-             name='docking_ctrl', output='screen', parameters=[{
+             name='docking_ctrl', output='screen', parameters=[slot_config, {
                  'use_sim_time': False,
                  'dock.motion_enabled': ParameterValue(
                      LaunchConfiguration('dock_motion_enabled'), value_type=bool),
                  'dock.staging_heading_enabled': True,
                  'dock.staging_angle_deg': staging_heading,
-                 'dock.berth_distance': 1.0,
-                 'dock.pre_entry_offset': ParameterValue(
-                     LaunchConfiguration('pre_entry_offset_m'), value_type=float),
-                 'dock.reverse_min_distance': reverse_distance,
+                 **retry_params,
              }]),
         Node(package='kaboat_control', executable='cmd_mux',
              name='cmd_mux', output='screen', parameters=[{'use_sim_time': False}]),
@@ -93,14 +101,20 @@ def generate_launch_description():
         DeclareLaunchArgument('dock_weights', description='Jetson의 YOLO .pt 절대 경로'),
         DeclareLaunchArgument('dock_target_class',
                               description='red_triangle / green_circle / blue_square'),
-        DeclareLaunchArgument('wall_to_mouth_m',
-                              description='표식 뒷벽부터 슬롯 입구까지 실측 거리 [m]'),
-        DeclareLaunchArgument('pre_entry_offset_m', default_value='1.5',
-                              description='슬롯 입구 바깥 첫 목표점 거리 [m]'),
-        DeclareLaunchArgument('hull_length_m', default_value='1.0',
-                              description='선체 실제 전장 [m]; 기본 1m는 임시값'),
-        DeclareLaunchArgument('exit_clearance_m', default_value='0.2',
-                              description='후진 완료 시 선미-입구 추가 여유 [m]'),
+        DeclareLaunchArgument(
+            'slot_config',
+            default_value=os.path.join(
+                get_package_share_directory('kaboat_bringup'),
+                'config', 'dock_slot.yaml'),
+            description='슬롯·선체 치수 YAML(wall_to_mouth, 슬롯 폭, 선체 크기 등). '
+                        '슬롯 크기 값은 이 파일에서만 정한다'),
+        DeclareLaunchArgument('retry_x', default_value='',
+                              description='ACQUIRE 15초 실패 시 이동할 재시도 odom X [m]; '
+                                          '비우면 재시도 없이 ABORT'),
+        DeclareLaunchArgument('retry_y', default_value='',
+                              description='재시도 waypoint odom Y [m]'),
+        DeclareLaunchArgument('retry_angle_deg', default_value='',
+                              description='재시도 waypoint 도착 선수각 [deg]'),
         DeclareLaunchArgument('dock_device', default_value='cpu',
                               description='Ultralytics device: cpu 또는 0'),
         DeclareLaunchArgument('dock_motion_enabled', default_value='false',
