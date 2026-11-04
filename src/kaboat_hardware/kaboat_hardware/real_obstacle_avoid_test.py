@@ -74,7 +74,7 @@ class RealObstacleAvoidTest(Node):
         #  - tank_stop_margin: 선체 중심이 경계에서 이 거리 안이면 정지(해제)한다.
         self.declare_parameter('tank_bounds', [0.0, 0.0, 0.0, 0.0])
         self.declare_parameter('exclude_tank_walls', False)
-        self.declare_parameter('tank_wall_band', 0.3)
+        self.declare_parameter('tank_wall_band', 0.5)
         self.declare_parameter('tank_wall_dri', 0.5)
         self.declare_parameter('tank_stop_margin', 0.5)
 

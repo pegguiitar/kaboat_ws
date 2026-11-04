@@ -82,7 +82,7 @@ def test_follow_curvature_slows_down():
 def test_follow_caps_target_to_waypoint_when_close():
     """wp 가 lookahead 안 — 목표점 = wp 자체 (경로가 wp 를 지나쳐도 무시)."""
     fsm = make_fsm()
-    wp = (1.5, 1.0)   # min_horizon(3m) 때문에 경로는 wp 너머까지 뻗는다
+    wp = (1.5, 1.0)   # wp 거리 1.8 m < min_horizon(2 m) 이라 경로는 wp 너머까지 뻗는다
     plan = acquire(fsm, dri_of([]), wp=wp).plan
     p = FsmParams()
     _, ang = follow_cmd(plan, BOAT, YAW, 0.0, wp, p, KP, KD)

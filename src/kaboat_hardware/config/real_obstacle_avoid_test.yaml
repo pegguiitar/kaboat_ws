@@ -12,7 +12,7 @@ real_obstacle_avoid_test:
     # 방향 허용 >= 180 이면 방향 검사를 끈다. 전방 장애물 확인 차선도 배→목표 방향이다.
     fixed_goal_enabled: true
     fixed_start_xy: [9.0, 2.5]
-    fixed_goal_xy: [1.0, 2.5]
+    fixed_goal_xy: [1.5, 2.5]          # 벽·벽 앞 구조물에서 떨어지게 (이전 1.0)
     start_tolerance: 0.5
     start_heading_tolerance_deg: 45.0
     goal_tolerance: 0.5
@@ -32,8 +32,9 @@ real_obstacle_avoid_test:
     # 수조 시험 전용이다. tank_bounds 를 0 으로 두면 전부 꺼진다.
     tank_bounds: [0.0, 0.0, 10.0, 5.0]   # [x_min, y_min, x_max, y_max]
     exclude_tank_walls: true             # 경계 띠 안·밖 점유 셀을 '벽'으로 보고 장애물에서 뺀다
-    tank_wall_band: 0.3                  # 벽으로 보는 띠 폭 [m]. 먼 벽(≈7 m)은 육상 yaw 오차 ±2° 로
-                                         # ≈0.25 m 밀려 보일 수 있다 — 먼 벽에 X 가 남으면 키운다
+    tank_wall_band: 0.5                  # 벽으로 보는 띠 폭 [m]. 벽 점이 경계 안쪽 0.4~0.5 m 까지
+                                         # 퍼져 찍혀 0.3 이면 벽에 X 가 남았다. 벽에서 0.5 m 안
+                                         # 의 진짜 장애물도 같이 벽으로 처리된다는 점에 주의
     tank_wall_dri: 0.5                   # 벽 DRI 상한. 지도엔 약하게 보이되 후보 필터 문턱(1.116 = 1.2 × 0.93)
                                          # 아래라 경로를 막지 않는다. 0 이면 벽 셀을 완전히 지움
     # 벽을 DRI 에서 빼면 플래너가 벽을 모르므로, 선체 중심이 경계에서 이 거리 안이면

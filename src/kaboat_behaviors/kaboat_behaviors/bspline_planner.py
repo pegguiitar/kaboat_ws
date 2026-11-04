@@ -47,7 +47,10 @@ class PlannerParams:
     # 동급 안전에 계획 지평선 +0.5m. 격자 recenter 지연이 커지면(실물 SLAM
     # 등) 재검토.
     boundary_margin: float = 0.5
-    min_horizon: float = 3.0       # waypoint 가 코앞이어도 r_end 하한 [m]
+    # waypoint 가 코앞이어도 r_end 하한 [m]. 3.0 → 2.0 (2026-11-04 실물 튜닝): 3 m 로 두면
+    # 벽 앞 목표에서 마지막 제어점이 목표를 지나 벽 위에 놓여 NO PLAN 이 났다.
+    # 퇴화 방지 하한(p1_len + 2·cp_min_gap = 2.0 m)이 따로 있어 2.0 보다 낮출 의미는 없다.
+    min_horizon: float = 2.0
     cp_min_gap: float = 0.5        # r_end 퇴화 방지: r_end ≥ ‖p1‖ + 2·이 값 [m]
     # 후보 부채꼴 = wp 중심 ±search_fov/2. 원래 180°(wp 전진 반평면 전체, §3-2)
     # 였는데, wp_bearing 이 헤딩과 크게 벌어진 상황(급회전 직후 등)에서 p2 가
