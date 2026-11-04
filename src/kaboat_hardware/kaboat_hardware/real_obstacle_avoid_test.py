@@ -47,14 +47,14 @@ class RealObstacleAvoidTest(Node):
         self.declare_parameter('wait_for_start', True)
         self.declare_parameter('allow_escape', False)
         self.declare_parameter('goal_distance', 3.0)
-        # 고정 시작·목표(odom = 수조 좌표). 켜면 목표는 선수 앞 goal_distance 가 아니라
-        # fixed_goal_xy 이고, 출발은 배가 fixed_start_xy 근처(start_tolerance)에서
-        # 목표를 향해(start_heading_tolerance_deg) 놓여 있을 때만 허용한다.
-        # start_tolerance <= 0 이면 위치 검사, heading 허용 >= 180 이면 방향 검사를 끈다.
+        # 고정 목표(odom = 수조 좌표). 켜면 목표는 선수 앞 goal_distance 가 아니라
+        # fixed_goal_xy 이고, 배는 어디서든 선수가 목표를 향해(start_heading_tolerance_deg)
+        # 있으면 출발한다. start_tolerance > 0 이면 fixed_start_xy 근처에서만 출발하도록
+        # 위치 검사를 켠다(기본 0 = 끔). heading 허용 >= 180 이면 방향 검사도 끈다.
         self.declare_parameter('fixed_goal_enabled', False)
         self.declare_parameter('fixed_goal_xy', [0.0, 0.0])
         self.declare_parameter('fixed_start_xy', [0.0, 0.0])
-        self.declare_parameter('start_tolerance', 0.5)
+        self.declare_parameter('start_tolerance', 0.0)
         self.declare_parameter('start_heading_tolerance_deg', 45.0)
         self.declare_parameter('goal_tolerance', 0.5)
         self.declare_parameter('max_cross_track_error', 0.7)
@@ -144,8 +144,10 @@ class RealObstacleAvoidTest(Node):
                 raise ValueError('fixed_goal_xy and fixed_start_xy must be finite '
                                  '[x, y] pairs')
             if self.tank_enabled:
-                for label, point in (('fixed_goal_xy', self.fixed_goal_xy),
-                                     ('fixed_start_xy', self.fixed_start_xy)):
+                points = [('fixed_goal_xy', self.fixed_goal_xy)]
+                if self.start_tolerance > 0.0:     # 시작점은 위치 검사를 켤 때만 쓴다
+                    points.append(('fixed_start_xy', self.fixed_start_xy))
+                for label, point in points:
                     edge = edge_distance(point[0], point[1], self.tank_bounds)
                     if edge < self.tank_stop_margin:
                         raise ValueError(
@@ -233,7 +235,11 @@ class RealObstacleAvoidTest(Node):
         self.get_logger().info(
             f'Real avoidance test ready ({mode}). Goal: '
             + (f'fixed ({self.fixed_goal_xy[0]:.2f}, {self.fixed_goal_xy[1]:.2f}), '
-               f'start ({self.fixed_start_xy[0]:.2f}, {self.fixed_start_xy[1]:.2f})'
+               + (f'start ({self.fixed_start_xy[0]:.2f}, {self.fixed_start_xy[1]:.2f})'
+                  if self.start_tolerance > 0.0 else 'start anywhere')
+               + (f' facing the goal within '
+                  f'{math.degrees(self.start_heading_tolerance):.0f} deg'
+                  if self.start_heading_tolerance < math.pi else '')
                if self.fixed_goal_enabled else
                f'{self.goal_distance:.1f} m ahead of the start pose')
             + '. Waiting for /scan, /odom and /occupancy_grid.')
@@ -550,10 +556,19 @@ class RealObstacleAvoidTest(Node):
                 self.preview_received = now
                 self.preview_obstacle_distance = self._front_obstacle_distance(
                     dri.occ_xy, boat, yaw, goal)
-                if not self.wait_for_start and plan is not None:
-                    ok, _ = self._arm()
-                    if ok:
-                        return
+                start_text = ''
+                if not self.wait_for_start:
+                    # 즉시 출발 모드에서 출발이 막힌 이유를 상태·로그에 남긴다
+                    # (전엔 버려져서 배가 왜 안 움직이는지 알 수 없었다).
+                    if plan is None:
+                        why = 'no valid preview B-spline path (NO PLAN)'
+                    else:
+                        ok, why = self._arm()
+                        if ok:
+                            return
+                    start_text = f', start_blocked={why}'
+                    self.get_logger().warn(f'auto start blocked: {why}',
+                                           throttle_duration_sec=2.0)
                 self._publish_command(Twist())
                 self._publish_debug(dri, plan, goal)
                 tank_text = ''
@@ -565,7 +580,7 @@ class RealObstacleAvoidTest(Node):
                     f'obstacles={len(dri.occ_xy)}, '
                     f'front={self.preview_obstacle_distance}, '
                     f'goal=({goal[0]:.2f}, {goal[1]:.2f}), '
-                    f'drive_enabled={self.drive_enabled}{tank_text}')
+                    f'drive_enabled={self.drive_enabled}{tank_text}{start_text}')
                 return
 
             if math.hypot(goal[0] - boat[0], goal[1] - boat[1]) <= self.goal_tolerance:

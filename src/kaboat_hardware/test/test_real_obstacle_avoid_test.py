@@ -265,6 +265,17 @@ class TestRealObstacleAvoidTest(unittest.TestCase):
         self.node._tick()
         self.assertTrue(self.node.started)
 
+    def test_auto_start_block_reason_is_reported(self):
+        statuses = []
+        self.node.status_pub.publish = statuses.append
+        self.node.wait_for_start = False
+        self.feed_scene()                       # 배 (0, 0)
+        self.enable_fixed_goal((-4.0, 0.0), start=(3.0, 0.0))   # 시작점에서 3 m
+        self.node._tick()
+        self.assertFalse(self.node.started)
+        self.assertIn('start_blocked=boat is 3.00 m from the start point',
+                      statuses[-1].data)
+
 
 if __name__ == '__main__':
     unittest.main()

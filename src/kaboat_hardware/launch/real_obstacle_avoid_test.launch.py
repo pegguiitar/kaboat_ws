@@ -34,8 +34,8 @@ def generate_launch_description():
         DeclareLaunchArgument('goal_distance', default_value='3.0',
                               description='Goal distance ahead of boat at start [m]'),
         DeclareLaunchArgument('fixed_goal', default_value='true',
-                              description='true: fixed start/goal from the config yaml '
-                                          '(boat starts at fixed_start_xy facing the goal); '
+                              description='true: fixed goal from the config yaml '
+                                          '(boat starts anywhere facing the goal); '
                                           'false: goal_distance ahead of the boat'),
         DeclareLaunchArgument('exclude_tank_walls', default_value='true',
                               description='Drop occupied cells at the tank walls from the DRI '

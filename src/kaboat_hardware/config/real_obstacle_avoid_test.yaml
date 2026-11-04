@@ -6,14 +6,14 @@ real_obstacle_avoid_test:
     allow_escape: false
     goal_distance: 3.0                   # 고정 목표를 끄면(fixed_goal_enabled: false) 선수 앞 이 거리
 
-    # 고정 시작·목표 (수조 좌표). 배를 시작점에 목표 방향(-x = 180°)으로 놓고 시작한다.
-    # 출발 조건: 시작점에서 start_tolerance 이내, 선수가 목표 방향에서
-    # start_heading_tolerance_deg 이내. start_tolerance <= 0 이면 위치 검사,
-    # 방향 허용 >= 180 이면 방향 검사를 끈다. 전방 장애물 확인 차선도 배→목표 방향이다.
+    # 고정 목표 (수조 좌표). 배는 수조 어디서든(벽에서 tank_stop_margin 이상) 선수를
+    # 목표 쪽으로 두면 출발한다 — 출발 조건은 선수가 목표 방향에서
+    # start_heading_tolerance_deg 이내일 것. 방향 허용 >= 180 이면 방향 검사도 끈다.
+    # 전방 장애물 확인 차선도 배→목표 방향이다.
+    # 특정 시작점에서만 출발시키려면 fixed_start_xy: [x, y] 와 start_tolerance > 0 을 준다.
     fixed_goal_enabled: true
-    fixed_start_xy: [9.0, 2.5]
     fixed_goal_xy: [1.5, 2.5]          # 벽·벽 앞 구조물에서 떨어지게 (이전 1.0)
-    start_tolerance: 0.5
+    start_tolerance: 0.0               # 0 = 시작 위치 검사 끔
     start_heading_tolerance_deg: 45.0
     goal_tolerance: 0.5
     require_front_obstacle: true
