@@ -43,7 +43,7 @@ Visualization Manager:
         Value: /manual_dri/dri
       Value: true
     - Class: rviz_default_plugins/MarkerArray
-      Name: "DRI 문턱(0.85) 초과 구역 · 빨간 X"
+      Name: "DRI 문턱(0.93) 초과 구역 · 빨간 X"
       Enabled: true
       Topic:
         Depth: 1

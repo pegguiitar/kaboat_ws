@@ -79,7 +79,9 @@ class PlannerParams:
     # 하는데 스플라인은 굽이에서 현보다 수 cm 안쪽으로 붙어, 1.0 그대로면
     # 경계 스침(실측 1.013)이 남는다. 0.85 = 위험 경사(≈2.7/m) 기준 ~5cm
     # 편차 흡수. check 는 margin 없이 threshold 그대로 본다.
-    gen_margin: float = 0.85
+    # 0.85 → 0.93 (2026-11-04): 장애물 간격 ~2 m 수조 배치. 무작위 400장면 합성 조사에서
+    # 만들자마자 check 위반 수(1/396)와 틈 통과 간격이 0.85 와 같았다.
+    gen_margin: float = 0.93
     repair_max: int = 3            # tick 당 수리 한도 (노드가 쓰는 값)
     repair_dtheta: float = math.radians(6.0)  # 수리 1회 방위 이동각
     progress_window: float = 2.0   # check 진행 갱신 전방 탐색 창 [m]

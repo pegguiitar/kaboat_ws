@@ -287,7 +287,7 @@ ros2 topic echo /real_avoid_test/status     # PREVIEW 확인, NO PLAN이면 배�
 | 경로·표식 | `/real_avoid_test/path`, `/real_avoid_test/markers` |
 
 - **고정 시작·목표:** 시작 `(9.0, 2.5)`, 목표 `(1.0, 2.5)`(수조 좌표, `config/real_obstacle_avoid_test.yaml`의 `fixed_start_xy`, `fixed_goal_xy`)입니다. 배를 시작점에 **선수 -X(180°)** 로 놓습니다. 출발은 시작점에서 0.5m 이내, 선수가 목표 방향에서 45° 이내일 때만 허용되고(아니면 `PREVIEW`에서 이유를 표시하며 대기), 전방 장애물 확인 차선도 배→목표 방향입니다. 목표 0.5m 이내면 종료합니다. 런치 인자 `fixed_goal:=false`면 예전처럼 선수 앞 `goal_distance`(기본 3m)가 목표입니다. 목표까지 8m라서 DRI 창(±7.4m)보다 멀지만 플래너가 창 안 6.9m 지평선으로 계획합니다.
-- **수조 벽 처리:** `/odom`이 수조 좌표(좌하단 원점, 10 × 5m)이므로, 경계 띠(`tank_wall_band` 0.3m) 안의 점유 셀을 벽으로 봅니다. 벽은 버리지 않고 DRI를 `tank_wall_dri`(0.5)로 눌러서 지도에 약하게만 남깁니다. 후보 필터 문턱(0.85)보다 낮아서 경로를 막지 않고, 빨간 X와 "전방 장애물 확인"에는 들어가지 않습니다. `tank_wall_dri: 0`이면 벽 셀을 완전히 지우고, 런치 인자 `exclude_tank_walls:=false`면 벽도 일반 장애물입니다(`config/real_obstacle_avoid_test.yaml`). 야외에는 벽이 없으니 플래너는 그대로입니다. 먼 벽(약 7m)은 육상 yaw 오차로 0.25m쯤 밀려 보일 수 있어서, 먼 벽에 X가 남으면 띠를 키웁니다.
+- **수조 벽 처리:** `/odom`이 수조 좌표(좌하단 원점, 10 × 5m)이므로, 경계 띠(`tank_wall_band` 0.3m) 안의 점유 셀을 벽으로 봅니다. 벽은 버리지 않고 DRI를 `tank_wall_dri`(0.5)로 눌러서 지도에 약하게만 남깁니다. 후보 필터 문턱(0.93)보다 낮아서 경로를 막지 않고, 빨간 X와 "전방 장애물 확인"에는 들어가지 않습니다. `tank_wall_dri: 0`이면 벽 셀을 완전히 지우고, 런치 인자 `exclude_tank_walls:=false`면 벽도 일반 장애물입니다(`config/real_obstacle_avoid_test.yaml`). 야외에는 벽이 없으니 플래너는 그대로입니다. 먼 벽(약 7m)은 육상 yaw 오차로 0.25m쯤 밀려 보일 수 있어서, 먼 벽에 X가 남으면 띠를 키웁니다.
 - **벽을 빼는 대신 경계 감시:** 플래너가 벽을 모르므로 선체 `/odom`의 x, y가 경계에서 `tank_stop_margin`(기본 0.5m) 안으로 들어오면 정지(`STOP: tank boundary`)합니다. 출발할 때도 배와 목표점이 이 안쪽이어야 합니다(아니면 `PREVIEW`에서 대기). 시작 y는 1.75~3.25m, 부표는 벽에서 1.6m 이상 떼어 두면 조사에서 안전했습니다.
 
 ## 10. 장애물 회피 저속 주행

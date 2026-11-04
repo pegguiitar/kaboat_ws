@@ -20,7 +20,7 @@
 | 구독 | `/mission/goal` `/mission/state` | 목표점 / 지금 이 behavior 차례인지 |
 | 발행 | `/cmd/avoid` | 속도·회전 명령 → `cmd_mux` → `/cmd_vel` |
 | 발행 | `/avoid/plan` `/avoid/cps` `/avoid/dri` | 디버그용 경로·제어점·목표점·위험도 지도 (RViz). **보는 사람이 있을 때만 발행** — RViz 를 끄면 만들지도 않는다 |
-| 발행 | `/avoid/dri_marks` | DRI **원값**이 `viz.dri_mark_threshold`(0.85)를 넘는 **격자 셀마다** 셀 중심에 빨간 X (`viz.dri_mark_size` 0.15 m). 표시 전용, 판단에 안 쓴다. `real_obstacle_avoid_test`(`/real_avoid_test/dri_marks`)와 `manual_dri_monitor`(`/manual_dri/dri_marks`)도 같은 방식으로 낸다 |
+| 발행 | `/avoid/dri_marks` | DRI **원값**이 `viz.dri_mark_threshold`(0.93)를 넘는 **격자 셀마다** 셀 중심에 빨간 X (`viz.dri_mark_size` 0.15 m). 표시 전용, 판단에 안 쓴다. `real_obstacle_avoid_test`(`/real_avoid_test/dri_marks`)와 `manual_dri_monitor`(`/manual_dri/dri_marks`)도 같은 방식으로 낸다 |
 
 ---
 
@@ -186,7 +186,7 @@ waypoint 방향으로 두고 곧바로 직선 경로를 만든다.
    31개를 3° 간격으로 만든다. 이는 월드 절대축이나 현재 선수각 중심이 아니다.
    선수각은 `p1` 방향과 첫 원의 연속성 비용에만 들어간다.
 2. **위험한 후보 제거** — 직전 제어점에서 후보까지 직선을 긋고 8점을 샘플링한다.
-   선분 최대 DRI가 `safe_threshold × gen_margin`(기본 `1.0 × 0.85 = 0.85`)을
+   선분 최대 DRI가 `safe_threshold × gen_margin`(기본 `1.0 × 0.93 = 0.93`)을
    넘으면 탈락시킨다. 점 하나만 보면 후보점은 안전해도 거기까지 가는 선분이
    위험 구름을 가로지를 수 있기 때문이다.
 3. **±12° 탐색의 기준 후보 선정** — 남은 안전 후보에 다음 기하 비용을 계산한다.
@@ -378,7 +378,7 @@ waypoint 방향으로 두고 곧바로 직선 경로를 만든다.
 | `dri_angle_slack` | 12° | 기하 최적 안전 후보 주변에서 최소 DRI 후보를 찾는 각도 반폭 |
 | `risk_straight_slack` | 0.03 | 최소 max DRI와 이 값 이내인 후보 중 가장 직선적인 것을 선택 |
 | `safe_threshold` | 1.0 | **유일한 안전 기준선.** 경로를 만들 때와 검사할 때가 같은 선을 쓴다 |
-| `gen_margin` | 0.85 | 만들 때는 기준선의 85% 에서 자름. 직선으로 판정하는데 실제 곡선은 몇 cm 안쪽으로 붙어서 생기는 오차 흡수 |
+| `gen_margin` | 0.93 | 만들 때는 기준선의 93% 에서 자름(2026-11-04 0.85→0.93). 직선으로 판정하는데 실제 곡선은 몇 cm 안쪽으로 붙어서 생기는 오차 흡수 |
 | `repair_max` / `repair_dtheta` | 3 / 6° | tick 당 수리 횟수 / 한 번에 움직이는 각도 |
 | `progress_window` | 2.0 m | 배가 어디쯤 왔는지 찾을 때 보는 앞쪽 범위 |
 
