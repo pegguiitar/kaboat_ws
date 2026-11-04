@@ -27,6 +27,8 @@ from kaboat_behaviors.bspline_planner import (
     PlannerParams, check, generate,
 )
 from kaboat_behaviors.dri import DriParams, build_dri
+from kaboat_behaviors.dri_marker import clear_dri_x_markers, dri_x_markers
+from kaboat_hardware.tank_walls import build_tank_dri, edge_distance, valid_bounds
 from kaboat_hardware.trajectory_visualization import (
     BoundedTrajectoryHistory, create_trail_marker,
 )
@@ -42,6 +44,15 @@ class RealObstacleAvoidTest(Node):
         self.declare_parameter('wait_for_start', True)
         self.declare_parameter('allow_escape', False)
         self.declare_parameter('goal_distance', 3.0)
+        # 고정 시작·목표(odom = 수조 좌표). 켜면 목표는 선수 앞 goal_distance 가 아니라
+        # fixed_goal_xy 이고, 출발은 배가 fixed_start_xy 근처(start_tolerance)에서
+        # 목표를 향해(start_heading_tolerance_deg) 놓여 있을 때만 허용한다.
+        # start_tolerance <= 0 이면 위치 검사, heading 허용 >= 180 이면 방향 검사를 끈다.
+        self.declare_parameter('fixed_goal_enabled', False)
+        self.declare_parameter('fixed_goal_xy', [0.0, 0.0])
+        self.declare_parameter('fixed_start_xy', [0.0, 0.0])
+        self.declare_parameter('start_tolerance', 0.5)
+        self.declare_parameter('start_heading_tolerance_deg', 45.0)
         self.declare_parameter('goal_tolerance', 0.5)
         self.declare_parameter('max_cross_track_error', 0.7)
         self.declare_parameter('max_linear_cmd', 0.10)
@@ -52,6 +63,20 @@ class RealObstacleAvoidTest(Node):
         self.declare_parameter('require_front_obstacle', True)
         self.declare_parameter('front_corridor_half_width', 1.0)
         self.declare_parameter('viz_dri_scale', 4.0)
+        # DRI 원값이 이 문턱을 넘는 구역마다 중심에 빨간 X (RViz 표시 전용).
+        self.declare_parameter('viz_dri_mark_threshold', 0.85)
+        self.declare_parameter('viz_dri_mark_size', 0.4)
+        # 수조 시험: /odom 이 수조 좌표(좌하단 원점)이므로 경계를 알 수 있다.
+        # tank_bounds=(x_min, y_min, x_max, y_max). 기본값(전부 0)은 꺼짐 = 야외 동작.
+        #  - exclude_tank_walls: 경계 띠(tank_wall_band) 안·밖의 점유 셀을 '벽'으로 보고
+        #    장애물에서 뺀다. 버리지는 않고 벽만의 DRI 를 tank_wall_dri 상한으로 눌러 합친다
+        #    (0 이면 완전히 지움). 상한은 플래너 후보 필터 문턱보다 낮아야 경로를 막지 않는다.
+        #  - tank_stop_margin: 선체 중심이 경계에서 이 거리 안이면 정지(해제)한다.
+        self.declare_parameter('tank_bounds', [0.0, 0.0, 0.0, 0.0])
+        self.declare_parameter('exclude_tank_walls', False)
+        self.declare_parameter('tank_wall_band', 0.3)
+        self.declare_parameter('tank_wall_dri', 0.5)
+        self.declare_parameter('tank_stop_margin', 0.5)
 
         self.drive_enabled = bool(self.get_parameter('drive_enabled').value)
         self.wait_for_start = bool(self.get_parameter('wait_for_start').value)
@@ -70,6 +95,58 @@ class RealObstacleAvoidTest(Node):
         self.front_corridor_half_width = float(
             self.get_parameter('front_corridor_half_width').value)
         self.viz_dri_scale = float(self.get_parameter('viz_dri_scale').value)
+        self.viz_dri_mark_threshold = float(
+            self.get_parameter('viz_dri_mark_threshold').value)
+        self.viz_dri_mark_size = float(
+            self.get_parameter('viz_dri_mark_size').value)
+        self.tank_bounds = tuple(
+            float(v) for v in self.get_parameter('tank_bounds').value)
+        self.tank_enabled = valid_bounds(self.tank_bounds)
+        self.exclude_tank_walls = bool(
+            self.get_parameter('exclude_tank_walls').value)
+        self.tank_wall_band = float(self.get_parameter('tank_wall_band').value)
+        self.tank_wall_dri = float(self.get_parameter('tank_wall_dri').value)
+        self.tank_stop_margin = float(
+            self.get_parameter('tank_stop_margin').value)
+        if self.exclude_tank_walls and not self.tank_enabled:
+            raise ValueError('exclude_tank_walls requires a valid tank_bounds '
+                             '(x_min, y_min, x_max, y_max)')
+        if self.tank_enabled:
+            width = self.tank_bounds[2] - self.tank_bounds[0]
+            height = self.tank_bounds[3] - self.tank_bounds[1]
+            if not (math.isfinite(self.tank_wall_band) and self.tank_wall_band > 0.0
+                    and math.isfinite(self.tank_wall_dri) and self.tank_wall_dri >= 0.0
+                    and math.isfinite(self.tank_stop_margin)
+                    and 0.0 <= self.tank_stop_margin < 0.5 * min(width, height)):
+                raise ValueError(
+                    'tank_wall_band must be positive, tank_wall_dri >= 0 and '
+                    'tank_stop_margin must be in [0, half of the smaller tank side)')
+
+        self.fixed_goal_enabled = bool(
+            self.get_parameter('fixed_goal_enabled').value)
+        self.fixed_goal_xy = tuple(
+            float(v) for v in self.get_parameter('fixed_goal_xy').value)
+        self.fixed_start_xy = tuple(
+            float(v) for v in self.get_parameter('fixed_start_xy').value)
+        self.start_tolerance = float(self.get_parameter('start_tolerance').value)
+        self.start_heading_tolerance = math.radians(float(
+            self.get_parameter('start_heading_tolerance_deg').value))
+        if self.fixed_goal_enabled:
+            if (len(self.fixed_goal_xy) != 2 or len(self.fixed_start_xy) != 2
+                    or not all(math.isfinite(v) for v in
+                               self.fixed_goal_xy + self.fixed_start_xy)
+                    or not math.isfinite(self.start_tolerance)
+                    or not math.isfinite(self.start_heading_tolerance)):
+                raise ValueError('fixed_goal_xy and fixed_start_xy must be finite '
+                                 '[x, y] pairs')
+            if self.tank_enabled:
+                for label, point in (('fixed_goal_xy', self.fixed_goal_xy),
+                                     ('fixed_start_xy', self.fixed_start_xy)):
+                    edge = edge_distance(point[0], point[1], self.tank_bounds)
+                    if edge < self.tank_stop_margin:
+                        raise ValueError(
+                            f'{label} {point} is {edge:.2f} m from the tank '
+                            f'boundary (stop margin {self.tank_stop_margin:.2f} m)')
 
         for name, value in (
             ('goal_distance', self.goal_distance),
@@ -79,6 +156,8 @@ class RealObstacleAvoidTest(Node):
             ('scan_timeout_sec', self.scan_timeout),
             ('grid_timeout_sec', self.grid_timeout),
             ('viz_dri_scale', self.viz_dri_scale),
+            ('viz_dri_mark_threshold', self.viz_dri_mark_threshold),
+            ('viz_dri_mark_size', self.viz_dri_mark_size),
             ('front_corridor_half_width', self.front_corridor_half_width),
         ):
             if not math.isfinite(value) or value <= 0.0:
@@ -95,6 +174,13 @@ class RealObstacleAvoidTest(Node):
         self.fsm_params = self._params_from('fsm', FsmParams)
         self.fsm = AvoidFsm(self.planner_params, self.fsm_params,
                             yaw_kp=YAW_KP, yaw_kd=YAW_KD)
+        gen_threshold = self.planner_params.safe_threshold * self.planner_params.gen_margin
+        if (self.tank_enabled and self.exclude_tank_walls
+                and self.tank_wall_dri >= gen_threshold):
+            raise ValueError(
+                f'tank_wall_dri ({self.tank_wall_dri}) must be below the planner '
+                f'candidate filter threshold ({gen_threshold:.2f}); otherwise walls '
+                'block paths again')
 
         self.odom = None
         self.grid = None
@@ -120,6 +206,8 @@ class RealObstacleAvoidTest(Node):
             OccupancyGrid, '/real_avoid_test/dri', 10)
         self.marker_pub = self.create_publisher(
             MarkerArray, '/real_avoid_test/markers', 10)
+        self.dri_marks_pub = self.create_publisher(
+            MarkerArray, '/real_avoid_test/dri_marks', 1)
         self.status_pub = self.create_publisher(
             String, '/real_avoid_test/status', 10)
 
@@ -137,8 +225,18 @@ class RealObstacleAvoidTest(Node):
 
         mode = 'DRIVE' if self.drive_enabled else 'PREVIEW ONLY'
         self.get_logger().info(
-            f'Real avoidance test ready ({mode}). Goal: {self.goal_distance:.1f} m '
-            'ahead of the start pose. Waiting for /scan, /odom and /occupancy_grid.')
+            f'Real avoidance test ready ({mode}). Goal: '
+            + (f'fixed ({self.fixed_goal_xy[0]:.2f}, {self.fixed_goal_xy[1]:.2f}), '
+               f'start ({self.fixed_start_xy[0]:.2f}, {self.fixed_start_xy[1]:.2f})'
+               if self.fixed_goal_enabled else
+               f'{self.goal_distance:.1f} m ahead of the start pose')
+            + '. Waiting for /scan, /odom and /occupancy_grid.')
+        if self.tank_enabled:
+            self.get_logger().info(
+                f'Tank bounds {self.tank_bounds}: walls_excluded='
+                f'{self.exclude_tank_walls} (band {self.tank_wall_band:.2f} m, '
+                f'wall DRI cap {self.tank_wall_dri:.2f}), '
+                f'stop margin {self.tank_stop_margin:.2f} m')
 
     def _params_from(self, prefix, cls):
         defaults = cls()
@@ -148,6 +246,20 @@ class RealObstacleAvoidTest(Node):
             self.declare_parameter(name, getattr(defaults, field.name))
             values[field.name] = self.get_parameter(name).value
         return cls(**values)
+
+    def _tank_edge(self, x, y):
+        """(x, y) 에서 수조 경계까지의 안쪽 거리 [m]. 수조 설정이 없으면 None."""
+        if not self.tank_enabled:
+            return None
+        return edge_distance(x, y, self.tank_bounds)
+
+    def _build_dri(self, boat, yaw):
+        """이 틱의 DRI. 수조 벽 제외가 켜져 있으면 벽 셀은 상한 tank_wall_dri 로 누른다."""
+        if self.exclude_tank_walls and self.tank_enabled:
+            return build_tank_dri(self.grid, boat, yaw, self.dri_params,
+                                  self.tank_bounds, self.tank_wall_band,
+                                  self.tank_wall_dri)
+        return build_dri(self.grid, boat, yaw, self.dri_params)
 
     def _on_odom(self, msg):
         self.odom = msg
@@ -213,15 +325,32 @@ class RealObstacleAvoidTest(Node):
         return (boat[0] + self.goal_distance * math.cos(yaw),
                 boat[1] + self.goal_distance * math.sin(yaw))
 
-    def _front_obstacle_distance(self, occ_xy, boat, yaw):
-        """Require an obstacle on the short test lane, not just a side wall."""
+    def _target_goal(self, boat, yaw):
+        """출발 전 미리보기용 목표 — 고정 목표가 켜져 있으면 그 좌표."""
+        if self.fixed_goal_enabled:
+            return self.fixed_goal_xy
+        return self._relative_goal(boat, yaw)
+
+    def _front_obstacle_distance(self, occ_xy, boat, yaw, goal=None):
+        """Require an obstacle on the test lane, not just a side wall.
+
+        차선은 상대 목표일 때 선수 방향 goal_distance, 고정 목표일 때 배→목표 방향
+        목표까지의 거리다(폭은 front_corridor_half_width).
+        """
         if len(occ_xy) == 0:
             return None
+        lane_yaw, length = yaw, self.goal_distance
+        if self.fixed_goal_enabled and goal is not None:
+            dx, dy = goal[0] - boat[0], goal[1] - boat[1]
+            length = math.hypot(dx, dy)
+            if length < 1e-6:
+                return None
+            lane_yaw = math.atan2(dy, dx)
         delta = occ_xy - np.asarray(boat)
-        c, s = math.cos(yaw), math.sin(yaw)
+        c, s = math.cos(lane_yaw), math.sin(lane_yaw)
         forward = delta[:, 0] * c + delta[:, 1] * s
         lateral = -delta[:, 0] * s + delta[:, 1] * c
-        on_lane = ((forward > 0.0) & (forward <= self.goal_distance)
+        on_lane = ((forward > 0.0) & (forward <= length)
                    & (np.abs(lateral) <= self.front_corridor_half_width))
         if not np.any(on_lane):
             return None
@@ -248,6 +377,39 @@ class RealObstacleAvoidTest(Node):
         reason = self._input_error(now)
         if reason:
             return False, reason
+        if self.tank_enabled:
+            pos = self.odom.pose.pose.position
+            edge = self._tank_edge(pos.x, pos.y)
+            if edge < self.tank_stop_margin:
+                return False, (f'boat is {edge:.2f} m from the tank boundary '
+                               f'(stop margin {self.tank_stop_margin:.2f} m)')
+            if self.preview_goal is not None:
+                goal_edge = self._tank_edge(*self.preview_goal)
+                if goal_edge < self.tank_stop_margin:
+                    return False, (f'goal is {goal_edge:.2f} m from the tank '
+                                   f'boundary (stop margin '
+                                   f'{self.tank_stop_margin:.2f} m)')
+        if self.fixed_goal_enabled:
+            pos = self.odom.pose.pose.position
+            if self.start_tolerance > 0.0:
+                off = math.hypot(pos.x - self.fixed_start_xy[0],
+                                 pos.y - self.fixed_start_xy[1])
+                if off > self.start_tolerance:
+                    return False, (
+                        f'boat is {off:.2f} m from the start point '
+                        f'({self.fixed_start_xy[0]:.2f}, {self.fixed_start_xy[1]:.2f}); '
+                        f'allowed {self.start_tolerance:.2f} m')
+            if self.start_heading_tolerance < math.pi:
+                yaw = yaw_from_quaternion(self.odom.pose.pose.orientation)
+                bearing = math.atan2(self.fixed_goal_xy[1] - pos.y,
+                                     self.fixed_goal_xy[0] - pos.x)
+                err = abs(math.atan2(math.sin(bearing - yaw),
+                                     math.cos(bearing - yaw)))
+                if err > self.start_heading_tolerance:
+                    return False, (
+                        f'boat heading is {math.degrees(err):.0f} deg off the goal '
+                        f'direction; allowed '
+                        f'{math.degrees(self.start_heading_tolerance):.0f} deg')
         if (self.preview_plan is None or self.preview_goal is None
                 or self.preview_received is None
                 or now - self.preview_received > 0.3):
@@ -327,6 +489,7 @@ class RealObstacleAvoidTest(Node):
         marker = Marker()
         marker.action = Marker.DELETEALL
         self.marker_pub.publish(MarkerArray(markers=[marker]))
+        self.dri_marks_pub.publish(clear_dri_x_markers(path.header.frame_id))
 
     def _tick(self):
         now = time.monotonic()
@@ -352,9 +515,19 @@ class RealObstacleAvoidTest(Node):
             return
 
         boat, yaw, vel, yaw_rate = self._boat_state()
-        goal = self.goal if self.started else self._relative_goal(boat, yaw)
+        # 벽을 DRI 에서 뺀 대신, 선체 위치(/odom)가 수조 경계에 가까워지면 정지한다.
+        if self.started and self.tank_enabled:
+            edge = self._tank_edge(*boat)
+            if edge < self.tank_stop_margin:
+                self._disarm(f'near tank boundary ({edge:.2f} m < '
+                             f'{self.tank_stop_margin:.2f} m)')
+                self._publish_status(
+                    'STOP', f'tank boundary {edge:.2f} m < '
+                            f'{self.tank_stop_margin:.2f} m')
+                return
+        goal = self.goal if self.started else self._target_goal(boat, yaw)
         try:
-            dri = build_dri(self.grid, boat, yaw, self.dri_params)
+            dri = self._build_dri(boat, yaw)
             now_t = (self.odom.header.stamp.sec
                      + self.odom.header.stamp.nanosec * 1e-9)
             if now_t <= 0.0:
@@ -370,18 +543,23 @@ class RealObstacleAvoidTest(Node):
                 self.preview_goal = goal
                 self.preview_received = now
                 self.preview_obstacle_distance = self._front_obstacle_distance(
-                    dri.occ_xy, boat, yaw)
+                    dri.occ_xy, boat, yaw, goal)
                 if not self.wait_for_start and plan is not None:
                     ok, _ = self._arm()
                     if ok:
                         return
                 self._publish_command(Twist())
                 self._publish_debug(dri, plan, goal)
+                tank_text = ''
+                if self.tank_enabled:
+                    tank_text = (f', tank_edge={self._tank_edge(*boat):.2f}'
+                                 f', walls_excluded={self.exclude_tank_walls}')
                 self._publish_status(
                     'PREVIEW' if plan is not None else 'NO PLAN',
                     f'obstacles={len(dri.occ_xy)}, '
                     f'front={self.preview_obstacle_distance}, '
-                    f'drive_enabled={self.drive_enabled}')
+                    f'goal=({goal[0]:.2f}, {goal[1]:.2f}), '
+                    f'drive_enabled={self.drive_enabled}{tank_text}')
                 return
 
             if math.hypot(goal[0] - boat[0], goal[1] - boat[1]) <= self.goal_tolerance:
@@ -455,6 +633,11 @@ class RealObstacleAvoidTest(Node):
                              0.0, 100.0)
             grid.data = np.rint(values).astype(np.int8).ravel().tolist()
             self.dri_pub.publish(grid)
+
+        if self.count_subscribers('/real_avoid_test/dri_marks') > 0:
+            self.dri_marks_pub.publish(dri_x_markers(
+                dri, self.viz_dri_mark_threshold, self.viz_dri_mark_size,
+                frame, stamp))
 
         markers = MarkerArray()
         wp = Marker()

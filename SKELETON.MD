@@ -159,7 +159,7 @@ cell 과 구분되는 "좌표 랜드마크". 극좌표는 소비자가 자기 od
   레이캐스팅으로 log-odds 누적(경로 셀=`L_FREE`, 히트 끝점=`L_OCC`) +
   `/camera/depth/points` z-band·거리(`CAM_RANGE`) 필터로 LiDAR 사각지대 보완
   (점유 증거만) + IMU 롤/피치 `TILT_MAX`(10°) 초과 스캔 게이팅. 셀 좌표는
-  **월드 정수격자(`floor(x/res)`, global)** 이고, 그 격자를 **배 중심 20×20m 창으로
+  **월드 정수격자(`floor(x/res)`, global)** 이고, 그 격자를 **배 중심 15×15m 창(기본값, `size` 파라미터)으로
   잘라 담는 고정 크기 numpy 배열(rolling grid)** 을 쓴다 — 배열 인덱스는 좌표가
   아니라 창에서의 위치이고, 배가 움직이면 anchor(배열 (0,0)의 global 인덱스)를
   절대위치에서 다시 잡아 정수 셀 단위 `np.roll` 로 창만 민다(셀의 global 정체성

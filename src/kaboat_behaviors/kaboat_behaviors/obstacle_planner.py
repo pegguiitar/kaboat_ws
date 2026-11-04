@@ -19,6 +19,7 @@ from .behavior_base import BehaviorBase, YAW_KP, YAW_KD, yaw_from_quaternion
 from .avoid_fsm import AvoidFsm, FsmParams
 from .bspline_planner import PlannerParams
 from .dri import DriParams, build_dri
+from .dri_marker import dri_x_markers
 
 
 class ObstaclePlanner(BehaviorBase):
@@ -46,9 +47,16 @@ class ObstaclePlanner(BehaviorBase):
         self.plan_pub = self.create_publisher(Path, '/avoid/plan', 1)
         self.cps_pub = self.create_publisher(MarkerArray, '/avoid/cps', 1)
         self.dri_pub = self.create_publisher(OccupancyGrid, '/avoid/dri', 1)
+        # DRI 가 문턱을 넘는 구역마다 중심에 빨간 X — 표시 전용(판단에 안 쓴다).
+        self.dri_marks_pub = self.create_publisher(
+            MarkerArray, '/avoid/dri_marks', 1)
         # 위험도(무한대까지 가능)를 RViz costmap 색상표 0~100 으로 접는 나눗셈 값.
         # 표시 전용 — 판단에는 안 쓴다.
         self.declare_parameter('viz.dri_scale', 4.0)
+        # 이 DRI 원값(지도 0~100 으로 접기 전)을 넘는 구역에 X 를 찍는다.
+        # 0.85 = planner 후보 필터 문턱(safe_threshold 1.0 × gen_margin 0.85).
+        self.declare_parameter('viz.dri_mark_threshold', 0.85)
+        self.declare_parameter('viz.dri_mark_size', 0.4)
 
     def _params_from(self, prefix: str, cls):
         defaults = cls()
@@ -102,6 +110,11 @@ class ObstaclePlanner(BehaviorBase):
     def _publish_debug(self, plan, dri):
         if self.count_subscribers('/avoid/dri') > 0:
             self._publish_dri(dri)
+        if self.count_subscribers('/avoid/dri_marks') > 0:
+            self.dri_marks_pub.publish(dri_x_markers(
+                dri, float(self.get_parameter('viz.dri_mark_threshold').value),
+                float(self.get_parameter('viz.dri_mark_size').value),
+                self.occupancy_grid.header.frame_id, self.odom.header.stamp))
         if (self.count_subscribers('/avoid/plan') > 0
                 or self.count_subscribers('/avoid/cps') > 0):
             self._publish_plan(plan)

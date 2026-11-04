@@ -4,7 +4,17 @@ real_obstacle_avoid_test:
   ros__parameters:
     drive_enabled: false
     allow_escape: false
-    goal_distance: 3.0
+    goal_distance: 3.0                   # 고정 목표를 끄면(fixed_goal_enabled: false) 선수 앞 이 거리
+
+    # 고정 시작·목표 (수조 좌표). 배를 시작점에 목표 방향(-x = 180°)으로 놓고 시작한다.
+    # 출발 조건: 시작점에서 start_tolerance 이내, 선수가 목표 방향에서
+    # start_heading_tolerance_deg 이내. start_tolerance <= 0 이면 위치 검사,
+    # 방향 허용 >= 180 이면 방향 검사를 끈다. 전방 장애물 확인 차선도 배→목표 방향이다.
+    fixed_goal_enabled: true
+    fixed_start_xy: [9.0, 2.5]
+    fixed_goal_xy: [1.0, 2.5]
+    start_tolerance: 0.5
+    start_heading_tolerance_deg: 45.0
     goal_tolerance: 0.5
     require_front_obstacle: true
     front_corridor_half_width: 1.0
@@ -15,6 +25,21 @@ real_obstacle_avoid_test:
     scan_timeout_sec: 0.5
     grid_timeout_sec: 0.5
     viz_dri_scale: 4.0
+
+    # 수조 벽 처리 — /odom 이 곧 수조 좌표(좌하단 원점, 가로 x 10 m × 세로 y 5 m,
+    # lidar_tracker.yaml 의 pool_size 와 같은 값). 야외에는 벽이 없으므로 이 블록은
+    # 수조 시험 전용이다. tank_bounds 를 0 으로 두면 전부 꺼진다.
+    tank_bounds: [0.0, 0.0, 10.0, 5.0]   # [x_min, y_min, x_max, y_max]
+    exclude_tank_walls: true             # 경계 띠 안·밖 점유 셀을 '벽'으로 보고 장애물에서 뺀다
+    tank_wall_band: 0.3                  # 벽으로 보는 띠 폭 [m]. 먼 벽(≈7 m)은 육상 yaw 오차 ±2° 로
+                                         # ≈0.25 m 밀려 보일 수 있다 — 먼 벽에 X 가 남으면 키운다
+    tank_wall_dri: 0.5                   # 벽 DRI 상한. 지도엔 약하게 보이되 후보 필터 문턱(0.85)
+                                         # 아래라 경로를 막지 않는다. 0 이면 벽 셀을 완전히 지움
+    # 벽을 DRI 에서 빼면 플래너가 벽을 모르므로, 선체 중심이 경계에서 이 거리 안이면
+    # 정지(해제)한다. 출발 때도 배·목표가 이 안쪽이어야 한다.
+    # ⚠ 선체 반길이(≈0.55 m)보다 작은 값이다: 선수가 벽을 향해 있으면 정지 시점에
+    #   이미 선수가 벽에 닿아 있고 타력으로 더 밀린다. 충돌이 걱정되면 키운다.
+    tank_stop_margin: 0.5
 
     # Short tank path: these are test-specific overrides, not sim mission defaults.
     fsm.lookahead: 0.8

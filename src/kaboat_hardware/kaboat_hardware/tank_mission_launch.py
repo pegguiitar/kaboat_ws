@@ -141,7 +141,7 @@ def generate_tank_mission_launch(mission):
         DeclareLaunchArgument('start_occupancy_grid', default_value='true',
                               description='false if one /occupancy_grid publisher already exists'),
         DeclareLaunchArgument('enable_tilt_gate', default_value='true'),
-        DeclareLaunchArgument('grid_size', default_value='10.0'),
+        DeclareLaunchArgument('grid_size', default_value='15.0'),
     ]
     if mission == 'gate':
         args.extend([

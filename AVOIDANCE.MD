@@ -20,6 +20,7 @@
 | 구독 | `/mission/goal` `/mission/state` | 목표점 / 지금 이 behavior 차례인지 |
 | 발행 | `/cmd/avoid` | 속도·회전 명령 → `cmd_mux` → `/cmd_vel` |
 | 발행 | `/avoid/plan` `/avoid/cps` `/avoid/dri` | 디버그용 경로·제어점·목표점·위험도 지도 (RViz). **보는 사람이 있을 때만 발행** — RViz 를 끄면 만들지도 않는다 |
+| 발행 | `/avoid/dri_marks` | DRI **원값**이 `viz.dri_mark_threshold`(0.85)를 넘는 연결 구역마다 중심에 빨간 X (`viz.dri_mark_size` 0.4 m). 표시 전용, 판단에 안 쓴다. `real_obstacle_avoid_test`(`/real_avoid_test/dri_marks`)와 `manual_dri_monitor`(`/manual_dri/dri_marks`)도 같은 방식으로 낸다 |
 
 ---
 

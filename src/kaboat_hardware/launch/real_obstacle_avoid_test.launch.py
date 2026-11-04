@@ -33,9 +33,17 @@ def generate_launch_description():
                               description='Permit FSM reverse ESCAPE command'),
         DeclareLaunchArgument('goal_distance', default_value='3.0',
                               description='Goal distance ahead of boat at start [m]'),
+        DeclareLaunchArgument('fixed_goal', default_value='true',
+                              description='true: fixed start/goal from the config yaml '
+                                          '(boat starts at fixed_start_xy facing the goal); '
+                                          'false: goal_distance ahead of the boat'),
+        DeclareLaunchArgument('exclude_tank_walls', default_value='true',
+                              description='Drop occupied cells at the tank walls from the DRI '
+                                          '(bounds/stop margin: config yaml). false = walls count '
+                                          'as obstacles'),
         DeclareLaunchArgument('start_occupancy_grid', default_value='true',
                               description='Launch mapping node; false if one already runs'),
-        DeclareLaunchArgument('grid_size', default_value='10.0',
+        DeclareLaunchArgument('grid_size', default_value='15.0',
                               description='Rolling occupancy grid side length [m]'),
         DeclareLaunchArgument('enable_tilt_gate', default_value='true',
                               description='Use IMU roll/pitch to reject scans (default: true)'),
@@ -88,6 +96,10 @@ def generate_launch_description():
                     LaunchConfiguration('allow_escape'), value_type=bool),
                 'goal_distance': ParameterValue(
                     LaunchConfiguration('goal_distance'), value_type=float),
+                'fixed_goal_enabled': ParameterValue(
+                    LaunchConfiguration('fixed_goal'), value_type=bool),
+                'exclude_tank_walls': ParameterValue(
+                    LaunchConfiguration('exclude_tank_walls'), value_type=bool),
                 'use_sim_time': False,
             }],
         ),

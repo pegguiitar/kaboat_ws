@@ -111,7 +111,7 @@ class OccupancyGridNode(Node):
         super().__init__('occupancy_grid')
 
         self.declare_parameter('resolution', 0.2)   # 셀 크기 [m]
-        self.declare_parameter('size', 20.0)        # window 한 변 길이 [m]
+        self.declare_parameter('size', 15.0)        # window 한 변 길이 [m] (배 기준 전후좌우 ≈7.5)
         self.declare_parameter('publish_rate', 10.0)  # 발행 주기 [Hz] — 스캔(10Hz)과 동율.
         # 변환이 0.07ms 라 부담 없고, 유령/신규 장애물이 소비자에게 보이는 지연을
         # 최대 1s → 0.1s 로 줄인다. 10Hz 넘게 올려도 스캔이 10Hz 라 무의미.

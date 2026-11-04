@@ -42,6 +42,16 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /manual_dri/dri
       Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Name: "DRI 문턱(0.85) 초과 구역 · 빨간 X"
+      Enabled: true
+      Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /manual_dri/dri_marks
+      Value: true
     - Class: rviz_default_plugins/LaserScan
       Name: "선체 라이다 /scan"
       Enabled: true

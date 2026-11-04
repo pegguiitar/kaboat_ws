@@ -83,6 +83,16 @@ Visualization Manager:
     Unreliable: false
     Use Timestamp: false
     Value: true
+  - Class: rviz_default_plugins/MarkerArray
+    Name: DRI 문턱(0.85) 초과 구역
+    Enabled: true
+    Topic:
+      Value: /avoid/dri_marks
+      Depth: 1
+      Durability Policy: Volatile
+      History Policy: Keep Last
+      Reliability Policy: Reliable
+    Value: true
   - Alpha: 1
     Autocompute Intensity Bounds: true
     Autocompute Value Bounds:

@@ -21,7 +21,7 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('start_occupancy_grid', default_value='true',
                               description='false if /occupancy_grid already has a publisher'),
-        DeclareLaunchArgument('grid_size', default_value='10.0',
+        DeclareLaunchArgument('grid_size', default_value='15.0',
                               description='Rolling occupancy map side length in metres'),
         DeclareLaunchArgument('enable_tilt_gate', default_value='true',
                               description='Reject scans at large IMU roll/pitch'),

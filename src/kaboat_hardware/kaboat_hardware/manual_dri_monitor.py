@@ -15,9 +15,11 @@ from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import LaserScan
 from std_msgs.msg import String
+from visualization_msgs.msg import MarkerArray
 
 from kaboat_behaviors.behavior_base import yaw_from_quaternion
 from kaboat_behaviors.dri import DriParams, build_dri
+from kaboat_behaviors.dri_marker import clear_dri_x_markers, dri_x_markers
 
 
 def dri_visualization(dri, source: OccupancyGrid, scale: float, stamp):
@@ -35,15 +37,23 @@ class ManualDriMonitor(Node):
     def __init__(self):
         super().__init__('manual_dri_monitor')
         self.declare_parameter('viz_dri_scale', 4.0)
+        # DRI 원값이 이 문턱을 넘는 구역마다 중심에 빨간 X (RViz 표시 전용).
+        self.declare_parameter('viz_dri_mark_threshold', 0.85)
+        self.declare_parameter('viz_dri_mark_size', 0.4)
         self.declare_parameter('odom_timeout_sec', 0.5)
         self.declare_parameter('scan_timeout_sec', 0.7)
         self.declare_parameter('grid_timeout_sec', 0.7)
         self.viz_scale = float(self.get_parameter('viz_dri_scale').value)
+        self.mark_threshold = float(
+            self.get_parameter('viz_dri_mark_threshold').value)
+        self.mark_size = float(self.get_parameter('viz_dri_mark_size').value)
         self.odom_timeout = float(self.get_parameter('odom_timeout_sec').value)
         self.scan_timeout = float(self.get_parameter('scan_timeout_sec').value)
         self.grid_timeout = float(self.get_parameter('grid_timeout_sec').value)
         for name, value in (
             ('viz_dri_scale', self.viz_scale),
+            ('viz_dri_mark_threshold', self.mark_threshold),
+            ('viz_dri_mark_size', self.mark_size),
             ('odom_timeout_sec', self.odom_timeout),
             ('scan_timeout_sec', self.scan_timeout),
             ('grid_timeout_sec', self.grid_timeout),
@@ -79,6 +89,8 @@ class ManualDriMonitor(Node):
         self._last_valid_info = None
 
         self.dri_pub = self.create_publisher(OccupancyGrid, '/manual_dri/dri', 1)
+        self.dri_marks_pub = self.create_publisher(
+            MarkerArray, '/manual_dri/dri_marks', 1)
         self.status_pub = self.create_publisher(String, '/manual_dri/status', 10)
         self.create_subscription(Odometry, '/odom', self._on_odom, 10)
         self.create_subscription(OccupancyGrid, '/occupancy_grid', self._on_grid, 1)
@@ -142,6 +154,7 @@ class ManualDriMonitor(Node):
             self.get_logger().info(f'manual DRI: {state}')
 
     def _clear_dri(self):
+        self.dri_marks_pub.publish(clear_dri_x_markers('odom'))
         info = self._last_valid_info
         if info is None and self.grid is not None:
             info = self.grid.info
@@ -179,6 +192,10 @@ class ManualDriMonitor(Node):
             self._status('DRI_ERROR', str(exc))
             return
         self.dri_pub.publish(output)
+        if self.count_subscribers('/manual_dri/dri_marks') > 0:
+            self.dri_marks_pub.publish(dri_x_markers(
+                dri, self.mark_threshold, self.mark_size,
+                output.header.frame_id, output.header.stamp))
         self._last_valid_info = self.grid.info
         self._status('READY', f'occupied_cells={len(dri.occ_xy)}')
 
