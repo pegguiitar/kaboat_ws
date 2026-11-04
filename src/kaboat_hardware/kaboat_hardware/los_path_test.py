@@ -15,8 +15,8 @@ from rclpy.qos import DurabilityPolicy, QoSProfile
 from std_msgs.msg import Bool, String
 from std_srvs.srv import Trigger
 
-from kaboat_behaviors.behavior_base import DEFAULT_MAX_ANGULAR, DEFAULT_MAX_LINEAR
-from kaboat_behaviors.los_controller import LosFollower, bspline_path, circle_path
+from kaboat_behaviors.los_controller import (
+    BSPLINE_TRACK_YAW_KD, BSPLINE_TRACK_YAW_KP, LosFollower, bspline_path, circle_path)
 from kaboat_hardware.test_coordinates import BSPLINE_TRACK, CIRCLE_DRIVE
 
 
@@ -47,10 +47,12 @@ class LosPathTest(Node):
             'thrust_ratio': 0.3,
             'motion_enabled': False,
             'wait_for_start': False,
-            'max_linear': DEFAULT_MAX_LINEAR,
-            'max_angular': DEFAULT_MAX_ANGULAR,
-            'yaw_kp': 18.0 / 118.6,
-            'yaw_kd': 9.0 / 118.6,
+            # bspline_track_test 와 같은 제어: max_linear/max_angular 는 thrust_ratio=1 일
+            # 때의 전체 스케일이고(ratio 0.3 → 0.30), 요 PD 게인은 ratio 와 무관하다.
+            'max_linear': 1.0,
+            'max_angular': 1.0,
+            'yaw_kp': BSPLINE_TRACK_YAW_KP,
+            'yaw_kd': BSPLINE_TRACK_YAW_KD,
             'goal_tolerance': 0.4,
             'tank_size_x': 10.0,
             'tank_size_y': 5.0,
@@ -85,12 +87,16 @@ class LosPathTest(Node):
                            for x, y in self.path.samples)):
             raise ValueError('LOS path or settings are outside the measured tank bounds')
 
+        scales = (float(p('max_linear')), float(p('max_angular')))
+        if not all(math.isfinite(v) and 0.0 < v <= 1.0 for v in scales):
+            raise ValueError('max_linear and max_angular must be in (0, 1]')
         self.follower = LosFollower(
-            max_linear=float(p('max_linear')),
-            max_angular=float(p('max_angular')),
+            max_linear=scales[0],
+            max_angular=scales[1],
             yaw_kp=float(p('yaw_kp')),
             yaw_kd=float(p('yaw_kd')),
             goal_tolerance=float(p('goal_tolerance')),
+            ratio_limits_only=True,
         )
         self.odom = None
         self.last_odom_time = None
@@ -110,7 +116,7 @@ class LosPathTest(Node):
         self.create_subscription(Bool, '/emergency_stop', self._on_estop, 10)
         self.create_subscription(Bool, '/start_mission', self._on_start, 10)
         self.create_service(Trigger, '/los_test/start', self._on_start_service)
-        self.create_timer(0.1, self._tick)
+        self.create_timer(0.05, self._tick)   # bspline_track_test 와 같은 20 Hz
         self.create_timer(0.5, self._publish_path)
         self._publish_path()
         if self.started:

@@ -154,22 +154,48 @@ class LosStep:
     curvature: float = 0.0
 
 
+# bspline_track_test 의 제어 상수. 수조에서 경로를 잘 따라간다고 확인된 값이다
+# (cruise_speed 0.30 = thrust_ratio 0.3, max_angular 0.30, kp_yaw 1.5, kd_yaw 0.15).
+BSPLINE_TRACK_YAW_KP = 1.5
+BSPLINE_TRACK_YAW_KD = 0.15
+
+
 class LosFollower:
-    """Stateful, ROS-free progress tracker around the shared LOS control law."""
+    """Stateful, ROS-free progress tracker around the shared LOS control law.
+
+    ``ratio_limits_only`` 가 False(기본, 게이트·탐색 behavior 가 쓰는 기존 동작)면
+    thrust_ratio 를 **최종 명령 전체**에 곱한다. 그러면 요 PD 의 루프 게인도 같이
+    ratio 배로 줄어든다. True 면 bspline_track_test 와 같이 게인은 그대로 두고
+    ratio 를 **출력 한계**(전진 cmd_full·상한, 회전 상한)에만 적용한다. 이때
+    max_linear/max_angular 는 ratio=1 일 때의 전체 스케일이다.
+    """
 
     def __init__(self, *, params: FsmParams | None = None,
                  yaw_kp: float = 18.0 / 118.6,
                  yaw_kd: float = 9.0 / 118.6,
                  max_linear: float = 12.0 / 118.6,
                  max_angular: float = 3.0 / 118.6,
-                 goal_tolerance: float = 0.4):
+                 goal_tolerance: float = 0.4,
+                 ratio_limits_only: bool = False):
         self.params = params or replace(FsmParams(), lookahead=1.0,
                                         slow_radius=1.5,
                                         cmd_full=max_linear)
         self.yaw_kp, self.yaw_kd = yaw_kp, yaw_kd
         self.max_linear, self.max_angular = max_linear, max_angular
         self.goal_tolerance = goal_tolerance
+        self.ratio_limits_only = ratio_limits_only
         self.reset()
+
+    @classmethod
+    def bspline_track(cls, *, goal_tolerance: float = 0.4) -> 'LosFollower':
+        """bspline_track_test 와 같은 제어 상수·출력 규칙의 follower.
+
+        thrust_ratio=r 이면 전진 상한과 cmd_full 이 r, 회전 상한이 r 이고 게인은
+        kp 1.5 / kd 0.15 그대로라, r=0.3 이면 bspline_track_test 기본값과 같다.
+        """
+        return cls(yaw_kp=BSPLINE_TRACK_YAW_KP, yaw_kd=BSPLINE_TRACK_YAW_KD,
+                   max_linear=1.0, max_angular=1.0,
+                   goal_tolerance=goal_tolerance, ratio_limits_only=True)
 
     def reset(self):
         self.path = None
@@ -250,10 +276,24 @@ class LosFollower:
 
         plan = replace(path, progress_idx=self.progress_idx % n)
         waypoint_xy = None if path.closed else path.samples[-1]
+        curvature = curvature_ahead(plan, self.params.kappa_window)
+        if self.ratio_limits_only:
+            # bspline_track_test 와 같은 규칙: ratio 는 cmd_full 과 출력 상한에만,
+            # 요 PD 게인은 그대로.
+            linear_cap = self.max_linear * ratio
+            angular_cap = self.max_angular * ratio
+            linear, angular = follow_cmd(
+                plan, boat, yaw, yaw_rate, waypoint_xy,
+                replace(self.params, cmd_full=linear_cap),
+                self.yaw_kp, self.yaw_kd)
+            return LosStep(
+                linear=min(max(linear, 0.0), linear_cap),
+                angular=max(-angular_cap, min(angular_cap, angular)),
+                phase='FOLLOW', progress_idx=self.progress_idx,
+                curvature=curvature)
         linear, angular = follow_cmd(
             plan, boat, yaw, yaw_rate, waypoint_xy,
             self.params, self.yaw_kp, self.yaw_kd)
-        curvature = curvature_ahead(plan, self.params.kappa_window)
         return LosStep(
             linear=min(max(linear, 0.0), self.max_linear) * ratio,
             angular=max(-self.max_angular,
