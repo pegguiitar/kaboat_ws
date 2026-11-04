@@ -270,7 +270,7 @@ python3 scripts/teleop_laptop.py
 
 - 키를 놓으면 명령이 0으로 부드럽게 내려가고, 창이 포커스를 잃거나 `Space`를 누르면 즉시 0입니다.
 - 통신이 끊기면 젯슨이 0.5초 후 PWM 중립으로 전환하며 **자율주행으로 자동 복귀하지 않습니다**.
-- 명령 상한은 전진 `12/118.6`, 후진 `6/118.6`, 회전 `3/118.6`이며 젯슨이 다시 검사합니다([`thrusters.yaml`](src/kaboat_hardware/config/thrusters.yaml)의 `teleop_max_*`).
+- 명령 상한은 전진 `0.30`, 후진 `0.15`, 회전 `0.25`(A/D는 제자리 회전)이며 젯슨이 다시 검사합니다([`thrusters.yaml`](src/kaboat_hardware/config/thrusters.yaml)의 `teleop_max_*`).
 - `R`로 복귀하기 전에 자율주행 노드가 실행 중이고 현재 목표가 유효한지 확인합니다.
 - 젯슨에서 `ros2 topic echo /teleop/status`로 `TELEOP`, `TELEOP_TIMEOUT`, `AUTO`, `RC_OVERRIDE`, `ESTOP`, `BACKEND_ERROR`를 확인합니다.
 

@@ -49,8 +49,8 @@ class TeleopWindow:
         self.keys_label.pack(pady=5)
         tk.Label(
             self.root,
-            text='W 전진  S 후진  A 좌회전  D 우회전\n'
-                 'W+A / W+D 전진 회전 · S+A / S+D 후진 회전\n'
+            text='W 전진(30%)  S 후진(15%)\n'
+                 'A 제자리 좌회전  D 제자리 우회전(25%, A/D 가 W/S 보다 우선)\n'
                  'Space 정지 · R 자율주행 복귀 · Q 또는 창 닫기 중립 유지',
             fg='#d5dbdb', bg='#17202a', font=('Sans', 11),
             justify='center').pack(pady=12)

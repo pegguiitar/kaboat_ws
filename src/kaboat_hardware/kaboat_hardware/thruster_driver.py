@@ -62,9 +62,9 @@ class ThrusterDriver(Node):
         self.declare_parameter('teleop_timeout_sec', 0.5)
         # Low default limits match the existing tank keyboard test's 12/6/3 N
         # normalized commands. The Jetson enforces them independently of the PC.
-        self.declare_parameter('teleop_max_forward', 12.0 / 118.6)
-        self.declare_parameter('teleop_max_reverse', 6.0 / 118.6)
-        self.declare_parameter('teleop_max_angular', 3.0 / 118.6)
+        self.declare_parameter('teleop_max_forward', 0.30)
+        self.declare_parameter('teleop_max_reverse', 0.15)
+        self.declare_parameter('teleop_max_angular', 0.25)
 
         hw_type = str(self.get_parameter('hardware_type').value).lower()
         self.port = str(self.get_parameter('port').value)

@@ -45,6 +45,6 @@ thruster_driver:
     rc_timeout_sec: 0.5         # RC 조종 신호 유효 판정 시간 [s]
     enable_laptop_teleop: true  # 노트북 WASD 모드. RC 입력은 항상 더 높은 우선순위
     teleop_timeout_sec: 0.5     # 텔레옵 명령 중단 시 자동주행 대신 즉시 중립
-    teleop_max_forward: 0.10118 # 12 N / 118.6 N
-    teleop_max_reverse: 0.05059 # 6 N / 118.6 N
-    teleop_max_angular: 0.02530 # 3 N / 118.6 N
+    teleop_max_forward: 0.30    # 노트북 W (scripts/teleop_keys.py FORWARD 와 같게)
+    teleop_max_reverse: 0.15    # 노트북 S
+    teleop_max_angular: 0.25    # 노트북 A/D 제자리 회전 (좌 -0.25, 우 +0.25)
