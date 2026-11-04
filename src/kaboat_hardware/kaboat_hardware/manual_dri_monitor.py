@@ -37,9 +37,9 @@ class ManualDriMonitor(Node):
     def __init__(self):
         super().__init__('manual_dri_monitor')
         self.declare_parameter('viz_dri_scale', 4.0)
-        # DRI 원값이 이 문턱을 넘는 구역마다 중심에 빨간 X (RViz 표시 전용).
+        # DRI 원값이 이 문턱을 넘는 셀마다 셀 중심에 빨간 X (RViz 표시 전용).
         self.declare_parameter('viz_dri_mark_threshold', 0.85)
-        self.declare_parameter('viz_dri_mark_size', 0.4)
+        self.declare_parameter('viz_dri_mark_size', 0.15)   # 셀(0.2 m) 안에 들어가는 크기
         self.declare_parameter('odom_timeout_sec', 0.5)
         self.declare_parameter('scan_timeout_sec', 0.7)
         self.declare_parameter('grid_timeout_sec', 0.7)

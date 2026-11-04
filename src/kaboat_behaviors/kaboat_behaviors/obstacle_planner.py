@@ -47,16 +47,16 @@ class ObstaclePlanner(BehaviorBase):
         self.plan_pub = self.create_publisher(Path, '/avoid/plan', 1)
         self.cps_pub = self.create_publisher(MarkerArray, '/avoid/cps', 1)
         self.dri_pub = self.create_publisher(OccupancyGrid, '/avoid/dri', 1)
-        # DRI 가 문턱을 넘는 구역마다 중심에 빨간 X — 표시 전용(판단에 안 쓴다).
+        # DRI 가 문턱을 넘는 셀마다 셀 중심에 빨간 X — 표시 전용(판단에 안 쓴다).
         self.dri_marks_pub = self.create_publisher(
             MarkerArray, '/avoid/dri_marks', 1)
         # 위험도(무한대까지 가능)를 RViz costmap 색상표 0~100 으로 접는 나눗셈 값.
         # 표시 전용 — 판단에는 안 쓴다.
         self.declare_parameter('viz.dri_scale', 4.0)
-        # 이 DRI 원값(지도 0~100 으로 접기 전)을 넘는 구역에 X 를 찍는다.
+        # 이 DRI 원값(지도 0~100 으로 접기 전)을 넘는 셀마다 X 를 찍는다.
         # 0.85 = planner 후보 필터 문턱(safe_threshold 1.0 × gen_margin 0.85).
         self.declare_parameter('viz.dri_mark_threshold', 0.85)
-        self.declare_parameter('viz.dri_mark_size', 0.4)
+        self.declare_parameter('viz.dri_mark_size', 0.15)   # 셀(0.2 m) 안에 들어가는 크기
 
     def _params_from(self, prefix: str, cls):
         defaults = cls()

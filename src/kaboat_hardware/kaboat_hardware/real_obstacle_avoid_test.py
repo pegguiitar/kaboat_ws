@@ -63,9 +63,9 @@ class RealObstacleAvoidTest(Node):
         self.declare_parameter('require_front_obstacle', True)
         self.declare_parameter('front_corridor_half_width', 1.0)
         self.declare_parameter('viz_dri_scale', 4.0)
-        # DRI 원값이 이 문턱을 넘는 구역마다 중심에 빨간 X (RViz 표시 전용).
+        # DRI 원값이 이 문턱을 넘는 셀마다 셀 중심에 빨간 X (RViz 표시 전용).
         self.declare_parameter('viz_dri_mark_threshold', 0.85)
-        self.declare_parameter('viz_dri_mark_size', 0.4)
+        self.declare_parameter('viz_dri_mark_size', 0.15)   # 셀(0.2 m) 안에 들어가는 크기
         # 수조 시험: /odom 이 수조 좌표(좌하단 원점)이므로 경계를 알 수 있다.
         # tank_bounds=(x_min, y_min, x_max, y_max). 기본값(전부 0)은 꺼짐 = 야외 동작.
         #  - exclude_tank_walls: 경계 띠(tank_wall_band) 안·밖의 점유 셀을 '벽'으로 보고
