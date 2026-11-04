@@ -33,12 +33,15 @@ class FsmParams:
     v↔cmd 캘리브레이션(cmd_full·v_full)은 물리 결합층(SKELETON §6) — 실물 전환 시
     이 두 값만 재실측하면 speed_to_cmd 가 통째로 교체 지점이다.
     """
-    lookahead: float = 2.0        # 📝 follow 목표점 전방 호길이 [m]
+    # 경로 추종 상수 lookahead·slow_radius·cmd_full 은 수조에서 검증한 LOS
+    # (LosFollower.bspline_track, thrust_ratio 0.3) 와 같은 값 (2026-11-04 실물 튜닝).
+    # 이전 sim 값: lookahead 2.0, slow_radius 3.0, cmd_full 12/118.6.
+    lookahead: float = 1.0        # follow 목표점 전방 호길이 [m]
     kappa_window: float = 2.0     # 📝 곡률 감속 전방 창 [m]
     v_min: float = 0.3            # 📝 곡률 감속 하한 [m/s]
     v_max: float = 1.4            # 📝 현재 회피 추종 상한 [m/s] (교정 전속은 v_full)
     omega_max: float = 0.52       # ✅ 실측 최대 요레이트 [rad/s] — v = ω_max/κ
-    slow_radius: float = 3.0      # 위치 waypoint 와 동일 — 목표 근접 감속 반경 [m]
+    slow_radius: float = 1.5      # 목표 근접 감속 반경 [m]
     t_backstop: float = 3.0       # 📝 재생성 트리거 (c) 주기 [s]
     d_panic: float = 3.0          # 📝 위반까지 경로거리 이 값 미만이면 즉시 ESCAPE [m]
     #   근거: 전속 1.48 에서 타력 감쇠 실측(3s 에 0.11 로) → 제동거리 ~2m + 여유
@@ -49,7 +52,9 @@ class FsmParams:
     v_escape: float = 0.5         # 📝 후진 속도 [m/s] — 대칭 실측(-1.48)의 보수적 1/3
     escape_min_t: float = 3.0     # 📝 최소 이탈 시간 [s] — 즉시 복귀 채터링 차단
     escape_n_ok: int = 5          # 📝 복귀 조건: generate 연속 성공 tick 수
-    cmd_full: float = 12.0 / 118.6  # ✅ v_full 을 내는 추력 명령 (SKELETON §6 직진 검증값)
+    # v_full 을 내는 추력 명령 = 회피 출력 비율. LOS 의 thrust_ratio 와 같은 뜻으로,
+    # 회피 노드는 이 값을 전진·회전 출력 상한으로도 쓴다 (bspline_track 과 같은 규칙).
+    cmd_full: float = 0.3
     v_full: float = 1.48          # ✅ cmd_full 에서의 실측 속도 [m/s]
     cmd_exp: float = 1.64         # ✅ v↔cmd 멱지수 — sim 2점 fit (12N→1.480,
     #   6N→0.970 m/s, 2026-07-18). 정상상태 추력=항력 균형이 순수 2차 항력이면

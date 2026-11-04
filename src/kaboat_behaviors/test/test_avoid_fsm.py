@@ -19,7 +19,7 @@ BOAT = (0.0, 0.0)
 YAW = 0.0
 V_FULL = (1.48, 0.0)
 WP_FAR = (15.0, 0.0)
-KP, KD = 18.0 / 118.6, 9.0 / 118.6   # behavior_base 게인과 동일
+KP, KD = 1.5, 0.15   # 회피 노드 게인 = LOS bspline_track (test_los 실물 튜닝값)
 
 
 def dri_of(obstacles, boat_xy=BOAT, yaw=YAW):
@@ -82,7 +82,7 @@ def test_follow_curvature_slows_down():
 def test_follow_caps_target_to_waypoint_when_close():
     """wp 가 lookahead 안 — 목표점 = wp 자체 (경로가 wp 를 지나쳐도 무시)."""
     fsm = make_fsm()
-    wp = (1.5, 1.0)   # wp 거리 1.8 m < min_horizon(2 m) 이라 경로는 wp 너머까지 뻗는다
+    wp = (0.6, 0.4)   # wp 거리 0.72 m < lookahead(1 m), min_horizon(2 m) 이라 경로는 wp 너머까지 뻗는다
     plan = acquire(fsm, dri_of([]), wp=wp).plan
     p = FsmParams()
     _, ang = follow_cmd(plan, BOAT, YAW, 0.0, wp, p, KP, KD)
@@ -103,21 +103,21 @@ def test_follow_large_heading_error_slow_forward():
 def test_follow_slows_near_waypoint():
     """slow_radius 안 — 도착 감속 (mission_manager 4m 전환 전 과속 방지)."""
     fsm = make_fsm()
-    wp = (2.0, 0.0)
+    wp = (1.0, 0.0)   # slow_radius(1.5 m) 안
     plan = acquire(fsm, dri_of([]), wp=wp).plan
     p = FsmParams()
     lin, _ = follow_cmd(plan, BOAT, YAW, 0.0, wp, p, KP, KD)
-    assert lin < speed_to_cmd(p.v_max, p) * (2.0 / p.slow_radius) + 1e-12
+    assert 0.0 < lin < speed_to_cmd(p.v_max * (1.0 / p.slow_radius), p) + 1e-12
 
 
 def test_follow_combines_large_heading_and_waypoint_slowdown_in_old_order():
     """공통 조종기 분리 전과 동일하게 회전 속도캡 뒤 거리감속을 적용한다."""
     fsm = make_fsm()
-    wp = (-2.0, 0.0)
+    wp = (-1.0, 0.0)   # 뒤쪽(오차 >60°) + slow_radius(1.5 m) 안
     plan = acquire(fsm, dri_of([]), wp=wp).plan
     p = FsmParams()
     lin, _ = follow_cmd(plan, BOAT, YAW, 0.0, wp, p, KP, KD)
-    expected_v = 0.3 * p.v_max * (2.0 / p.slow_radius)
+    expected_v = 0.3 * p.v_max * (1.0 / p.slow_radius)
     assert lin == pytest.approx(speed_to_cmd(expected_v, p))
 
 

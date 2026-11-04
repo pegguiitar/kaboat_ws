@@ -302,8 +302,9 @@ waypoint 방향으로 두고 곧바로 직선 경로를 만든다.
 ### 3-5. 속도와 조향
 
 - **조향**: 경로 위에서 `lookahead` 만큼 앞선 점을 목표로 삼고, 기존
-  공통 `waypoint()` 접근과 같은 PD 제어를 쓴다(게인도 동일 — 축소 선체가 발진해서
-  뒤집히지 않는 실측 안전값). 목표점이 waypoint 보다 멀어지면 waypoint 로
+  수조에서 검증한 LOS(`LosFollower.bspline_track`, `test_los`)와 같은 PD 제어를 쓴다
+  (요 게인 kp 1.5 / kd 0.15, 출력 비율 `cmd_full` 0.3 을 전진·회전 상한으로 —
+  2026-11-04 실물 튜닝. 이전에는 sim 의 `waypoint()` 게인 0.152/0.076 이었다). 목표점이 waypoint 보다 멀어지면 waypoint 로
   잘라낸다. 순수 FSM에는 도착 판정을 만들지 않는다. ROS 노드인
   `obstacle_planner`가 완료 신호를 보내고, 최종 미션 전환은
   `mission_manager`가 웨이포인트 4m 조건과 함께 판정한다.
@@ -386,9 +387,9 @@ waypoint 방향으로 두고 곧바로 직선 경로를 만든다.
 
 | 이름 | 값 | 뜻과 근거 |
 |---|---|---|
-| `lookahead` / `kappa_window` | 2.0 / 2.0 m | 조향 목표점 거리 / 굽이를 미리 보는 거리 |
-| `v_min` / `v_max` | 0.3 / 1.1 m/s | 감속 하한 / 현재 회피 추종 상한. 1.48m/s 교정 전속보다 낮춰 경로 이탈을 줄임 |
-| `slow_radius` | 3.0 m | waypoint 이 거리 안에서 감속 시작 (위치 목표 접근과 동일) |
+| `lookahead` / `kappa_window` | 1.0 / 2.0 m | 조향 목표점 거리 / 굽이를 미리 보는 거리. lookahead 는 `test_los` 값(이전 sim 2.0) |
+| `v_min` / `v_max` | 0.3 / 1.4 m/s | 감속 하한 / 회피 추종 상한 (`test_los` 와 같음) |
+| `slow_radius` | 1.5 m | waypoint 이 거리 안에서 감속 시작 (`test_los` 값, 이전 sim 3.0) |
 | `omega_max` | 0.52 rad/s | 낼 수 있는 최대 회전 속도 (실측 0.44~0.49) |
 | `t_backstop` | 3.0 s | 아무 일 없어도 이 주기로 경로를 다시 만듦 |
 | `d_panic` | 3.0 m | 위험 지점까지 이만큼도 안 남으면 즉시 탈출. 타력으로 멈추는 데 ~2m (실측) + 여유 |
@@ -397,7 +398,7 @@ waypoint 방향으로 두고 곧바로 직선 경로를 만든다.
 | `escape_radius` / `escape_n_bearings` | 2.5 m / 31 | 탈출 방향 후보의 거리 / 개수 |
 | `v_escape` | 0.5 m/s | 후진 속도. 후진 추력은 전진과 대칭(−1.48)이지만 보수적으로 1/3 |
 | `escape_min_t` / `escape_n_ok` | 3.0 s / 5 | 복귀 조건 — 최소 탈출 시간 + 연속 성공 횟수 |
-| `cmd_full` / `v_full` / `cmd_exp` | 0.101 / 1.48 / 1.64 | 속도 → 추력 명령 변환 곡선. 2점 실측으로 맞춘 지수 |
+| `cmd_full` / `v_full` / `cmd_exp` | 0.3 / 1.48 / 1.64 | 속도 → 추력 명령 변환 곡선. `cmd_full` 은 회피 출력 비율(= `test_los` thrust_ratio 0.3)이고 전진·회전 상한으로도 쓴다 (이전 sim 0.101) |
 
 ## 5. 돌려보고 검증하기
 

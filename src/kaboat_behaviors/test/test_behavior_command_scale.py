@@ -106,3 +106,29 @@ def test_scale_flag_resets_every_tick():
     tick(state)
     tick(state)
     assert sent[-1].linear.x == pytest.approx(DEFAULT_MAX_LINEAR)   # LOS 한계가 이월되지 않음
+
+
+def test_avoid_output_uses_los_thrust_ratio_not_waypoint_scale(monkeypatch):
+    """obstacle_planner 도 los() 와 같은 규칙: 전체 스케일 1.0, 상한 fsm.cmd_full(0.3).
+
+    예전엔 waypoint 상한(전진 0.101·회전 0.025)에 잘려 경로를 못 따라갔다.
+    """
+    from kaboat_behaviors import obstacle_planner
+    from kaboat_behaviors.avoid_fsm import FsmParams, StepOut
+
+    monkeypatch.setattr(obstacle_planner, 'build_dri', lambda *a, **k: None)
+    state, sent = make_state(0.0, 0.0, 0.0,
+                             lambda s: obstacle_planner.ObstaclePlanner.compute_cmd(s))
+    state.goal = SimpleNamespace(pose=SimpleNamespace(
+        position=SimpleNamespace(x=10.0, y=0.0)))
+    state.occupancy_grid = object()
+    state.dri_params = None
+    state.thrust_ratio = FsmParams().cmd_full
+    state.fsm = SimpleNamespace(step=lambda *a: StepOut(0.25, -0.8, 'FOLLOW', None))
+    state.distance_to_goal = lambda: 10.0
+    state._publish_debug = lambda *a: None
+    tick(state)
+    cmd = sent[-1]
+    assert FsmParams().cmd_full == pytest.approx(0.3)
+    assert cmd.linear.x == pytest.approx(0.25)
+    assert cmd.angular.z == pytest.approx(-0.3)

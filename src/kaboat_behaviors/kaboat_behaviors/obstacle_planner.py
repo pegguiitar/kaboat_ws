@@ -15,11 +15,12 @@ from geometry_msgs.msg import PoseStamped, Twist
 from nav_msgs.msg import OccupancyGrid, Path
 from visualization_msgs.msg import Marker, MarkerArray
 
-from .behavior_base import BehaviorBase, YAW_KP, YAW_KD, yaw_from_quaternion
+from .behavior_base import BehaviorBase, yaw_from_quaternion
 from .avoid_fsm import AvoidFsm, FsmParams
 from .bspline_planner import PlannerParams
 from .dri import DriParams, build_dri
 from .dri_marker import dri_x_markers
+from .los_controller import BSPLINE_TRACK_YAW_KD, BSPLINE_TRACK_YAW_KP
 
 
 class ObstaclePlanner(BehaviorBase):
@@ -34,8 +35,15 @@ class ObstaclePlanner(BehaviorBase):
         self.dri_params = self._params_from('dri', DriParams)
         self.planner_params = self._params_from('planner', PlannerParams)
         self.fsm_params = self._params_from('fsm', FsmParams)
+        # 경로 추종은 수조에서 검증한 LOS(test_los) 와 같은 상수: 요 PD 1.5/0.15,
+        # 출력 비율 fsm.cmd_full(0.3) 을 전진 기준·전진/회전 상한으로 쓴다.
+        ratio = float(self.fsm_params.cmd_full)
+        if not math.isfinite(ratio) or not 0.0 < ratio <= 1.0:
+            raise ValueError('fsm.cmd_full (avoid thrust ratio) must be in (0, 1]')
+        self.thrust_ratio = ratio
         self.fsm = AvoidFsm(self.planner_params, self.fsm_params,
-                            yaw_kp=YAW_KP, yaw_kd=YAW_KD)
+                            yaw_kp=BSPLINE_TRACK_YAW_KP,
+                            yaw_kd=BSPLINE_TRACK_YAW_KD)
         # 디버그 출력 — RViz 가 구독. 로직 아님.
         # 별도 viz 노드를 두지 않는 이유: 위험도 지도는 여기서 이미 계산했으므로
         # 그대로 내보내면 추가 계산이 0 이다. 별도 노드는 같은 걸 다시 계산해야
@@ -104,6 +112,10 @@ class ObstaclePlanner(BehaviorBase):
         self._publish_debug(out.plan, dri)
         cmd.linear.x = out.linear_x
         cmd.angular.z = out.angular_z
+        # los() 와 같은 출력 규칙: 전체 스케일 1.0, 상한 = 출력 비율. 이게 없으면
+        # BehaviorBase 의 waypoint 상한(전진 0.101·회전 0.025)에 잘린다.
+        self._command_full_scale = (1.0, 1.0)
+        self._command_thrust_ratio = self.thrust_ratio
         return cmd
 
     # ── 디버그 발행 (구독자 있을 때만) ──────────────────

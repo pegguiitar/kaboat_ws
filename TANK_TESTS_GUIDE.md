@@ -302,7 +302,7 @@ ros2 launch kaboat_hardware real_obstacle_avoid_test.launch.py drive_enabled:=tr
 ros2 service call /real_avoid_test/start std_srvs/srv/Trigger '{}'
 ```
 
-- 상한 전진 0.10·회전 0.06, 후진 탈출 꺼짐. 센서 끊김, 경로 0.7m 이탈, 후진 요청 시 중지.
+- 상한 전진 0.30·회전 0.30(`test_los`와 같은 출력 비율, 경로 추종 게인도 `test_los`와 같은 1.5/0.15), 후진 탈출 꺼짐. 센서 끊김, 경로 0.7m 이탈, 후진 요청 시 중지.
 - 실물 튜닝: [`real_obstacle_avoid_test.yaml`](src/kaboat_hardware/config/real_obstacle_avoid_test.yaml)의 `fsm.*`.
 - 선체 폭 충돌 예측은 없으므로 RViz에서 여유를 직접 확인합니다.
 

@@ -22,12 +22,15 @@ from std_srvs.srv import Trigger
 from visualization_msgs.msg import Marker, MarkerArray
 
 from kaboat_behaviors.avoid_fsm import AvoidFsm, FsmParams
-from kaboat_behaviors.behavior_base import YAW_KD, YAW_KP, yaw_from_quaternion
+from kaboat_behaviors.behavior_base import yaw_from_quaternion
 from kaboat_behaviors.bspline_planner import (
     PlannerParams, check, generate,
 )
 from kaboat_behaviors.dri import DriParams, build_dri
 from kaboat_behaviors.dri_marker import clear_dri_x_markers, dri_x_markers
+from kaboat_behaviors.los_controller import (
+    BSPLINE_TRACK_YAW_KD, BSPLINE_TRACK_YAW_KP,
+)
 from kaboat_hardware.tank_walls import build_tank_dri, edge_distance, valid_bounds
 from kaboat_hardware.trajectory_visualization import (
     BoundedTrajectoryHistory, create_trail_marker,
@@ -55,8 +58,9 @@ class RealObstacleAvoidTest(Node):
         self.declare_parameter('start_heading_tolerance_deg', 45.0)
         self.declare_parameter('goal_tolerance', 0.5)
         self.declare_parameter('max_cross_track_error', 0.7)
-        self.declare_parameter('max_linear_cmd', 0.10)
-        self.declare_parameter('max_angular_cmd', 0.06)
+        # 출력 상한 = test_los 의 thrust_ratio 0.3 (전진·회전 모두)
+        self.declare_parameter('max_linear_cmd', 0.30)
+        self.declare_parameter('max_angular_cmd', 0.30)
         self.declare_parameter('odom_timeout_sec', 0.5)
         self.declare_parameter('scan_timeout_sec', 0.5)
         self.declare_parameter('grid_timeout_sec', 0.5)
@@ -172,8 +176,10 @@ class RealObstacleAvoidTest(Node):
         self.dri_params = self._params_from('dri', DriParams)
         self.planner_params = self._params_from('planner', PlannerParams)
         self.fsm_params = self._params_from('fsm', FsmParams)
+        # 경로 추종 게인은 test_los 에서 검증한 값 (kp 1.5, kd 0.15)
         self.fsm = AvoidFsm(self.planner_params, self.fsm_params,
-                            yaw_kp=YAW_KP, yaw_kd=YAW_KD)
+                            yaw_kp=BSPLINE_TRACK_YAW_KP,
+                            yaw_kd=BSPLINE_TRACK_YAW_KD)
         gen_threshold = self.planner_params.safe_threshold * self.planner_params.gen_margin
         if (self.tank_enabled and self.exclude_tank_walls
                 and self.tank_wall_dri >= gen_threshold):

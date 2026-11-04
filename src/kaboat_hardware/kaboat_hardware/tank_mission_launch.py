@@ -135,8 +135,10 @@ def generate_tank_mission_launch(mission):
         DeclareLaunchArgument('tank_size_x', default_value='10.0'),
         DeclareLaunchArgument('tank_size_y', default_value='5.0'),
         DeclareLaunchArgument('tank_margin', default_value='0.5'),
-        DeclareLaunchArgument('max_linear_cmd', default_value='0.06'),
-        DeclareLaunchArgument('max_angular_cmd', default_value='0.02'),
+        # 최종 /cmd_vel 상한. 회피·게이트 경로 추종(test_los 튜닝, 출력 비율 0.3)이
+        # 잘리지 않도록 같은 0.3 (이전 0.06/0.02 에선 회전이 0.02 로 막혔다).
+        DeclareLaunchArgument('max_linear_cmd', default_value='0.30'),
+        DeclareLaunchArgument('max_angular_cmd', default_value='0.30'),
         DeclareLaunchArgument('approach_thrust_ratio', default_value='0.5'),
         DeclareLaunchArgument('start_occupancy_grid', default_value='true',
                               description='false if one /occupancy_grid publisher already exists'),

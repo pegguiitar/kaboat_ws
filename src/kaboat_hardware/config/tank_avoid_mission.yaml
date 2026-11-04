@@ -1,9 +1,6 @@
-# Production obstacle_planner tuning for a short indoor tank course.
-# Other DRI/planner/FSM parameters retain their code defaults until measured.
+# Production obstacle_planner on the indoor tank.
+# 경로 추종(lookahead 1.0, slow_radius 1.5, 게인 1.5/0.15)은 test_los 에서 검증한
+# 코드 기본값을 그대로 쓴다. 출력 비율만 여기서 명시해 둔다(코드 기본값과 같음).
 obstacle_planner:
   ros__parameters:
-    fsm.lookahead: 0.8
-    fsm.kappa_window: 1.0
-    fsm.v_min: 0.2
-    fsm.v_max: 0.5
-    fsm.slow_radius: 1.5
+    fsm.cmd_full: 0.3                    # 회피 출력 비율 = 전진 기준·전진/회전 상한
