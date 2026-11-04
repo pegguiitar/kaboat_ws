@@ -16,6 +16,11 @@ if [ -f /workspace/kaboat_ws/install/setup.bash ]; then
     source /workspace/kaboat_ws/install/setup.bash
 fi
 
+# 호스트(Jazzy)와 컨테이너(Humble)가 network_mode: host 로 같은 PC 를 쓰면 Fast DDS 가
+# 공유 메모리를 쓰려다 컨테이너 경계에서 데이터가 안 건너온다(디스커버리만 됨).
+# /shore/scan, /boat_pose 가 호스트·Zenoh 브리지로 가도록 UDP 만 쓴다.
+export FASTDDS_BUILTIN_TRANSPORTS=UDPv4
+
 # 3. 컨테이너 내부 편의 단축어 (Aliases)
 alias cb="colcon build --symlink-install"
 alias sb="source /workspace/kaboat_ws/install/setup.bash"
