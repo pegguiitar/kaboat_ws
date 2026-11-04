@@ -19,7 +19,7 @@ from .obstacle_avoidance_utils import apply_repulsion
 ARRIVE_RADIUS = 0.8
 SEARCH_TIME = 5.0
 SEARCH_CIRCLE_RADIUS = 1.2
-SEARCH_THRUST_RATIO = 0.5
+SEARCH_THRUST_RATIO = 0.3   # los_path_test 에서 검증된 LOS 출력 상한
 
 
 class SearchCircler(BehaviorBase):

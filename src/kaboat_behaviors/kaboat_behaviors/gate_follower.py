@@ -32,16 +32,22 @@ class GateFollower(BehaviorBase):
         super().__init__()
         self.gate_params = self._params_from('gate', GateParams)
         self.dri_params = self._params_from('dri', DriParams)
-        self.declare_parameter('gate.thrust_ratio', 0.5)
+        self.declare_parameter('gate.thrust_ratio', 0.5)       # waypoint(접근) 구간
+        # LOS 경로 추종 구간: los_path_test 에서 검증된 값 0.3 (전진·회전 출력 상한).
+        self.declare_parameter('gate.los_thrust_ratio', 0.3)
         self.declare_parameter('gate.motion_enabled', False)
         self.declare_parameter('gate.scan_timeout_sec', 0.7)
         self.declare_parameter('gate.grid_timeout_sec', 0.7)
         self.thrust_ratio = float(self.get_parameter('gate.thrust_ratio').value)
+        self.los_thrust_ratio = float(
+            self.get_parameter('gate.los_thrust_ratio').value)
         self.motion_enabled = bool(self.get_parameter('gate.motion_enabled').value)
         self.scan_timeout = float(self.get_parameter('gate.scan_timeout_sec').value)
         self.grid_timeout = float(self.get_parameter('gate.grid_timeout_sec').value)
         if (not math.isfinite(self.thrust_ratio)
                 or not 0.0 <= self.thrust_ratio <= 1.0
+                or not math.isfinite(self.los_thrust_ratio)
+                or not 0.0 <= self.los_thrust_ratio <= 1.0
                 or not math.isfinite(self.scan_timeout) or self.scan_timeout <= 0
                 or not math.isfinite(self.grid_timeout) or self.grid_timeout <= 0):
             raise ValueError('invalid gate thrust ratio or sensor timeout')
@@ -65,6 +71,7 @@ class GateFollower(BehaviorBase):
         self.get_logger().info(
             f'gate LiDAR/DRI: required_pairs={self.gate_params.required_pairs}, '
             f'thrust_ratio={self.thrust_ratio:.2f}, '
+            f'los_thrust_ratio={self.los_thrust_ratio:.2f}, '
             f'motion_enabled={self.motion_enabled}')
 
     def _params_from(self, prefix, cls):
@@ -232,7 +239,7 @@ class GateFollower(BehaviorBase):
         if not points_observed(
                 grid, self._path.samples[max(0, progress - 2):]):
             return self._stop('PATH_UNOBSERVED')
-        cmd, reached = self.los(self._path, self.thrust_ratio)
+        cmd, reached = self.los(self._path, self.los_thrust_ratio)
         progress = self._los_follower.progress_idx or 0
         if not lookahead_chord_safe(
                 dri, boat, self._path, progress,

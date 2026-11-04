@@ -83,10 +83,13 @@ class BehaviorBase(Node):
         self._waypoint_controller = WaypointController(WaypointParams(
             max_linear=self.max_linear, max_angular=self.max_angular,
             yaw_kp=YAW_KP, yaw_kd=YAW_KD))
-        self._los_follower = LosFollower(
-            max_linear=self.max_linear, max_angular=self.max_angular,
-            yaw_kp=YAW_KP, yaw_kd=YAW_KD)
+        # LOS 는 los_path_test/bspline_track_test 에서 검증된 제어(kp 1.5, kd 0.15,
+        # thrust_ratio 가 출력 상한)를 쓴다. 이 경로의 명령은 이 behavior 의
+        # max_linear/max_angular(waypoint 용 작은 스케일)가 아니라 1.0 을 전체
+        # 스케일로 보고 thrust_ratio 만큼으로 제한한다(_command_full_scale).
+        self._los_follower = LosFollower.bspline_track()
         self._command_thrust_ratio = None
+        self._command_full_scale = None
         self.buoys = []           # list[kaboat_msgs.Buoy] — 전역(odom) 좌표 부표맵
         self.occupancy_grid = None  # OccupancyGrid | None — 회피(apply_repulsion) 소비처
 
@@ -149,16 +152,21 @@ class BehaviorBase(Node):
         if not self.active:
             return
         self._command_thrust_ratio = None
+        self._command_full_scale = None
         cmd = self.compute_cmd() # cmd는 속도 명령 표준화 명령어
         if cmd is None:
             return
-        cmd.linear.x = max(-self.max_linear, min(self.max_linear, cmd.linear.x))
-        cmd.angular.z = max(-self.max_angular, min(self.max_angular, cmd.angular.z))
+        # waypoint() 는 이 behavior 의 max_linear/max_angular 가 전체 스케일이고,
+        # los() 는 1.0 이다(thrust_ratio 가 곧 출력 상한).
+        full_linear, full_angular = (self._command_full_scale
+                                     or (self.max_linear, self.max_angular))
+        cmd.linear.x = max(-full_linear, min(full_linear, cmd.linear.x))
+        cmd.angular.z = max(-full_angular, min(full_angular, cmd.angular.z))
         if self._command_thrust_ratio is not None:
             # Repulsion may run after waypoint()/los(); cap the published command
             # as well, so it cannot undo a caller's lower thrust setting.
-            linear_limit = self.max_linear * self._command_thrust_ratio
-            angular_limit = self.max_angular * self._command_thrust_ratio
+            linear_limit = full_linear * self._command_thrust_ratio
+            angular_limit = full_angular * self._command_thrust_ratio
             cmd.linear.x = max(-linear_limit, min(linear_limit, cmd.linear.x))
             cmd.angular.z = max(-angular_limit, min(angular_limit, cmd.angular.z))
         self.cmd_pub.publish(cmd)
@@ -263,6 +271,7 @@ class BehaviorBase(Node):
         target = make_waypoint(x, y, angle, thrust_ratio)
         self._waypoint_controller.set_goal(target)
         self._command_thrust_ratio = target.thrust_ratio
+        self._command_full_scale = (self.max_linear, self.max_angular)
         cmd = Twist()
         if not self.waypoint_odom_ready():
             self._waypoint_controller.reset_progress()
@@ -291,6 +300,7 @@ class BehaviorBase(Node):
         if not isinstance(path, SampledPlan):
             raise TypeError('path must be built with sampled_path, bspline_path or circle_path')
         self._command_thrust_ratio = ratio
+        self._command_full_scale = (1.0, 1.0)
         cmd = Twist()
         if not self.waypoint_odom_ready() or path.frame_id != 'odom':
             return cmd, False

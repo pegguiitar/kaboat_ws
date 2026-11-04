@@ -34,7 +34,7 @@ def test_search_uses_stable_circle_path_and_keeps_orbiting_outside_entry_radius(
     state.distance = 1.2  # orbit radius exceeds the 0.8 m entry threshold
     SearchCircler.compute_cmd(state)
     assert calls[0][0] is calls[1][0]
-    assert calls[0][1] == calls[1][1] == 0.5
+    assert calls[0][1] == calls[1][1] == 0.3
     assert np.all(calls[0][0].curvatures > 0)  # green -> CCW
 
     state.color = 'red'
