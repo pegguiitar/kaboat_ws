@@ -47,7 +47,9 @@ class DriParams:
     # 충분하다고 결정. (occupancy_grid 의 옛 8m confirm 게이트는 이 전역 문턱으로
     # 대체되어 제거됨. 예전엔 50 = far 1히트도 통과였다.)
     occ_threshold: int = 95
-    sigma: float = 0.5          # 등방 σ **상한**(코앞·정면일 때) [m] — 곧 berth 폭.
+    # 0.5 → 0.4 (2026-11-04 실물 튜닝, safe_threshold 1.2 와 함께): 2 m 간격 장애물 사이
+    # 통과 후보를 늘리려고 위험 거품을 줄였다. 0.5 는 sim 튜닝값.
+    sigma: float = 0.4          # 등방 σ **상한**(코앞·정면일 때) [m] — 곧 berth 폭.
     #   1.0 은 3m 격자 부표 밭에서 틈 중앙 risk 를 threshold 위로 밀어 올려
     #   전부 "막힘" 판정 → 배가 밭을 통째로 우회했다 (§3-2).
     dist_falloff: float = 4.0   # 근접성 g(ρ)=1/(1+ρ/ρ₀) 의 ρ₀ [m]

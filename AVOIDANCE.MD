@@ -20,7 +20,7 @@
 | 구독 | `/mission/goal` `/mission/state` | 목표점 / 지금 이 behavior 차례인지 |
 | 발행 | `/cmd/avoid` | 속도·회전 명령 → `cmd_mux` → `/cmd_vel` |
 | 발행 | `/avoid/plan` `/avoid/cps` `/avoid/dri` | 디버그용 경로·제어점·목표점·위험도 지도 (RViz). **보는 사람이 있을 때만 발행** — RViz 를 끄면 만들지도 않는다 |
-| 발행 | `/avoid/dri_marks` | DRI **원값**이 `viz.dri_mark_threshold`(0.93)를 넘는 **격자 셀마다** 셀 중심에 빨간 X (`viz.dri_mark_size` 0.15 m). 표시 전용, 판단에 안 쓴다. `real_obstacle_avoid_test`(`/real_avoid_test/dri_marks`)와 `manual_dri_monitor`(`/manual_dri/dri_marks`)도 같은 방식으로 낸다 |
+| 발행 | `/avoid/dri_marks` | DRI **원값**이 `viz.dri_mark_threshold`(1.116)를 넘는 **격자 셀마다** 셀 중심에 빨간 X (`viz.dri_mark_size` 0.15 m). 표시 전용, 판단에 안 쓴다. `real_obstacle_avoid_test`(`/real_avoid_test/dri_marks`)와 `manual_dri_monitor`(`/manual_dri/dri_marks`)도 같은 방식으로 낸다 |
 
 ---
 
@@ -152,8 +152,8 @@ sigma_eff =
 amplitude = (1 + a_dist·g) × (1 + a_head·f)
 ```
 
-따라서 `sigma=0.5m`는 코앞·정면 장애물의 최대값이고, 멀거나 측면이면 더
-작아진다. 검사 기준 `safe_threshold=1.0`에서의 유효 위험 반경은 대략
+따라서 `sigma=0.4m`(2026-11-04 실물 튜닝, 이전 sim 0.5m)는 코앞·정면 장애물의 최대값이고, 멀거나 측면이면 더
+작아진다. 검사 기준 `safe_threshold=1.2`(이전 sim 1.0)에서의 유효 위험 반경은 대략
 `sigma_eff × sqrt(2 ln(amplitude))`이다.
 
 ### 3-2. 경로 만들기 (`generate`)
@@ -186,7 +186,7 @@ waypoint 방향으로 두고 곧바로 직선 경로를 만든다.
    31개를 3° 간격으로 만든다. 이는 월드 절대축이나 현재 선수각 중심이 아니다.
    선수각은 `p1` 방향과 첫 원의 연속성 비용에만 들어간다.
 2. **위험한 후보 제거** — 직전 제어점에서 후보까지 직선을 긋고 8점을 샘플링한다.
-   선분 최대 DRI가 `safe_threshold × gen_margin`(기본 `1.0 × 0.93 = 0.93`)을
+   선분 최대 DRI가 `safe_threshold × gen_margin`(기본 `1.2 × 0.93 = 1.116`)을
    넘으면 탈락시킨다. 점 하나만 보면 후보점은 안전해도 거기까지 가는 선분이
    위험 구름을 가로지를 수 있기 때문이다.
 3. **±12° 탐색의 기준 후보 선정** — 남은 안전 후보에 다음 기하 비용을 계산한다.
@@ -355,7 +355,7 @@ waypoint 방향으로 두고 곧바로 직선 경로를 만든다.
 | 이름 | 값 | 뜻과 근거 |
 |---|---|---|
 | `occ_threshold` | 95 | 이 값 이상인 칸만 장애물로 인정. 3 hit≈93은 버리고 4 hit≈97부터 DRI 중심으로 사용 |
-| `sigma` | 0.5 m | 위험 구름 폭의 최대값. `0.6→0.5`로 줄여 좁은 통로에서 가우시안 중첩을 완화 |
+| `sigma` | 0.4 m | 위험 구름 폭의 최대값. sim `0.6→0.5`, 실물 `0.5→0.4`(2026-11-04, 2 m 간격 통과 후보 확보) |
 | `dist_falloff` | 4.0 m | 거리에 따라 크기·진하기가 줄어드는 기준 거리 |
 | `k_dist` / `k_head` | 0.3 / 0.3 | 구름 크기 줄이는 정도. 코앞·정면은 `sigma` 그대로, 멀고 옆일수록 작아진다. 반대로 키우는 방식은 정면 중거리 구름을 0.88m 로 불려 3m 틈을 닫아버렸다 |
 | `a_dist` | 1.0 | 가까울수록 진하게 |
@@ -377,7 +377,7 @@ waypoint 방향으로 두고 곧바로 직선 경로를 만든다.
 | `w_wp` / `w_prev` | 1.0 / 1.0 | DRI 탐색 중심을 정하는 기하 점수. 목표 방향과 직전 방향을 동등하게 반영해 직진성을 강화 |
 | `dri_angle_slack` | 12° | 기하 최적 안전 후보 주변에서 최소 DRI 후보를 찾는 각도 반폭 |
 | `risk_straight_slack` | 0.03 | 최소 max DRI와 이 값 이내인 후보 중 가장 직선적인 것을 선택 |
-| `safe_threshold` | 1.0 | **유일한 안전 기준선.** 경로를 만들 때와 검사할 때가 같은 선을 쓴다 |
+| `safe_threshold` | 1.2 | **유일한 안전 기준선.** 실물 튜닝에서 1.0→1.2(2026-11-04). 경로를 만들 때와 검사할 때가 같은 선을 쓴다 |
 | `gen_margin` | 0.93 | 만들 때는 기준선의 93% 에서 자름(2026-11-04 0.85→0.93). 직선으로 판정하는데 실제 곡선은 몇 cm 안쪽으로 붙어서 생기는 오차 흡수 |
 | `repair_max` / `repair_dtheta` | 3 / 6° | tick 당 수리 횟수 / 한 번에 움직이는 각도 |
 | `progress_window` | 2.0 m | 배가 어디쯤 왔는지 찾을 때 보는 앞쪽 범위 |
@@ -433,7 +433,7 @@ python3 scripts/demo/watch_goal.py      29.0 76.5   # 완주 시간·속도·전
 
 접촉 판정 기준은 **최소 거리 0.5m 초과**(선체 반폭 0.3m + 여유). 이전 파라미터
 조합의 7번 주행 기록은 0.48~0.90m였고, 그중 0.48m는 이 여유 기준에 못 미친다.
-현재 `sigma=0.5m`, `search_fov=90°`, `v_max=1.1m/s` 조합의 최소 이격거리는
+sim 튜닝 당시 `sigma=0.5m`, `search_fov=90°`, `v_max=1.1m/s` 조합의 최소 이격거리는(실물 sigma 0.4 에서는 재측정 필요)
 같은 조건으로 다시 측정해야 한다.
 
 `meas_step1.py` 는 배를 정해진 순서로 몰며 전진·후진·회전 성능을 재는

@@ -54,8 +54,8 @@ class ObstaclePlanner(BehaviorBase):
         # 표시 전용 — 판단에는 안 쓴다.
         self.declare_parameter('viz.dri_scale', 4.0)
         # 이 DRI 원값(지도 0~100 으로 접기 전)을 넘는 셀마다 X 를 찍는다.
-        # 0.93 = planner 후보 필터 문턱(safe_threshold 1.0 × gen_margin 0.93).
-        self.declare_parameter('viz.dri_mark_threshold', 0.93)
+        # 1.116 = planner 후보 필터 문턱(safe_threshold 1.2 × gen_margin 0.93).
+        self.declare_parameter('viz.dri_mark_threshold', 1.116)
         self.declare_parameter('viz.dri_mark_size', 0.15)   # 셀(0.2 m) 안에 들어가는 크기
 
     def _params_from(self, prefix: str, cls):

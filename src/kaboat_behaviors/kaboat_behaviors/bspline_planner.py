@@ -74,7 +74,9 @@ class PlannerParams:
     # 0 이면 generate → None (구 hard_max 역할 흡수 — 생성이 "괜찮다"고
     # 낸 경로를 같은 tick check 가 위반 판정하던 자기모순 제거).
     # berth 관계: 거품 반경 = σ·√(2·ln(A/threshold)).
-    safe_threshold: float = 1.0
+    # 1.0 → 1.2 (2026-11-04 실물 튜닝): 장애물 간격 ~2 m 에서 후보가 너무 적었다
+    # (빈 틈 2 m 기준 후보 7/31 → 12/31, sigma 0.4 와 함께). 이전 값은 sim 튜닝값.
+    safe_threshold: float = 1.2
     # 생성 필터는 threshold×이 값 에서 자른다 — 필터는 현(chord)으로 판정
     # 하는데 스플라인은 굽이에서 현보다 수 cm 안쪽으로 붙어, 1.0 그대로면
     # 경계 스침(실측 1.013)이 남는다. 0.85 = 위험 경사(≈2.7/m) 기준 ~5cm

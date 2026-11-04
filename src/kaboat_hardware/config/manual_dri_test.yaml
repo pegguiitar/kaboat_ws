@@ -6,7 +6,7 @@ manual_dri_monitor:
     scan_timeout_sec: 0.7
     grid_timeout_sec: 0.7
     dri.occ_threshold: 95
-    dri.sigma: 0.5
+    dri.sigma: 0.4                     # DriParams 기본값과 같게 (실물 튜닝)
     dri.dist_falloff: 4.0
     dri.k_dist: 0.3
     dri.k_head: 0.3
