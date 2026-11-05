@@ -155,6 +155,20 @@ def pick_ref_obstacle(occ_xy, boat, yaw, p: PlannerParams):
     return float(rho[ok][np.argmin(eff)])
 
 
+def _argmin_toward_wp(cost, bearings, wp_bearing) -> int:
+    """cost 최소 후보. 동점이면 wp 방위에 가장 가까운 후보.
+
+    w_wp = w_prev 라 직전 CP 방위와 wp 방위 사이 후보는 기하 비용이 전부 같다.
+    np.argmin 은 동점에서 배열 앞쪽(−search_fov/2, 오른쪽)을 고르므로, 오른쪽으로
+    피한 경로는 직전 방위를 유지해 목표 옆으로 멀어지고 왼쪽 회피만 곧바로 wp 로
+    복귀하는 비대칭이 있었다 (2026-11-04 실측: 목표 6 m 에서 끝점이 옆으로 3 m).
+    동점을 wp 쪽으로 깨서 좌우 대칭으로 만든다.
+    """
+    best = float(np.min(cost))
+    tied = np.nonzero(cost <= best + 1e-9)[0]
+    return int(tied[np.argmin(np.abs(bearings[tied] - wp_bearing))])
+
+
 def _arc_pick(dri, origin, radius, wp_bearing, prev_pt, prev_bearing,
               p: PlannerParams):
     """arc 위 후보 선택 — 하드 필터 + 제한 범위 최소 DRI 근처 직진 우선.
@@ -168,6 +182,7 @@ def _arc_pick(dri, origin, radius, wp_bearing, prev_pt, prev_bearing,
        후보를 찾고, 그 방위 ±dri_angle_slack 로 탐색 범위를 제한
     ③ 제한 범위의 선분 max DRI 최저값 + risk_straight_slack 이내 후보 중
        기하 비용 argmin
+    ②③ 모두 비용 동점이면 wp 방위에 가까운 후보 (_argmin_toward_wp)
     생존자 없으면 None — 호출측(generate)이 전체를 None 으로 (→ ESCAPE).
     """
     half = 0.5 * p.search_fov
@@ -188,7 +203,7 @@ def _arc_pick(dri, origin, radius, wp_bearing, prev_pt, prev_bearing,
         + p.w_prev * np.abs([_wrap(b - prev_bearing) for b in bearings])
     )
     geom_cost[~safe] = np.inf
-    geom_best = int(np.argmin(geom_cost))
+    geom_best = _argmin_toward_wp(geom_cost, bearings, wp_bearing)
 
     # 전역 DRI 최소를 택하면 밭 밖의 0 지대로 과도하게 우회할 수 있으므로,
     # 기하 최적 안전 후보 주변으로만 범위를 제한한다.
@@ -203,7 +218,7 @@ def _arc_pick(dri, origin, radius, wp_bearing, prev_pt, prev_bearing,
     )
     straight_cost = geom_cost.copy()
     straight_cost[~near_min_risk] = np.inf
-    i = int(np.argmin(straight_cost))
+    i = _argmin_toward_wp(straight_cost, bearings, wp_bearing)
     return float(bearings[i]), cands[i]
 
 

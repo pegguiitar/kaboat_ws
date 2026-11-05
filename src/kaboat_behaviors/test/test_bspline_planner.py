@@ -326,3 +326,21 @@ def test_samples_spacing_is_half_resolution():
     seg = np.hypot(*np.diff(plan.samples, axis=0).T)
     assert np.all(seg < 0.5 * RES + 1e-6)
     assert np.median(seg) == pytest.approx(0.5 * RES, rel=0.1)
+
+
+@pytest.mark.parametrize('wp_x', [4.0, 6.0])
+def test_left_and_right_detours_are_mirror_images_and_return_to_wp(wp_x):
+    """동점 기하 비용은 wp 쪽으로 — 오른쪽 회피도 왼쪽처럼 wp 로 복귀한다.
+
+    예전엔 argmin 이 동점에서 오른쪽(배열 앞) 후보를 골라, 장애물을 오른쪽으로
+    피하면 방위 −30° 를 끝까지 유지해 끝점이 목표 옆 2~3 m 로 빠졌다.
+    """
+    wp = (wp_x, 0.0)
+    left = gen(dri_of([(1.5, -0.3)]), vel=V_ZERO, wp=wp)    # 장애물 오른쪽 → 왼쪽 회피
+    right = gen(dri_of([(1.5, 0.3)]), vel=V_ZERO, wp=wp)    # 장애물 왼쪽 → 오른쪽 회피
+    assert left is not None and right is not None
+    assert left.bearings[0] > 0.1 and right.bearings[0] < -0.1
+    assert np.allclose(left.bearings, [-b for b in right.bearings], atol=1e-9)
+    for plan in (left, right):
+        assert plan.bearings[-1] == pytest.approx(0.0, abs=1e-9)
+        assert np.allclose(plan.samples[-1], wp, atol=1e-6)
