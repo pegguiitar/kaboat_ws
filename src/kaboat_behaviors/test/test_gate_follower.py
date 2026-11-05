@@ -145,3 +145,70 @@ def test_cached_gate_stops_when_one_post_disappears_from_live_scan():
         if node is not None:
             node.destroy_node()
         rclpy.shutdown()
+
+
+def test_posts_need_not_be_visible_close_to_the_gate_line():
+    """선수 라이다 뒤쪽 가림 때문에 게이트선 직전엔 기둥이 안 보일 수 있다 — 계속 진행."""
+    rclpy.init()
+    node = None
+    try:
+        node = _ready_node()
+        node.compute_cmd()
+        mid = node._pair.midpoint
+        _set_odom(node, mid[0] - 0.8, mid[1])           # 게이트선 0.8 m 앞 (해제 거리 1.0 m)
+        node._scan_hits = np.asarray([node._pair.left])  # 한쪽 기둥만 보임
+        node.compute_cmd()
+        assert node._status_text == 'FOLLOW_GATE_1/3'
+    finally:
+        if node is not None:
+            node.destroy_node()
+        rclpy.shutdown()
+
+
+def _blocked_gate_node():
+    # 게이트 (x=3) 중점 경로 위에 장애물 → PATH_UNSAFE
+    node = _ready_node([(3.0, -1.5), (3.0, 1.5), (1.5, 0.0)])
+    node.compute_cmd()
+    assert node._status_text == 'PATH_UNSAFE'
+    return node
+
+
+def test_persistent_path_unsafe_drops_the_pair_and_holds_it_out():
+    rclpy.init()
+    node = None
+    try:
+        node = _blocked_gate_node()
+        mid = node._pair.midpoint
+        node._stall_since = time.monotonic() - node.replan_timeout - 0.1
+        node.compute_cmd()
+        assert node._pair is None and node._path is None
+        assert [m for m, _ in node._rejected] == [mid]
+        assert node._passed_midpoints == []
+        node.compute_cmd()                               # 버린 쌍은 다시 고르지 않음
+        assert node._status_text == 'WAIT_GATE_PAIR'
+
+        node._rejected = [(m, time.monotonic() - 1.0) for m, _ in node._rejected]
+        node.compute_cmd()                               # 보류 시간이 지나면 다시 후보
+        assert node._pair is not None
+    finally:
+        if node is not None:
+            node.destroy_node()
+        rclpy.shutdown()
+
+
+def test_stall_after_crossing_counts_the_gate_as_passed():
+    rclpy.init()
+    node = None
+    try:
+        node = _blocked_gate_node()
+        mid = node._pair.midpoint
+        node._crossed = True
+        node._stall_since = time.monotonic() - node.replan_timeout - 0.1
+        node.compute_cmd()
+        assert node._passed_midpoints == [mid]
+        assert node._rejected == []
+        assert node._status_text == 'GATE_1/3_PASSED'
+    finally:
+        if node is not None:
+            node.destroy_node()
+        rclpy.shutdown()

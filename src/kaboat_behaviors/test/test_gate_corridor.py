@@ -133,3 +133,13 @@ def test_scan_hits_use_the_onboard_lidar_mount_offset():
     # 오프셋 생략 시 예전처럼 base_link 원점
     (hit,) = scan_hits_world(scan, (5.0, 2.5), 0.0)
     assert hit[0] == pytest.approx(7.0)
+
+
+def test_excluded_midpoints_are_skipped_like_passed_ones():
+    grid = gate_grid()
+    p = GateParams()
+    first = select_gate_pair(grid, (0.0, 0.0), (9.0, 0.0), [], p)
+    other = select_gate_pair(grid, (0.0, 0.0), (9.0, 0.0), [], p,
+                             excluded_midpoints=[first.midpoint])
+    assert other is not None
+    assert np.linalg.norm(np.subtract(other.midpoint, first.midpoint)) > 1.0

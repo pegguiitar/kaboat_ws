@@ -28,7 +28,10 @@ class GateParams:
     max_midpoint_lateral: float = 2.5
     passed_pair_exclusion: float = 1.0
     min_pair_advance: float = 0.8
-    max_midpoint_shift: float = 1.5
+    # 연속 게이트 중점의 좌우 이동 허용치 [m]. 코스의 실제 최대 좌우 어긋남으로 둔다.
+    # 1.5 → 1.0 (2026-11-04 가정값, 대회장 실측 후 gate_params.yaml 에서 수정).
+    # 실제 어긋남보다 작으면 그 게이트를 건너뛰고 다음 게이트를 고른다.
+    max_midpoint_shift: float = 1.0
     exit_distance: float = 1.0
     sample_spacing: float = 0.05
     min_clearance: float = 0.5
@@ -129,8 +132,12 @@ def pair_observed(pair: GatePair, scan_hits, p: GateParams):
                for post in (pair.left, pair.right))
 
 
-def select_gate_pair(grid, boat_xy, goal_xy, passed_midpoints, p: GateParams):
-    """Find the nearest credible aperture ahead along the mission goal axis."""
+def select_gate_pair(grid, boat_xy, goal_xy, passed_midpoints, p: GateParams,
+                     excluded_midpoints=()):
+    """Find the nearest credible aperture ahead along the mission goal axis.
+
+    excluded_midpoints: 잠시 후보에서 뺄 쌍의 중점 (경로가 계속 막혀 버린 쌍).
+    """
     direction = _unit_toward(boat_xy, goal_xy)
     if direction is None:
         return None
@@ -154,7 +161,7 @@ def select_gate_pair(grid, boat_xy, goal_xy, passed_midpoints, p: GateParams):
                     or abs(ta - tb) > p.max_pair_along_error
                     or abs(mid_side) > p.max_midpoint_lateral
                     or any(np.linalg.norm(mid - old) < p.passed_pair_exclusion
-                           for old in passed_midpoints)):
+                           for old in (*passed_midpoints, *excluded_midpoints))):
                 continue
             if passed_midpoints:
                 from_last = mid - np.asarray(passed_midpoints[-1])
