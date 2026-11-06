@@ -3,12 +3,24 @@
 실물 수조에서 진행한 장애물 회피(`test_avoid`, `real_obstacle_avoid_test`) 실험의 설정값과 결과를 남깁니다.
 알고리즘 설명은 [AVOIDANCE.MD](AVOIDANCE.MD), 실행 명령 전체는 [TANK_TESTS_GUIDE.md](TANK_TESTS_GUIDE.md) 9·10절을 봅니다.
 
+## SOTA (지금까지 가장 좋았던 수조 설정)
+
+| 항목 | 값 |
+|---|---|
+| 직진 / 회전 | **0.23 / 0.33** |
+| 헤딩 P / D | **1.3 / 0.15** |
+| ESCAPE | 켜짐, 후진 출력 0.1 |
+| 선체 라이다 피치 차단 | −4.0° ~ +2.0° (롤 ±3.0°) |
+| 커밋 | `47b0c41` (11-06 기록) |
+
+이 설정으로 돌아가려면 [저장해 둔 설정](#저장해-둔-설정)의 **설정 3 (SOTA)** 값을 넣거나 `git show 47b0c41` 시점 값을 봅니다.
+
 ## 현재 경로 추종 출력 (2026-11-06 기준)
 
 | 항목 | 값 | 바꾸는 곳 |
 |---|---|---|
-| **직진(전진) 계수** | **0.23** (직선 구간 실제 전진 명령 0.210) | `FsmParams.cmd_full` ([avoid_fsm.py](src/kaboat_behaviors/kaboat_behaviors/avoid_fsm.py)), 수조 시험 상한 `max_linear_cmd` |
-| **회전 계수** | **0.33** (회전 명령 상한) | 수조 시험 `max_angular_cmd`, 대회 미션 `avoid.max_angular_ratio` ([obstacle_planner.py](src/kaboat_behaviors/kaboat_behaviors/obstacle_planner.py)) |
+| **직진(전진) 계수** | **0.25** (직선 구간 실제 전진 명령 0.228) | `FsmParams.cmd_full` ([avoid_fsm.py](src/kaboat_behaviors/kaboat_behaviors/avoid_fsm.py)), 수조 시험 상한 `max_linear_cmd` |
+| **회전 계수** | **0.35** (회전 명령 상한) | 수조 시험 `max_angular_cmd`, 대회 미션 `avoid.max_angular_ratio` ([obstacle_planner.py](src/kaboat_behaviors/kaboat_behaviors/obstacle_planner.py)) |
 
 수조 시험 값은 [real_obstacle_avoid_test.yaml](src/kaboat_hardware/config/real_obstacle_avoid_test.yaml), 수조 대회 미션 값은 [tank_avoid_mission.yaml](src/kaboat_hardware/config/tank_avoid_mission.yaml)에도 같은 값으로 적혀 있습니다. 바꿀 때는 코드 기본값과 두 YAML을 함께 바꿉니다.
 
@@ -16,9 +28,9 @@
 
 | 선수 오차 | 전진 / 회전 | 좌 / 우 추진기 |
 |---|---|---|
-| 0° | 0.210 / 0 | +0.21 / +0.21 |
-| 10° | 0.210 / 0.23 | +0.44 / −0.02 |
-| 15° 이상 | 0.210 / 0.33 (상한) | +0.54 / −0.12 |
+| 0° | 0.228 / 0 | +0.23 / +0.23 |
+| 10° | 0.228 / 0.23 | +0.46 / 0.00 |
+| 15.4° 이상 | 0.228 / 0.35 (상한) | +0.58 / −0.12 |
 
 ## 저장해 둔 설정
 
@@ -28,6 +40,7 @@
 |---|---|---|---|---|---|
 | 설정 1 | 0.20 | 0.38 | 1.5 / 0.15 | `0da9004` | 11-06 저장 |
 | 설정 2 | 0.23 | 0.36 | 1.5 / 0.15 | `d895965` | 11-06 저장. D 0.18을 시험했다가 0.15로 되돌린 뒤의 값 |
+| **설정 3 (SOTA)** | **0.23** | **0.33** | **1.3 / 0.15** | `47b0c41` | 11-06 저장. ESCAPE 켬(후진 0.1), 피치 차단 −4.0°~+2.0° |
 
 ## 나머지 설정값
 
@@ -99,7 +112,10 @@ rviz2 -d ~/Projects/KABOAT/kaboat_ws/src/kaboat_hardware/rviz/real_obstacle_avoi
 | 11-06 | D 게인 0.18 → 0.15 되돌림 (직진 0.23, 회전 0.36) | |
 | 11-06 | D 게인 0.15 → 0.12, 수조 테스트 ESCAPE 켬(후진 출력 0.1) | ESCAPE 가 없어 경로를 못 만들면 정지만 했음. 예전 후진 출력은 0.04라 움직이지 않을 값이어서 0.1로 직접 지정 |
 | 11-06 | D 게인 0.12 → 0.15 되돌림 (직진 0.23, 회전 0.36, ESCAPE 켬·후진 0.1) | |
-| 11-06 | **회전 0.36 → 0.33, P 게인 1.5 → 1.3** (현재: 직진 0.23, 회전 0.33, P/D 1.3/0.15, ESCAPE 켬·후진 0.1) | 작은 오차에서 덜 민감하게. P 게인은 `test_los`·게이트에도 적용 |
+| 11-06 | 회전 0.36 → 0.33, P 게인 1.5 → 1.3 | 작은 오차에서 덜 민감하게. P 게인은 `test_los`·게이트에도 적용 |
+| 11-06 | 피치 차단 상한 +1.0° → +2.0° | |
+| 11-06 | ★ 직진 0.23·회전 0.33·P/D 1.3/0.15 를 **SOTA 로 기록** (`47b0c41`) | |
+| 11-06 | **직진 0.23 → 0.25, 회전 0.33 → 0.35** (현재, P/D 1.3/0.15) | |
 
 ## 실험 결과
 
@@ -114,4 +130,5 @@ rviz2 -d ~/Projects/KABOAT/kaboat_ws/src/kaboat_hardware/rviz/real_obstacle_avoi
 | 11-06 | 0.23 / 0.36, D 0.15 | | | | |
 | 11-06 | 0.23 / 0.36, D 0.12, ESCAPE 켬 | | | | |
 | 11-06 | 0.23 / 0.36, D 0.15, ESCAPE 켬 | | | | |
-| 11-06 | 0.23 / 0.33, P/D 1.3/0.15, ESCAPE 켬 | | | | |
+| 11-06 | 0.23 / 0.33, P/D 1.3/0.15, ESCAPE 켬 | | | | ★ SOTA |
+| 11-06 | 0.25 / 0.35, P/D 1.3/0.15, ESCAPE 켬 | | | | |
