@@ -180,7 +180,7 @@ class RealObstacleAvoidTest(Node):
         self.dri_params = self._params_from('dri', DriParams)
         self.planner_params = self._params_from('planner', PlannerParams)
         self.fsm_params = self._params_from('fsm', FsmParams)
-        # 경로 추종 게인은 test_los 와 같은 값 (kp 1.5, kd 0.12)
+        # 경로 추종 게인은 test_los 와 같은 값 (kp 1.5, kd 0.15)
         self.fsm = AvoidFsm(self.planner_params, self.fsm_params,
                             yaw_kp=BSPLINE_TRACK_YAW_KP,
                             yaw_kd=BSPLINE_TRACK_YAW_KD)
