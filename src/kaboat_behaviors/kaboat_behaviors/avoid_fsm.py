@@ -33,10 +33,11 @@ class FsmParams:
     v↔cmd 캘리브레이션(cmd_full·v_full)은 물리 결합층(SKELETON §6) — 실물 전환 시
     이 두 값만 재실측하면 speed_to_cmd 가 통째로 교체 지점이다.
     """
-    # 경로 추종 상수 lookahead·slow_radius 는 수조에서 검증한 LOS
-    # (LosFollower.bspline_track) 와 같은 값 (2026-11-04 실물 튜닝).
+    # 경로 추종 상수 slow_radius 는 수조에서 검증한 LOS(LosFollower.bspline_track) 와 같은
+    # 값 (2026-11-04 실물 튜닝). lookahead 는 LOS 의 1.0 에서 0.8 로 줄임 (2026-11-06,
+    # 회피 경로를 더 바짝 따라가게). LOS 는 자기 lookahead(1.0)를 따로 지정해 영향 없음.
     # 이전 sim 값: lookahead 2.0, slow_radius 3.0, cmd_full 12/118.6.
-    lookahead: float = 1.0        # follow 목표점 전방 호길이 [m]
+    lookahead: float = 0.8        # follow 목표점 전방 호길이 [m]
     kappa_window: float = 2.0     # 📝 곡률 감속 전방 창 [m]
     v_min: float = 0.3            # 📝 곡률 감속 하한 [m/s]
     v_max: float = 1.4            # 📝 현재 회피 추종 상한 [m/s] (교정 전속은 v_full)

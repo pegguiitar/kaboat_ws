@@ -113,11 +113,11 @@ def test_follow_slows_near_waypoint():
 def test_follow_combines_large_heading_and_waypoint_slowdown_in_old_order():
     """공통 조종기 분리 전과 동일하게 회전 속도캡 뒤 거리감속을 적용한다."""
     fsm = make_fsm()
-    wp = (-1.0, 0.0)   # 뒤쪽(오차 >60°) + slow_radius(1.5 m) 안
+    wp = (-0.7, 0.0)   # 뒤쪽(오차 >60°) + lookahead(0.8 m)·slow_radius(1.5 m) 안
     plan = acquire(fsm, dri_of([]), wp=wp).plan
     p = FsmParams()
     lin, _ = follow_cmd(plan, BOAT, YAW, 0.0, wp, p, KP, KD)
-    expected_v = 0.3 * p.v_max * (1.0 / p.slow_radius)
+    expected_v = 0.3 * p.v_max * (0.7 / p.slow_radius)
     assert lin == pytest.approx(speed_to_cmd(expected_v, p))
 
 

@@ -392,7 +392,7 @@ waypoint 방향으로 두고 곧바로 직선 경로를 만든다.
 
 | 이름 | 값 | 뜻과 근거 |
 |---|---|---|
-| `lookahead` / `kappa_window` | 1.0 / 2.0 m | 조향 목표점 거리 / 굽이를 미리 보는 거리. lookahead 는 `test_los` 값(이전 sim 2.0) |
+| `lookahead` / `kappa_window` | 0.8 / 2.0 m | 조향 목표점 거리 / 굽이를 미리 보는 거리. lookahead 는 `test_los`의 1.0에서 2026-11-06 0.8로 줄임(이전 sim 2.0) |
 | `v_min` / `v_max` | 0.3 / 1.4 m/s | 감속 하한 / 회피 추종 상한 (`test_los` 와 같음) |
 | `slow_radius` | 1.5 m | waypoint 이 거리 안에서 감속 시작 (`test_los` 값, 이전 sim 3.0) |
 | `omega_max` | 0.52 rad/s | 낼 수 있는 최대 회전 속도 (실측 0.44~0.49) |
