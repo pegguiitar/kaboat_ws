@@ -20,7 +20,7 @@
 | 항목 | 값 | 바꾸는 곳 |
 |---|---|---|
 | **직진(전진) 계수** | **0.25** (직선 구간 실제 전진 명령 0.228) | `FsmParams.cmd_full` ([avoid_fsm.py](src/kaboat_behaviors/kaboat_behaviors/avoid_fsm.py)), 수조 시험 상한 `max_linear_cmd` |
-| **회전 계수** | **0.35** (회전 명령 상한) | 수조 시험 `max_angular_cmd`, 대회 미션 `avoid.max_angular_ratio` ([obstacle_planner.py](src/kaboat_behaviors/kaboat_behaviors/obstacle_planner.py)) |
+| **회전 계수** | **0.33** (회전 명령 상한) | 수조 시험 `max_angular_cmd`, 대회 미션 `avoid.max_angular_ratio` ([obstacle_planner.py](src/kaboat_behaviors/kaboat_behaviors/obstacle_planner.py)) |
 
 수조 시험 값은 [real_obstacle_avoid_test.yaml](src/kaboat_hardware/config/real_obstacle_avoid_test.yaml), 수조 대회 미션 값은 [tank_avoid_mission.yaml](src/kaboat_hardware/config/tank_avoid_mission.yaml)에도 같은 값으로 적혀 있습니다. 바꿀 때는 코드 기본값과 두 YAML을 함께 바꿉니다.
 
@@ -30,7 +30,7 @@
 |---|---|---|
 | 0° | 0.228 / 0 | +0.23 / +0.23 |
 | 10° | 0.228 / 0.23 | +0.46 / 0.00 |
-| 15.4° 이상 | 0.228 / 0.35 (상한) | +0.58 / −0.12 |
+| 14.5° 이상 | 0.228 / 0.33 (상한) | +0.56 / −0.10 |
 
 ## 저장해 둔 설정
 
@@ -48,7 +48,7 @@
 
 | 항목 | 값 |
 |---|---|
-| 헤딩 P / D 게인 | **1.3** / 0.15 (LOS·게이트와 공용 상수 `BSPLINE_TRACK_YAW_KP/KD`) |
+| 헤딩 P / D 게인 | **1.3 / 0.17** (LOS·게이트와 공용 상수 `BSPLINE_TRACK_YAW_KP/KD`) |
 | 전방 주시 거리 `lookahead` | 1.0 m |
 | 목표 근접 감속 반경 `slow_radius` | 1.5 m |
 | 곡률 감속: `kappa_window` / `v_min` / `v_max` / `omega_max` | 2.0 m / 0.3 / 1.4 m/s / 0.52 rad/s |
@@ -115,7 +115,8 @@ rviz2 -d ~/Projects/KABOAT/kaboat_ws/src/kaboat_hardware/rviz/real_obstacle_avoi
 | 11-06 | 회전 0.36 → 0.33, P 게인 1.5 → 1.3 | 작은 오차에서 덜 민감하게. P 게인은 `test_los`·게이트에도 적용 |
 | 11-06 | 피치 차단 상한 +1.0° → +2.0° | |
 | 11-06 | ★ 직진 0.23·회전 0.33·P/D 1.3/0.15 를 **SOTA 로 기록** (`47b0c41`) | |
-| 11-06 | **직진 0.23 → 0.25, 회전 0.33 → 0.35** (현재, P/D 1.3/0.15) | |
+| 11-06 | 직진 0.23 → 0.25, 회전 0.33 → 0.35 (P/D 1.3/0.15) | |
+| 11-06 | **회전 0.35 → 0.33, D 게인 0.15 → 0.17** (현재: 직진 0.25, 회전 0.33, P/D 1.3/0.17) | D 게인은 `test_los`·게이트에도 적용 |
 
 ## 실험 결과
 
@@ -132,3 +133,4 @@ rviz2 -d ~/Projects/KABOAT/kaboat_ws/src/kaboat_hardware/rviz/real_obstacle_avoi
 | 11-06 | 0.23 / 0.36, D 0.15, ESCAPE 켬 | | | | |
 | 11-06 | 0.23 / 0.33, P/D 1.3/0.15, ESCAPE 켬 | | | | ★ SOTA |
 | 11-06 | 0.25 / 0.35, P/D 1.3/0.15, ESCAPE 켬 | | | | |
+| 11-06 | 0.25 / 0.33, P/D 1.3/0.17, ESCAPE 켬 | | | | |
