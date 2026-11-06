@@ -45,7 +45,9 @@ class RealObstacleAvoidTest(Node):
 
         self.declare_parameter('drive_enabled', False)
         self.declare_parameter('wait_for_start', True)
-        self.declare_parameter('allow_escape', False)
+        # 경로를 5초 넘게 못 만들거나 위험이 해소되지 않으면 후진 탈출(ESCAPE).
+        # false 면 그때 정지(해제)한다. 후진 중에도 수조 경계 정지는 그대로 동작.
+        self.declare_parameter('allow_escape', True)
         self.declare_parameter('goal_distance', 3.0)
         # 고정 목표(odom = 수조 좌표). 켜면 목표는 선수 앞 goal_distance 가 아니라
         # fixed_goal_xy 이고, 배는 어디서든 선수가 목표를 향해(start_heading_tolerance_deg)
@@ -178,7 +180,7 @@ class RealObstacleAvoidTest(Node):
         self.dri_params = self._params_from('dri', DriParams)
         self.planner_params = self._params_from('planner', PlannerParams)
         self.fsm_params = self._params_from('fsm', FsmParams)
-        # 경로 추종 게인은 test_los 와 같은 값 (kp 1.5, kd 0.15)
+        # 경로 추종 게인은 test_los 와 같은 값 (kp 1.5, kd 0.12)
         self.fsm = AvoidFsm(self.planner_params, self.fsm_params,
                             yaw_kp=BSPLINE_TRACK_YAW_KP,
                             yaw_kd=BSPLINE_TRACK_YAW_KD)

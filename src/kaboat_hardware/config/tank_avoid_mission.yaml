@@ -1,5 +1,5 @@
 # Production obstacle_planner on the indoor tank.
-# 경로 추종(lookahead 1.0, slow_radius 1.5, 게인 1.5/0.15)은 test_los 에서 검증한
+# 경로 추종(lookahead 1.0, slow_radius 1.5, 게인 1.5/0.12)은 test_los 에서 검증한
 # 코드 기본값을 그대로 쓴다. 출력 비율만 여기서 명시해 둔다(코드 기본값과 같음).
 obstacle_planner:
   ros__parameters:

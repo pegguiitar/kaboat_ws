@@ -49,7 +49,10 @@ class FsmParams:
     delta_r1: float = 1.0         # 📝 트리거 (a') r1 급락 판정 폭 [m]
     escape_radius: float = 2.5    # 📝 ESCAPE 방위 후보 반경 [m] — 단거리 선분 시험
     escape_n_bearings: int = 31   # 반평면 후보 수 (생성기 n_candidates 와 동급)
-    v_escape: float = 0.5         # 📝 후진 속도 [m/s] — 대칭 실측(-1.48)의 보수적 1/3
+    # ESCAPE 후진 출력 비율 (직접 지정). 예전엔 v_escape 0.5 m/s 를 속도 곡선으로 바꿨는데
+    # 실물 cmd_full(0.23) 기준 0.04 밖에 안 나와 수조에서 배가 움직이지 않았다
+    # (2026-11-06 실물 튜닝, 수조 테스트에 ESCAPE 를 켜면서 0.1 로 정함).
+    escape_thrust: float = 0.1
     escape_min_t: float = 3.0     # 📝 최소 이탈 시간 [s] — 즉시 복귀 채터링 차단
     escape_n_ok: int = 5          # 📝 복귀 조건: generate 연속 성공 tick 수
     # v_full 을 내는 추력 명령 = 회피 **전진** 출력 비율. 회피 노드는 이 값을 전진
@@ -207,13 +210,11 @@ def escape_cmd(dri, boat_xy, yaw: float, yaw_rate: float,
     """
     target, surrounded = escape_pick(dri, boat_xy, yaw, planner, fsm)
     desired = DesiredVelocity(
-        vx=fsm.v_escape * math.cos(target),
-        vy=fsm.v_escape * math.sin(target),
-        reverse=True,
-    )
+        vx=math.cos(target), vy=math.sin(target), reverse=True)
     out = control_velocity(
         desired, yaw, yaw_rate, _controller_params(fsm, yaw_kp, yaw_kd))
-    return out.linear_x, out.angular_z, surrounded
+    # 조향은 선미 기준 PD 그대로, 후진 출력은 escape_thrust 를 직접 쓴다
+    return -fsm.escape_thrust, out.angular_z, surrounded
 
 
 class AvoidFsm:

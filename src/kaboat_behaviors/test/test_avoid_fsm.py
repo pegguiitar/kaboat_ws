@@ -298,6 +298,16 @@ def test_escape_backs_up():
     assert out.state == 'ESCAPE' and out.linear_x < 0.0
 
 
+def test_escape_reverse_output_is_escape_thrust():
+    """후진 출력은 속도 곡선이 아니라 escape_thrust 그대로 (실물에서 0.04 로 안 움직이던 문제)."""
+    fsm = make_fsm(t_backstop=1e9, d_panic=3.0)
+    enter_escape(fsm)
+    out = fsm.step(dri_of(WALL), BOAT, YAW, V_FULL, 0.0, WP_FAR, 0.2)
+    assert out.state == 'ESCAPE'
+    assert out.linear_x == pytest.approx(-FsmParams().escape_thrust)
+    assert FsmParams().escape_thrust == pytest.approx(0.1)
+
+
 def test_escape_steers_stern_to_low_dri():
     """후방 좌측(방위 135~180°)이 막힘 — 선미가 우후방으로 향하도록 조향.
     yaw=0 이라 선미 기준 오차 = wrap(target−π) < 0 쪽(우후방) → ang < 0

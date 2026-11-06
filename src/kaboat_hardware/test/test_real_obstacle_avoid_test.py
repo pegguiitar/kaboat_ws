@@ -150,6 +150,31 @@ class TestRealObstacleAvoidTest(unittest.TestCase):
         self.node.tank_wall_band = band
         self.node.tank_wall_dri = wall_dri
 
+    def _start_and_force_escape(self):
+        from kaboat_behaviors.avoid_fsm import StepOut
+        self.node.drive_enabled = True
+        self.feed_scene()
+        self.node._tick()
+        ok, _ = self.node._arm()
+        self.assertTrue(ok)
+        self.node._tick()
+        self.assertTrue(self.node.started)
+        self.node.fsm.step = lambda *a: StepOut(-0.1, 0.2, 'ESCAPE', None, None)
+        self.node._tick()
+
+    def test_escape_backs_up_when_allowed(self):
+        self.assertTrue(self.node.allow_escape)          # 기본값: 수조 테스트에서도 ESCAPE
+        self._start_and_force_escape()
+        self.assertTrue(self.node.started)
+        self.assertAlmostEqual(self.motor_commands[-1].linear.x, -0.1)
+        self.assertAlmostEqual(self.motor_commands[-1].angular.z, 0.2)
+
+    def test_escape_stops_when_disabled(self):
+        self.node.allow_escape = False
+        self._start_and_force_escape()
+        self.assertFalse(self.node.started)
+        self.assertEqual(self.motor_commands[-1].linear.x, 0.0)
+
     def test_tank_boundary_stops_a_running_test(self):
         self.node.drive_enabled = True
         self.feed_scene()

@@ -3,7 +3,7 @@
 real_obstacle_avoid_test:
   ros__parameters:
     drive_enabled: false
-    allow_escape: false
+    allow_escape: true                   # 경로를 못 만들면 후진 탈출(ESCAPE). false 면 정지
     goal_distance: 3.0                   # 고정 목표를 끄면(fixed_goal_enabled: false) 선수 앞 이 거리
 
     # 고정 목표 (수조 좌표). 배는 수조 어디서든(벽에서 tank_stop_margin 이상) 선수를
@@ -43,5 +43,5 @@ real_obstacle_avoid_test:
     #   이미 선수가 벽에 닿아 있고 타력으로 더 밀린다. 충돌이 걱정되면 키운다.
     tank_stop_margin: 0.5
 
-    # 경로 추종(lookahead 1.0, slow_radius 1.5, cmd_full 0.23, 게인 1.5/0.15)은
+    # 경로 추종(lookahead 1.0, slow_radius 1.5, cmd_full 0.23, 게인 1.5/0.12)은
     # test_los 에서 검증한 코드 기본값을 그대로 쓴다 — 여기서 fsm.* 를 덮어쓰지 않는다.
