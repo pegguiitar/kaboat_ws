@@ -4,7 +4,7 @@
   /cmd_vel (geometry_msgs/msg/Twist)       — 정규화된 자율주행 추력 비율 [-1.0, 1.0]
   /rc/cmd_vel (geometry_msgs/msg/Twist)    — RC 수동 조종기 오버라이드 명령 (옵션)
   /teleop/enable (std_msgs/msg/Bool)        — 노트북 키보드 수동 모드
-  /teleop/levels (std_msgs/msg/Int8MultiArray) — 노트북 키보드 [좌 단계, 우 단계] (-4~+4)
+  /teleop/levels (std_msgs/msg/Int8MultiArray) — 노트북 키보드 [속도 단계 -4~+4, 선회 +1/0/-1]
   /teleop/esp_mode (std_msgs/msg/String)    — ESP 제어 모드 전환 문자열을 시리얼로 전송
   /emergency_stop (std_msgs/msg/Bool)      — 비상 정지 신호 (true 시 즉시 PWM 중립)
 
@@ -77,6 +77,8 @@ class ThrusterDriver(Node):
         # 키보드 속도 1~4 단계의 PWM 폭 [µs] (중립 1500 기준 ±). 후진은 같은 폭으로 내린다.
         # 기본 50/100/150/200 → 전진 1550/1600/1650/1700, 후진 1450/1400/1350/1300.
         self.declare_parameter('teleop_level_pwm_offsets', [50, 100, 150, 200])
+        # A/D 선회 폭 [µs]: A 면 좌 -폭, 우 +폭 (D 는 반대). 중립 + A 면 1400/1600.
+        self.declare_parameter('teleop_turn_pwm_offset', 100)
 
         hw_type = str(self.get_parameter('hardware_type').value).lower()
         self.port = str(self.get_parameter('port').value)
@@ -90,6 +92,7 @@ class ThrusterDriver(Node):
         self.teleop_timeout_sec = float(self.get_parameter('teleop_timeout_sec').value)
         self.teleop_level_offsets = [
             int(v) for v in self.get_parameter('teleop_level_pwm_offsets').value]
+        self.teleop_turn_offset = int(self.get_parameter('teleop_turn_pwm_offset').value)
         if (not math.isfinite(self.teleop_timeout_sec)
                 or not 0.1 <= self.teleop_timeout_sec <= 2.0):
             raise ValueError('invalid laptop teleop timeout')
@@ -117,6 +120,8 @@ class ThrusterDriver(Node):
             raise ValueError(
                 'teleop_level_pwm_offsets 는 증가하는 양수 4개이고 '
                 'max_forward_pwm/max_reverse_pwm 안이어야 합니다')
+        if not 0 < self.teleop_turn_offset <= 400:
+            raise ValueError('teleop_turn_pwm_offset 은 1~400 µs 여야 합니다')
         self.mixer = ThrusterMixer(self.config)
         # 키보드 단계 PWM 도 max_output_ratio 안전 상한을 따른다
         self.teleop_pwm_high = ratio_to_pwm(self.config.max_output_ratio, self.config)
@@ -218,10 +223,10 @@ class ThrusterDriver(Node):
     def _on_teleop_levels(self, msg: Int8MultiArray):
         if not self.teleop_enabled:
             return
-        levels = list(msg.data)
+        levels = list(msg.data)   # [속도 단계, 선회 방향]
         if (len(levels) != 2
-                or not all(-TELEOP_MAX_LEVEL <= int(v) <= TELEOP_MAX_LEVEL
-                           for v in levels)):
+                or not -TELEOP_MAX_LEVEL <= int(levels[0]) <= TELEOP_MAX_LEVEL
+                or not -1 <= int(levels[1]) <= 1):
             # 잘못된 명령은 버리고 중립 (갱신 시각을 지워 곧바로 teleop_timeout)
             self.current_teleop_levels = (0, 0)
             self.last_teleop_cmd_time = 0.0
@@ -230,12 +235,18 @@ class ThrusterDriver(Node):
         self.last_teleop_cmd_time = time.monotonic()
 
     def _teleop_pwm(self):
-        """좌우 단계 → PWM. 슬루 제한 없이 단계값 그대로(단계 하나가 50 µs 남짓)."""
+        """[속도 단계, 선회] → 좌우 PWM. 슬루 제한 없이 그대로.
+
+        좌 = 속도 PWM - 선회×폭, 우 = 속도 PWM + 선회×폭 (선회 +1 = A = 좌회전).
+        """
+        level, turn = self.current_teleop_levels
+        neutral = self.config.neutral_pwm
+        base = level_to_pwm(level, self.teleop_level_offsets, neutral)
         out = []
-        for level, invert in zip(self.current_teleop_levels,
-                                 (self.config.invert_left, self.config.invert_right)):
-            pwm = level_to_pwm(level, self.teleop_level_offsets,
-                               self.config.neutral_pwm, invert)
+        for side, invert in ((-1, self.config.invert_left), (1, self.config.invert_right)):
+            pwm = base + side * turn * self.teleop_turn_offset
+            if invert:
+                pwm = 2 * neutral - pwm
             out.append(max(self.teleop_pwm_low, min(self.teleop_pwm_high, pwm)))
         return out[0], out[1]
 

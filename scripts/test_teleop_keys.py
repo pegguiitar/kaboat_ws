@@ -1,9 +1,9 @@
-"""9단계 속도(W/S), A/D 차동 조향, 키 자동반복 걸러내기."""
+"""9단계 속도(W/S), A/D 선회 방향, 키 자동반복 걸러내기."""
 
 import unittest
 
 from teleop_keys import (
-    AUTOREPEAT_GAP, MAX_LEVEL, KeyTracker, SpeedLevel, thruster_levels)
+    AUTOREPEAT_GAP, MAX_LEVEL, KeyTracker, SpeedLevel, teleop_command)
 
 
 class SpeedLevelTest(unittest.TestCase):
@@ -18,28 +18,19 @@ class SpeedLevelTest(unittest.TestCase):
         self.assertEqual(MAX_LEVEL, 4)
 
 
-class ThrusterLevelsTest(unittest.TestCase):
-    def test_no_turn_key_drives_both_sides_equally(self):
+class TeleopCommandTest(unittest.TestCase):
+    def test_no_turn_key_sends_the_speed_level_straight(self):
         for level in range(-4, 5):
-            self.assertEqual(thruster_levels(level, set()), (level, level))
+            self.assertEqual(teleop_command(level, set()), (level, 0))
 
-    def test_forward_3_with_a_is_left_2_right_4(self):
-        self.assertEqual(thruster_levels(3, {'a'}), (2, 4))   # 요구사항 예시
-        self.assertEqual(thruster_levels(3, {'d'}), (4, 2))
+    def test_a_is_left_turn_and_d_is_right_turn_while_held(self):
+        self.assertEqual(teleop_command(3, {'a'}), (3, 1))
+        self.assertEqual(teleop_command(3, {'d'}), (3, -1))
+        self.assertEqual(teleop_command(0, {'a'}), (0, 1))    # 중립 + A = 제자리 좌회전
 
-    def test_neutral_a_and_d_rotate_in_place(self):
-        self.assertEqual(thruster_levels(0, {'a'}), (-1, 1))  # 좌 후진, 우 전진 = 제자리 좌회전
-        self.assertEqual(thruster_levels(0, {'d'}), (1, -1))
-
-    def test_releasing_a_returns_to_equal_output(self):
-        self.assertEqual(thruster_levels(2, {'a'}), (1, 3))
-        self.assertEqual(thruster_levels(2, set()), (2, 2))
-
-    def test_both_turn_keys_cancel_and_sides_stay_within_range(self):
-        self.assertEqual(thruster_levels(1, {'a', 'd'}), (1, 1))
-        self.assertEqual(thruster_levels(4, {'a'}), (3, 4))
-        self.assertEqual(thruster_levels(-4, {'d'}), (-3, -4))
-        self.assertEqual(thruster_levels(-3, {'a'}), (-4, -2))
+    def test_releasing_or_both_turn_keys_go_straight(self):
+        self.assertEqual(teleop_command(2, set()), (2, 0))
+        self.assertEqual(teleop_command(1, {'a', 'd'}), (1, 0))
 
 
 class KeyTrackerTest(unittest.TestCase):

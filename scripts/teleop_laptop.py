@@ -3,14 +3,14 @@
 
 노트북(ROS 도메인 43)이 보내는 토픽. 젯슨(도메인 42)이 받아 ESP 로 시리얼 전송한다.
   /teleop/enable   (Bool)           노트북 조종 모드 진입·해제
-  /teleop/levels   (Int8MultiArray) [좌 단계, 우 단계], -4 ~ +4. 20 Hz
+  /teleop/levels   (Int8MultiArray) [속도 단계 -4~+4, 선회 +1(A)/0/-1(D)]. 20 Hz
   /teleop/gps_mark (Empty)          Space — 젯슨 gps_mark_logger 가 CSV 에 한 줄 기록
   /teleop/esp_mode (String)         P = computer_control_mode, O = rc_control_mode
 받는 토픽: /teleop/status (젯슨 제어 모드), /teleop/event (ESP 모드 전송·GPS 기록 결과)
 
 키 (조종 창을 클릭해 포커스를 준 상태에서)
   W / S    속도 단계 +1 / -1 (-4 ~ +4, 떼도 유지)
-  A / D    누르고 있는 동안 좌 / 우 회전 (좌우 1단계 차이, 중립이면 제자리 회전)
+  A / D    누르고 있는 동안 좌 / 우 회전 (좌우 출력 차이, 중립이면 제자리 회전)
   X        즉시 0단계(중립)
   Space    현재 GPS 위치 기록
   P / O    ESP 를 컴퓨터 조종 / RC 조종 모드로
@@ -29,7 +29,7 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Bool, Empty, Int8MultiArray, String
 
-from teleop_keys import MAX_LEVEL, KeyTracker, SpeedLevel, thruster_levels
+from teleop_keys import MAX_LEVEL, KeyTracker, SpeedLevel, teleop_command
 
 
 DOMAIN = '43'
@@ -171,11 +171,11 @@ class TeleopWindow:
 
             ready = self._ready(now)
             if ready and self.focused and self.closing is None:
-                left, right = thruster_levels(self.speed.level, held)
+                level, turn = teleop_command(self.speed.level, held)
             else:
                 self.speed.stop()
-                left, right = 0, 0
-            self.levels_pub.publish(Int8MultiArray(data=[left, right]))
+                level, turn = 0, 0
+            self.levels_pub.publish(Int8MultiArray(data=[level, turn]))
 
             if now - self.last_status_time > STATUS_MAX_AGE:
                 label, color = '젯슨 응답 없음 — 키보드 명령 차단', '#e74c3c'
@@ -190,11 +190,10 @@ class TeleopWindow:
             self.status_label.configure(text=label, fg=color)
             self.level_label.configure(
                 text=f'속도 단계 {self.speed.level:+d}    {level_bar(self.speed.level)}')
-            turn = ('좌회전' if 'a' in held and 'd' not in held else
-                    '우회전' if 'd' in held and 'a' not in held else '직진')
+            turn_text = {1: '좌회전 (A)', -1: '우회전 (D)', 0: '직진'}[turn]
             focus = '' if self.focused else '   (창을 클릭하세요)'
             self.output_label.configure(
-                text=f'좌 추진기 {left:+d}   우 추진기 {right:+d}   {turn}{focus}')
+                text=f'보내는 명령: 속도 {level:+d}단계, {turn_text}{focus}')
             self.event_label.configure(text=self.last_event)
             self.root.after(PERIOD_MS, self._tick)
         except tk.TclError:

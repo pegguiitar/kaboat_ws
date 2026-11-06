@@ -1,4 +1,4 @@
-"""젯슨 thruster_driver: 노트북 키보드 단계 → PWM, 링크 끊김 중립, ESP 모드 문자열."""
+"""젯슨 thruster_driver: 노트북 [속도 단계, 선회] → PWM, 링크 끊김 중립, ESP 모드 문자열."""
 
 import time
 
@@ -16,8 +16,9 @@ def twist(linear=0.0, angular=0.0):
     return msg
 
 
-def levels(left, right):
-    return Int8MultiArray(data=[left, right])
+def levels(level, turn):
+    """노트북이 보내는 [속도 단계, 선회 +1(A)/0/-1(D)]."""
+    return Int8MultiArray(data=[level, turn])
 
 
 def test_level_to_pwm_table_and_inversion():
@@ -41,14 +42,22 @@ def test_laptop_levels_override_auto_and_timeout_stays_neutral():
         assert node.backend.last_left == node.config.neutral_pwm
         assert node.backend.last_right == node.config.neutral_pwm
 
-        node._on_teleop_levels(levels(2, 4))        # 전진 3단계 + A
+        node._on_teleop_levels(levels(3, 0))        # 전진 3단계 직진
         node._control_loop()
         assert node.active_mode == 'teleop'
-        assert (node.backend.last_left, node.backend.last_right) == (1600, 1700)
+        assert (node.backend.last_left, node.backend.last_right) == (1650, 1650)
 
-        node._on_teleop_levels(levels(-1, 1))       # 중립 + A = 제자리 좌회전
+        node._on_teleop_levels(levels(3, 1))        # 전진 3단계 + A (선회 폭 100 µs)
         node._control_loop()
-        assert (node.backend.last_left, node.backend.last_right) == (1450, 1550)
+        assert (node.backend.last_left, node.backend.last_right) == (1550, 1750)
+
+        node._on_teleop_levels(levels(3, -1))       # 전진 3단계 + D
+        node._control_loop()
+        assert (node.backend.last_left, node.backend.last_right) == (1750, 1550)
+
+        node._on_teleop_levels(levels(0, 1))        # 중립 + A = 제자리 좌회전
+        node._control_loop()
+        assert (node.backend.last_left, node.backend.last_right) == (1400, 1600)
 
         node.last_teleop_cmd_time = time.monotonic() - 2.0
         node._control_loop()
@@ -75,8 +84,8 @@ def test_invalid_levels_and_disabled_teleop_are_ignored():
         assert node.current_teleop_levels == (0, 0)
 
         node._on_teleop_enable(Bool(data=True))
-        node._on_teleop_levels(levels(3, 3))
-        node._on_teleop_levels(levels(5, 0))        # 범위 밖 → 버리고 중립
+        node._on_teleop_levels(levels(3, 0))
+        node._on_teleop_levels(levels(2, 4))        # 선회는 -1~1 (예전 [좌, 우] 형식) → 중립
         node._control_loop()
         assert node.active_mode == 'teleop_timeout'
         assert node.backend.last_left == node.config.neutral_pwm
@@ -96,9 +105,12 @@ def test_max_output_ratio_still_caps_keyboard_levels():
     try:
         node.teleop_pwm_high, node.teleop_pwm_low = 1600, 1400   # max_output_ratio ≈ 0.2
         node._on_teleop_enable(Bool(data=True))
-        node._on_teleop_levels(levels(-4, 4))
+        node._on_teleop_levels(levels(4, 0))
         node._control_loop()
-        assert (node.backend.last_left, node.backend.last_right) == (1400, 1600)
+        assert (node.backend.last_left, node.backend.last_right) == (1600, 1600)
+        node._on_teleop_levels(levels(-4, 1))
+        node._control_loop()
+        assert (node.backend.last_left, node.backend.last_right) == (1400, 1400)
     finally:
         node.destroy_node()
         rclpy.shutdown()
@@ -116,6 +128,23 @@ def test_esp_mode_strings_are_sent_and_others_rejected():
         assert node.backend.lines == ['computer_control_mode', 'rc_control_mode']
         assert node.esp_mode == 'rc_control_mode'
         assert '전송 완료' in events[0].data and 'REJECTED' in events[-1].data
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+def test_turn_width_and_inversion():
+    rclpy.init()
+    node = ThrusterDriver()
+    try:
+        node._on_teleop_enable(Bool(data=True))
+        node.teleop_turn_offset = 150
+        node._on_teleop_levels(levels(1, 1))        # 1550 ± 150
+        node._control_loop()
+        assert (node.backend.last_left, node.backend.last_right) == (1400, 1700)
+        node.config.invert_left = True              # 좌 배선 반전 → 중립 기준 대칭
+        node._control_loop()
+        assert (node.backend.last_left, node.backend.last_right) == (1600, 1700)
     finally:
         node.destroy_node()
         rclpy.shutdown()

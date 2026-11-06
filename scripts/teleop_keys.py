@@ -3,11 +3,13 @@
 속도는 -4 ~ +4 의 9단계다. 0 = 중립, +1~+4 = 전진, -1~-4 = 후진.
 W 를 한 번 누를 때마다 1단계 올리고 S 는 1단계 내린다. 단계는 키를 떼도 유지된다.
 
-A/D 는 누르고 있는 동안에만 좌우 추진기에 1단계 차이를 준다.
-  A(좌회전): 좌 = 단계 - 1, 우 = 단계 + 1
-  D(우회전): 좌 = 단계 + 1, 우 = 단계 - 1
-예) 전진 3단계 + A → 좌 2, 우 4.  중립 + A → 좌 -1(후진), 우 +1(전진) = 제자리 좌회전.
-A/D 를 떼면 좌우가 다시 같은 단계(직진)로 돌아간다. 좌우 단계는 ±4 를 넘지 않는다.
+A/D 는 누르고 있는 동안에만 좌우 추진기에 출력 차이를 준다(차동 조향).
+  A(좌회전): 좌 = 속도 - 선회 폭, 우 = 속도 + 선회 폭
+  D(우회전): 좌 = 속도 + 선회 폭, 우 = 속도 - 선회 폭
+선회 폭은 젯슨 thrusters.yaml 의 teleop_turn_pwm_offset [µs] 이다.
+예) 중립 + A → 좌 후진, 우 전진 = 제자리 좌회전. A/D 를 떼면 다시 좌우 같은 출력(직진).
+
+노트북은 [속도 단계, 선회 방향] 을 보내고 젯슨이 PWM 으로 바꾼다.
 """
 
 MAX_LEVEL = 4
@@ -28,10 +30,9 @@ def turn_from_keys(held):
     return 1 if a and not d else -1 if d and not a else 0
 
 
-def thruster_levels(level, held):
-    """현재 속도 단계와 누르고 있는 키 → (좌 단계, 우 단계)."""
-    turn = turn_from_keys(held)
-    return clamp_level(level - turn), clamp_level(level + turn)
+def teleop_command(level, held):
+    """현재 속도 단계와 누르고 있는 키 → (속도 단계, 선회 방향 +1/0/-1)."""
+    return clamp_level(level), turn_from_keys(held)
 
 
 class SpeedLevel:
