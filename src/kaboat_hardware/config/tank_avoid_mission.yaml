@@ -3,5 +3,5 @@
 # 코드 기본값을 그대로 쓴다. 출력 비율만 여기서 명시해 둔다(코드 기본값과 같음).
 obstacle_planner:
   ros__parameters:
-    fsm.cmd_full: 0.15                   # 회피 전진 출력 비율 = 전진 기준·전진 상한
-    avoid.max_angular_ratio: 0.4         # 회피 회전 출력 상한
+    fsm.cmd_full: 0.2                    # 회피 전진 출력 비율 = 전진 기준·전진 상한
+    avoid.max_angular_ratio: 0.38        # 회피 회전 출력 상한

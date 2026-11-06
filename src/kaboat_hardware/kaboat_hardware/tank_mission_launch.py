@@ -135,7 +135,7 @@ def generate_tank_mission_launch(mission):
         DeclareLaunchArgument('tank_size_x', default_value='10.0'),
         DeclareLaunchArgument('tank_size_y', default_value='5.0'),
         DeclareLaunchArgument('tank_margin', default_value='0.5'),
-        # 최종 /cmd_vel 상한. 게이트 LOS(0.3/0.3)와 회피(전진 0.15·회전 0.4)가
+        # 최종 /cmd_vel 상한. 게이트 LOS(0.3/0.3)와 회피(전진 0.2·회전 0.38)가
         # 잘리지 않도록 전진 0.3·회전 0.4 (이전 0.06/0.02 에선 회전이 0.02 로 막혔다).
         DeclareLaunchArgument('max_linear_cmd', default_value='0.30'),
         DeclareLaunchArgument('max_angular_cmd', default_value='0.40'),
