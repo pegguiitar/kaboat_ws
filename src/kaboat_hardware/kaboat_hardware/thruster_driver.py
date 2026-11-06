@@ -4,13 +4,15 @@
   /cmd_vel (geometry_msgs/msg/Twist)       — 정규화된 자율주행 추력 비율 [-1.0, 1.0]
   /rc/cmd_vel (geometry_msgs/msg/Twist)    — RC 수동 조종기 오버라이드 명령 (옵션)
   /teleop/enable (std_msgs/msg/Bool)        — 노트북 키보드 수동 모드
-  /teleop/cmd_vel (geometry_msgs/msg/Twist) — 노트북 WASD 명령
+  /teleop/levels (std_msgs/msg/Int8MultiArray) — 노트북 키보드 [좌 단계, 우 단계] (-4~+4)
+  /teleop/esp_mode (std_msgs/msg/String)    — ESP 제어 모드 전환 문자열을 시리얼로 전송
   /emergency_stop (std_msgs/msg/Bool)      — 비상 정지 신호 (true 시 즉시 PWM 중립)
 
 출력:
   하드웨어 PWM (시리얼/PCA9685/더미)
   /diagnostics (diagnostic_msgs/msg/DiagnosticArray) — 모터 동작 상태 진단
   /teleop/status (std_msgs/msg/String) — 현재 제어 모드
+  /teleop/event (std_msgs/msg/String)  — ESP 모드 전송 결과 (노트북 창 표시용)
 """
 
 import math
@@ -18,13 +20,25 @@ import time
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
-from std_msgs.msg import Bool, String
+from std_msgs.msg import Bool, Int8MultiArray, String
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 
 from kaboat_hardware.thruster_backend import (
     ThrusterConfig, ThrusterMixer, BaseThrusterBackend,
-    DummyBackend, SerialBackend, PCA9685Backend
+    DummyBackend, SerialBackend, PCA9685Backend, ratio_to_pwm
 )
+
+TELEOP_MAX_LEVEL = 4
+# 노트북 P / O 키. 이 두 문자열만 ESP 로 보낸다.
+ESP_MODES = ('computer_control_mode', 'rc_control_mode')
+
+
+def level_to_pwm(level: int, offsets, neutral: int, invert: bool = False) -> int:
+    """키보드 속도 단계(-4~+4) → PWM [µs]. offsets[k-1] = k 단계의 중립 대비 폭."""
+    if level == 0:
+        return neutral
+    delta = offsets[abs(level) - 1] * (1 if level > 0 else -1)
+    return neutral - delta if invert else neutral + delta
 
 
 class ThrusterDriver(Node):
@@ -60,11 +74,9 @@ class ThrusterDriver(Node):
         self.declare_parameter('rc_timeout_sec', 0.5)
         self.declare_parameter('enable_laptop_teleop', True)
         self.declare_parameter('teleop_timeout_sec', 0.5)
-        # Low default limits match the existing tank keyboard test's 12/6/3 N
-        # normalized commands. The Jetson enforces them independently of the PC.
-        self.declare_parameter('teleop_max_forward', 0.30)
-        self.declare_parameter('teleop_max_reverse', 0.15)
-        self.declare_parameter('teleop_max_angular', 0.25)
+        # 키보드 속도 1~4 단계의 PWM 폭 [µs] (중립 1500 기준 ±). 후진은 같은 폭으로 내린다.
+        # 기본 50/100/150/200 → 전진 1550/1600/1650/1700, 후진 1450/1400/1350/1300.
+        self.declare_parameter('teleop_level_pwm_offsets', [50, 100, 150, 200])
 
         hw_type = str(self.get_parameter('hardware_type').value).lower()
         self.port = str(self.get_parameter('port').value)
@@ -76,15 +88,11 @@ class ThrusterDriver(Node):
         self.rc_timeout_sec = float(self.get_parameter('rc_timeout_sec').value)
         self.enable_laptop_teleop = bool(self.get_parameter('enable_laptop_teleop').value)
         self.teleop_timeout_sec = float(self.get_parameter('teleop_timeout_sec').value)
-        self.teleop_max_forward = float(self.get_parameter('teleop_max_forward').value)
-        self.teleop_max_reverse = float(self.get_parameter('teleop_max_reverse').value)
-        self.teleop_max_angular = float(self.get_parameter('teleop_max_angular').value)
+        self.teleop_level_offsets = [
+            int(v) for v in self.get_parameter('teleop_level_pwm_offsets').value]
         if (not math.isfinite(self.teleop_timeout_sec)
-                or not 0.1 <= self.teleop_timeout_sec <= 2.0
-                or not all(math.isfinite(v) and 0.0 <= v <= 1.0 for v in (
-                    self.teleop_max_forward, self.teleop_max_reverse,
-                    self.teleop_max_angular))):
-            raise ValueError('invalid laptop teleop timeout or output limits')
+                or not 0.1 <= self.teleop_timeout_sec <= 2.0):
+            raise ValueError('invalid laptop teleop timeout')
 
         # 설정 및 믹서 생성
         self.config = ThrusterConfig(
@@ -101,7 +109,18 @@ class ThrusterDriver(Node):
         )
         if not 0.0 <= self.config.max_output_ratio <= 1.0:
             raise ValueError('max_output_ratio는 0.0~1.0 범위여야 합니다')
+        offsets = self.teleop_level_offsets
+        if (len(offsets) != TELEOP_MAX_LEVEL or offsets[0] <= 0
+                or any(b <= a for a, b in zip(offsets, offsets[1:]))
+                or self.config.neutral_pwm + offsets[-1] > self.config.max_forward_pwm
+                or self.config.neutral_pwm - offsets[-1] < self.config.max_reverse_pwm):
+            raise ValueError(
+                'teleop_level_pwm_offsets 는 증가하는 양수 4개이고 '
+                'max_forward_pwm/max_reverse_pwm 안이어야 합니다')
         self.mixer = ThrusterMixer(self.config)
+        # 키보드 단계 PWM 도 max_output_ratio 안전 상한을 따른다
+        self.teleop_pwm_high = ratio_to_pwm(self.config.max_output_ratio, self.config)
+        self.teleop_pwm_low = ratio_to_pwm(-self.config.max_output_ratio, self.config)
 
         # 백엔드 초기화
         self.backend: BaseThrusterBackend = self._init_backend(hw_type)
@@ -120,7 +139,8 @@ class ThrusterDriver(Node):
         self.current_rc_cmd = Twist()
         self.teleop_enabled = False
         self.last_teleop_cmd_time: float = 0.0
-        self.current_teleop_cmd = Twist()
+        self.current_teleop_levels = (0, 0)
+        self.esp_mode = 'unknown'
         self.emergency_stopped = False
         self.active_mode = 'idle'
         self.last_left_pwm = self.config.neutral_pwm
@@ -135,11 +155,14 @@ class ThrusterDriver(Node):
             self.create_subscription(Twist, '/rc/cmd_vel', self._on_rc_cmd, 10)
         if self.enable_laptop_teleop:
             self.create_subscription(Bool, '/teleop/enable', self._on_teleop_enable, 10)
-            self.create_subscription(Twist, '/teleop/cmd_vel', self._on_teleop_cmd, 10)
+            self.create_subscription(
+                Int8MultiArray, '/teleop/levels', self._on_teleop_levels, 10)
+            self.create_subscription(String, '/teleop/esp_mode', self._on_esp_mode, 10)
 
         # 진단 퍼블리셔
         self.diag_pub = self.create_publisher(DiagnosticArray, '/diagnostics', 10)
         self.teleop_status_pub = self.create_publisher(String, '/teleop/status', 10)
+        self.teleop_event_pub = self.create_publisher(String, '/teleop/event', 10)
 
         # 50Hz 주기 제어 타이머
         timer_period = 1.0 / max(1.0, self.update_rate_hz)
@@ -182,7 +205,7 @@ class ThrusterDriver(Node):
         if enabled == self.teleop_enabled:
             return
         self.teleop_enabled = enabled
-        self.current_teleop_cmd = Twist()
+        self.current_teleop_levels = (0, 0)
         self.last_teleop_cmd_time = 0.0
         self.mixer.reset()
         if not enabled:
@@ -192,22 +215,47 @@ class ThrusterDriver(Node):
         self.get_logger().warn(
             '노트북 텔레옵 진입' if enabled else '노트북 텔레옵 해제 — 자율주행 복귀')
 
-    def _on_teleop_cmd(self, msg: Twist):
+    def _on_teleop_levels(self, msg: Int8MultiArray):
         if not self.teleop_enabled:
             return
-        linear = float(msg.linear.x)
-        angular = float(msg.angular.z)
-        if not (math.isfinite(linear) and math.isfinite(angular)):
-            self.current_teleop_cmd = Twist()
+        levels = list(msg.data)
+        if (len(levels) != 2
+                or not all(-TELEOP_MAX_LEVEL <= int(v) <= TELEOP_MAX_LEVEL
+                           for v in levels)):
+            # 잘못된 명령은 버리고 중립 (갱신 시각을 지워 곧바로 teleop_timeout)
+            self.current_teleop_levels = (0, 0)
             self.last_teleop_cmd_time = 0.0
             return
-        cmd = Twist()
-        cmd.linear.x = max(-self.teleop_max_reverse,
-                           min(self.teleop_max_forward, linear))
-        cmd.angular.z = max(-self.teleop_max_angular,
-                            min(self.teleop_max_angular, angular))
-        self.current_teleop_cmd = cmd
+        self.current_teleop_levels = (int(levels[0]), int(levels[1]))
         self.last_teleop_cmd_time = time.monotonic()
+
+    def _teleop_pwm(self):
+        """좌우 단계 → PWM. 슬루 제한 없이 단계값 그대로(단계 하나가 50 µs 남짓)."""
+        out = []
+        for level, invert in zip(self.current_teleop_levels,
+                                 (self.config.invert_left, self.config.invert_right)):
+            pwm = level_to_pwm(level, self.teleop_level_offsets,
+                               self.config.neutral_pwm, invert)
+            out.append(max(self.teleop_pwm_low, min(self.teleop_pwm_high, pwm)))
+        return out[0], out[1]
+
+    def _on_esp_mode(self, msg: String):
+        mode = msg.data.strip()
+        if mode not in ESP_MODES:
+            self.get_logger().warn(f'알 수 없는 ESP 모드 요청 무시: {msg.data!r}')
+            self._event(f'ESP_MODE_REJECTED {msg.data!r}')
+            return
+        ok = self.backend.send_line(mode)
+        if ok:
+            self.esp_mode = mode
+            self.get_logger().warn(f'ESP 제어 모드 전송: {mode}')
+            self._event(f'ESP_MODE {mode} 전송 완료')
+        else:
+            self.get_logger().error(f'ESP 제어 모드 전송 실패: {mode}')
+            self._event(f'ESP_MODE {mode} 전송 실패 (시리얼 연결 확인)')
+
+    def _event(self, text: str):
+        self.teleop_event_pub.publish(String(data=text))
 
     def _on_estop(self, msg: Bool):
         if msg.data and not self.emergency_stopped:
@@ -242,8 +290,10 @@ class ThrusterDriver(Node):
         elif self.teleop_enabled:
             if now - self.last_teleop_cmd_time <= self.teleop_timeout_sec:
                 self.active_mode = 'teleop'
-                target_linear = self.current_teleop_cmd.linear.x
-                target_angular = self.current_teleop_cmd.angular.z
+                # 키보드 단계는 좌우 PWM 을 직접 정한다 (믹서 미사용)
+                self.mixer.reset()
+                self._send(*self._teleop_pwm())
+                return
             else:
                 self.active_mode = 'teleop_timeout'
                 target_linear = 0.0
@@ -264,7 +314,9 @@ class ThrusterDriver(Node):
 
         # 차동 믹싱 및 슬루 레이트 제한 적용
         left_pwm, right_pwm, _, _ = self.mixer.mix(target_linear, target_angular, now)
+        self._send(left_pwm, right_pwm)
 
+    def _send(self, left_pwm: int, right_pwm: int):
         # 하드웨어 백엔드로 PWM 전송
         self.last_send_ok = self.backend.send_pwm(left_pwm, right_pwm)
         if not self.last_send_ok:
@@ -316,8 +368,8 @@ class ThrusterDriver(Node):
             KeyValue(key='linear_cmd', value=f"{self.current_cmd.linear.x:.3f}"),
             KeyValue(key='angular_cmd', value=f"{self.current_cmd.angular.z:.3f}"),
             KeyValue(key='teleop_enabled', value=str(self.teleop_enabled)),
-            KeyValue(key='teleop_linear_cmd', value=f"{self.current_teleop_cmd.linear.x:.3f}"),
-            KeyValue(key='teleop_angular_cmd', value=f"{self.current_teleop_cmd.angular.z:.3f}"),
+            KeyValue(key='teleop_levels', value=str(self.current_teleop_levels)),
+            KeyValue(key='esp_mode', value=self.esp_mode),
         ]
 
         diag_arr.status.append(status)

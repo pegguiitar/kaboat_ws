@@ -1,8 +1,21 @@
 #!/usr/bin/env python3
-"""Laptop WASD control through Zenoh, with focus/key-release deadman behavior.
+"""노트북 키보드 조종 창 — Zenoh 로 젯슨 thruster_driver 에 명령을 보낸다.
 
-ROS domain 43 publishes /teleop/enable and /teleop/cmd_vel. The Jetson driver
-in domain 42 arbitrates those against RC and autonomous /cmd_vel commands.
+노트북(ROS 도메인 43)이 보내는 토픽. 젯슨(도메인 42)이 받아 ESP 로 시리얼 전송한다.
+  /teleop/enable   (Bool)           노트북 조종 모드 진입·해제
+  /teleop/levels   (Int8MultiArray) [좌 단계, 우 단계], -4 ~ +4. 20 Hz
+  /teleop/gps_mark (Empty)          Space — 젯슨 gps_mark_logger 가 CSV 에 한 줄 기록
+  /teleop/esp_mode (String)         P = computer_control_mode, O = rc_control_mode
+받는 토픽: /teleop/status (젯슨 제어 모드), /teleop/event (ESP 모드 전송·GPS 기록 결과)
+
+키 (조종 창을 클릭해 포커스를 준 상태에서)
+  W / S    속도 단계 +1 / -1 (-4 ~ +4, 떼도 유지)
+  A / D    누르고 있는 동안 좌 / 우 회전 (좌우 1단계 차이, 중립이면 제자리 회전)
+  X        즉시 0단계(중립)
+  Space    현재 GPS 위치 기록
+  P / O    ESP 를 컴퓨터 조종 / RC 조종 모드로
+  R        조종 종료 후 자율주행 복귀,  Q·Esc·창 닫기  조종 종료(중립 유지)
+창이 포커스를 잃거나 젯슨 상태가 끊기면 즉시 0단계로 돌아간다.
 """
 
 import fcntl
@@ -13,55 +26,71 @@ import time
 import tkinter as tk
 
 import rclpy
-from geometry_msgs.msg import Twist
 from rclpy.node import Node
-from std_msgs.msg import Bool, String
+from std_msgs.msg import Bool, Empty, Int8MultiArray, String
 
-from teleop_keys import SmoothAxes
+from teleop_keys import MAX_LEVEL, KeyTracker, SpeedLevel, thruster_levels
 
 
 DOMAIN = '43'
 PERIOD_MS = 50
 STATUS_MAX_AGE = 1.0
 LOCK_PATH = Path('/tmp/kaboat_laptop_teleop.lock')
+ESP_MODES = {'p': 'computer_control_mode', 'o': 'rc_control_mode'}
+BG = '#17202a'
+
+
+def level_bar(level):
+    """-4 … +4 를 칸으로 그린 문자열. 현재 단계 칸만 채운다."""
+    cells = []
+    for k in range(-MAX_LEVEL, MAX_LEVEL + 1):
+        mark = '■' if k == level else ('│' if k == 0 else '·')
+        cells.append(mark)
+    return ' '.join(cells)
 
 
 class TeleopWindow:
     def __init__(self, node):
         self.node = node
         self.mode_pub = node.create_publisher(Bool, '/teleop/enable', 10)
-        self.cmd_pub = node.create_publisher(Twist, '/teleop/cmd_vel', 10)
-        node.create_subscription(
-            String, '/teleop/status', self._on_status, 10)
+        self.levels_pub = node.create_publisher(Int8MultiArray, '/teleop/levels', 10)
+        self.gps_pub = node.create_publisher(Empty, '/teleop/gps_mark', 10)
+        self.esp_pub = node.create_publisher(String, '/teleop/esp_mode', 10)
+        node.create_subscription(String, '/teleop/status', self._on_status, 10)
+        node.create_subscription(String, '/teleop/event', self._on_event, 10)
 
         self.root = tk.Tk()
-        self.root.title('KABOAT 노트북 텔레옵')
-        self.root.geometry('560x250')
+        self.root.title('KABOAT 노트북 키보드 조종')
+        self.root.geometry('620x360')
         self.root.resizable(False, False)
-        self.root.configure(bg='#17202a')
+        self.root.configure(bg=BG)
         self.status_label = tk.Label(
-            self.root, text='젯슨 상태 대기 중', fg='#f8c471', bg='#17202a',
+            self.root, text='젯슨 상태 대기 중', fg='#f8c471', bg=BG,
             font=('Sans', 15, 'bold'))
-        self.status_label.pack(pady=(20, 10))
-        self.keys_label = tk.Label(
-            self.root, text='조종하려면 이 창을 클릭하세요', fg='white',
-            bg='#17202a', font=('Sans', 12))
-        self.keys_label.pack(pady=5)
+        self.status_label.pack(pady=(16, 6))
+        self.level_label = tk.Label(
+            self.root, text='', fg='white', bg=BG, font=('Monospace', 16, 'bold'))
+        self.level_label.pack(pady=4)
+        self.output_label = tk.Label(
+            self.root, text='조종하려면 이 창을 클릭하세요', fg='white', bg=BG,
+            font=('Sans', 12))
+        self.output_label.pack(pady=4)
+        self.event_label = tk.Label(
+            self.root, text='', fg='#85c1e9', bg=BG, font=('Sans', 11))
+        self.event_label.pack(pady=4)
         tk.Label(
             self.root,
-            text='W 전진(30%)  S 후진(15%)\n'
-                 'A 제자리 좌회전  D 제자리 우회전(25%, A/D 가 W/S 보다 우선)\n'
-                 'Space 정지 · R 자율주행 복귀 · Q 또는 창 닫기 중립 유지',
-            fg='#d5dbdb', bg='#17202a', font=('Sans', 11),
-            justify='center').pack(pady=12)
+            text='W/S 속도 단계 +1/-1 (-4~+4, 유지)   A/D 누르는 동안 좌/우 회전\n'
+                 'X 즉시 중립   Space GPS 위치 기록   P 컴퓨터 조종 / O RC 조종 (ESP)\n'
+                 'R 자율주행 복귀   Q·Esc·창 닫기 조종 종료(중립 유지)',
+            fg='#d5dbdb', bg=BG, font=('Sans', 11), justify='center').pack(pady=10)
 
-        self.pressed = set()
-        self.space_held = False
+        self.keys = KeyTracker()
+        self.speed = SpeedLevel()
         self.focused = False
-        self.smoother = SmoothAxes()
-        self.last_tick = time.monotonic()
         self.last_status_time = 0.0
         self.last_status = 'NO_STATUS'
+        self.last_event = ''
         self.closing = None  # None, 'manual', or 'auto'
 
         self.root.bind('<KeyPress>', self._key_press)
@@ -71,75 +100,82 @@ class TeleopWindow:
         self.root.protocol('WM_DELETE_WINDOW', self._close_manual)
         self.root.after(PERIOD_MS, self._tick)
 
+    # ── 젯슨에서 오는 것 ───────────────────────────────
     def _on_status(self, msg):
         self.last_status = msg.data
         self.last_status_time = time.monotonic()
-        if msg.data not in ('TELEOP', 'TELEOP_TIMEOUT'):
-            self.pressed.clear()
-            self.smoother.reset()
+
+    def _on_event(self, msg):
+        self.last_event = msg.data
+
+    def _ready(self, now):
+        return (now - self.last_status_time <= STATUS_MAX_AGE
+                and self.last_status in ('TELEOP', 'TELEOP_TIMEOUT'))
+
+    # ── 키 입력 ────────────────────────────────────────
+    def _neutral(self):
+        self.speed.stop()
+        self.keys.clear()
+        self.levels_pub.publish(Int8MultiArray(data=[0, 0]))
 
     def _focus_in(self, event):
         self.focused = True
 
     def _focus_out(self, event):
+        # 데드맨: 창을 벗어나면 단계도 0 으로 (다시 들어와도 예전 속도로 출발하지 않게)
         self.focused = False
-        self.pressed.clear()
-        self.space_held = False
-        self.smoother.reset()
-        self.cmd_pub.publish(Twist())
+        self._neutral()
 
     def _key_press(self, event):
         key = event.keysym.lower()
+        if not self.keys.press(key, time.monotonic()):
+            return                                  # 자동반복 — 한 번만 처리
         if key == 'r':
-            self._return_auto()
+            self._close('auto')
         elif key in ('q', 'escape'):
-            self._close_manual()
+            self._close('manual')
+        elif key == 'x':
+            self.speed.stop()
+        elif key == 'w':
+            if self._ready(time.monotonic()):
+                self.speed.up()
+        elif key == 's':
+            if self._ready(time.monotonic()):
+                self.speed.down()
         elif key == 'space':
-            self.space_held = True
-            self.pressed.clear()
-            self.smoother.reset()
-            self.cmd_pub.publish(Twist())
-        elif key in ('w', 'a', 's', 'd') and not self.space_held:
-            self.pressed.add(key)
+            self.gps_pub.publish(Empty())
+            self.last_event = 'GPS 위치 기록 요청 보냄…'
+        elif key in ESP_MODES:
+            self.esp_pub.publish(String(data=ESP_MODES[key]))
+            self.last_event = f'ESP 모드 전송 요청: {ESP_MODES[key]}'
 
     def _key_release(self, event):
-        key = event.keysym.lower()
-        if key == 'space':
-            self.space_held = False
-        else:
-            self.pressed.discard(key)
+        self.keys.release(event.keysym.lower(), time.monotonic())
 
-    def _return_auto(self):
+    def _close(self, how):
         if self.closing is None:
-            self.closing = 'auto'
-            self.pressed.clear()
-            self.smoother.reset()
+            self.closing = how
+            self._neutral()
             self.root.after(500, self.root.destroy)
 
     def _close_manual(self):
-        if self.closing is None:
-            self.closing = 'manual'
-            self.pressed.clear()
-            self.smoother.reset()
-            self.root.after(500, self.root.destroy)
+        self._close('manual')
 
+    # ── 20 Hz 주기 ─────────────────────────────────────
     def _tick(self):
         try:
             rclpy.spin_once(self.node, timeout_sec=0.0)
             now = time.monotonic()
-            dt = min(0.1, max(0.0, now - self.last_tick))
-            self.last_tick = now
+            held = self.keys.poll(now)
             self.mode_pub.publish(Bool(data=self.closing != 'auto'))
 
-            ready = (now - self.last_status_time <= STATUS_MAX_AGE
-                     and self.last_status in ('TELEOP', 'TELEOP_TIMEOUT'))
-            cmd = Twist()
-            if (ready and self.focused and not self.space_held
-                    and self.closing is None):
-                cmd.linear.x, cmd.angular.z = self.smoother.step(self.pressed, dt)
+            ready = self._ready(now)
+            if ready and self.focused and self.closing is None:
+                left, right = thruster_levels(self.speed.level, held)
             else:
-                self.smoother.reset()
-            self.cmd_pub.publish(cmd)
+                self.speed.stop()
+                left, right = 0, 0
+            self.levels_pub.publish(Int8MultiArray(data=[left, right]))
 
             if now - self.last_status_time > STATUS_MAX_AGE:
                 label, color = '젯슨 응답 없음 — 키보드 명령 차단', '#e74c3c'
@@ -148,13 +184,18 @@ class TeleopWindow:
             elif self.last_status == 'RC_OVERRIDE':
                 label, color = '무선 조종기 우선', '#f8c471'
             elif ready:
-                label, color = '노트북 텔레옵 연결됨', '#58d68d'
+                label, color = '노트북 조종 연결됨', '#58d68d'
             else:
                 label, color = f'젯슨 모드: {self.last_status}', '#f8c471'
             self.status_label.configure(text=label, fg=color)
-            keys = '+'.join(sorted(self.pressed)) if self.pressed else '중립'
-            self.keys_label.configure(
-                text=f'키: {keys}    전진: {cmd.linear.x:+.3f}    회전: {cmd.angular.z:+.3f}')
+            self.level_label.configure(
+                text=f'속도 단계 {self.speed.level:+d}    {level_bar(self.speed.level)}')
+            turn = ('좌회전' if 'a' in held and 'd' not in held else
+                    '우회전' if 'd' in held and 'a' not in held else '직진')
+            focus = '' if self.focused else '   (창을 클릭하세요)'
+            self.output_label.configure(
+                text=f'좌 추진기 {left:+d}   우 추진기 {right:+d}   {turn}{focus}')
+            self.event_label.configure(text=self.last_event)
             self.root.after(PERIOD_MS, self._tick)
         except tk.TclError:
             # Closing the window while a timer is queued is normal.
@@ -164,9 +205,8 @@ class TeleopWindow:
         try:
             self.root.mainloop()
         finally:
-            self.cmd_pub.publish(Twist())
-            # Q/window close keeps teleop armed and the Jetson neutral. R alone
-            # explicitly returns control to the autonomous /cmd_vel stream.
+            self.levels_pub.publish(Int8MultiArray(data=[0, 0]))
+            # Q/창 닫기는 젯슨 텔레옵 모드를 유지한 채 중립. R 만 자율주행으로 넘긴다.
             self.mode_pub.publish(Bool(data=self.closing != 'auto'))
 
 

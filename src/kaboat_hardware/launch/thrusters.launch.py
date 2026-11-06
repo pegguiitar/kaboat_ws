@@ -4,6 +4,7 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
+from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
@@ -31,6 +32,12 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'max_output_ratio', default_value='1.0',
             description='믹싱 후 좌/우 스러스터 최종 절대 출력 상한 [0.0~1.0]'),
+        DeclareLaunchArgument(
+            'gps_logger', default_value='true',
+            description='노트북 Space 로 GPS 위치를 CSV 에 기록하는 gps_mark_logger 실행'),
+        DeclareLaunchArgument(
+            'gps_log_dir', default_value='~/kaboat_gps_logs',
+            description='GPS 기록 CSV 저장 폴더 (젯슨)'),
 
         Node(
             package='kaboat_hardware',
@@ -47,5 +54,13 @@ def generate_launch_description():
                     'use_sim_time': False,
                 }
             ],
+        ),
+        Node(
+            package='kaboat_hardware',
+            executable='gps_mark_logger',
+            name='gps_mark_logger',
+            output='screen',
+            condition=IfCondition(LaunchConfiguration('gps_logger')),
+            parameters=[{'log_dir': LaunchConfiguration('gps_log_dir')}],
         ),
     ])

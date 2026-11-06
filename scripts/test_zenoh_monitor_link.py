@@ -42,7 +42,8 @@ def test_motor_and_start_commands_are_never_bridged():
 def test_laptop_only_sends_pose_and_teleop_and_no_services():
     jetson_pub, jetson_sub = _allowed('jetson')
     laptop_pub, _ = _allowed('laptop')
-    expected = {'/boat_pose', '/teleop/enable', '/teleop/cmd_vel'}
+    expected = {'/boat_pose', '/teleop/enable', '/teleop/levels',
+                '/teleop/gps_mark', '/teleop/esp_mode'}
     assert laptop_pub == expected and jetson_sub == expected
     config = link.build_config('jetson', JETSON_IP)
     allow = config['plugins']['ros2dds']['allow']

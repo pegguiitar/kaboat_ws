@@ -13,7 +13,7 @@ bringup과 점검은 [SENSOR_CHECK.md](SENSOR_CHECK.md)를 봅니다.
 - [4. 노트북 도커 컨테이너](#4-노트북-도커-컨테이너)
 - [5. 선체 젯슨 단축어](#5-선체-젯슨-단축어)
 - [6. Zenoh 브리지 실행](#6-zenoh-브리지-실행)
-- [7. 노트북 WASD 텔레옵](#7-노트북-wasd-텔레옵)
+- [7. 노트북 키보드 조종](#7-노트북-키보드-조종)
 - [8. 실내 수조 표준 워크플로우](#8-실내-수조-표준-워크플로우)
 - [9. 문제 해결](#9-문제-해결)
 
@@ -45,8 +45,8 @@ Zenoh가 전달하는 토픽([`zenoh_monitor_link.py`](scripts/zenoh_monitor_lin
 
 | 방향 | 토픽 |
 |---|---|
-| 젯슨 → 노트북 | `/scan`, `/scan/raw`, `/odom`, `/tf`, `/tf_static`, `/occupancy_grid`, `/avoid/plan`, `/avoid/cps`, `/avoid/dri`, `/real_avoid_test/{path,markers,dri,status}`, `/manual_dri/{dri,status}`, `/straight_drive/markers`, `/bspline_test/{path,markers}`, `/circle_drive/markers`, `/station_keeping/markers`, `/dock/{waypoints,entrance_base,marker_base,detection_status}`, `/mission/state`, `/mission/goal`, `/imu/data`, `/gps/fix`, `/gnss_1/velocity`, `/ekf/status`, `/ekf/odometry_map`, `/teleop/status` |
-| 노트북 → 젯슨 | `/boat_pose`, `/teleop/enable`, `/teleop/cmd_vel` |
+| 젯슨 → 노트북 | `/scan`, `/scan/raw`, `/odom`, `/tf`, `/tf_static`, `/occupancy_grid`, `/avoid/plan`, `/avoid/cps`, `/avoid/dri`, `/real_avoid_test/{path,markers,dri,status}`, `/manual_dri/{dri,status}`, `/straight_drive/markers`, `/bspline_test/{path,markers}`, `/circle_drive/markers`, `/station_keeping/markers`, `/dock/{waypoints,entrance_base,marker_base,detection_status}`, `/mission/state`, `/mission/goal`, `/imu/data`, `/gps/fix`, `/gnss_1/velocity`, `/ekf/status`, `/ekf/odometry_map`, `/teleop/{status,event}` |
+| 노트북 → 젯슨 | `/boat_pose`, `/teleop/{enable,levels,gps_mark,esp_mode}` |
 | 전달 안 함 | `/cmd_vel`, `/cmd/*`, `/start_mission`, `/emergency_stop`, 서비스, 액션, 카메라 원본 영상 |
 
 출발·정지·비상 정지는 브리지를 통과하지 않으므로 **젯슨 도메인 42의 터미널**에서
@@ -119,7 +119,7 @@ RViz 프로세스는 라이다와 같은 Humble 컨테이너에서 실행됩니�
 | **`rviz_tank [시험종류]`** | 수조 추적·경로 비교 RViz. `straight`, `bspline`, `circle`, `los`, `los_circle`, `waypoint`, `station`. 생략하면 추적 화면과 실제 궤적만 |
 | **`rviz_remote`** | 선체 `/scan`을 `onboard_laser_frame` 기준으로 표시 |
 | **`view_pitch`** | 롤/피치 각도와 Pitch [-4.0°, +1.0°], Roll ±3.0° 스캔 차단 상태 출력 |
-| **`python3 scripts/teleop_laptop.py`** | 노트북 WASD 텔레옵 창 (7절) |
+| **`python3 scripts/teleop_laptop.py`** | 노트북 키보드 조종 창 (7절) |
 
 전체 지도·경로 모니터링 화면은 다음으로 엽니다(Fixed Frame `odom`).
 
@@ -233,18 +233,25 @@ python3 boat_attitude.py --gps-topic /gps/fix --odom-topic /odom
 
 ---
 
-## 7. 노트북 WASD 텔레옵
+## 7. 노트북 키보드 조종
 
-노트북 도메인 43에서 `/teleop/enable`(Bool)과 `/teleop/cmd_vel`(Twist)을
-발행하면 Zenoh가 젯슨 도메인 42로 전달하고, 젯슨 `thruster_driver`가 자율주행
-`/cmd_vel` 대신 선택합니다. 노트북이 `/cmd_vel`이나 모터 PWM을 직접 발행하지
-않습니다. 물리 RC 조종기(`/rc/cmd_vel`)가 항상 더 높은 우선순위입니다.
+노트북 조종 창이 도메인 43에서 아래 토픽을 보내면 Zenoh가 젯슨 도메인 42로 전달합니다.
+젯슨 `thruster_driver`가 받아 ESP에 시리얼로 보냅니다. 노트북이 `/cmd_vel`이나 모터 PWM을
+직접 보내지는 않습니다.
+
+| 토픽 | 내용 |
+|---|---|
+| `/teleop/enable` (Bool) | 노트북 조종 모드 진입·해제 |
+| `/teleop/levels` (Int8MultiArray) | `[좌 단계, 우 단계]`, -4 ~ +4, 20 Hz |
+| `/teleop/gps_mark` (Empty) | Space — 젯슨 `gps_mark_logger`가 CSV에 기록 |
+| `/teleop/esp_mode` (String) | `computer_control_mode` / `rc_control_mode` |
+| `/teleop/status`, `/teleop/event` (젯슨 → 노트북) | 젯슨 제어 모드 / ESP 모드 전송·GPS 기록 결과 |
 
 ```bash
 # 젯슨: 코드 갱신 후 빌드, 이전 run_zenoh·run_motor는 종료 후 재실행
 cb && sb
 run_zenoh
-run_motor        # 다른 터미널
+run_motor        # 다른 터미널 — thruster_driver 와 gps_mark_logger 를 같이 띄움
 ```
 
 ```zsh
@@ -255,22 +262,24 @@ set_kaboat
 python3 scripts/teleop_laptop.py
 ```
 
-젯슨이 `/teleop/status`를 보내기 전에는 조종 창이 움직이는 명령을 차단합니다.
+젯슨이 `/teleop/status`를 보내기 전에는 조종 창이 속도를 올리지 않습니다.
 조종 창을 클릭해 포커스를 준 상태에서 키를 누릅니다.
 
 | 입력 | 동작 |
 |---|---|
-| `W` / `S` | 전진 / 후진 |
-| `A` / `D` | 제자리 좌회전 / 우회전 |
-| `W+A` / `W+D` | 전진하며 좌회전 / 우회전 |
-| `S+A` / `S+D` | 후진하며 좌회전 / 우회전 |
-| `Space` | 즉시 중립 명령 |
-| `Q` 또는 창 닫기 | 노트북 조종 종료, 젯슨 텔레옵 모드 유지하며 중립 |
+| `W` / `S` | 속도 단계 +1 / -1. -4 ~ +4 (0 중립, +는 전진, -는 후진), **키를 떼도 단계 유지**. 꾹 눌러도 한 번만 셈 |
+| `A` / `D` (누르고 있는 동안) | 좌 / 우 회전. 좌우 추진기에 1단계 차이 — 예) 전진 3단계 + `A` → 좌 2, 우 4. 떼면 다시 같은 단계로 직진 |
+| 중립에서 `A` / `D` | 제자리 좌회전(좌 -1 후진, 우 +1 전진) / 제자리 우회전 |
+| `X` | 즉시 0단계(중립) |
+| `Space` | 그 시점 시각과 GPS 위도·경도를 젯슨 CSV에 한 줄 기록 |
+| `P` / `O` | ESP에 `computer_control_mode` / `rc_control_mode` 전송 (컴퓨터 조종 / RC 수신기 조종) |
+| `Q`·`Esc` 또는 창 닫기 | 노트북 조종 종료, 젯슨 텔레옵 모드 유지하며 중립 |
 | `R` | 노트북 조종 종료 후 자율주행 명령으로 명시적 복귀 |
 
-- 키를 놓으면 명령이 0으로 부드럽게 내려가고, 창이 포커스를 잃거나 `Space`를 누르면 즉시 0입니다.
-- 통신이 끊기면 젯슨이 0.5초 후 PWM 중립으로 전환하며 **자율주행으로 자동 복귀하지 않습니다**.
-- 명령 상한은 전진 `0.30`, 후진 `0.15`, 회전 `0.25`(A/D는 제자리 회전)이며 젯슨이 다시 검사합니다([`thrusters.yaml`](src/kaboat_hardware/config/thrusters.yaml)의 `teleop_max_*`).
+- **단계 → PWM**: 1~4단계는 중립 1500µs에서 ±50/100/150/200µs입니다(전진 1550~1700, 후진 1450~1300). [`thrusters.yaml`](src/kaboat_hardware/config/thrusters.yaml)의 `teleop_level_pwm_offsets`에서 바꿉니다. `max_output_ratio` 상한은 그대로 적용됩니다.
+- **ESP 시리얼**: 출력은 기존과 같은 8자리 `LLLLRRRR\n`(앞 4자리 좌, 뒤 4자리 우 PWM)이고, `P`/`O`는 문자열 한 줄(`computer_control_mode\n` / `rc_control_mode\n`)입니다.
+- **GPS 기록**: `run_motor`가 시작될 때 젯슨 `~/kaboat_gps_logs/gps_log_날짜_시간.csv`를 만들고 첫 줄에 `timestamp,latitude,longitude`를 씁니다. `Space`마다 한 줄씩 추가하고 곧바로 디스크에 반영하므로 비정상 종료돼도 그 전 기록은 남습니다. GPS가 없거나 2초 넘게 갱신되지 않으면 기록하지 않고 조종 창에 실패 이유를 표시합니다. 폴더는 `run_motor gps_log_dir:=...`로 바꿉니다.
+- **안전**: 창이 포커스를 잃거나 젯슨 상태가 끊기면 즉시 0단계로 돌아갑니다(다시 포커스를 줘도 이전 속도로 출발하지 않음). 통신이 끊기면 젯슨이 0.5초 후 PWM 중립으로 전환하며 **자율주행으로 자동 복귀하지 않습니다**.
 - `R`로 복귀하기 전에 자율주행 노드가 실행 중이고 현재 목표가 유효한지 확인합니다.
 - 젯슨에서 `ros2 topic echo /teleop/status`로 `TELEOP`, `TELEOP_TIMEOUT`, `AUTO`, `RC_OVERRIDE`, `ESTOP`, `BACKEND_ERROR`를 확인합니다.
 

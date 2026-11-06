@@ -145,6 +145,10 @@ class BaseThrusterBackend:
     def send_pwm(self, left_pwm: int, right_pwm: int) -> bool:
         raise NotImplementedError
 
+    def send_line(self, text: str) -> bool:
+        """제어기(ESP)에 문자열 한 줄을 보낸다. 지원하지 않는 백엔드는 False."""
+        return False
+
     def close(self):
         pass
 
@@ -155,6 +159,7 @@ class DummyBackend(BaseThrusterBackend):
     def __init__(self):
         self.last_left = 1500
         self.last_right = 1500
+        self.lines = []
         self.is_open = False
 
     def open(self) -> bool:
@@ -164,6 +169,10 @@ class DummyBackend(BaseThrusterBackend):
     def send_pwm(self, left_pwm: int, right_pwm: int) -> bool:
         self.last_left = left_pwm
         self.last_right = right_pwm
+        return True
+
+    def send_line(self, text: str) -> bool:
+        self.lines.append(text)
         return True
 
     def close(self):
@@ -177,6 +186,7 @@ class SerialBackend(BaseThrusterBackend):
       고정 8자리 정수 + 줄바꿈: `LLLLRRRR\n` (예: `16501520\n`)
       - 앞 4자리: 좌측 스러스터 [1000~2000 µs]
       - 뒤 4자리: 우측 스러스터 [1000~2000 µs]
+      제어 모드 전환은 문자열 한 줄: `computer_control_mode\n` / `rc_control_mode\n`
     """
 
     def __init__(self, port: str = '/dev/ttyCH341USB0', baudrate: int = 115200,
@@ -247,6 +257,20 @@ class SerialBackend(BaseThrusterBackend):
             r_val = max(1000, min(2000, int(right_pwm)))
             msg = f"{l_val:04d}{r_val:04d}\n".encode('ascii')
             self.serial.write(msg)
+            return True
+        except Exception:
+            try:
+                self.serial.close()
+            except Exception:
+                pass
+            self.serial = None
+            return False
+
+    def send_line(self, text: str) -> bool:
+        if self.serial is None or not self.serial.is_open:
+            return False
+        try:
+            self.serial.write(f"{text}\n".encode('ascii'))
             return True
         except Exception:
             try:

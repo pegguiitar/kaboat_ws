@@ -3,7 +3,8 @@
 
 Jetson ROS domain 42 -> laptop ROS domain 43 carries monitoring topics.
 Laptop -> Jetson carries the indoor /boat_pose and explicit keyboard teleop
-enable/command topics. /cmd_vel itself is never bridged.
+topics (enable, thruster levels, GPS mark, ESP mode). /cmd_vel itself is never
+bridged.
 """
 
 import argparse
@@ -63,12 +64,15 @@ MONITOR_TOPICS = (
     '/ekf/status',
     '/ekf/odometry_map',
     '/teleop/status',
+    '/teleop/event',
 )
 
 LAPTOP_TO_JETSON_TOPICS = (
     '/boat_pose',
     '/teleop/enable',
-    '/teleop/cmd_vel',
+    '/teleop/levels',
+    '/teleop/gps_mark',
+    '/teleop/esp_mode',
 )
 
 

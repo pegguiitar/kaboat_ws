@@ -1,59 +1,95 @@
-"""Pure WASD mixing and ramping for the laptop keyboard teleop client."""
+"""노트북 키보드 텔레옵의 순수 로직 (ROS·GUI 없음).
 
-import math
+속도는 -4 ~ +4 의 9단계다. 0 = 중립, +1~+4 = 전진, -1~-4 = 후진.
+W 를 한 번 누를 때마다 1단계 올리고 S 는 1단계 내린다. 단계는 키를 떼도 유지된다.
+
+A/D 는 누르고 있는 동안에만 좌우 추진기에 1단계 차이를 준다.
+  A(좌회전): 좌 = 단계 - 1, 우 = 단계 + 1
+  D(우회전): 좌 = 단계 + 1, 우 = 단계 - 1
+예) 전진 3단계 + A → 좌 2, 우 4.  중립 + A → 좌 -1(후진), 우 +1(전진) = 제자리 좌회전.
+A/D 를 떼면 좌우가 다시 같은 단계(직진)로 돌아간다. 좌우 단계는 ±4 를 넘지 않는다.
+"""
+
+MAX_LEVEL = 4
+
+# X11 은 키를 누르고 있으면 '떼기 → 누르기' 를 거의 동시에(수 ms) 반복해서 보낸다(자동반복).
+# 떼기 뒤 이 시간 안에 같은 키가 다시 눌리면 자동반복으로 보고 무시한다 [s].
+# 사람이 같은 키를 떼었다 다시 누르는 데는 이보다 오래 걸려 빠른 연타는 모두 센다.
+AUTOREPEAT_GAP = 0.03
 
 
-# 정규화 추력 비율(0~1). 예전 값(전진 12/118.6, 후진 6/118.6, 회전 3/118.6)은
-# 회전 2.5% 가 ESC 시동 구간 근처라 배가 돌지 않았다. 다른 수조 시험(직선·LOS 30%)
-# 수준으로 올린다. 젯슨 thruster_driver 의 teleop_max_* 가 같은 값으로 다시 자른다.
-FORWARD = 0.30
-REVERSE = 0.15
-TURN = 0.25
+def clamp_level(value):
+    return max(-MAX_LEVEL, min(MAX_LEVEL, int(value)))
 
 
-def command_for_keys(keys, forward=FORWARD, reverse=REVERSE, turn=TURN):
-    """Return (linear, angular) for the pressed keys.
+def turn_from_keys(held):
+    """+1 = 좌회전(A), -1 = 우회전(D), 0 = 직진. A 와 D 를 같이 누르면 0."""
+    a, d = 'a' in held, 'd' in held
+    return 1 if a and not d else -1 if d and not a else 0
 
-    A/D 는 **제자리 회전**이다: 전진 0, 좌우 모터를 반대로(좌 -turn, 우 +turn).
-    A/D 가 눌려 있으면 W/S 보다 우선한다. A 와 D 를 같이 누르면 회전 없음.
+
+def thruster_levels(level, held):
+    """현재 속도 단계와 누르고 있는 키 → (좌 단계, 우 단계)."""
+    turn = turn_from_keys(held)
+    return clamp_level(level - turn), clamp_level(level + turn)
+
+
+class SpeedLevel:
+    """W/S 로 오르내리는 전후진 속도 단계 (-4 ~ +4)."""
+
+    def __init__(self):
+        self.level = 0
+
+    def up(self):
+        self.level = clamp_level(self.level + 1)
+        return self.level
+
+    def down(self):
+        self.level = clamp_level(self.level - 1)
+        return self.level
+
+    def stop(self):
+        self.level = 0
+        return self.level
+
+
+class KeyTracker:
+    """자동반복을 걸러 실제로 누른 순간과 누르고 있는 키를 구분한다.
+
+    press() 는 새로 누른 키면 True 를 돌려준다(W/S 1단계, Space 1회 기록 등에 사용).
+    떼기는 AUTOREPEAT_GAP 이 지나야 확정된다(poll). 그 사이 다시 눌리면 자동반복이다.
     """
-    keys = {key.lower() for key in keys}
-    turn_dir = (1.0 if 'a' in keys and 'd' not in keys else
-                -1.0 if 'd' in keys and 'a' not in keys else 0.0)
-    if turn_dir:
-        return 0.0, turn_dir * turn
-    linear = (forward if 'w' in keys and 's' not in keys else
-              -reverse if 's' in keys and 'w' not in keys else 0.0)
-    return linear, 0.0
 
+    def __init__(self, gap=AUTOREPEAT_GAP):
+        self.gap = float(gap)
+        self.held = set()
+        self._release_at = {}
 
-def approach(current, target, max_change):
-    if not (math.isfinite(current) and math.isfinite(target)
-            and math.isfinite(max_change) and max_change >= 0.0):
-        raise ValueError('nonfinite teleop ramp input')
-    return current + max(-max_change, min(max_change, target - current))
+    def press(self, key, now):
+        key = key.lower()
+        if key in self._release_at:
+            released = self._release_at.pop(key)
+            # 떼기 직후(gap 안) 다시 눌림 = 자동반복. 그보다 늦으면 실제로 다시 누른 것
+            # (주기 poll 이 떼기를 확정하기 전에 다시 눌러도 연타로 센다).
+            return now - released >= self.gap
+        if key in self.held:                 # 떼기 없이 반복된 누르기
+            return False
+        self.held.add(key)
+        return True
 
+    def release(self, key, now):
+        key = key.lower()
+        if key in self.held:
+            self._release_at[key] = now
 
-class SmoothAxes:
-    # 0.5 초 안에 목표 출력에 도달 (출력을 올렸으므로 예전 0.3 / 0.15 보다 빠르게).
-    def __init__(self, linear_rate=0.6, angular_rate=0.5):
-        if linear_rate <= 0.0 or angular_rate <= 0.0:
-            raise ValueError('ramp rates must be positive')
-        self.linear_rate = float(linear_rate)
-        self.angular_rate = float(angular_rate)
-        self.linear = 0.0
-        self.angular = 0.0
+    def poll(self, now):
+        """떼기가 확정된 키를 held 에서 뺀다. 매 주기 호출."""
+        for key, at in list(self._release_at.items()):
+            if now - at >= self.gap:
+                self.held.discard(key)
+                del self._release_at[key]
+        return self.held
 
-    def step(self, keys, dt):
-        if not math.isfinite(dt) or dt < 0.0:
-            raise ValueError('dt must be nonnegative and finite')
-        target_linear, target_angular = command_for_keys(keys)
-        self.linear = approach(
-            self.linear, target_linear, self.linear_rate * dt)
-        self.angular = approach(
-            self.angular, target_angular, self.angular_rate * dt)
-        return self.linear, self.angular
-
-    def reset(self):
-        self.linear = 0.0
-        self.angular = 0.0
+    def clear(self):
+        self.held.clear()
+        self._release_at.clear()

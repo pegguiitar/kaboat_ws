@@ -29,6 +29,7 @@ setup(
             'odom_tf_broadcaster = kaboat_hardware.odom_tf_broadcaster:main',
             'imu_dead_reckoning_odom = kaboat_hardware.imu_dead_reckoning_odom:main',
             'thruster_driver = kaboat_hardware.thruster_driver:main',
+            'gps_mark_logger = kaboat_hardware.gps_mark_logger:main',
             'lidar_boat_tracker = kaboat_hardware.lidar_boat_tracker:main',
             'indoor_lidar_odom = kaboat_hardware.indoor_lidar_odom:main',
             'calibrate_indoor_imu = kaboat_hardware.calibrate_indoor_imu:main',
