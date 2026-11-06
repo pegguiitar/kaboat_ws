@@ -302,12 +302,12 @@ ros2 launch kaboat_hardware real_obstacle_avoid_test.launch.py drive_enabled:=tr
 ros2 service call /real_avoid_test/start std_srvs/srv/Trigger '{}'
 ```
 
-- 상한 전진 0.23·회전 0.36(전진 0.3·회전 0.3이면 꺾이는 회피 경로에서 밀려 조정, 경로 추종 게인은 `test_los`와 같은 1.5/0.15). 경로를 5초 넘게 못 만들거나 위험이 안 풀리면 **후진 탈출(ESCAPE, 출력 0.1)** 후 경로가 다시 나오면 복귀(`allow_escape:=false`면 대신 정지). 센서 끊김, 경로 0.7m 이탈, 벽 0.5m 접근(후진 중 포함) 시 중지.
+- 상한 전진 0.23·회전 0.33(전진 0.3·회전 0.3이면 꺾이는 회피 경로에서 밀려 조정, 경로 추종 게인은 `test_los`와 같은 1.3/0.15). 경로를 5초 넘게 못 만들거나 위험이 안 풀리면 **후진 탈출(ESCAPE, 출력 0.1)** 후 경로가 다시 나오면 복귀(`allow_escape:=false`면 대신 정지). 센서 끊김, 경로 0.7m 이탈, 벽 0.5m 접근(후진 중 포함) 시 중지.
 - 경로 추종 값(`fsm.*`)은 `test_los`와 같은 코드 기본값을 씁니다. 바꿔 보려면 [`real_obstacle_avoid_test.yaml`](src/kaboat_hardware/config/real_obstacle_avoid_test.yaml)에 `fsm.*`를 추가해 덮어씁니다.
 - 선체 폭 충돌 예측은 없으므로 RViz에서 여유를 직접 확인합니다.
 
 ## 11. 게이트 라이다 미리보기
-- **제어 상수:** LOS 시험은 `bspline_track_test`와 같은 제어를 씁니다. `thrust_ratio`가 전진·회전 출력 **상한**(0.3이면 각각 0.30)이고, 요 PD 게인(kp 1.5, kd 0.15)과 20Hz 제어 주기도 같습니다. 이전에는 게인과 상한이 약 10~40배 작아서 곡선을 못 따라 경로를 벗어났습니다. 게이트·탐색 미션이 쓰는 공통 `los()` 기본 동작(`LosFollower()`)은 바꾸지 않았습니다.
+- **제어 상수:** LOS 시험은 `bspline_track_test`와 같은 제어를 씁니다. `thrust_ratio`가 전진·회전 출력 **상한**(0.3이면 각각 0.30)이고, 요 D 게인(kd 0.15)과 20Hz 제어 주기도 같습니다(kp는 2026-11-06에 1.5→1.3으로 낮춰 `bspline_track_test`의 1.5와 다름). 이전에는 게인과 상한이 약 10~40배 작아서 곡선을 못 따라 경로를 벗어났습니다. 게이트·탐색 미션이 쓰는 공통 `los()` 기본 동작(`LosFollower()`)은 바꾸지 않았습니다.
 
 3절로 `/odom`·선체 `/scan`을 준비합니다. `goal_x/y`는 **마지막 게이트 뒤쪽 실측 좌표**(출구에서 4m 이내).
 

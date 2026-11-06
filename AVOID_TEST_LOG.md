@@ -8,7 +8,7 @@
 | 항목 | 값 | 바꾸는 곳 |
 |---|---|---|
 | **직진(전진) 계수** | **0.23** (직선 구간 실제 전진 명령 0.210) | `FsmParams.cmd_full` ([avoid_fsm.py](src/kaboat_behaviors/kaboat_behaviors/avoid_fsm.py)), 수조 시험 상한 `max_linear_cmd` |
-| **회전 계수** | **0.36** (회전 명령 상한) | 수조 시험 `max_angular_cmd`, 대회 미션 `avoid.max_angular_ratio` ([obstacle_planner.py](src/kaboat_behaviors/kaboat_behaviors/obstacle_planner.py)) |
+| **회전 계수** | **0.33** (회전 명령 상한) | 수조 시험 `max_angular_cmd`, 대회 미션 `avoid.max_angular_ratio` ([obstacle_planner.py](src/kaboat_behaviors/kaboat_behaviors/obstacle_planner.py)) |
 
 수조 시험 값은 [real_obstacle_avoid_test.yaml](src/kaboat_hardware/config/real_obstacle_avoid_test.yaml), 수조 대회 미션 값은 [tank_avoid_mission.yaml](src/kaboat_hardware/config/tank_avoid_mission.yaml)에도 같은 값으로 적혀 있습니다. 바꿀 때는 코드 기본값과 두 YAML을 함께 바꿉니다.
 
@@ -17,8 +17,8 @@
 | 선수 오차 | 전진 / 회전 | 좌 / 우 추진기 |
 |---|---|---|
 | 0° | 0.210 / 0 | +0.21 / +0.21 |
-| 10° | 0.210 / 0.26 | +0.47 / −0.05 |
-| 20° 이상 | 0.210 / 0.36 (상한) | +0.57 / −0.15 |
+| 10° | 0.210 / 0.23 | +0.44 / −0.02 |
+| 15° 이상 | 0.210 / 0.33 (상한) | +0.54 / −0.12 |
 
 ## 저장해 둔 설정
 
@@ -35,7 +35,7 @@
 
 | 항목 | 값 |
 |---|---|
-| 헤딩 P / D 게인 | 1.5 / 0.15 (LOS·게이트와 공용 상수 `BSPLINE_TRACK_YAW_KD`) |
+| 헤딩 P / D 게인 | **1.3** / 0.15 (LOS·게이트와 공용 상수 `BSPLINE_TRACK_YAW_KP/KD`) |
 | 전방 주시 거리 `lookahead` | 1.0 m |
 | 목표 근접 감속 반경 `slow_radius` | 1.5 m |
 | 곡률 감속: `kappa_window` / `v_min` / `v_max` / `omega_max` | 2.0 m / 0.3 / 1.4 m/s / 0.52 rad/s |
@@ -98,7 +98,8 @@ rviz2 -d ~/Projects/KABOAT/kaboat_ws/src/kaboat_hardware/rviz/real_obstacle_avoi
 | 11-06 | 회전 0.38 → 0.36, D 게인 0.15 → 0.18 (직진 0.23) | 선수가 경로 방향을 지나치는 것을 줄이려고 감쇠를 키움. D 게인은 `test_los`·게이트에도 적용 |
 | 11-06 | D 게인 0.18 → 0.15 되돌림 (직진 0.23, 회전 0.36) | |
 | 11-06 | D 게인 0.15 → 0.12, 수조 테스트 ESCAPE 켬(후진 출력 0.1) | ESCAPE 가 없어 경로를 못 만들면 정지만 했음. 예전 후진 출력은 0.04라 움직이지 않을 값이어서 0.1로 직접 지정 |
-| 11-06 | **D 게인 0.12 → 0.15 되돌림** (현재: 직진 0.23, 회전 0.36, D 0.15, ESCAPE 켬·후진 0.1) | |
+| 11-06 | D 게인 0.12 → 0.15 되돌림 (직진 0.23, 회전 0.36, ESCAPE 켬·후진 0.1) | |
+| 11-06 | **회전 0.36 → 0.33, P 게인 1.5 → 1.3** (현재: 직진 0.23, 회전 0.33, P/D 1.3/0.15, ESCAPE 켬·후진 0.1) | 작은 오차에서 덜 민감하게. P 게인은 `test_los`·게이트에도 적용 |
 
 ## 실험 결과
 
@@ -113,3 +114,4 @@ rviz2 -d ~/Projects/KABOAT/kaboat_ws/src/kaboat_hardware/rviz/real_obstacle_avoi
 | 11-06 | 0.23 / 0.36, D 0.15 | | | | |
 | 11-06 | 0.23 / 0.36, D 0.12, ESCAPE 켬 | | | | |
 | 11-06 | 0.23 / 0.36, D 0.15, ESCAPE 켬 | | | | |
+| 11-06 | 0.23 / 0.33, P/D 1.3/0.15, ESCAPE 켬 | | | | |

@@ -1,7 +1,7 @@
 # Production obstacle_planner on the indoor tank.
-# 경로 추종(lookahead 1.0, slow_radius 1.5, 게인 1.5/0.15)은 test_los 에서 검증한
+# 경로 추종(lookahead 1.0, slow_radius 1.5, 게인 1.3/0.15)은 test_los 에서 검증한
 # 코드 기본값을 그대로 쓴다. 출력 비율만 여기서 명시해 둔다(코드 기본값과 같음).
 obstacle_planner:
   ros__parameters:
     fsm.cmd_full: 0.23                   # 회피 전진 출력 비율 = 전진 기준·전진 상한
-    avoid.max_angular_ratio: 0.36        # 회피 회전 출력 상한
+    avoid.max_angular_ratio: 0.33        # 회피 회전 출력 상한

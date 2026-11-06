@@ -20,7 +20,7 @@ real_obstacle_avoid_test:
     front_corridor_half_width: 1.0
     max_cross_track_error: 0.7
     max_linear_cmd: 0.23                 # 전진 상한 = fsm.cmd_full 0.23 (0.3 이면 회피 경로에서 밀림)
-    max_angular_cmd: 0.36                # 회전 상한 (2026-11-06 실물 튜닝)
+    max_angular_cmd: 0.33                # 회전 상한 (2026-11-06 실물 튜닝)
     odom_timeout_sec: 0.5
     scan_timeout_sec: 0.5
     grid_timeout_sec: 0.5
@@ -43,5 +43,5 @@ real_obstacle_avoid_test:
     #   이미 선수가 벽에 닿아 있고 타력으로 더 밀린다. 충돌이 걱정되면 키운다.
     tank_stop_margin: 0.5
 
-    # 경로 추종(lookahead 1.0, slow_radius 1.5, cmd_full 0.23, 게인 1.5/0.15)은
+    # 경로 추종(lookahead 1.0, slow_radius 1.5, cmd_full 0.23, 게인 1.3/0.15)은
     # test_los 에서 검증한 코드 기본값을 그대로 쓴다 — 여기서 fsm.* 를 덮어쓰지 않는다.

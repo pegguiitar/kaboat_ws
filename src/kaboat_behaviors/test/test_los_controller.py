@@ -120,15 +120,16 @@ TRACK_CPS = [(8.5, 2.0), (7.0, 3.5), (5.0, 1.5), (3.0, 3.5), (1.5, 2.5)]
 
 
 def bspline_test_reference(path, progress_idx, boat, yaw, yaw_rate,
-                           cruise=0.30, max_angular=0.30, kd=BSPLINE_TRACK_YAW_KD):
+                           cruise=0.30, max_angular=0.30,
+                           kp=BSPLINE_TRACK_YAW_KP, kd=BSPLINE_TRACK_YAW_KD):
     """bspline_track_test._control_loop 의 명령 계산을 그대로 옮긴 기준값.
 
-    D 게인은 LOS 공용 상수를 따른다(지금은 bspline_track_test 와 같은 0.15).
+    요 게인만 LOS 공용 상수를 따른다(2026-11-06 kp 1.3 — bspline_track_test 는 1.5).
     """
     params = replace(FsmParams(), lookahead=1.0, slow_radius=1.5, cmd_full=cruise)
     plan = replace(path, progress_idx=progress_idx)
     linear, angular = follow_cmd(plan, boat, yaw, yaw_rate, path.samples[-1],
-                                 params, 1.5, kd)
+                                 params, kp, kd)
     return (max(0.0, min(cruise, linear)),
             max(-max_angular, min(max_angular, angular)))
 
@@ -160,7 +161,7 @@ def test_bspline_track_mode_reproduces_bspline_track_test_commands():
 
 def test_bspline_track_constants_are_the_tested_ones():
     f = LosFollower.bspline_track()
-    assert (f.yaw_kp, f.yaw_kd) == (BSPLINE_TRACK_YAW_KP, BSPLINE_TRACK_YAW_KD) == (1.5, 0.15)
+    assert (f.yaw_kp, f.yaw_kd) == (BSPLINE_TRACK_YAW_KP, BSPLINE_TRACK_YAW_KD) == (1.3, 0.15)
     assert f.ratio_limits_only and f.max_linear == f.max_angular == 1.0
 
 
