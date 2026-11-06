@@ -33,8 +33,8 @@ class FsmParams:
     v↔cmd 캘리브레이션(cmd_full·v_full)은 물리 결합층(SKELETON §6) — 실물 전환 시
     이 두 값만 재실측하면 speed_to_cmd 가 통째로 교체 지점이다.
     """
-    # 경로 추종 상수 lookahead·slow_radius·cmd_full 은 수조에서 검증한 LOS
-    # (LosFollower.bspline_track, thrust_ratio 0.3) 와 같은 값 (2026-11-04 실물 튜닝).
+    # 경로 추종 상수 lookahead·slow_radius 는 수조에서 검증한 LOS
+    # (LosFollower.bspline_track) 와 같은 값 (2026-11-04 실물 튜닝).
     # 이전 sim 값: lookahead 2.0, slow_radius 3.0, cmd_full 12/118.6.
     lookahead: float = 1.0        # follow 목표점 전방 호길이 [m]
     kappa_window: float = 2.0     # 📝 곡률 감속 전방 창 [m]
@@ -52,9 +52,11 @@ class FsmParams:
     v_escape: float = 0.5         # 📝 후진 속도 [m/s] — 대칭 실측(-1.48)의 보수적 1/3
     escape_min_t: float = 3.0     # 📝 최소 이탈 시간 [s] — 즉시 복귀 채터링 차단
     escape_n_ok: int = 5          # 📝 복귀 조건: generate 연속 성공 tick 수
-    # v_full 을 내는 추력 명령 = 회피 출력 비율. LOS 의 thrust_ratio 와 같은 뜻으로,
-    # 회피 노드는 이 값을 전진·회전 출력 상한으로도 쓴다 (bspline_track 과 같은 규칙).
-    cmd_full: float = 0.3
+    # v_full 을 내는 추력 명령 = 회피 **전진** 출력 비율. 회피 노드는 이 값을 전진
+    # 출력 상한으로도 쓴다. 회전 상한은 노드 쪽 별도 값(0.4)이다.
+    # 0.3 → 0.2 → 0.15 (2026-11-06 실물 튜닝): 0.3(직선 전진 0.27)이면 꺾이는 회피
+    # 경로에서 관성으로 바깥으로 밀려 추종을 못 했다. 0.15 면 직선 전진 0.14.
+    cmd_full: float = 0.15
     v_full: float = 1.48          # ✅ cmd_full 에서의 실측 속도 [m/s]
     cmd_exp: float = 1.64         # ✅ v↔cmd 멱지수 — sim 2점 fit (12N→1.480,
     #   6N→0.970 m/s, 2026-07-18). 정상상태 추력=항력 균형이 순수 2차 항력이면

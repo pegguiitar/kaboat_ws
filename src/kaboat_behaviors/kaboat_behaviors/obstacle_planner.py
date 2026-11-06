@@ -35,12 +35,16 @@ class ObstaclePlanner(BehaviorBase):
         self.dri_params = self._params_from('dri', DriParams)
         self.planner_params = self._params_from('planner', PlannerParams)
         self.fsm_params = self._params_from('fsm', FsmParams)
-        # 경로 추종은 수조에서 검증한 LOS(test_los) 와 같은 상수: 요 PD 1.5/0.15,
-        # 출력 비율 fsm.cmd_full(0.3) 을 전진 기준·전진/회전 상한으로 쓴다.
+        # 경로 추종은 수조에서 검증한 LOS(test_los) 와 같은 요 PD 1.5/0.15.
+        # 전진: fsm.cmd_full(0.15) 이 전진 기준이자 전진 상한.
+        # 회전: avoid.max_angular_ratio(0.4) 상한 (2026-11-06 실물 튜닝 0.3 → 0.4).
+        self.declare_parameter('avoid.max_angular_ratio', 0.4)
         ratio = float(self.fsm_params.cmd_full)
-        if not math.isfinite(ratio) or not 0.0 < ratio <= 1.0:
-            raise ValueError('fsm.cmd_full (avoid thrust ratio) must be in (0, 1]')
+        turn = float(self.get_parameter('avoid.max_angular_ratio').value)
+        if not all(math.isfinite(v) and 0.0 < v <= 1.0 for v in (ratio, turn)):
+            raise ValueError('fsm.cmd_full and avoid.max_angular_ratio must be in (0, 1]')
         self.thrust_ratio = ratio
+        self.turn_ratio = turn
         self.fsm = AvoidFsm(self.planner_params, self.fsm_params,
                             yaw_kp=BSPLINE_TRACK_YAW_KP,
                             yaw_kd=BSPLINE_TRACK_YAW_KD)
@@ -112,10 +116,9 @@ class ObstaclePlanner(BehaviorBase):
         self._publish_debug(out.plan, dri)
         cmd.linear.x = out.linear_x
         cmd.angular.z = out.angular_z
-        # los() 와 같은 출력 규칙: 전체 스케일 1.0, 상한 = 출력 비율. 이게 없으면
+        # 출력 상한: 전진 fsm.cmd_full, 회전 avoid.max_angular_ratio. 이게 없으면
         # BehaviorBase 의 waypoint 상한(전진 0.101·회전 0.025)에 잘린다.
-        self._command_full_scale = (1.0, 1.0)
-        self._command_thrust_ratio = self.thrust_ratio
+        self._command_full_scale = (self.thrust_ratio, self.turn_ratio)
         return cmd
 
     # ── 디버그 발행 (구독자 있을 때만) ──────────────────
