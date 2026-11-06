@@ -156,10 +156,10 @@ class LosStep:
 
 # bspline_track_test 의 제어 상수. 수조에서 경로를 잘 따라간다고 확인된 값이다
 # (cruise_speed 0.30 = thrust_ratio 0.3, max_angular 0.30, kp_yaw 1.5, kd_yaw 0.15).
-# LOS·게이트·회피가 함께 쓴다. 2026-11-06 실물 튜닝: kp 1.5 → 1.4, kd 0.15 → 0.14
-# (kp 1.3, kd 0.18·0.17·0.12 도 시험). bspline_track_test 의 kp_yaw/kd_yaw(1.5/0.15)는 별개.
+# LOS·게이트·회피가 함께 쓴다. 2026-11-06 실물 튜닝: kp 1.5 → 1.4, kd 0.15 → 0.16
+# (kp 1.3, kd 0.18·0.17·0.14·0.12 도 시험). bspline_track_test 의 kp_yaw/kd_yaw(1.5/0.15)는 별개.
 BSPLINE_TRACK_YAW_KP = 1.4
-BSPLINE_TRACK_YAW_KD = 0.14
+BSPLINE_TRACK_YAW_KD = 0.16
 
 
 class LosFollower:
@@ -193,7 +193,7 @@ class LosFollower:
         """bspline_track_test 와 같은 제어 상수·출력 규칙의 follower.
 
         thrust_ratio=r 이면 전진 상한과 cmd_full 이 r, 회전 상한이 r 이고 게인은
-        kp 1.4 / kd 0.14 그대로다(bspline_track_test 는 kp 1.5 / kd 0.15).
+        kp 1.4 / kd 0.16 그대로다(bspline_track_test 는 kp 1.5 / kd 0.15).
         """
         return cls(yaw_kp=BSPLINE_TRACK_YAW_KP, yaw_kd=BSPLINE_TRACK_YAW_KD,
                    max_linear=1.0, max_angular=1.0,

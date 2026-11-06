@@ -83,7 +83,7 @@ class BehaviorBase(Node):
         self._waypoint_controller = WaypointController(WaypointParams(
             max_linear=self.max_linear, max_angular=self.max_angular,
             yaw_kp=YAW_KP, yaw_kd=YAW_KD))
-        # LOS 는 los_path_test/bspline_track_test 에서 검증된 제어(kp 1.4, kd 0.14,
+        # LOS 는 los_path_test/bspline_track_test 에서 검증된 제어(kp 1.4, kd 0.16,
         # thrust_ratio 가 출력 상한)를 쓴다. 이 경로의 명령은 이 behavior 의
         # max_linear/max_angular(waypoint 용 작은 스케일)가 아니라 1.0 을 전체
         # 스케일로 보고 thrust_ratio 만큼으로 제한한다(_command_full_scale).
