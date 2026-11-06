@@ -58,9 +58,9 @@ class RealObstacleAvoidTest(Node):
         self.declare_parameter('start_heading_tolerance_deg', 45.0)
         self.declare_parameter('goal_tolerance', 0.5)
         self.declare_parameter('max_cross_track_error', 0.7)
-        # 출력 상한: 전진 0.2 (= fsm.cmd_full), 회전 0.38 (2026-11-06 실물 튜닝)
-        self.declare_parameter('max_linear_cmd', 0.20)
-        self.declare_parameter('max_angular_cmd', 0.38)
+        # 출력 상한: 전진 0.23 (= fsm.cmd_full), 회전 0.36 (2026-11-06 실물 튜닝)
+        self.declare_parameter('max_linear_cmd', 0.23)
+        self.declare_parameter('max_angular_cmd', 0.36)
         self.declare_parameter('odom_timeout_sec', 0.5)
         self.declare_parameter('scan_timeout_sec', 0.5)
         self.declare_parameter('grid_timeout_sec', 0.5)
@@ -178,7 +178,7 @@ class RealObstacleAvoidTest(Node):
         self.dri_params = self._params_from('dri', DriParams)
         self.planner_params = self._params_from('planner', PlannerParams)
         self.fsm_params = self._params_from('fsm', FsmParams)
-        # 경로 추종 게인은 test_los 에서 검증한 값 (kp 1.5, kd 0.15)
+        # 경로 추종 게인은 test_los 와 같은 값 (kp 1.5, kd 0.18)
         self.fsm = AvoidFsm(self.planner_params, self.fsm_params,
                             yaw_kp=BSPLINE_TRACK_YAW_KP,
                             yaw_kd=BSPLINE_TRACK_YAW_KD)
