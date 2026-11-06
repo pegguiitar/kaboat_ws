@@ -118,7 +118,7 @@ class OccupancyGridNode(Node):
         self.declare_parameter('enable_tilt_gate', True)  # 실내 수조 시험은 false
         self.declare_parameter('tilt_threshold_deg', 3.0)  # [deg] 기울기 게이트 임계
         self.declare_parameter('pitch_min_deg', -4.0)      # [deg] 피치 하한
-        self.declare_parameter('pitch_max_deg', 1.0)       # [deg] 피치 상한
+        self.declare_parameter('pitch_max_deg', 2.0)       # [deg] 피치 상한 (1.0 → 2.0, 2026-11-06)
         self.declare_parameter('roll_min_deg', -3.0)       # [deg] 롤 하한
         self.declare_parameter('roll_max_deg', 3.0)        # [deg] 롤 상한
         # 선체 라이다(TG-50) 장착 위치 — base_link(외벽 추적기의 판 중점) 기준 [m].

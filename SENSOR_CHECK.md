@@ -297,7 +297,7 @@ ros2 topic hz /scan
   sudo sysctl -w net.core.rmem_default=8388608
   ```
 - **스캔 토픽이 안 나올 때 (`ros2 topic hz /scan` 0Hz)** — 드라이버(`/scan/raw`)는
-  돌아가는데 필터링된 `/scan`이 안 나온다면, 보트의 Pitch가 [-4.0°, +1.0°] 범위를 벗어났거나 Roll이 ±3.0° 이상 기울어져
+  돌아가는데 필터링된 `/scan`이 안 나온다면, 보트의 Pitch가 [-4.0°, +2.0°] 범위를 벗어났거나 Roll이 ±3.0° 이상 기울어져
   `onboard_scan_filter`가 수면/하늘 노이즈를 방지하기 위해 스캔을 차단(`drop`)하는
   상태입니다. 아래 §4.5의 `view_roll_pitch.py`로 현재 기울기를 확인하세요. 육상 테스트라면
   `enable_imu_filter:=false`로 필터를 끌 수 있습니다.
@@ -370,7 +370,7 @@ python3 scripts/view_roll_pitch.py
   ```text
   Roll:  -1.90° | Pitch: -17.50° | Yaw: +25.10° | 상태: [ ⚠️ TILTED > 3° (스캔 차단됨) ]
   ```
-* `onboard_scan_filter`와 `occupancy_grid`는 Pitch가 [-4.0°, +1.0°] 범위를 벗어나거나 Roll이 ±3.0°를 초과하면 해당 라이다 스캔을 즉시 버려 지도 오염을 차단합니다. 배의 수평을 맞추거나 필요시 센서 장착 각도를 점검하세요.
+* `onboard_scan_filter`와 `occupancy_grid`는 Pitch가 [-4.0°, +2.0°] 범위를 벗어나거나 Roll이 ±3.0°를 초과하면 해당 라이다 스캔을 즉시 버려 지도 오염을 차단합니다. 배의 수평을 맞추거나 필요시 센서 장착 각도를 점검하세요.
 
 ---
 

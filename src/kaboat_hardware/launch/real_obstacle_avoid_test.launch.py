@@ -51,7 +51,7 @@ def generate_launch_description():
                               description='Tilt gate threshold [deg] (default: 3.0)'),
         DeclareLaunchArgument('pitch_min_deg', default_value='-4.0',
                               description='Pitch lower bound for tilt gate [deg] (default: -4.0)'),
-        DeclareLaunchArgument('pitch_max_deg', default_value='1.0',
+        DeclareLaunchArgument('pitch_max_deg', default_value='2.0',
                               description='Pitch upper bound for tilt gate [deg] (default: 1.0)'),
         DeclareLaunchArgument('roll_min_deg', default_value='-3.0',
                               description='Roll lower bound for tilt gate [deg] (default: -3.0)'),

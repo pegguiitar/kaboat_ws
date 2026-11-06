@@ -118,7 +118,7 @@ RViz 프로세스는 라이다와 같은 Humble 컨테이너에서 실행됩니�
 | **`kaboat_sim`** | 시뮬레이터 컨테이너 셸 진입 (`DISPLAY` 전달) |
 | **`rviz_tank [시험종류]`** | 수조 추적·경로 비교 RViz. `straight`, `bspline`, `circle`, `los`, `los_circle`, `waypoint`, `station`. 생략하면 추적 화면과 실제 궤적만 |
 | **`rviz_remote`** | 선체 `/scan`을 `onboard_laser_frame` 기준으로 표시 |
-| **`view_pitch`** | 롤/피치 각도와 Pitch [-4.0°, +1.0°], Roll ±3.0° 스캔 차단 상태 출력 |
+| **`view_pitch`** | 롤/피치 각도와 Pitch [-4.0°, +2.0°], Roll ±3.0° 스캔 차단 상태 출력 |
 | **`python3 scripts/teleop_laptop.py`** | 노트북 키보드 조종 창 (7절) |
 
 전체 지도·경로 모니터링 화면은 다음으로 엽니다(Fixed Frame `odom`).
