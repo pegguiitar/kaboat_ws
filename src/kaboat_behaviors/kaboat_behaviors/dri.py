@@ -150,24 +150,30 @@ def build_dri(grid, boat_xy, boat_yaw: float, p: DriParams) -> DriGrid:
     # 3σ 밖은 잘라낸다 — 등방이라 패치는 그냥 반경 3σ 의 정사각형.
     radii = np.ceil(3.0 * sig / res).astype(np.int64)
 
+    # A cell-centred obstacle has the same relative cell offsets regardless of
+    # world anchor. Cache squared offsets by patch radius, not by obstacle.
+    offsets_sq = {int(r): (np.arange(-r, r + 1, dtype=np.float64) * res) ** 2
+                  for r in np.unique(radii)}
     for k in range(oy.size):
         r = int(radii[k])
-        x0, x1 = max(0, ox[k] - r), min(w, ox[k] + r + 1)
-        y0, y1 = max(0, oy[k] - r), min(h, oy[k] + r + 1)
+        cx, cy = int(ox[k]), int(oy[k])
+        x0, x1 = max(0, cx - r), min(w, cx + r + 1)
+        y0, y1 = max(0, cy - r), min(h, cy + r + 1)
         if x0 >= x1 or y0 >= y1:
             continue
 
         # 패치 격자점의 셀 c 기준 상대 world 좌표
-        px = (anchor[0] + np.arange(x0, x1) + 0.5) * res - cxs[k]
-        py = (anchor[1] + np.arange(y0, y1) + 0.5) * res - cys[k]
+        px_sq = offsets_sq[r][x0-cx+r:x1-cx+r]
+        py_sq = offsets_sq[r][y0-cy+r:y1-cy+r]
 
         # 등방 가우시안은 분리 가능 — exp(−(dx²+dy²)/2σ²) = exp(−dx²/2σ²)·exp(−dy²/2σ²).
         # 1D 두 개의 외적이라 2D exp 를 통째로 부르지 않는다 (회전축이 없어서 가능).
-        ex = np.exp(-(px * px) * inv[k])
-        ey = np.exp(-(py * py) * inv[k])
+        inv_k = float(inv[k])
+        ex = np.exp(-px_sq * inv_k)
+        ey = float(amp[k]) * np.exp(-py_sq * inv_k)
         # max 결합 — 겹치는 셀은 더하지 않고 더 위험한 쪽을 남긴다 (§3-1)
         patch = dri[y0:y1, x0:x1]
-        np.maximum(patch, amp[k] * np.outer(ey, ex), out=patch)
+        np.maximum(patch, ey[:, None] * ex[None, :], out=patch)
 
     return DriGrid(data=dri, anchor=anchor, resolution=res,
                    occ_xy=np.stack([cxs, cys], axis=1))

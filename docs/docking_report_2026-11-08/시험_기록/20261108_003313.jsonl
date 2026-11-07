@@ -1,0 +1,1381 @@
+{"elapsed_s": 0.11, "event": "phase", "value": "waiting for a continuous valid B-spline and connected actuator"}
+{"elapsed_s": 0.1131701530000555, "topic": "/odom", "last": [6.689057860801572, 2.33540336359271]}
+{"elapsed_s": 0.114, "event": "wait", "value": {"status": null, "path_ready": false, "actuator_ready": false, "esp_mode": null}}
+{"elapsed_s": 0.13286407500004316, "topic": "/odom", "last": [6.689057860801572, 2.33540336359271]}
+{"elapsed_s": 0.15464819500004978, "topic": "/odom", "last": [6.687809520800944, 2.337468344236655]}
+{"elapsed_s": 0.18087870299996212, "topic": "/odom", "last": [6.687809520800944, 2.337468344236655]}
+{"elapsed_s": 0.21977904699997453, "topic": "/odom", "last": [6.686815180591833, 2.3432578539932787]}
+{"elapsed_s": 0.24784160299998348, "topic": "/odom", "last": [6.686815180591833, 2.3432578539932787]}
+{"elapsed_s": 0.3019332220000024, "topic": "/odom", "last": [6.679345409137339, 2.3467027457803242]}
+{"elapsed_s": 0.31541117400001895, "topic": "/odom", "last": [6.679345409137339, 2.3467027457803242]}
+{"elapsed_s": 0.34828803200002767, "topic": "/odom", "last": [6.679345409137339, 2.3467027457803242]}
+{"elapsed_s": 0.3810923119999643, "topic": "/odom", "last": [6.679345409137339, 2.3467027457803242]}
+{"elapsed_s": 0.415400118999969, "topic": "/odom", "last": [6.679345409137339, 2.3467027457803242]}
+{"elapsed_s": 0.44687309999994795, "topic": "/odom", "last": [6.691075493838298, 2.331115573367425]}
+{"elapsed_s": 0.44804941899997175, "topic": "/diagnostics", "actuator": {"mode": "timeout", "left_pwm": "1500", "right_pwm": "1500", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.000", "angular_cmd": "0.000", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 0.48330857899998136, "topic": "/odom", "last": [6.686416342300598, 2.3399456385221953]}
+{"elapsed_s": 0.5165722310000547, "topic": "/odom", "last": [6.684977879854438, 2.3435675973541272]}
+{"elapsed_s": 0.5474375799999507, "topic": "/odom", "last": [6.684977879854438, 2.3435675973541272]}
+{"elapsed_s": 0.5805754689999958, "topic": "/odom", "last": [6.684977879854438, 2.3435675973541272]}
+{"elapsed_s": 0.6162514080000392, "topic": "/odom", "last": [6.687522156299501, 2.3396521580361154]}
+{"elapsed_s": 0.6484208240000271, "topic": "/odom", "last": [6.689071258525276, 2.3350630367294896]}
+{"elapsed_s": 0.6872584449999977, "topic": "/odom", "last": [6.689071258525276, 2.3350630367294896]}
+{"elapsed_s": 0.716949043999989, "topic": "/odom", "last": [6.690317391528787, 2.33087740445392]}
+{"elapsed_s": 0.749811181000041, "topic": "/odom", "last": [6.690317391528787, 2.33087740445392]}
+{"elapsed_s": 0.781463623000036, "topic": "/odom", "last": [6.691571028075466, 2.330505967152141]}
+{"elapsed_s": 0.8217036480000388, "topic": "/odom", "last": [6.691571028075466, 2.330505967152141]}
+{"elapsed_s": 0.8600044539999772, "topic": "/odom", "last": [6.692770501499368, 2.331554217629357]}
+{"elapsed_s": 0.8820017000000462, "topic": "/odom", "last": [6.692770501499368, 2.331554217629357]}
+{"elapsed_s": 0.9149914229999467, "topic": "/odom", "last": [6.692770501499368, 2.331554217629357]}
+{"elapsed_s": 0.9500681770000483, "topic": "/odom", "last": [6.694201318297647, 2.329376852791831]}
+{"elapsed_s": 0.9802248669999472, "topic": "/odom", "last": [6.694201318297647, 2.329376852791831]}
+{"elapsed_s": 1.014385629000003, "topic": "/odom", "last": [6.681471865155056, 2.342439103015471]}
+{"elapsed_s": 1.0477798749999465, "topic": "/odom", "last": [6.681471865155056, 2.342439103015471]}
+{"elapsed_s": 1.0819404779999786, "topic": "/odom", "last": [6.678954995626942, 2.3426834279881863]}
+{"elapsed_s": 1.1138864939999849, "topic": "/odom", "last": [6.678954995626942, 2.3426834279881863]}
+{"elapsed_s": 1.152290631000028, "topic": "/odom", "last": [6.683799647464923, 2.342057298997787]}
+{"elapsed_s": 1.1806510500000513, "topic": "/odom", "last": [6.683799647464923, 2.342057298997787]}
+{"elapsed_s": 1.2186754970000493, "topic": "/odom", "last": [6.686309024669254, 2.337561757777676]}
+{"elapsed_s": 1.2471969120000495, "topic": "/odom", "last": [6.686309024669254, 2.337561757777676]}
+{"elapsed_s": 1.2827555659999916, "topic": "/odom", "last": [6.740992687738295, 2.260793219153178]}
+{"elapsed_s": 1.3148224179999488, "topic": "/odom", "last": [6.740992687738295, 2.260793219153178]}
+{"elapsed_s": 1.3618008260000352, "topic": "/odom", "last": [6.740992687738295, 2.260793219153178]}
+{"elapsed_s": 1.3850442479999856, "topic": "/odom", "last": [6.740992687738295, 2.260793219153178]}
+{"elapsed_s": 1.4415710329999456, "topic": "/odom", "last": [6.740992687738295, 2.260793219153178]}
+{"elapsed_s": 1.455938543000002, "topic": "/odom", "last": [6.729435016337845, 2.286017178687782]}
+{"elapsed_s": 1.4570337720000452, "topic": "/diagnostics", "actuator": {"mode": "timeout", "left_pwm": "1500", "right_pwm": "1500", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.000", "angular_cmd": "0.000", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 1.485565170999962, "topic": "/odom", "last": [6.729435016337845, 2.286017178687782]}
+{"elapsed_s": 1.5155978579999783, "topic": "/odom", "last": [6.724417138207355, 2.2993005376094944]}
+{"elapsed_s": 1.567290981000042, "topic": "/odom", "last": [6.720438397219484, 2.308640984713734]}
+{"elapsed_s": 1.586189361000038, "topic": "/odom", "last": [6.720438397219484, 2.308640984713734]}
+{"elapsed_s": 1.6380844100000331, "topic": "/odom", "last": [6.720438397219484, 2.308640984713734]}
+{"elapsed_s": 1.67777609999996, "topic": "/odom", "last": [6.720438397219484, 2.308640984713734]}
+{"elapsed_s": 1.7037742170000456, "topic": "/odom", "last": [6.719477767045049, 2.3100190441652932]}
+{"elapsed_s": 1.7227181990000417, "topic": "/odom", "last": [6.719477767045049, 2.3100190441652932]}
+{"elapsed_s": 1.7540539599999647, "topic": "/odom", "last": [6.719477767045049, 2.3100190441652932]}
+{"elapsed_s": 1.7823156880000397, "topic": "/odom", "last": [6.719477767045049, 2.3100190441652932]}
+{"elapsed_s": 1.8146955710000157, "topic": "/odom", "last": [6.719477767045049, 2.3100190441652932]}
+{"elapsed_s": 1.8468446639999456, "topic": "/odom", "last": [6.719477767045049, 2.3100190441652932]}
+{"elapsed_s": 1.8803650879999623, "topic": "/odom", "last": [6.719477767045049, 2.3100190441652932]}
+{"elapsed_s": 1.9141633760000332, "topic": "/odom", "last": [6.719477767045049, 2.3100190441652932]}
+{"elapsed_s": 1.9482076860000461, "topic": "/odom", "last": [6.700238775711705, 2.327754470915647]}
+{"elapsed_s": 1.9853615160000118, "topic": "/odom", "last": [6.689722585845969, 2.3401343434275192]}
+{"elapsed_s": 2.024811950999947, "topic": "/odom", "last": [6.689722585845969, 2.3401343434275192]}
+{"elapsed_s": 2.050941015000035, "topic": "/odom", "last": [6.689722585845969, 2.3401343434275192]}
+{"elapsed_s": 2.081078662999971, "topic": "/odom", "last": [6.689722585845969, 2.3401343434275192]}
+{"elapsed_s": 2.114537454000015, "topic": "/odom", "last": [6.683648035063539, 2.3451521988668045]}
+{"elapsed_s": 2.1476411950000056, "topic": "/odom", "last": [6.683648035063539, 2.3451521988668045]}
+{"elapsed_s": 2.1805661480000254, "topic": "/odom", "last": [6.683648035063539, 2.3451521988668045]}
+{"elapsed_s": 2.2147532459999866, "topic": "/odom", "last": [6.743157051839347, 2.27150611467636]}
+{"elapsed_s": 2.2489636719999453, "topic": "/odom", "last": [6.743157051839347, 2.27150611467636]}
+{"elapsed_s": 2.2856652990000157, "topic": "/odom", "last": [6.743157051839347, 2.27150611467636]}
+{"elapsed_s": 2.325245208999945, "topic": "/odom", "last": [6.769334120253726, 2.216708859833891]}
+{"elapsed_s": 2.3542900930000314, "topic": "/odom", "last": [6.731912994336401, 2.2703613797472797]}
+{"elapsed_s": 2.355427275000011, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 2.3580855200000315, "topic": "/dock/bspline_path", "last": 0}
+{"elapsed_s": 2.3603994039999634, "topic": "/dock/avoid/status", "last": "WAIT: waiting for /odom"}
+{"elapsed_s": 2.366, "event": "parameters", "value": {"drive_enabled": true, "approach_only": true, "trial_timeout_sec": 15.0, "max_linear_cmd": 0.15}}
+{"elapsed_s": 2.386501843000019, "topic": "/odom", "last": [6.709061595347524, 2.31046593698533]}
+{"elapsed_s": 2.3999792500000012, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 2.401252498999952, "topic": "/dock/bspline_path", "last": 0}
+{"elapsed_s": 2.417164752999952, "topic": "/odom", "last": [6.755768292105518, 2.2580480761935515]}
+{"elapsed_s": 2.4482989069999803, "topic": "/odom", "last": [6.778908917102047, 2.2131900960713247]}
+{"elapsed_s": 2.4491779700000507, "topic": "/diagnostics", "actuator": {"mode": "auto", "left_pwm": "1500", "right_pwm": "1500", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.000", "angular_cmd": "0.000", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 2.480546051000033, "topic": "/odom", "last": [6.778908917102047, 2.2131900960713247]}
+{"elapsed_s": 2.488074758000039, "topic": "/dock/avoid/status", "last": "WAIT: marker goal stale"}
+{"elapsed_s": 2.4993234029999485, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 2.500589515999991, "topic": "/dock/bspline_path", "last": 0}
+{"elapsed_s": 2.5185143989999688, "topic": "/odom", "last": [6.778908917102047, 2.2131900960713247]}
+{"elapsed_s": 2.54795388499997, "topic": "/odom", "last": [6.759398453471023, 2.2583040012468194]}
+{"elapsed_s": 2.57531187699999, "topic": "/dock/avoid/status", "last": "WAIT: marker goal stale"}
+{"elapsed_s": 2.5801936999999953, "topic": "/odom", "last": [6.759398453471023, 2.2583040012468194]}
+{"elapsed_s": 2.5997094069999775, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 2.600969311999961, "topic": "/dock/bspline_path", "last": 0}
+{"elapsed_s": 2.6139758909999955, "topic": "/odom", "last": [6.785387048256445, 2.222936225821825]}
+{"elapsed_s": 2.6482842399999527, "topic": "/odom", "last": [6.785387048256445, 2.222936225821825]}
+{"elapsed_s": 2.6592138680000517, "topic": "/dock/avoid/status", "last": "WAIT: marker goal stale"}
+{"elapsed_s": 2.6808836479999627, "topic": "/odom", "last": [6.785387048256445, 2.222936225821825]}
+{"elapsed_s": 2.700387546999991, "topic": "/dock/bspline_path", "last": 0}
+{"elapsed_s": 2.7009153369999694, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 2.7135835389999556, "topic": "/odom", "last": [6.782892699719513, 2.168537936114009]}
+{"elapsed_s": 2.7466521430000057, "topic": "/odom", "last": [6.782302462370764, 2.1415057108168094]}
+{"elapsed_s": 2.7673124570000027, "topic": "/dock/avoid/status", "last": "WAIT: marker goal stale"}
+{"elapsed_s": 2.7825059399999645, "topic": "/odom", "last": [6.782302462370764, 2.1415057108168094]}
+{"elapsed_s": 2.8004622150000387, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 2.803020169999968, "topic": "/dock/bspline_path", "last": 0}
+{"elapsed_s": 2.8137542729999723, "topic": "/odom", "last": [6.782302462370764, 2.1415057108168094]}
+{"elapsed_s": 2.846835229000021, "topic": "/odom", "last": [6.732058053293544, 2.2477691303075487]}
+{"elapsed_s": 2.8650495900000124, "topic": "/dock/avoid/status", "last": "WAIT: marker goal stale"}
+{"elapsed_s": 2.880480390999992, "topic": "/odom", "last": [6.732058053293544, 2.2477691303075487]}
+{"elapsed_s": 2.8997714519999818, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 2.9010138209999923, "topic": "/dock/bspline_path", "last": 0}
+{"elapsed_s": 2.9143952560000344, "topic": "/odom", "last": [6.732058053293544, 2.2477691303075487]}
+{"elapsed_s": 2.9468375709999464, "topic": "/odom", "last": [6.698086407281931, 2.320959681644392]}
+{"elapsed_s": 2.9803003609999905, "topic": "/odom", "last": [6.698086407281931, 2.320959681644392]}
+{"elapsed_s": 2.981810608000046, "topic": "/dock/avoid/status", "last": "WAIT: marker goal stale"}
+{"elapsed_s": 2.999396473000047, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 3.0016575879999436, "topic": "/dock/bspline_path", "last": 0}
+{"elapsed_s": 3.014676453999982, "topic": "/odom", "last": [6.75387110249834, 2.2623723204174455]}
+{"elapsed_s": 3.0468803950000165, "topic": "/odom", "last": [6.75387110249834, 2.2623723204174455]}
+{"elapsed_s": 3.067269245000034, "topic": "/dock/avoid/status", "last": "WAIT: marker goal stale"}
+{"elapsed_s": 3.08060667999996, "topic": "/odom", "last": [6.75387110249834, 2.2623723204174455]}
+{"elapsed_s": 3.100235765999969, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 3.101451380999947, "topic": "/dock/bspline_path", "last": 0}
+{"elapsed_s": 3.113559280000004, "topic": "/odom", "last": [6.7774147614078615, 2.21569942480396]}
+{"elapsed_s": 3.1473676790000127, "topic": "/odom", "last": [6.7774147614078615, 2.21569942480396]}
+{"elapsed_s": 3.182378700999948, "topic": "/dock/avoid/status", "last": "WAIT: marker goal stale"}
+{"elapsed_s": 3.1832536990000335, "topic": "/odom", "last": [6.7339437802286835, 2.278598913662164]}
+{"elapsed_s": 3.214965402999951, "topic": "/odom", "last": [6.7339437802286835, 2.278598913662164]}
+{"elapsed_s": 3.220161505999954, "topic": "/dock/bspline_path", "last": 0}
+{"elapsed_s": 3.2206578709999576, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 3.2470665580000286, "topic": "/odom", "last": [6.7339437802286835, 2.278598913662164]}
+{"elapsed_s": 3.280407488000037, "topic": "/odom", "last": [6.773683040395777, 2.2399923234411503]}
+{"elapsed_s": 3.284991798999954, "topic": "/dock/avoid/status", "last": "NO PLAN: obstacles=380, front=None, goal=(2.47, 4.54), drive_enabled=True, tank_edge=2.28, walls_excluded=False, dock_phase=-, blocked=ENTRY_PATH_NEAR_BOUNDARY"}
+{"elapsed_s": 3.314702491000048, "topic": "/odom", "last": [6.789370654711151, 2.2069084021150016]}
+{"elapsed_s": 3.3183403780000162, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 3.3197337259999813, "topic": "/dock/bspline_path", "last": 0}
+{"elapsed_s": 3.347005570999954, "topic": "/odom", "last": [6.789370654711151, 2.2069084021150016]}
+{"elapsed_s": 3.374226054000019, "topic": "/dock/avoid/status", "last": "NO PLAN: obstacles=389, front=4.781170798645939, goal=(2.45, 4.55), drive_enabled=True, tank_edge=2.24, walls_excluded=False, dock_phase=-, blocked=ENTRY_PATH_NEAR_BOUNDARY"}
+{"elapsed_s": 3.38084363400003, "topic": "/odom", "last": [6.789370654711151, 2.2069084021150016]}
+{"elapsed_s": 3.4169261719999895, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 3.4213955359999773, "topic": "/dock/bspline_path", "last": 0}
+{"elapsed_s": 3.4228659100000414, "topic": "/odom", "last": [6.789370654711151, 2.2069084021150016]}
+{"elapsed_s": 3.452663357000006, "topic": "/diagnostics", "actuator": {"mode": "auto", "left_pwm": "1500", "right_pwm": "1500", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.000", "angular_cmd": "0.000", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 3.4546357919999764, "topic": "/odom", "last": [6.747744334217979, 2.2677567577904636]}
+{"elapsed_s": 3.4689418599999726, "topic": "/dock/avoid/status", "last": "NO PLAN: obstacles=389, front=4.814423289290307, goal=(2.45, 4.55), drive_enabled=True, tank_edge=2.21, walls_excluded=False, dock_phase=-, blocked=ENTRY_PATH_NEAR_BOUNDARY"}
+{"elapsed_s": 3.480746933999967, "topic": "/odom", "last": [6.710242381215138, 2.308844624172718]}
+{"elapsed_s": 3.516290769999955, "topic": "/odom", "last": [6.710242381215138, 2.308844624172718]}
+{"elapsed_s": 3.524749646000032, "topic": "/dock/bspline_path", "last": 0}
+{"elapsed_s": 3.5258639149999453, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 3.5503465990000223, "topic": "/odom", "last": [6.760424897373257, 2.2572169731951615]}
+{"elapsed_s": 3.5830067760000475, "topic": "/odom", "last": [6.760424897373257, 2.2572169731951615]}
+{"elapsed_s": 3.618311116999962, "topic": "/odom", "last": [6.760424897373257, 2.2572169731951615]}
+{"elapsed_s": 3.6201233240000192, "topic": "/dock/avoid/status", "last": "NO PLAN: obstacles=394, front=4.688375056710173, goal=(2.45, 4.54), drive_enabled=True, tank_edge=2.31, walls_excluded=False, dock_phase=-, blocked=ENTRY_PATH_NEAR_BOUNDARY"}
+{"elapsed_s": 3.636504518000038, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 3.638298101000032, "topic": "/dock/bspline_path", "last": 0}
+{"elapsed_s": 3.6492864819999795, "topic": "/odom", "last": [6.740050741214695, 2.2996460020184113]}
+{"elapsed_s": 3.6845788880000327, "topic": "/dock/avoid/status", "last": "NO PLAN: obstacles=394, front=4.688375056710173, goal=(2.45, 4.54), drive_enabled=True, tank_edge=2.31, walls_excluded=False, dock_phase=-, blocked=ENTRY_PATH_NEAR_BOUNDARY"}
+{"elapsed_s": 3.6854675829999906, "topic": "/odom", "last": [6.77808591410532, 2.2540071715138645]}
+{"elapsed_s": 3.7192873740000323, "topic": "/odom", "last": [6.77808591410532, 2.2540071715138645]}
+{"elapsed_s": 3.7246162159999585, "topic": "/dock/bspline_path", "last": 0}
+{"elapsed_s": 3.725181318999944, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 3.750542937999967, "topic": "/odom", "last": [6.791632877670858, 2.213896230360217]}
+{"elapsed_s": 3.7805972869999778, "topic": "/odom", "last": [6.791632877670858, 2.213896230360217]}
+{"elapsed_s": 3.7877317119999816, "topic": "/dock/avoid/status", "last": "NO PLAN: obstacles=394, front=4.775603463861136, goal=(2.45, 4.54), drive_enabled=True, tank_edge=2.25, walls_excluded=False, dock_phase=-, blocked=ENTRY_PATH_NEAR_BOUNDARY"}
+{"elapsed_s": 3.8176079119999713, "topic": "/odom", "last": [6.791632877670858, 2.213896230360217]}
+{"elapsed_s": 3.822408772000017, "topic": "/dock/bspline_path", "last": 0}
+{"elapsed_s": 3.8229218100000253, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 3.849077401000045, "topic": "/odom", "last": [6.799010114422934, 2.186493541736354]}
+{"elapsed_s": 3.880752335000011, "topic": "/odom", "last": [6.799010114422934, 2.186493541736354]}
+{"elapsed_s": 3.8868051319999495, "topic": "/dock/avoid/status", "last": "NO PLAN: obstacles=388, front=4.811672258880783, goal=(2.45, 4.54), drive_enabled=True, tank_edge=2.21, walls_excluded=False, dock_phase=-, blocked=ENTRY_PATH_NEAR_BOUNDARY"}
+{"elapsed_s": 3.9155453979999493, "topic": "/odom", "last": [6.733703255358064, 2.2696626535081976]}
+{"elapsed_s": 3.9312274369999614, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 3.93567404800001, "topic": "/dock/bspline_path", "last": 0}
+{"elapsed_s": 3.950396029999979, "topic": "/odom", "last": [6.733703255358064, 2.2696626535081976]}
+{"elapsed_s": 3.9830102519999855, "topic": "/odom", "last": [6.720293187697703, 2.2968713805901304]}
+{"elapsed_s": 4.014167092999969, "topic": "/odom", "last": [6.720293187697703, 2.2968713805901304]}
+{"elapsed_s": 4.01856503099998, "topic": "/dock/avoid/status", "last": "NO PLAN: obstacles=388, front=4.8349352055944825, goal=(2.44, 4.54), drive_enabled=True, tank_edge=2.19, walls_excluded=False, dock_phase=-, blocked=ENTRY_PATH_NEAR_BOUNDARY"}
+{"elapsed_s": 4.043850134999957, "topic": "/dock/bspline_path", "last": 0}
+{"elapsed_s": 4.044452486999944, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 4.050413825999954, "topic": "/odom", "last": [6.7059091682298515, 2.324819790081648]}
+{"elapsed_s": 4.083750914999996, "topic": "/dock/avoid/status", "last": "NO PLAN: obstacles=388, front=4.8349352055944825, goal=(2.44, 4.54), drive_enabled=True, tank_edge=2.19, walls_excluded=False, dock_phase=-, blocked=ENTRY_PATH_NEAR_BOUNDARY"}
+{"elapsed_s": 4.086411207999959, "topic": "/odom", "last": [6.7059091682298515, 2.324819790081648]}
+{"elapsed_s": 4.116715065999983, "topic": "/dock/bspline_path", "last": 0}
+{"elapsed_s": 4.118451943999958, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 4.120835396999951, "topic": "/odom", "last": [6.698456151503363, 2.337996063217928]}
+{"elapsed_s": 4.1474023590000115, "topic": "/odom", "last": [6.698456151503363, 2.337996063217928]}
+{"elapsed_s": 4.1657056819999525, "topic": "/dock/avoid/status", "last": "NO PLAN: obstacles=390, front=4.674855970809224, goal=(2.44, 4.54), drive_enabled=True, tank_edge=2.32, walls_excluded=False, dock_phase=-, blocked=ENTRY_PATH_NEAR_BOUNDARY"}
+{"elapsed_s": 4.18074764000005, "topic": "/odom", "last": [6.754468755546798, 2.2732156597861612]}
+{"elapsed_s": 4.216385364999951, "topic": "/odom", "last": [6.754468755546798, 2.2732156597861612]}
+{"elapsed_s": 4.231753347999984, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 4.236029714999972, "topic": "/dock/bspline_path", "last": 0}
+{"elapsed_s": 4.247091985999987, "topic": "/odom", "last": [6.754468755546798, 2.2732156597861612]}
+{"elapsed_s": 4.280640345000052, "topic": "/odom", "last": [6.7801098709043774, 2.2243199082212466]}
+{"elapsed_s": 4.3029436120000355, "topic": "/dock/avoid/status", "last": "NO PLAN: obstacles=394, front=4.745162322607408, goal=(2.44, 4.54), drive_enabled=True, tank_edge=2.27, walls_excluded=False, dock_phase=-, blocked=ENTRY_PATH_NEAR_BOUNDARY"}
+{"elapsed_s": 4.313782581000055, "topic": "/odom", "last": [6.7801098709043774, 2.2243199082212466]}
+{"elapsed_s": 4.320082648000039, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 4.321245526999974, "topic": "/dock/bspline_path", "last": 0}
+{"elapsed_s": 4.348720832000026, "topic": "/odom", "last": [6.7801098709043774, 2.2243199082212466]}
+{"elapsed_s": 4.371269865000045, "topic": "/dock/avoid/status", "last": "NO PLAN: obstacles=394, front=4.745162322607408, goal=(2.44, 4.54), drive_enabled=True, tank_edge=2.27, walls_excluded=False, dock_phase=-, blocked=ENTRY_PATH_NEAR_BOUNDARY"}
+{"elapsed_s": 4.380116398000041, "topic": "/odom", "last": [6.782897061354733, 2.174620609414559]}
+{"elapsed_s": 4.417541465999989, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 4.418875707999973, "topic": "/dock/bspline_path", "last": 0}
+{"elapsed_s": 4.42116786400004, "topic": "/odom", "last": [6.782897061354733, 2.174620609414559]}
+{"elapsed_s": 4.4473458549999805, "topic": "/diagnostics", "actuator": {"mode": "auto", "left_pwm": "1500", "right_pwm": "1500", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.000", "angular_cmd": "0.000", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 4.450926620000018, "topic": "/odom", "last": [6.784767261518708, 2.1471359765135825]}
+{"elapsed_s": 4.46501937000005, "topic": "/dock/avoid/status", "last": "NO PLAN: obstacles=389, front=4.830292667431229, goal=(2.43, 4.54), drive_enabled=True, tank_edge=2.17, walls_excluded=False, dock_phase=-, blocked=ENTRY_PATH_NEAR_BOUNDARY"}
+{"elapsed_s": 4.481345841999996, "topic": "/odom", "last": [6.785728039279995, 2.1320494671998804]}
+{"elapsed_s": 4.514734515999976, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 4.516799817999981, "topic": "/dock/bspline_path", "last": 0}
+{"elapsed_s": 4.517607326999951, "topic": "/odom", "last": [6.785728039279995, 2.1320494671998804]}
+{"elapsed_s": 4.548905450999996, "topic": "/odom", "last": [6.785728039279995, 2.1320494671998804]}
+{"elapsed_s": 4.581855330000053, "topic": "/odom", "last": [6.790976402643157, 2.133714052750365]}
+{"elapsed_s": 4.605755725999984, "topic": "/dock/avoid/status", "last": "NO PLAN: obstacles=385, front=4.86009278899841, goal=(2.43, 4.54), drive_enabled=True, tank_edge=2.13, walls_excluded=False, dock_phase=-, blocked=ENTRY_PATH_NEAR_BOUNDARY"}
+{"elapsed_s": 4.615419592999956, "topic": "/odom", "last": [6.790976402643157, 2.133714052750365]}
+{"elapsed_s": 4.624667993000003, "topic": "/dock/bspline_path", "last": 0}
+{"elapsed_s": 4.625163462000046, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 4.6499836579999965, "topic": "/odom", "last": [6.793844659707031, 2.134600221978294]}
+{"elapsed_s": 4.67616117, "topic": "/dock/avoid/status", "last": "NO PLAN: obstacles=385, front=4.86009278899841, goal=(2.43, 4.54), drive_enabled=True, tank_edge=2.13, walls_excluded=False, dock_phase=-, blocked=ENTRY_PATH_NEAR_BOUNDARY"}
+{"elapsed_s": 4.68049849800002, "topic": "/odom", "last": [6.793844659707031, 2.134600221978294]}
+{"elapsed_s": 4.714674745000025, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 4.716559082000003, "topic": "/dock/bspline_path", "last": 0}
+{"elapsed_s": 4.71732508599996, "topic": "/odom", "last": [6.738881646560258, 2.240338537377717]}
+{"elapsed_s": 4.747262503000002, "topic": "/odom", "last": [6.738881646560258, 2.240338537377717]}
+{"elapsed_s": 4.780274048000024, "topic": "/odom", "last": [6.782986174669416, 2.234922708183123]}
+{"elapsed_s": 4.789700884000013, "topic": "/dock/avoid/status", "last": "NO PLAN: obstacles=372, front=4.864590864961232, goal=(2.42, 4.53), drive_enabled=True, tank_edge=2.13, walls_excluded=False, dock_phase=-, blocked=ENTRY_PATH_NEAR_BOUNDARY"}
+{"elapsed_s": 4.813999945999967, "topic": "/odom", "last": [6.782986174669416, 2.234922708183123]}
+{"elapsed_s": 4.827621451000027, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 4.8297305940000115, "topic": "/dock/bspline_path", "last": 0}
+{"elapsed_s": 4.8473508590000165, "topic": "/odom", "last": [6.745865497756659, 2.287788390361955]}
+{"elapsed_s": 4.880598792000001, "topic": "/odom", "last": [6.745865497756659, 2.287788390361955]}
+{"elapsed_s": 4.886485953000033, "topic": "/dock/avoid/status", "last": "NO PLAN: obstacles=376, front=4.909026452734974, goal=(2.42, 4.52), drive_enabled=True, tank_edge=2.24, walls_excluded=False, dock_phase=-, blocked=ENTRY_PATH_NEAR_BOUNDARY"}
+{"elapsed_s": 4.9131143869999505, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 4.914603257999943, "topic": "/odom", "last": [6.787172228377345, 2.2616599915094353]}
+{"elapsed_s": 4.917090170000051, "topic": "/dock/bspline_path", "last": 0}
+{"elapsed_s": 4.947439532999965, "topic": "/odom", "last": [6.787172228377345, 2.2616599915094353]}
+{"elapsed_s": 4.965597250999963, "topic": "/dock/avoid/status", "last": "NO PLAN: obstacles=375, front=4.885089595030319, goal=(2.42, 4.52), drive_enabled=True, tank_edge=2.29, walls_excluded=False, dock_phase=-, blocked=ENTRY_PATH_NEAR_BOUNDARY"}
+{"elapsed_s": 4.980695211000011, "topic": "/odom", "last": [6.802094647143688, 2.2286468204890655]}
+{"elapsed_s": 5.0141747659999965, "topic": "/odom", "last": [6.802094647143688, 2.2286468204890655]}
+{"elapsed_s": 5.016080672000044, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 5.018472606000046, "topic": "/dock/bspline_path", "last": 0}
+{"elapsed_s": 5.049881035999988, "topic": "/odom", "last": [6.802094647143688, 2.2286468204890655]}
+{"elapsed_s": 5.065797095999983, "topic": "/dock/avoid/status", "last": "NO PLAN: obstacles=378, front=4.965838613612145, goal=(2.42, 4.52), drive_enabled=True, tank_edge=2.23, walls_excluded=False, dock_phase=-, blocked=ENTRY_PATH_NEAR_BOUNDARY"}
+{"elapsed_s": 5.086981421000019, "topic": "/odom", "last": [6.806679307046458, 2.1991819359121516]}
+{"elapsed_s": 5.1175229489999765, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 5.118, "event": "wait", "value": {"status": "NO PLAN: obstacles=378, front=4.965838613612145, goal=(2.42, 4.52), drive_enabled=True, tank_edge=2.23, walls_excluded=False, dock_phase=-, blocked=ENTRY_PATH_NEAR_BOUNDARY", "path_ready": false, "actuator_ready": true, "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 5.119463479000046, "topic": "/odom", "last": [6.806679307046458, 2.1991819359121516]}
+{"elapsed_s": 5.136635923999961, "topic": "/dock/bspline_path", "last": 51}
+{"elapsed_s": 5.147992475000024, "topic": "/odom", "last": [6.745478581789073, 2.295304389637762]}
+{"elapsed_s": 5.167720602000031, "topic": "/dock/avoid/status", "last": "PREVIEW: obstacles=379, front=4.987706489642143, goal=(2.41, 4.50), drive_enabled=True, tank_edge=2.20, walls_excluded=False, dock_phase=APPROACH_ENTRY, blocked="}
+{"elapsed_s": 5.181192247000013, "topic": "/odom", "last": [6.745478581789073, 2.295304389637762]}
+{"elapsed_s": 5.216791697999952, "topic": "/dock/bspline_path", "last": 0}
+{"elapsed_s": 5.218248758999948, "topic": "/odom", "last": [6.716252626559001, 2.325531084301329]}
+{"elapsed_s": 5.2188388230000555, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 5.247124003999943, "topic": "/odom", "last": [6.716252626559001, 2.325531084301329]}
+{"elapsed_s": 5.2579589729999725, "topic": "/dock/avoid/status", "last": "NO PLAN: obstacles=382, front=4.880153827101669, goal=(2.40, 4.50), drive_enabled=True, tank_edge=2.30, walls_excluded=False, dock_phase=-, blocked=ENTRY_PATH_NEAR_BOUNDARY"}
+{"elapsed_s": 5.2833077259999754, "topic": "/odom", "last": [6.716252626559001, 2.325531084301329]}
+{"elapsed_s": 5.316992151000022, "topic": "/odom", "last": [6.6990280213704, 2.3457564768203216]}
+{"elapsed_s": 5.321269093999945, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 5.32797192299995, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 5.349385790000042, "topic": "/odom", "last": [6.736224356537676, 2.237035669584521]}
+{"elapsed_s": 5.38062925600002, "topic": "/dock/avoid/status", "last": "PREVIEW: obstacles=386, front=4.8385172915030585, goal=(2.40, 4.48), drive_enabled=True, tank_edge=2.33, walls_excluded=False, dock_phase=APPROACH_ENTRY, blocked="}
+{"elapsed_s": 5.382085422000046, "topic": "/odom", "last": [6.736224356537676, 2.237035669584521]}
+{"elapsed_s": 5.416363142000023, "topic": "/odom", "last": [6.70047147529565, 2.3231572809953107]}
+{"elapsed_s": 5.422646312999973, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 5.438129018000041, "topic": "/dock/bspline_path", "last": 51}
+{"elapsed_s": 5.448584073000006, "topic": "/diagnostics", "actuator": {"mode": "auto", "left_pwm": "1500", "right_pwm": "1500", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.000", "angular_cmd": "0.000", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 5.455375673000049, "topic": "/odom", "last": [6.70047147529565, 2.3231572809953107]}
+{"elapsed_s": 5.482263826000008, "topic": "/odom", "last": [6.70047147529565, 2.3231572809953107]}
+{"elapsed_s": 5.488879870000005, "topic": "/dock/avoid/status", "last": "PREVIEW: obstacles=386, front=4.909008856718472, goal=(2.40, 4.48), drive_enabled=True, tank_edge=2.24, walls_excluded=False, dock_phase=APPROACH_ENTRY, blocked="}
+{"elapsed_s": 5.515605041999947, "topic": "/odom", "last": [6.695362620881607, 2.3405384068544044]}
+{"elapsed_s": 5.5160951350000005, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 5.524071950000007, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 5.550387000000001, "topic": "/odom", "last": [6.695362620881607, 2.3405384068544044]}
+{"elapsed_s": 5.565049619999968, "topic": "/dock/avoid/status", "last": "PREVIEW: obstacles=385, front=4.827543490219842, goal=(2.40, 4.48), drive_enabled=True, tank_edge=2.32, walls_excluded=False, dock_phase=APPROACH_ENTRY, blocked="}
+{"elapsed_s": 5.580475652000018, "topic": "/odom", "last": [6.695362620881607, 2.3405384068544044]}
+{"elapsed_s": 5.615231816000005, "topic": "/odom", "last": [6.686661783547823, 2.3533516190795494]}
+{"elapsed_s": 5.637274307999974, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 5.646548596000002, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 5.648226239999985, "topic": "/odom", "last": [6.686661783547823, 2.3533516190795494]}
+{"elapsed_s": 5.680609127000025, "topic": "/odom", "last": [6.67167779721369, 2.3694980534259926]}
+{"elapsed_s": 5.698896833000049, "topic": "/dock/avoid/status", "last": "PREVIEW: obstacles=384, front=4.812815234841471, goal=(2.40, 4.45), drive_enabled=True, tank_edge=2.34, walls_excluded=False, dock_phase=APPROACH_ENTRY, blocked="}
+{"elapsed_s": 5.716538858000035, "topic": "/odom", "last": [6.724568089522519, 2.2583916090108884]}
+{"elapsed_s": 5.719732797000006, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 5.728411326000014, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 5.750792290000049, "topic": "/odom", "last": [6.724568089522519, 2.2583916090108884]}
+{"elapsed_s": 5.784135586000048, "topic": "/odom", "last": [6.724568089522519, 2.2583916090108884]}
+{"elapsed_s": 5.81826283800001, "topic": "/odom", "last": [6.724568089522519, 2.2583916090108884]}
+{"elapsed_s": 5.838276604000043, "topic": "/dock/avoid/status", "last": "PREVIEW: obstacles=384, front=4.812815234841471, goal=(2.40, 4.45), drive_enabled=True, tank_edge=2.34, walls_excluded=False, dock_phase=APPROACH_ENTRY, blocked="}
+{"elapsed_s": 5.839, "event": "phase", "value": "sent computer_control_mode with neutral output; waiting for driver feedback"}
+{"elapsed_s": 5.849061043000006, "topic": "/odom", "last": [6.719680687383265, 2.2948722811880273]}
+{"elapsed_s": 5.865178291999996, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 5.875750565999965, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 5.895742667000036, "topic": "/odom", "last": [6.773411809713641, 2.269725705367149]}
+{"elapsed_s": 5.914739382999983, "topic": "/odom", "last": [6.773411809713641, 2.269725705367149]}
+{"elapsed_s": 5.949582428999975, "topic": "/dock/avoid/status", "last": "PREVIEW: obstacles=385, front=4.798077144223903, goal=(2.40, 4.46), drive_enabled=True, tank_edge=2.35, walls_excluded=False, dock_phase=APPROACH_ENTRY, blocked="}
+{"elapsed_s": 5.956083397000043, "topic": "/odom", "last": [6.731218684784247, 2.3163163918352287]}
+{"elapsed_s": 5.974534210999991, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 6.008641398000009, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 6.0100678019999805, "topic": "/odom", "last": [6.731218684784247, 2.3163163918352287]}
+{"elapsed_s": 6.0196102889999565, "topic": "/odom", "last": [6.708272390373243, 2.337361720045163]}
+{"elapsed_s": 6.051928470000007, "topic": "/odom", "last": [6.708272390373243, 2.337361720045163]}
+{"elapsed_s": 6.074394491000021, "topic": "/dock/avoid/status", "last": "PREVIEW: obstacles=385, front=4.798077144223903, goal=(2.38, 4.46), drive_enabled=True, tank_edge=2.35, walls_excluded=False, dock_phase=APPROACH_ENTRY, blocked="}
+{"elapsed_s": 6.080739999999992, "topic": "/odom", "last": [6.683270963294065, 2.3606961971446867]}
+{"elapsed_s": 6.082, "event": "arm", "value": {"success": false, "message": "docking waypoint violates tank boundary", "entry_xy": [2.402801199518888, 4.452380275569314]}}
+{"elapsed_s": 6.107834780999951, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 6.118272650999984, "topic": "/dock/bspline_path", "last": 51}
+{"elapsed_s": 6.120064825999975, "topic": "/odom", "last": [6.683270963294065, 2.3606961971446867]}
+{"elapsed_s": 6.151560904999997, "topic": "/odom", "last": [6.683270963294065, 2.3606961971446867]}
+{"elapsed_s": 6.181473710999967, "topic": "/dock/avoid/status", "last": "PREVIEW: obstacles=387, front=4.886583962791742, goal=(2.36, 4.48), drive_enabled=True, tank_edge=2.26, walls_excluded=False, dock_phase=APPROACH_ENTRY, blocked="}
+{"elapsed_s": 6.1826217090000455, "topic": "/odom", "last": [6.746515895262949, 2.289694624357325]}
+{"elapsed_s": 6.185, "event": "arm", "value": {"success": false, "message": "docking waypoint violates tank boundary", "entry_xy": [2.3789995458702697, 4.46005855285485]}}
+{"elapsed_s": 6.219149949999974, "topic": "/dock/bspline_path", "last": 51}
+{"elapsed_s": 6.228594834999967, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 6.240856079999958, "topic": "/odom", "last": [6.746515895262949, 2.289694624357325]}
+{"elapsed_s": 6.247350488000052, "topic": "/odom", "last": [6.776427828771075, 2.2420060226975727]}
+{"elapsed_s": 6.261017465999998, "topic": "/dock/avoid/status", "last": "PREVIEW: obstacles=387, front=4.917914343724809, goal=(2.36, 4.48), drive_enabled=True, tank_edge=2.27, walls_excluded=False, dock_phase=APPROACH_ENTRY, blocked="}
+{"elapsed_s": 6.28139037699998, "topic": "/odom", "last": [6.776427828771075, 2.2420060226975727]}
+{"elapsed_s": 6.285120298000038, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 6.297133088999999, "topic": "/dock/bspline_path", "last": 51}
+{"elapsed_s": 6.319041208000044, "topic": "/odom", "last": [6.805925957965302, 2.2390050096172667]}
+{"elapsed_s": 6.336847525000053, "topic": "/dock/avoid/status", "last": "PREVIEW: obstacles=387, front=4.855986472842679, goal=(2.36, 4.48), drive_enabled=True, tank_edge=2.32, walls_excluded=False, dock_phase=APPROACH_ENTRY, blocked="}
+{"elapsed_s": 6.342, "event": "arm", "value": {"success": false, "message": "docking waypoint violates tank boundary", "entry_xy": [2.3625456496700266, 4.482923204810889]}}
+{"elapsed_s": 6.347781759999975, "topic": "/odom", "last": [6.805925957965302, 2.2390050096172667]}
+{"elapsed_s": 6.359153861999971, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 6.3718581589999985, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 6.3811943690000135, "topic": "/odom", "last": [6.805925957965302, 2.2390050096172667]}
+{"elapsed_s": 6.416362030999949, "topic": "/dock/avoid/status", "last": "PREVIEW: obstacles=387, front=4.824952260484232, goal=(2.36, 4.48), drive_enabled=True, tank_edge=2.34, walls_excluded=False, dock_phase=APPROACH_ENTRY, blocked="}
+{"elapsed_s": 6.417805459999954, "topic": "/odom", "last": [6.805925957965302, 2.2390050096172667]}
+{"elapsed_s": 6.435871528000007, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 6.448433741000031, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 6.450461569000026, "topic": "/odom", "last": [6.74013598817182, 2.3246563049870983]}
+{"elapsed_s": 6.451222357000006, "topic": "/diagnostics", "actuator": {"mode": "auto", "left_pwm": "1500", "right_pwm": "1500", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.000", "angular_cmd": "0.000", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 6.490238342999987, "topic": "/dock/avoid/status", "last": "PREVIEW: obstacles=388, front=4.790892000919848, goal=(2.36, 4.48), drive_enabled=True, tank_edge=2.36, walls_excluded=False, dock_phase=APPROACH_ENTRY, blocked="}
+{"elapsed_s": 6.492251226999997, "topic": "/odom", "last": [6.778892077476986, 2.273151847200773]}
+{"elapsed_s": 6.493, "event": "arm", "value": {"success": false, "message": "docking waypoint violates tank boundary", "entry_xy": [2.3613411746319817, 4.479217675573504]}}
+{"elapsed_s": 6.5, "event": "arm", "value": {"success": false, "message": "docking waypoint violates tank boundary", "entry_xy": [2.358429328656566, 4.4775572767241965]}}
+{"elapsed_s": 6.517825904999995, "topic": "/odom", "last": [6.778892077476986, 2.273151847200773]}
+{"elapsed_s": 6.519341336000025, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 6.530531834000044, "topic": "/dock/bspline_path", "last": 52}
+{"elapsed_s": 6.548029886999984, "topic": "/odom", "last": [6.783320285975144, 2.204424783206415]}
+{"elapsed_s": 6.5683594370000264, "topic": "/dock/avoid/status", "last": "PREVIEW: obstacles=387, front=4.525130854216075, goal=(2.36, 4.48), drive_enabled=True, tank_edge=2.24, walls_excluded=False, dock_phase=APPROACH_ENTRY, blocked="}
+{"elapsed_s": 6.575, "event": "arm", "value": {"success": false, "message": "docking waypoint violates tank boundary", "entry_xy": [2.358429328656566, 4.4775572767241965]}}
+{"elapsed_s": 6.58, "event": "arm", "value": {"success": false, "message": "docking waypoint violates tank boundary", "entry_xy": [2.358429328656566, 4.4775572767241965]}}
+{"elapsed_s": 6.585590891000038, "topic": "/odom", "last": [6.783320285975144, 2.204424783206415]}
+{"elapsed_s": 6.587, "event": "arm", "value": {"success": false, "message": "docking waypoint violates tank boundary", "entry_xy": [2.358429328656566, 4.4775572767241965]}}
+{"elapsed_s": 6.59, "event": "arm", "value": {"success": false, "message": "docking waypoint violates tank boundary", "entry_xy": [2.358429328656566, 4.4775572767241965]}}
+{"elapsed_s": 6.597, "event": "arm", "value": {"success": false, "message": "docking waypoint violates tank boundary", "entry_xy": [2.358429328656566, 4.4775572767241965]}}
+{"elapsed_s": 6.6494466240000065, "topic": "/dock/bspline_path", "last": 52}
+{"elapsed_s": 6.650675360000037, "topic": "/odom", "last": [6.783320285975144, 2.204424783206415]}
+{"elapsed_s": 6.651045737000004, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 6.652218056000038, "topic": "/odom", "last": [6.785700717864833, 2.166647870523004]}
+{"elapsed_s": 6.668443916000001, "topic": "/dock/avoid/status", "last": "PREVIEW: obstacles=390, front=4.529666229240581, goal=(2.35, 4.48), drive_enabled=True, tank_edge=2.20, walls_excluded=False, dock_phase=APPROACH_ENTRY, blocked="}
+{"elapsed_s": 6.671, "event": "arm", "value": {"success": false, "message": "docking waypoint violates tank boundary", "entry_xy": [2.358429328656566, 4.4775572767241965]}}
+{"elapsed_s": 6.679, "event": "arm", "value": {"success": false, "message": "docking waypoint violates tank boundary", "entry_xy": [2.347356159261143, 4.4756121536919595]}}
+{"elapsed_s": 6.6883077899999535, "topic": "/odom", "last": [6.733118824310272, 2.2621670107566394]}
+{"elapsed_s": 6.69, "event": "arm", "value": {"success": false, "message": "docking waypoint violates tank boundary", "entry_xy": [2.347356159261143, 4.4756121536919595]}}
+{"elapsed_s": 6.696, "event": "arm", "value": {"success": false, "message": "docking waypoint violates tank boundary", "entry_xy": [2.347356159261143, 4.4756121536919595]}}
+{"elapsed_s": 6.716368195999962, "topic": "/odom", "last": [6.733118824310272, 2.2621670107566394]}
+{"elapsed_s": 6.719576246999964, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 6.731526475999999, "topic": "/dock/bspline_path", "last": 51}
+{"elapsed_s": 6.749114387999953, "topic": "/odom", "last": [6.700631985449872, 2.3433990967675573]}
+{"elapsed_s": 6.782769690999999, "topic": "/odom", "last": [6.700631985449872, 2.3433990967675573]}
+{"elapsed_s": 6.786622046000048, "topic": "/dock/avoid/status", "last": "PREVIEW: obstacles=392, front=4.454166704374648, goal=(2.35, 4.48), drive_enabled=True, tank_edge=2.26, walls_excluded=False, dock_phase=APPROACH_ENTRY, blocked="}
+{"elapsed_s": 6.792, "event": "arm", "value": {"success": false, "message": "docking waypoint violates tank boundary", "entry_xy": [2.347356159261143, 4.4756121536919595]}}
+{"elapsed_s": 6.820521034999956, "topic": "/odom", "last": [6.700631985449872, 2.3433990967675573]}
+{"elapsed_s": 6.824174184999947, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 6.8351525809999885, "topic": "/dock/bspline_path", "last": 51}
+{"elapsed_s": 6.847129850999977, "topic": "/odom", "last": [6.757048323651893, 2.2841557710793445]}
+{"elapsed_s": 6.882355177000022, "topic": "/odom", "last": [6.772799838672764, 2.213595252183054]}
+{"elapsed_s": 6.914113373999953, "topic": "/odom", "last": [6.772799838672764, 2.213595252183054]}
+{"elapsed_s": 6.938643479999996, "topic": "/dock/avoid/status", "last": "PREVIEW: obstacles=389, front=4.454166704374648, goal=(2.36, 4.47), drive_enabled=True, tank_edge=2.26, walls_excluded=False, dock_phase=APPROACH_ENTRY, blocked="}
+{"elapsed_s": 6.944, "event": "arm", "value": {"success": false, "message": "docking waypoint violates tank boundary", "entry_xy": [2.347356159261143, 4.4756121536919595]}}
+{"elapsed_s": 6.947882279000055, "topic": "/odom", "last": [6.781809458622757, 2.1746420988300637]}
+{"elapsed_s": 6.96798292699998, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 6.978267544999994, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 6.986279847999981, "topic": "/odom", "last": [6.781809458622757, 2.1746420988300637]}
+{"elapsed_s": 7.025563486999999, "topic": "/dock/avoid/status", "last": "PREVIEW: obstacles=389, front=4.377573131850947, goal=(2.36, 4.47), drive_enabled=True, tank_edge=2.34, walls_excluded=False, dock_phase=APPROACH_ENTRY, blocked="}
+{"elapsed_s": 7.0266941720000204, "topic": "/odom", "last": [6.781809458622757, 2.1746420988300637]}
+{"elapsed_s": 7.033, "event": "arm", "value": {"success": false, "message": "docking waypoint violates tank boundary", "entry_xy": [2.359576663514751, 4.470041978821429]}}
+{"elapsed_s": 7.049214722999977, "topic": "/odom", "last": [6.791604527088273, 2.1677881618461607]}
+{"elapsed_s": 7.053787704999991, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 7.062731104000022, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 7.08869852700002, "topic": "/odom", "last": [6.759724517405186, 2.25229064724455]}
+{"elapsed_s": 7.12471219400004, "topic": "/odom", "last": [6.759724517405186, 2.25229064724455]}
+{"elapsed_s": 7.130265362000046, "topic": "/dock/bspline_path", "last": 0}
+{"elapsed_s": 7.130958596000028, "topic": "/dock/avoid/status", "last": "PREVIEW: obstacles=392, front=4.377573131850947, goal=(2.36, 4.47), drive_enabled=True, tank_edge=2.34, walls_excluded=False, dock_phase=APPROACH_ENTRY, blocked="}
+{"elapsed_s": 7.131461617000014, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 7.152675124999973, "topic": "/odom", "last": [6.759724517405186, 2.25229064724455]}
+{"elapsed_s": 7.182068524999977, "topic": "/odom", "last": [6.713960740247321, 2.322611515948409]}
+{"elapsed_s": 7.202208500999973, "topic": "/dock/avoid/status", "last": "WAIT: marker goal stale"}
+{"elapsed_s": 7.208, "event": "arm", "value": {"success": false, "message": "wait for a valid preview B-spline path", "entry_xy": [2.359576663514751, 4.470041978821429]}}
+{"elapsed_s": 7.223452634999944, "topic": "/odom", "last": [6.713960740247321, 2.322611515948409]}
+{"elapsed_s": 7.232733034000034, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 7.248622276999981, "topic": "/dock/bspline_path", "last": 51}
+{"elapsed_s": 7.250674490000051, "topic": "/odom", "last": [6.762946625852907, 2.2682096272796572]}
+{"elapsed_s": 7.284321183999964, "topic": "/odom", "last": [6.762946625852907, 2.2682096272796572]}
+{"elapsed_s": 7.292104584999947, "topic": "/dock/avoid/status", "last": "PREVIEW: obstacles=386, front=4.671272965966042, goal=(2.37, 4.45), drive_enabled=True, tank_edge=2.21, walls_excluded=False, dock_phase=APPROACH_ENTRY, blocked="}
+{"elapsed_s": 7.315512710000007, "topic": "/odom", "last": [6.715663209550173, 2.3324328173875264]}
+{"elapsed_s": 7.329570065999974, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 7.343637885000021, "topic": "/dock/bspline_path", "last": 51}
+{"elapsed_s": 7.34745504, "topic": "/odom", "last": [6.715663209550173, 2.3324328173875264]}
+{"elapsed_s": 7.385403317000055, "topic": "/odom", "last": [6.715663209550173, 2.3324328173875264]}
+{"elapsed_s": 7.402735828999994, "topic": "/dock/avoid/status", "last": "PREVIEW: obstacles=389, front=4.702492939284424, goal=(2.38, 4.43), drive_enabled=True, tank_edge=2.17, walls_excluded=False, dock_phase=APPROACH_ENTRY, blocked="}
+{"elapsed_s": 7.425265627000044, "topic": "/odom", "last": [6.715663209550173, 2.3324328173875264]}
+{"elapsed_s": 7.427425907000043, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 7.433785751999949, "topic": "/dock/bspline_path", "last": 51}
+{"elapsed_s": 7.445863056000007, "topic": "/diagnostics", "actuator": {"mode": "auto", "left_pwm": "1500", "right_pwm": "1500", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.000", "angular_cmd": "0.000", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 7.449708307000037, "topic": "/odom", "last": [6.718973923858186, 2.323079418877793]}
+{"elapsed_s": 7.474452114999963, "topic": "/dock/avoid/status", "last": "PREVIEW: obstacles=389, front=4.63713620630065, goal=(2.38, 4.43), drive_enabled=True, tank_edge=2.25, walls_excluded=False, dock_phase=APPROACH_ENTRY, blocked="}
+{"elapsed_s": 7.484542295999972, "topic": "/odom", "last": [6.718973923858186, 2.323079418877793]}
+{"elapsed_s": 7.516456657000049, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 7.522306024000045, "topic": "/odom", "last": [6.718973923858186, 2.323079418877793]}
+{"elapsed_s": 7.529365790000043, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 7.547710616000018, "topic": "/odom", "last": [6.697228894591015, 2.3632478454635613]}
+{"elapsed_s": 7.582319607000045, "topic": "/odom", "last": [6.697228894591015, 2.3632478454635613]}
+{"elapsed_s": 7.589160392000053, "topic": "/dock/avoid/status", "last": "PREVIEW: obstacles=382, front=None, goal=(2.38, 4.43), drive_enabled=True, tank_edge=2.32, walls_excluded=False, dock_phase=APPROACH_ENTRY, blocked="}
+{"elapsed_s": 7.621210212000051, "topic": "/odom", "last": [6.686391179090572, 2.377910552657058]}
+{"elapsed_s": 7.633427072000018, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 7.64638279899998, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 7.655892901000016, "topic": "/odom", "last": [6.686391179090572, 2.377910552657058]}
+{"elapsed_s": 7.681242772000019, "topic": "/odom", "last": [6.686391179090572, 2.377910552657058]}
+{"elapsed_s": 7.709321322000051, "topic": "/dock/avoid/status", "last": "PREVIEW: obstacles=387, front=None, goal=(2.37, 4.43), drive_enabled=True, tank_edge=2.36, walls_excluded=False, dock_phase=APPROACH_ENTRY, blocked="}
+{"elapsed_s": 7.713696603000017, "topic": "/odom", "last": [6.750488541687453, 2.3058239824790996]}
+{"elapsed_s": 7.73122726400004, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 7.740697845, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 7.7502759169999536, "topic": "/odom", "last": [6.750488541687453, 2.3058239824790996]}
+{"elapsed_s": 7.78082051399997, "topic": "/odom", "last": [6.717708010168246, 2.3421858916393283]}
+{"elapsed_s": 7.796555129000012, "topic": "/dock/avoid/status", "last": "PREVIEW: obstacles=387, front=None, goal=(2.37, 4.43), drive_enabled=True, tank_edge=2.36, walls_excluded=False, dock_phase=APPROACH_ENTRY, blocked="}
+{"elapsed_s": 7.814947412000038, "topic": "/odom", "last": [6.717708010168246, 2.3421858916393283]}
+{"elapsed_s": 7.822539735999953, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 7.838311727000018, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 7.848578264000025, "topic": "/odom", "last": [6.704370135555605, 2.360514968560153]}
+{"elapsed_s": 7.880726581999966, "topic": "/odom", "last": [6.704370135555605, 2.360514968560153]}
+{"elapsed_s": 7.88987449800004, "topic": "/dock/avoid/status", "last": "PREVIEW: obstacles=394, front=None, goal=(2.37, 4.43), drive_enabled=True, tank_edge=2.38, walls_excluded=False, dock_phase=APPROACH_ENTRY, blocked="}
+{"elapsed_s": 7.898, "event": "arm", "value": {"success": true, "message": "avoidance test armed", "entry_xy": [2.372153285417584, 4.428420147578864]}}
+{"elapsed_s": 7.914197110000032, "topic": "/odom", "last": [6.69736973475969, 2.360523225357646]}
+{"elapsed_s": 7.926083145000007, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 7.9396143100000245, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 7.947776857000008, "topic": "/odom", "last": [6.69736973475969, 2.360523225357646]}
+{"elapsed_s": 7.980926705000002, "topic": "/odom", "last": [6.754825139322864, 2.292380061796143]}
+{"elapsed_s": 8.014197995000018, "topic": "/odom", "last": [6.754825139322864, 2.292380061796143]}
+{"elapsed_s": 8.047696171999974, "topic": "/odom", "last": [6.783188626891661, 2.247933668261835]}
+{"elapsed_s": 8.076283917999945, "topic": "/dock/avoid/status", "last": "FOLLOW: plan_acquired"}
+{"elapsed_s": 8.08279934999996, "topic": "/odom", "last": [6.783188626891661, 2.247933668261835]}
+{"elapsed_s": 8.112703354000018, "topic": "/cmd_vel", "last": [0.15, -0.0429010707006747]}
+{"elapsed_s": 8.118309131000046, "topic": "/odom", "last": [6.808294719864376, 2.244951719495515]}
+{"elapsed_s": 8.134269734999975, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 8.151848685000004, "topic": "/odom", "last": [6.808294719864376, 2.244951719495515]}
+{"elapsed_s": 8.183359225999993, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 8.184272274000023, "topic": "/odom", "last": [6.808294719864376, 2.244951719495515]}
+{"elapsed_s": 8.215647676000003, "topic": "/odom", "last": [6.734879818017054, 2.33078585467407]}
+{"elapsed_s": 8.216167240999994, "topic": "/cmd_vel", "last": [0.15, 0.003474605176206333]}
+{"elapsed_s": 8.242664980999962, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 8.24833834399999, "topic": "/odom", "last": [6.734879818017054, 2.33078585467407]}
+{"elapsed_s": 8.288064521000024, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 8.289248007999959, "topic": "/odom", "last": [6.734879818017054, 2.33078585467407]}
+{"elapsed_s": 8.314054503999955, "topic": "/cmd_vel", "last": [0.15, -0.05883084235625439]}
+{"elapsed_s": 8.318915621999963, "topic": "/odom", "last": [6.758159755757349, 2.236421544573447]}
+{"elapsed_s": 8.330522353999982, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 8.352257154999961, "topic": "/odom", "last": [6.721715859118611, 2.299452846112984]}
+{"elapsed_s": 8.38256318499998, "topic": "/odom", "last": [6.721715859118611, 2.299452846112984]}
+{"elapsed_s": 8.390095059000032, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 8.418622452000022, "topic": "/odom", "last": [6.6926166145081805, 2.3420979375069964]}
+{"elapsed_s": 8.42915395600005, "topic": "/cmd_vel", "last": [0.15, -0.08978151565301212]}
+{"elapsed_s": 8.437471706999986, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 8.44838930000003, "topic": "/diagnostics", "actuator": {"mode": "auto", "left_pwm": "1615", "right_pwm": "1548", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.150", "angular_cmd": "-0.090", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 8.453588379000053, "topic": "/odom", "last": [6.6926166145081805, 2.3420979375069964]}
+{"elapsed_s": 8.483820358999992, "topic": "/odom", "last": [6.7382193703915405, 2.25208331124478]}
+{"elapsed_s": 8.49404430300001, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 8.51489338500005, "topic": "/odom", "last": [6.7382193703915405, 2.25208331124478]}
+{"elapsed_s": 8.524605859999951, "topic": "/cmd_vel", "last": [0.15, -0.026020653346580498]}
+{"elapsed_s": 8.530844645000002, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 8.549422021000055, "topic": "/odom", "last": [6.699661055418371, 2.325646074049576]}
+{"elapsed_s": 8.578190315000029, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 8.580253504999973, "topic": "/odom", "last": [6.699661055418371, 2.325646074049576]}
+{"elapsed_s": 8.613934341999993, "topic": "/odom", "last": [6.679563866086916, 2.3581396588506047]}
+{"elapsed_s": 8.619781629000045, "topic": "/cmd_vel", "last": [0.15, -0.1346796978172054]}
+{"elapsed_s": 8.62986588900003, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 8.652983542000015, "topic": "/odom", "last": [6.679563866086916, 2.3581396588506047]}
+{"elapsed_s": 8.680307383000013, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 8.681234127000039, "topic": "/odom", "last": [6.679563866086916, 2.3581396588506047]}
+{"elapsed_s": 8.714038046000042, "topic": "/odom", "last": [6.671866551045154, 2.391708351825676]}
+{"elapsed_s": 8.722758462999991, "topic": "/cmd_vel", "last": [0.15, -0.02903829391334798]}
+{"elapsed_s": 8.734966970999949, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 8.754177098000014, "topic": "/odom", "last": [6.679703428557076, 2.3867990810924944]}
+{"elapsed_s": 8.772683496000013, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 8.782153085000004, "topic": "/odom", "last": [6.679703428557076, 2.3867990810924944]}
+{"elapsed_s": 8.821875388999956, "topic": "/cmd_vel", "last": [0.15, 0.02025259046403765]}
+{"elapsed_s": 8.825272244999951, "topic": "/odom", "last": [6.679703428557076, 2.3867990810924944]}
+{"elapsed_s": 8.839380577000043, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 8.857289422000008, "topic": "/odom", "last": [6.679703428557076, 2.3867990810924944]}
+{"elapsed_s": 8.872689979000029, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 8.885322560999953, "topic": "/odom", "last": [6.686092098812093, 2.37181466019584]}
+{"elapsed_s": 8.917214102999992, "topic": "/odom", "last": [6.684538103658055, 2.3911904211964212]}
+{"elapsed_s": 8.919668982999951, "topic": "/cmd_vel", "last": [0.15, 0.0008235461838274415]}
+{"elapsed_s": 8.934018120000019, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 8.948086739000018, "topic": "/odom", "last": [6.684538103658055, 2.3911904211964212]}
+{"elapsed_s": 8.980348018999962, "topic": "/odom", "last": [6.6739665553588345, 2.3984288958244755]}
+{"elapsed_s": 8.981460943999991, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 9.016291986000056, "topic": "/cmd_vel", "last": [0.15, 0.039140723443963014]}
+{"elapsed_s": 9.02606993400002, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 9.028100834000043, "topic": "/odom", "last": [6.6739665553588345, 2.3984288958244755]}
+{"elapsed_s": 9.050537349000024, "topic": "/odom", "last": [6.749255233527764, 2.3305161330537505]}
+{"elapsed_s": 9.066481759999988, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 9.083998178999991, "topic": "/odom", "last": [6.749255233527764, 2.3305161330537505]}
+{"elapsed_s": 9.112319964999983, "topic": "/cmd_vel", "last": [0.15, -0.013326598611389559]}
+{"elapsed_s": 9.116073789999973, "topic": "/odom", "last": [6.749255233527764, 2.3305161330537505]}
+{"elapsed_s": 9.124748253999996, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 9.149230612999986, "topic": "/odom", "last": [6.711060815492427, 2.355516429740226]}
+{"elapsed_s": 9.184321085999954, "topic": "/odom", "last": [6.711060815492427, 2.355516429740226]}
+{"elapsed_s": 9.214586697999948, "topic": "/odom", "last": [6.750037111802888, 2.2638388434133567]}
+{"elapsed_s": 9.22741083699998, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 9.248464947999992, "topic": "/odom", "last": [6.750037111802888, 2.2638388434133567]}
+{"elapsed_s": 9.248971840999957, "topic": "/cmd_vel", "last": [0.15, -0.013326598611389559]}
+{"elapsed_s": 9.254999003999956, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 9.286478984000041, "topic": "/odom", "last": [6.750037111802888, 2.2638388434133567]}
+{"elapsed_s": 9.314257171999998, "topic": "/odom", "last": [6.709137192179959, 2.3390030673970146]}
+{"elapsed_s": 9.329423707000046, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 9.348994994999998, "topic": "/odom", "last": [6.709137192179959, 2.3390030673970146]}
+{"elapsed_s": 9.357002977999969, "topic": "/cmd_vel", "last": [0.15, -0.013326598611389559]}
+{"elapsed_s": 9.37405503399998, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 9.380564929000002, "topic": "/odom", "last": [6.766725238315797, 2.2976991283974684]}
+{"elapsed_s": 9.417559002999951, "topic": "/odom", "last": [6.766725238315797, 2.2976991283974684]}
+{"elapsed_s": 9.425736334000021, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 9.444938492999995, "topic": "/diagnostics", "actuator": {"mode": "auto", "left_pwm": "1586", "right_pwm": "1576", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.150", "angular_cmd": "-0.013", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 9.447113556999966, "topic": "/odom", "last": [6.766725238315797, 2.2976991283974684]}
+{"elapsed_s": 9.449363023000046, "topic": "/cmd_vel", "last": [0.15, -0.00512485382804231]}
+{"elapsed_s": 9.461148990999959, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 9.484747039000013, "topic": "/odom", "last": [6.766725238315797, 2.2976991283974684]}
+{"elapsed_s": 9.507826066000007, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 9.514697859999956, "topic": "/odom", "last": [6.697293994566486, 2.3598027446615975]}
+{"elapsed_s": 9.530321365999953, "topic": "/cmd_vel", "last": [0.15, -0.00512485382804231]}
+{"elapsed_s": 9.545237846999953, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 9.547923323999953, "topic": "/odom", "last": [6.687826814137939, 2.366242092637073]}
+{"elapsed_s": 9.581593568000017, "topic": "/odom", "last": [6.687826814137939, 2.366242092637073]}
+{"elapsed_s": 9.590195998000013, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 9.615189986000019, "topic": "/cmd_vel", "last": [0.15, -0.03144581476378113]}
+{"elapsed_s": 9.618178960000023, "topic": "/odom", "last": [6.687826814137939, 2.366242092637073]}
+{"elapsed_s": 9.631094523999991, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 9.64837080999996, "topic": "/odom", "last": [6.670855414453511, 2.4049360240182667]}
+{"elapsed_s": 9.662660073999973, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 9.681976028000008, "topic": "/odom", "last": [6.670855414453511, 2.4049360240182667]}
+{"elapsed_s": 9.718232738999973, "topic": "/odom", "last": [6.745933510219745, 2.3344130583803313]}
+{"elapsed_s": 9.719412290000037, "topic": "/cmd_vel", "last": [0.15, 0.04195205027568234]}
+{"elapsed_s": 9.730534175999992, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 9.748956378999992, "topic": "/odom", "last": [6.745933510219745, 2.3344130583803313]}
+{"elapsed_s": 9.782191443999977, "topic": "/odom", "last": [6.745933510219745, 2.3344130583803313]}
+{"elapsed_s": 9.788994083000034, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 9.817314173, "topic": "/cmd_vel", "last": [0.15, -0.01577223275140631]}
+{"elapsed_s": 9.826669646000028, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 9.829812158999971, "topic": "/odom", "last": [6.78939751591186, 2.2975057992280914]}
+{"elapsed_s": 9.853370269000038, "topic": "/odom", "last": [6.729812929484549, 2.354447093319176]}
+{"elapsed_s": 9.886960125999963, "topic": "/odom", "last": [6.729812929484549, 2.354447093319176]}
+{"elapsed_s": 9.890791777000004, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 9.915800069000056, "topic": "/cmd_vel", "last": [0.15, 0.0007983090555502159]}
+{"elapsed_s": 9.917420109999966, "topic": "/odom", "last": [6.729812929484549, 2.354447093319176]}
+{"elapsed_s": 9.928479146999962, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 9.970492357000012, "topic": "/odom", "last": [6.701182686135027, 2.380458995873539]}
+{"elapsed_s": 9.980301729999951, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 9.987687135999977, "topic": "/odom", "last": [6.701182686135027, 2.380458995873539]}
+{"elapsed_s": 10.014614069000004, "topic": "/odom", "last": [6.671720636231439, 2.4029002421710044]}
+{"elapsed_s": 10.018586331000051, "topic": "/cmd_vel", "last": [0.15, 0.020645515085178024]}
+{"elapsed_s": 10.032972046000054, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 10.047941551000008, "topic": "/odom", "last": [6.671720636231439, 2.4029002421710044]}
+{"elapsed_s": 10.080733467999949, "topic": "/odom", "last": [6.747598229897607, 2.3375946616573353]}
+{"elapsed_s": 10.096323501000029, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 10.115513946999954, "topic": "/odom", "last": [6.747598229897607, 2.3375946616573353]}
+{"elapsed_s": 10.12057289300003, "topic": "/cmd_vel", "last": [0.15, 0.03588275309167213]}
+{"elapsed_s": 10.134968240000035, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 10.148129154999992, "topic": "/odom", "last": [6.70336274287764, 2.3852447140501587]}
+{"elapsed_s": 10.180816812999979, "topic": "/odom", "last": [6.70336274287764, 2.3852447140501587]}
+{"elapsed_s": 10.210387717999993, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 10.214445934999958, "topic": "/odom", "last": [6.686543612694663, 2.4024678850684307]}
+{"elapsed_s": 10.233013004999975, "topic": "/cmd_vel", "last": [0.15, 0.03588275309167213]}
+{"elapsed_s": 10.246861841000054, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 10.251516777000006, "topic": "/odom", "last": [6.686543612694663, 2.4024678850684307]}
+{"elapsed_s": 10.280538932000013, "topic": "/odom", "last": [6.673501092865284, 2.41701279207195]}
+{"elapsed_s": 10.315811200999974, "topic": "/odom", "last": [6.673501092865284, 2.41701279207195]}
+{"elapsed_s": 10.348624973000028, "topic": "/odom", "last": [6.673501092865284, 2.41701279207195]}
+{"elapsed_s": 10.363237221999952, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 10.383018467000056, "topic": "/odom", "last": [6.675254107258112, 2.4134292987240853]}
+{"elapsed_s": 10.395764715000041, "topic": "/cmd_vel", "last": [0.15, -0.01303812077576816]}
+{"elapsed_s": 10.406357724000031, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 10.420948916000043, "topic": "/odom", "last": [6.675254107258112, 2.4134292987240853]}
+{"elapsed_s": 10.447802151000019, "topic": "/odom", "last": [6.659858847010259, 2.433018050818583]}
+{"elapsed_s": 10.448578874999953, "topic": "/diagnostics", "actuator": {"mode": "auto", "left_pwm": "1586", "right_pwm": "1576", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.150", "angular_cmd": "-0.013", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 10.470819991999974, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 10.480969436999999, "topic": "/odom", "last": [6.659858847010259, 2.433018050818583]}
+{"elapsed_s": 10.502237665000052, "topic": "/cmd_vel", "last": [0.15, 0.028973197748347116]}
+{"elapsed_s": 10.514641471999994, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 10.516525616999957, "topic": "/odom", "last": [6.659858847010259, 2.433018050818583]}
+{"elapsed_s": 10.548225441, "topic": "/odom", "last": [6.651747433381152, 2.4298427704876366]}
+{"elapsed_s": 10.578383336999991, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 10.582768537999982, "topic": "/odom", "last": [6.646916401229493, 2.4355022092466863]}
+{"elapsed_s": 10.605832331999977, "topic": "/cmd_vel", "last": [0.15, 0.06362189617259423]}
+{"elapsed_s": 10.617758783, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 10.62116610299995, "topic": "/odom", "last": [6.646916401229493, 2.4355022092466863]}
+{"elapsed_s": 10.647050193000041, "topic": "/odom", "last": [6.6657834640908185, 2.4041590895601486]}
+{"elapsed_s": 10.665526572999966, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 10.684776573000022, "topic": "/odom", "last": [6.6657834640908185, 2.4041590895601486]}
+{"elapsed_s": 10.685449070000004, "topic": "/cmd_vel", "last": [0.15, 0.06362189617259423]}
+{"elapsed_s": 10.694881761000033, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 10.716469293000046, "topic": "/odom", "last": [6.667695019202316, 2.417678204245594]}
+{"elapsed_s": 10.734755203999953, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 10.74724861300001, "topic": "/odom", "last": [6.667695019202316, 2.417678204245594]}
+{"elapsed_s": 10.752868342000056, "topic": "/cmd_vel", "last": [0.15, 0.06052182544274895]}
+{"elapsed_s": 10.76131198400003, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 10.785266903999968, "topic": "/odom", "last": [6.667695019202316, 2.417678204245594]}
+{"elapsed_s": 10.80259813400005, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 10.817349777999993, "topic": "/odom", "last": [6.6512521236854445, 2.432059658606151]}
+{"elapsed_s": 10.819104222999954, "topic": "/cmd_vel", "last": [0.15, 0.08544637013645123]}
+{"elapsed_s": 10.828325931999984, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 10.848036518999947, "topic": "/odom", "last": [6.6512521236854445, 2.432059658606151]}
+{"elapsed_s": 10.869618705999983, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 10.883015593999971, "topic": "/odom", "last": [6.652591575177322, 2.417077426189404]}
+{"elapsed_s": 10.915850263000038, "topic": "/odom", "last": [6.652591575177322, 2.417077426189404]}
+{"elapsed_s": 10.924739099000021, "topic": "/cmd_vel", "last": [0.15, 0.020923688539041915]}
+{"elapsed_s": 10.936807090000002, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 10.950961470000038, "topic": "/odom", "last": [6.652591575177322, 2.417077426189404]}
+{"elapsed_s": 10.973622660000046, "topic": "/dock/avoid/status", "last": "FOLLOW: backstop_regen"}
+{"elapsed_s": 10.980090891000032, "topic": "/odom", "last": [6.652591575177322, 2.417077426189404]}
+{"elapsed_s": 11.014402621000045, "topic": "/odom", "last": [6.6473508149662575, 2.432471557639683]}
+{"elapsed_s": 11.020515801999977, "topic": "/cmd_vel", "last": [0.15, 0.020923688539041915]}
+{"elapsed_s": 11.031387313999971, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 11.048094366999976, "topic": "/odom", "last": [6.6473508149662575, 2.432471557639683]}
+{"elapsed_s": 11.07295292699996, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 11.082208652999952, "topic": "/odom", "last": [6.734318447013155, 2.3515236228024996]}
+{"elapsed_s": 11.112151470999947, "topic": "/cmd_vel", "last": [0.15, -0.014847371870942082]}
+{"elapsed_s": 11.124911894999968, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 11.125872655999956, "topic": "/odom", "last": [6.734318447013155, 2.3515236228024996]}
+{"elapsed_s": 11.148279472000013, "topic": "/odom", "last": [6.734318447013155, 2.3515236228024996]}
+{"elapsed_s": 11.161405952999985, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 11.183590908000042, "topic": "/odom", "last": [6.6986069016697325, 2.3945108681348746]}
+{"elapsed_s": 11.229442583000036, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 11.230478801999993, "topic": "/odom", "last": [6.6986069016697325, 2.3945108681348746]}
+{"elapsed_s": 11.230834683000012, "topic": "/cmd_vel", "last": [0.15, 0.023069990432690732]}
+{"elapsed_s": 11.248818313000015, "topic": "/odom", "last": [6.68432978161449, 2.400551855932129]}
+{"elapsed_s": 11.277645645999996, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 11.281105606999972, "topic": "/odom", "last": [6.68432978161449, 2.400551855932129]}
+{"elapsed_s": 11.316942433000008, "topic": "/odom", "last": [6.7536462429470205, 2.334935271736673]}
+{"elapsed_s": 11.318046525, "topic": "/cmd_vel", "last": [0.15, 0.02266681909841069]}
+{"elapsed_s": 11.33200422799996, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 11.348268678999943, "topic": "/odom", "last": [6.7536462429470205, 2.334935271736673]}
+{"elapsed_s": 11.38112184299996, "topic": "/odom", "last": [6.703913302838732, 2.362633967574477]}
+{"elapsed_s": 11.414250726999967, "topic": "/odom", "last": [6.703913302838732, 2.362633967574477]}
+{"elapsed_s": 11.436933231000012, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 11.453281138999955, "topic": "/diagnostics", "actuator": {"mode": "auto", "left_pwm": "1573", "right_pwm": "1590", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.150", "angular_cmd": "0.023", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 11.454787993999958, "topic": "/odom", "last": [6.687233114613971, 2.3896593290718444]}
+{"elapsed_s": 11.457549408999967, "topic": "/cmd_vel", "last": [0.15, 0.02266681909841069]}
+{"elapsed_s": 11.471784047000028, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 11.490235273000053, "topic": "/odom", "last": [6.687233114613971, 2.3896593290718444]}
+{"elapsed_s": 11.516257798999959, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 11.519735616000048, "topic": "/odom", "last": [6.670747404933632, 2.4027580240208293]}
+{"elapsed_s": 11.534041583999965, "topic": "/cmd_vel", "last": [0.15, -0.025354613852085758]}
+{"elapsed_s": 11.540980193999985, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 11.54996400899995, "topic": "/odom", "last": [6.670747404933632, 2.4027580240208293]}
+{"elapsed_s": 11.581343024000034, "topic": "/odom", "last": [6.670747404933632, 2.4027580240208293]}
+{"elapsed_s": 11.58247591700001, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 11.614535014000012, "topic": "/cmd_vel", "last": [0.15, 0.013712849660879375]}
+{"elapsed_s": 11.621543129999964, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 11.627153194000016, "topic": "/odom", "last": [6.660625891913403, 2.416106436580114]}
+{"elapsed_s": 11.656019633000028, "topic": "/odom", "last": [6.660625891913403, 2.416106436580114]}
+{"elapsed_s": 11.668747671999995, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 11.684907543000008, "topic": "/odom", "last": [6.660625891913403, 2.416106436580114]}
+{"elapsed_s": 11.716861388999973, "topic": "/cmd_vel", "last": [0.15, 0.028476019259128953]}
+{"elapsed_s": 11.719189608999955, "topic": "/odom", "last": [6.6580859135306305, 2.402051415637801]}
+{"elapsed_s": 11.726941743999987, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 11.759837053999945, "topic": "/odom", "last": [6.6580859135306305, 2.402051415637801]}
+{"elapsed_s": 11.781020830999978, "topic": "/odom", "last": [6.7192547626481325, 2.289244313355013]}
+{"elapsed_s": 11.789822273000027, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 11.815396498000041, "topic": "/odom", "last": [6.7192547626481325, 2.289244313355013]}
+{"elapsed_s": 11.825394802999995, "topic": "/cmd_vel", "last": [0.15, -0.11011460289261167]}
+{"elapsed_s": 11.836988572999985, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 11.847344390999979, "topic": "/odom", "last": [6.7192547626481325, 2.289244313355013]}
+{"elapsed_s": 11.878706731999955, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 11.88466925399996, "topic": "/odom", "last": [6.7192547626481325, 2.289244313355013]}
+{"elapsed_s": 11.914769322999973, "topic": "/odom", "last": [6.696400514555444, 2.331330347188489]}
+{"elapsed_s": 11.916592185000013, "topic": "/cmd_vel", "last": [0.15, -0.11011460289261167]}
+{"elapsed_s": 11.927417486999957, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 11.955807080999989, "topic": "/odom", "last": [6.673571182954228, 2.3714902823416377]}
+{"elapsed_s": 11.976297207000016, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 11.981507325000052, "topic": "/odom", "last": [6.672820506473105, 2.3766480602227023]}
+{"elapsed_s": 12.018067431999953, "topic": "/odom", "last": [6.655138256105557, 2.416629693462348]}
+{"elapsed_s": 12.020646218000024, "topic": "/cmd_vel", "last": [0.15, -0.02554269037900618]}
+{"elapsed_s": 12.031495328000005, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 12.046836554000038, "topic": "/odom", "last": [6.655138256105557, 2.416629693462348]}
+{"elapsed_s": 12.080748209000035, "topic": "/odom", "last": [6.655138256105557, 2.416629693462348]}
+{"elapsed_s": 12.098848033999957, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 12.114028071999996, "topic": "/cmd_vel", "last": [0.15, -0.02554269037900618]}
+{"elapsed_s": 12.115579344000025, "topic": "/odom", "last": [6.737139700618735, 2.344821392879069]}
+{"elapsed_s": 12.124950689000002, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 12.149153837999961, "topic": "/odom", "last": [6.737139700618735, 2.344821392879069]}
+{"elapsed_s": 12.18046273799996, "topic": "/odom", "last": [6.694090788805958, 2.393503405213706]}
+{"elapsed_s": 12.193223001999968, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 12.214407321999943, "topic": "/odom", "last": [6.694090788805958, 2.393503405213706]}
+{"elapsed_s": 12.23310191400003, "topic": "/cmd_vel", "last": [0.15, 0.025491344163095044]}
+{"elapsed_s": 12.243841549999956, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 12.246832283000003, "topic": "/odom", "last": [6.694090788805958, 2.393503405213706]}
+{"elapsed_s": 12.286807486000043, "topic": "/odom", "last": [6.694090788805958, 2.393503405213706]}
+{"elapsed_s": 12.300994154000023, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 12.314176092000025, "topic": "/odom", "last": [6.694090788805958, 2.393503405213706]}
+{"elapsed_s": 12.328413834000003, "topic": "/cmd_vel", "last": [0.15, 0.025491344163095044]}
+{"elapsed_s": 12.343922551999981, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 12.350435999999945, "topic": "/odom", "last": [6.670853573865136, 2.418341711807434]}
+{"elapsed_s": 12.380242684999985, "topic": "/odom", "last": [6.670853573865136, 2.418341711807434]}
+{"elapsed_s": 12.410124572999962, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 12.414050177000036, "topic": "/odom", "last": [6.670853573865136, 2.418341711807434]}
+{"elapsed_s": 12.441802889999963, "topic": "/cmd_vel", "last": [0.15, -0.02428435099348686]}
+{"elapsed_s": 12.44606658400005, "topic": "/diagnostics", "actuator": {"mode": "auto", "left_pwm": "1587", "right_pwm": "1576", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.150", "angular_cmd": "-0.024", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 12.459170792000009, "topic": "/odom", "last": [6.670853573865136, 2.418341711807434]}
+{"elapsed_s": 12.466791852000028, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 12.493350901999975, "topic": "/odom", "last": [6.65489911304245, 2.4336227646259823]}
+{"elapsed_s": 12.518709025000021, "topic": "/odom", "last": [6.65489911304245, 2.4336227646259823]}
+{"elapsed_s": 12.520352524000032, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 12.543013937999945, "topic": "/cmd_vel", "last": [0.15, 0.01637673258338283]}
+{"elapsed_s": 12.557354882000027, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 12.558296057999996, "topic": "/odom", "last": [6.654276567862872, 2.418286831579517]}
+{"elapsed_s": 12.580418097999996, "topic": "/odom", "last": [6.654276567862872, 2.418286831579517]}
+{"elapsed_s": 12.634415933000014, "topic": "/odom", "last": [6.738082610946483, 2.3503532174583404]}
+{"elapsed_s": 12.64818083099999, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 12.660882437000055, "topic": "/odom", "last": [6.738082610946483, 2.3503532174583404]}
+{"elapsed_s": 12.667983834999973, "topic": "/cmd_vel", "last": [0.15, 0.01637673258338283]}
+{"elapsed_s": 12.678275748000033, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 12.689471426999944, "topic": "/odom", "last": [6.696179230282942, 2.3721072788092608]}
+{"elapsed_s": 12.716218929999968, "topic": "/odom", "last": [6.696179230282942, 2.3721072788092608]}
+{"elapsed_s": 12.723606160000031, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 12.743711252000026, "topic": "/cmd_vel", "last": [0.15, 0.03919170559719505]}
+{"elapsed_s": 12.756024528000012, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 12.757051402999991, "topic": "/odom", "last": [6.677178683769986, 2.39006014474967]}
+{"elapsed_s": 12.781426269000008, "topic": "/odom", "last": [6.677178683769986, 2.39006014474967]}
+{"elapsed_s": 12.812685086999977, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 12.816325787999972, "topic": "/odom", "last": [6.677178683769986, 2.39006014474967]}
+{"elapsed_s": 12.83774886599997, "topic": "/cmd_vel", "last": [0.15, 0.05454693407584222]}
+{"elapsed_s": 12.858565559999988, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 12.86045165600001, "topic": "/odom", "last": [6.751475076343624, 2.332080003851382]}
+{"elapsed_s": 12.888777982999954, "topic": "/odom", "last": [6.751475076343624, 2.332080003851382]}
+{"elapsed_s": 12.899300972999981, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 12.91693499300004, "topic": "/odom", "last": [6.704497670195874, 2.3765257452524553]}
+{"elapsed_s": 12.918085389999987, "topic": "/cmd_vel", "last": [0.15, 0.030074511116330364]}
+{"elapsed_s": 12.927045364000037, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 12.954449394999983, "topic": "/odom", "last": [6.704497670195874, 2.3765257452524553]}
+{"elapsed_s": 12.965827575000048, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 12.98041342099998, "topic": "/odom", "last": [6.679438929867423, 2.3917636173614136]}
+{"elapsed_s": 13.012921871000003, "topic": "/cmd_vel", "last": [0.15, 0.0016070387185488624]}
+{"elapsed_s": 13.026795506999974, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 13.027998673999946, "topic": "/odom", "last": [6.679438929867423, 2.3917636173614136]}
+{"elapsed_s": 13.05205807499999, "topic": "/odom", "last": [6.661348745860608, 2.4303932819021545]}
+{"elapsed_s": 13.063995020999982, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 13.08102627400001, "topic": "/odom", "last": [6.661348745860608, 2.4303932819021545]}
+{"elapsed_s": 13.117394599000022, "topic": "/odom", "last": [6.656997336012587, 2.420103960863854]}
+{"elapsed_s": 13.12787899600005, "topic": "/cmd_vel", "last": [0.15, 0.0514282627095574]}
+{"elapsed_s": 13.136151911999946, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 13.157846004000021, "topic": "/odom", "last": [6.656997336012587, 2.420103960863854]}
+{"elapsed_s": 13.180641885, "topic": "/odom", "last": [6.656769832875888, 2.4264710427376857]}
+{"elapsed_s": 13.209601700000007, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 13.215884612999957, "topic": "/odom", "last": [6.656769832875888, 2.4264710427376857]}
+{"elapsed_s": 13.232939707000014, "topic": "/cmd_vel", "last": [0.15, 0.0514282627095574]}
+{"elapsed_s": 13.24269966899999, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 13.247629971000038, "topic": "/odom", "last": [6.656769832875888, 2.4264710427376857]}
+{"elapsed_s": 13.28023212000005, "topic": "/odom", "last": [6.6506873320843445, 2.4306624486434245]}
+{"elapsed_s": 13.297939582000026, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 13.315616194999961, "topic": "/cmd_vel", "last": [0.15, 0.032230474582751106]}
+{"elapsed_s": 13.317363023999974, "topic": "/odom", "last": [6.6506873320843445, 2.4306624486434245]}
+{"elapsed_s": 13.327600406999977, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 13.350424480000015, "topic": "/odom", "last": [6.6506873320843445, 2.4306624486434245]}
+{"elapsed_s": 13.368774935000033, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 13.386210453999979, "topic": "/odom", "last": [6.647792038300491, 2.4393639840850634]}
+{"elapsed_s": 13.41737582899998, "topic": "/odom", "last": [6.647792038300491, 2.4393639840850634]}
+{"elapsed_s": 13.421465278000028, "topic": "/cmd_vel", "last": [0.15, 0.06173553975545118]}
+{"elapsed_s": 13.43747772100005, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 13.452061295000021, "topic": "/diagnostics", "actuator": {"mode": "auto", "left_pwm": "1558", "right_pwm": "1604", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.150", "angular_cmd": "0.062", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 13.45462008100003, "topic": "/odom", "last": [6.65837492892212, 2.4154933526687428]}
+{"elapsed_s": 13.480970005000017, "topic": "/odom", "last": [6.661775467463278, 2.4158920621300686]}
+{"elapsed_s": 13.500874163000049, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 13.516435777999959, "topic": "/odom", "last": [6.661775467463278, 2.4158920621300686]}
+{"elapsed_s": 13.528820031999999, "topic": "/cmd_vel", "last": [0.15, 0.06173553975545118]}
+{"elapsed_s": 13.540433865999944, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 13.551033785999948, "topic": "/odom", "last": [6.661775467463278, 2.4158920621300686]}
+{"elapsed_s": 13.581260448999956, "topic": "/odom", "last": [6.658044487051011, 2.427527964742577]}
+{"elapsed_s": 13.619512181999994, "topic": "/odom", "last": [6.658044487051011, 2.427527964742577]}
+{"elapsed_s": 13.628001231999974, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 13.64629853300005, "topic": "/cmd_vel", "last": [0.15, 0.06173553975545118]}
+{"elapsed_s": 13.649315186999956, "topic": "/odom", "last": [6.6574016071745366, 2.417114995831112]}
+{"elapsed_s": 13.659451958999966, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 13.68236380999997, "topic": "/odom", "last": [6.6574016071745366, 2.417114995831112]}
+{"elapsed_s": 13.703631812000026, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 13.719433944999992, "topic": "/odom", "last": [6.645783083195051, 2.4403088300761384]}
+{"elapsed_s": 13.727456934999964, "topic": "/cmd_vel", "last": [0.15, 0.03127563716374402]}
+{"elapsed_s": 13.735202061999985, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 13.75601846799998, "topic": "/odom", "last": [6.645783083195051, 2.4403088300761384]}
+{"elapsed_s": 13.780184462999955, "topic": "/odom", "last": [6.6536706476581715, 2.4210422419872666]}
+{"elapsed_s": 13.78736173599998, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 13.815112943000031, "topic": "/odom", "last": [6.6536706476581715, 2.4210422419872666]}
+{"elapsed_s": 13.82108237600005, "topic": "/cmd_vel", "last": [0.15, 0.05352597660853439]}
+{"elapsed_s": 13.832726610000009, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 13.847856406000005, "topic": "/odom", "last": [6.6536706476581715, 2.4210422419872666]}
+{"elapsed_s": 13.881081513000026, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 13.88343485300004, "topic": "/odom", "last": [6.643762508697014, 2.44107973339183]}
+{"elapsed_s": 13.919693542000005, "topic": "/odom", "last": [6.643762508697014, 2.44107973339183]}
+{"elapsed_s": 13.921046217000026, "topic": "/cmd_vel", "last": [0.15, 0.07020241896225529]}
+{"elapsed_s": 13.932386155000017, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 13.948722190000012, "topic": "/odom", "last": [6.643762508697014, 2.44107973339183]}
+{"elapsed_s": 13.98060444600003, "topic": "/odom", "last": [6.642438251555955, 2.4355651160471954]}
+{"elapsed_s": 13.985721537000018, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 14.015137683000034, "topic": "/odom", "last": [6.73161004225985, 2.3597038225614098]}
+{"elapsed_s": 14.040267831000051, "topic": "/cmd_vel", "last": [0.15, 0.027722074401685913]}
+{"elapsed_s": 14.045543070000008, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 14.049070583999992, "topic": "/odom", "last": [6.73161004225985, 2.3597038225614098]}
+{"elapsed_s": 14.081917729999986, "topic": "/odom", "last": [6.757897138484444, 2.2673053152112725]}
+{"elapsed_s": 14.116101964999984, "topic": "/odom", "last": [6.757897138484444, 2.2673053152112725]}
+{"elapsed_s": 14.119757451000055, "topic": "/dock/avoid/status", "last": "FOLLOW: backstop_regen"}
+{"elapsed_s": 14.140288473000055, "topic": "/cmd_vel", "last": [0.15, 0.027722074401685913]}
+{"elapsed_s": 14.14808454499996, "topic": "/odom", "last": [6.757897138484444, 2.2673053152112725]}
+{"elapsed_s": 14.157539379000013, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 14.180836967999994, "topic": "/odom", "last": [6.713966596367128, 2.3320440819605697]}
+{"elapsed_s": 14.215141623000022, "topic": "/odom", "last": [6.713966596367128, 2.3320440819605697]}
+{"elapsed_s": 14.226341589999947, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 14.24759890200005, "topic": "/odom", "last": [6.750067605734788, 2.2566316698184408]}
+{"elapsed_s": 14.255238394000003, "topic": "/cmd_vel", "last": [0.15, -0.0223320293976387]}
+{"elapsed_s": 14.264312897999957, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 14.284103868999978, "topic": "/odom", "last": [6.750067605734788, 2.2566316698184408]}
+{"elapsed_s": 14.315751240000054, "topic": "/odom", "last": [6.704366562834705, 2.332261847715713]}
+{"elapsed_s": 14.319631211, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 14.340106455999944, "topic": "/cmd_vel", "last": [0.15, -0.0223320293976387]}
+{"elapsed_s": 14.349944499999992, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 14.353821046999997, "topic": "/odom", "last": [6.704366562834705, 2.332261847715713]}
+{"elapsed_s": 14.381996329000003, "topic": "/odom", "last": [6.688461959406498, 2.3596138107876357]}
+{"elapsed_s": 14.394877683000004, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 14.415187354999944, "topic": "/cmd_vel", "last": [0.15, -0.12275879522977204]}
+{"elapsed_s": 14.435654760000034, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 14.437352210999961, "topic": "/odom", "last": [6.688461959406498, 2.3596138107876357]}
+{"elapsed_s": 14.447691675999977, "topic": "/diagnostics", "actuator": {"mode": "auto", "left_pwm": "1620", "right_pwm": "1543", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.150", "angular_cmd": "-0.123", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 14.449567020000018, "topic": "/odom", "last": [6.667061491239558, 2.382441511093383]}
+{"elapsed_s": 14.469394439999974, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 14.491683074999969, "topic": "/odom", "last": [6.667061491239558, 2.382441511093383]}
+{"elapsed_s": 14.512769310999943, "topic": "/cmd_vel", "last": [0.15, -0.044237957191061744]}
+{"elapsed_s": 14.516859911999973, "topic": "/odom", "last": [6.6546246905261235, 2.4141181997879375]}
+{"elapsed_s": 14.527256050000005, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 14.54723636999995, "topic": "/odom", "last": [6.6546246905261235, 2.4141181997879375]}
+{"elapsed_s": 14.582325717000003, "topic": "/odom", "last": [6.6546246905261235, 2.4141181997879375]}
+{"elapsed_s": 14.587356662000047, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 14.615345507000029, "topic": "/odom", "last": [6.646990582874331, 2.4370441088139527]}
+{"elapsed_s": 14.619132644000047, "topic": "/cmd_vel", "last": [0.15, -0.004768514002720331]}
+{"elapsed_s": 14.63126524300003, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 14.650256289000026, "topic": "/odom", "last": [6.646990582874331, 2.4370441088139527]}
+{"elapsed_s": 14.682129906, "topic": "/odom", "last": [6.646990582874331, 2.4370441088139527]}
+{"elapsed_s": 14.71599784600005, "topic": "/odom", "last": [6.643512997511969, 2.4413100388125004]}
+{"elapsed_s": 14.752588190999973, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 14.754704661000005, "topic": "/odom", "last": [6.646373235546921, 2.4234985906693396]}
+{"elapsed_s": 14.779705270000022, "topic": "/cmd_vel", "last": [0.15, -0.004768514002720331]}
+{"elapsed_s": 14.781883341000025, "topic": "/odom", "last": [6.646373235546921, 2.4234985906693396]}
+{"elapsed_s": 14.79516473800004, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 14.834270665999952, "topic": "/odom", "last": [6.646373235546921, 2.4234985906693396]}
+{"elapsed_s": 14.836450914000011, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 14.848381299000039, "topic": "/odom", "last": [6.646702304437499, 2.4289241317696906]}
+{"elapsed_s": 14.853658362000033, "topic": "/cmd_vel", "last": [0.15, 0.027570948382761695]}
+{"elapsed_s": 14.863507253999956, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 14.884318410999981, "topic": "/odom", "last": [6.646702304437499, 2.4289241317696906]}
+{"elapsed_s": 14.904020642999967, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 14.916115576000038, "topic": "/odom", "last": [6.646702304437499, 2.4289241317696906]}
+{"elapsed_s": 14.91978933400003, "topic": "/cmd_vel", "last": [0.15, 0.027570948382761695]}
+{"elapsed_s": 14.928618039999947, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 14.948020104999955, "topic": "/odom", "last": [6.646702304437499, 2.4289241317696906]}
+{"elapsed_s": 14.970580297999959, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 14.980650059000027, "topic": "/odom", "last": [6.641763526210488, 2.4366739270920252]}
+{"elapsed_s": 15.012956422000002, "topic": "/cmd_vel", "last": [0.15, 0.09979315921897383]}
+{"elapsed_s": 15.022832162999975, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 15.037338006000027, "topic": "/odom", "last": [6.651758308607656, 2.424619087773851]}
+{"elapsed_s": 15.048470450999957, "topic": "/odom", "last": [6.651758308607656, 2.424619087773851]}
+{"elapsed_s": 15.066783783000005, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 15.080779533000054, "topic": "/odom", "last": [6.651758308607656, 2.424619087773851]}
+{"elapsed_s": 15.114999704999946, "topic": "/odom", "last": [6.641027794336667, 2.4461894738685457]}
+{"elapsed_s": 15.119136131000005, "topic": "/cmd_vel", "last": [0.15, 0.06796639797256501]}
+{"elapsed_s": 15.136972650999951, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 15.160238941999978, "topic": "/odom", "last": [6.636412064930278, 2.447340639651034]}
+{"elapsed_s": 15.181083220000005, "topic": "/odom", "last": [6.636412064930278, 2.447340639651034]}
+{"elapsed_s": 15.194788818000006, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 15.214990166999996, "topic": "/cmd_vel", "last": [0.15, 0.08087967904548185]}
+{"elapsed_s": 15.229502217999993, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 15.230680968999991, "topic": "/odom", "last": [6.639014504889044, 2.424721373435154]}
+{"elapsed_s": 15.249440649000007, "topic": "/odom", "last": [6.639014504889044, 2.424721373435154]}
+{"elapsed_s": 15.274784049000004, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 15.282781630000045, "topic": "/odom", "last": [6.639014504889044, 2.424721373435154]}
+{"elapsed_s": 15.312136749000047, "topic": "/cmd_vel", "last": [0.15, 0.02744206639933197]}
+{"elapsed_s": 15.313994107999974, "topic": "/odom", "last": [6.635407976693509, 2.4437156073178703]}
+{"elapsed_s": 15.325777961999961, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 15.347715290999986, "topic": "/odom", "last": [6.635407976693509, 2.4437156073178703]}
+{"elapsed_s": 15.379938228000015, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 15.38085735499999, "topic": "/odom", "last": [6.635407976693509, 2.4437156073178703]}
+{"elapsed_s": 15.412599383000043, "topic": "/cmd_vel", "last": [0.15, 0.05158162095246423]}
+{"elapsed_s": 15.414190208000036, "topic": "/odom", "last": [6.635407976693509, 2.4437156073178703]}
+{"elapsed_s": 15.422129003000009, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 15.446321750000038, "topic": "/diagnostics", "actuator": {"mode": "auto", "left_pwm": "1562", "right_pwm": "1601", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.150", "angular_cmd": "0.052", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 15.448908535999976, "topic": "/odom", "last": [6.711298202140271, 2.328990544308667]}
+{"elapsed_s": 15.468970680999973, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 15.482312750999995, "topic": "/odom", "last": [6.688928759823504, 2.3586367859038715]}
+{"elapsed_s": 15.519600265000008, "topic": "/odom", "last": [6.688928759823504, 2.3586367859038715]}
+{"elapsed_s": 15.524589000999981, "topic": "/cmd_vel", "last": [0.15, -0.04166515193619179]}
+{"elapsed_s": 15.532791545999999, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 15.547096231999944, "topic": "/odom", "last": [6.664669388668922, 2.399147457359498]}
+{"elapsed_s": 15.58110279799996, "topic": "/odom", "last": [6.664669388668922, 2.399147457359498]}
+{"elapsed_s": 15.598545325000032, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 15.613767186000018, "topic": "/cmd_vel", "last": [0.15, -0.04166515193619179]}
+{"elapsed_s": 15.628715217000035, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 15.629736138999988, "topic": "/odom", "last": [6.655994298157292, 2.4038742751493913]}
+{"elapsed_s": 15.64968493699996, "topic": "/odom", "last": [6.655994298157292, 2.4038742751493913]}
+{"elapsed_s": 15.668350503000056, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 15.680229463000046, "topic": "/odom", "last": [6.655994298157292, 2.4038742751493913]}
+{"elapsed_s": 15.712669461000019, "topic": "/cmd_vel", "last": [0.15, -0.005064401873077246]}
+{"elapsed_s": 15.71453674099996, "topic": "/odom", "last": [6.653870616159816, 2.425267360638589]}
+{"elapsed_s": 15.726803870000026, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 15.750259062000055, "topic": "/odom", "last": [6.735739371702183, 2.357498200021104]}
+{"elapsed_s": 15.77254033700001, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 15.784458210000025, "topic": "/odom", "last": [6.735739371702183, 2.357498200021104]}
+{"elapsed_s": 15.814965068999982, "topic": "/odom", "last": [6.735739371702183, 2.357498200021104]}
+{"elapsed_s": 15.819020404999947, "topic": "/cmd_vel", "last": [0.15, -0.020264269562003688]}
+{"elapsed_s": 15.835713407999947, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 15.851738040999976, "topic": "/odom", "last": [6.780249195591419, 2.320456337635516]}
+{"elapsed_s": 15.880949347999945, "topic": "/odom", "last": [6.7204496424575115, 2.359120200671025]}
+{"elapsed_s": 15.918520611999952, "topic": "/odom", "last": [6.7204496424575115, 2.359120200671025]}
+{"elapsed_s": 15.924170612000012, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 15.93973465800002, "topic": "/cmd_vel", "last": [0.15, -0.020264269562003688]}
+{"elapsed_s": 15.952848432999986, "topic": "/odom", "last": [6.7204496424575115, 2.359120200671025]}
+{"elapsed_s": 15.96446297, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 15.984691742999985, "topic": "/odom", "last": [6.689246726860475, 2.4007417982100905]}
+{"elapsed_s": 16.014250225999945, "topic": "/odom", "last": [6.689246726860475, 2.4007417982100905]}
+{"elapsed_s": 16.026602990000015, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 16.047548132999964, "topic": "/odom", "last": [6.6722412730903145, 2.4180795549727865]}
+{"elapsed_s": 16.05027876300005, "topic": "/cmd_vel", "last": [0.15, -0.020264269562003688]}
+{"elapsed_s": 16.06874905899997, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 16.086801071999957, "topic": "/odom", "last": [6.6722412730903145, 2.4180795549727865]}
+{"elapsed_s": 16.11385046700002, "topic": "/odom", "last": [6.67042797508865, 2.4013581458390503]}
+{"elapsed_s": 16.151068826000028, "topic": "/odom", "last": [6.67042797508865, 2.4013581458390503]}
+{"elapsed_s": 16.177943817000028, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 16.18739845899995, "topic": "/odom", "last": [6.745147428017248, 2.3478503411955414]}
+{"elapsed_s": 16.19856632799997, "topic": "/cmd_vel", "last": [0.15, -0.04299537732930649]}
+{"elapsed_s": 16.207865925999954, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 16.217191316000026, "topic": "/odom", "last": [6.745147428017248, 2.3478503411955414]}
+{"elapsed_s": 16.247107695999944, "topic": "/odom", "last": [6.68846590564867, 2.395438781059018]}
+{"elapsed_s": 16.258577749999972, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 16.27831745399999, "topic": "/cmd_vel", "last": [0.15, -0.03554236935697867]}
+{"elapsed_s": 16.280331905000025, "topic": "/odom", "last": [6.68846590564867, 2.395438781059018]}
+{"elapsed_s": 16.292253426000002, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 16.317664315000002, "topic": "/odom", "last": [6.68846590564867, 2.395438781059018]}
+{"elapsed_s": 16.33509231300002, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 16.34758204000002, "topic": "/odom", "last": [6.660650079275703, 2.4054403689104293]}
+{"elapsed_s": 16.358288010000024, "topic": "/cmd_vel", "last": [0.15, 0.0024725695682429327]}
+{"elapsed_s": 16.370789608999985, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 16.384281697999995, "topic": "/odom", "last": [6.660650079275703, 2.4054403689104293]}
+{"elapsed_s": 16.416552858000045, "topic": "/odom", "last": [6.660650079275703, 2.4054403689104293]}
+{"elapsed_s": 16.41766773500001, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 16.447136807999982, "topic": "/diagnostics", "actuator": {"mode": "auto", "left_pwm": "1580", "right_pwm": "1582", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.150", "angular_cmd": "0.002", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 16.46102359500003, "topic": "/odom", "last": [6.652171946810003, 2.4288827124521766]}
+{"elapsed_s": 16.46151967100002, "topic": "/cmd_vel", "last": [0.15, -0.01055662490964624]}
+{"elapsed_s": 16.46677897400002, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 16.482531568000013, "topic": "/odom", "last": [6.647633478659506, 2.437921106226309]}
+{"elapsed_s": 16.51430415599998, "topic": "/odom", "last": [6.647633478659506, 2.437921106226309]}
+{"elapsed_s": 16.53822156800004, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 16.546947166999985, "topic": "/odom", "last": [6.6348277774330136, 2.459442886890831]}
+{"elapsed_s": 16.566072902999963, "topic": "/cmd_vel", "last": [0.15, -0.03663300096776037]}
+{"elapsed_s": 16.575572282000053, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 16.587440520999962, "topic": "/odom", "last": [6.6348277774330136, 2.459442886890831]}
+{"elapsed_s": 16.61426213499999, "topic": "/odom", "last": [6.6348277774330136, 2.459442886890831]}
+{"elapsed_s": 16.62175787800004, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 16.647371237000016, "topic": "/cmd_vel", "last": [0.15, -0.010927374904620434]}
+{"elapsed_s": 16.650578422999956, "topic": "/odom", "last": [6.640727235651786, 2.447029295328977]}
+{"elapsed_s": 16.65679214900001, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 16.681001280000032, "topic": "/odom", "last": [6.640727235651786, 2.447029295328977]}
+{"elapsed_s": 16.702309120999985, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 16.714057292999996, "topic": "/odom", "last": [6.643036283935838, 2.450280920449364]}
+{"elapsed_s": 16.72248528399996, "topic": "/cmd_vel", "last": [0.15, -0.01776539496324314]}
+{"elapsed_s": 16.730264618999968, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 16.749905889000047, "topic": "/odom", "last": [6.643036283935838, 2.450280920449364]}
+{"elapsed_s": 16.77719029800005, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 16.780262408999988, "topic": "/odom", "last": [6.646505902116976, 2.4310004922844883]}
+{"elapsed_s": 16.812909770000033, "topic": "/cmd_vel", "last": [0.15, 0.04901279691011053]}
+{"elapsed_s": 16.815182403999984, "topic": "/odom", "last": [6.646505902116976, 2.4310004922844883]}
+{"elapsed_s": 16.82813953499999, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 16.853363699000056, "topic": "/odom", "last": [6.644448783008524, 2.4386414101295344]}
+{"elapsed_s": 16.880806319000044, "topic": "/odom", "last": [6.644448783008524, 2.4386414101295344]}
+{"elapsed_s": 16.91451658799997, "topic": "/odom", "last": [6.73124318944728, 2.3709542098551135]}
+{"elapsed_s": 16.922614297999985, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 16.941529404999983, "topic": "/cmd_vel", "last": [0.15, 0.04901279691011053]}
+{"elapsed_s": 16.948119109000004, "topic": "/odom", "last": [6.73124318944728, 2.3709542098551135]}
+{"elapsed_s": 16.956854307999947, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 16.98052019199997, "topic": "/odom", "last": [6.6958436014244604, 2.3968745897496406]}
+{"elapsed_s": 17.00837715900002, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 17.014805771000056, "topic": "/odom", "last": [6.6958436014244604, 2.3968745897496406]}
+{"elapsed_s": 17.028762063000045, "topic": "/cmd_vel", "last": [0.15, 0.020585064682603686]}
+{"elapsed_s": 17.03994762900004, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 17.051049543999966, "topic": "/odom", "last": [6.665120105246268, 2.4328857013464633]}
+{"elapsed_s": 17.080699165000055, "topic": "/odom", "last": [6.665120105246268, 2.4328857013464633]}
+{"elapsed_s": 17.090573625000047, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 17.113836938999953, "topic": "/odom", "last": [6.7407049057955355, 2.363836846329809]}
+{"elapsed_s": 17.12064271199995, "topic": "/cmd_vel", "last": [0.15, 0.032631783897152475]}
+{"elapsed_s": 17.13189266400002, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 17.147440292000056, "topic": "/odom", "last": [6.7407049057955355, 2.363836846329809]}
+{"elapsed_s": 17.17845580400001, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 17.184921952999957, "topic": "/odom", "last": [6.7407049057955355, 2.363836846329809]}
+{"elapsed_s": 17.215188229999967, "topic": "/odom", "last": [6.691508248197184, 2.4136989890094496]}
+{"elapsed_s": 17.24109410699998, "topic": "/cmd_vel", "last": [0.018246923579181028, -0.016990303140810764]}
+{"elapsed_s": 17.25040336799998, "topic": "/odom", "last": [6.691508248197184, 2.4136989890094496]}
+{"elapsed_s": 17.25734997799998, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 17.28033037199998, "topic": "/odom", "last": [6.691508248197184, 2.4136989890094496]}
+{"elapsed_s": 17.31694212299999, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 17.319150210999965, "topic": "/odom", "last": [6.666217220742691, 2.4307846655940937]}
+{"elapsed_s": 17.337208239999995, "topic": "/cmd_vel", "last": [0.018246923579181028, -0.016990303140810764]}
+{"elapsed_s": 17.347317362000013, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 17.350925837999966, "topic": "/odom", "last": [6.674036118392297, 2.4092612510674165]}
+{"elapsed_s": 17.38982382300003, "topic": "/odom", "last": [6.674036118392297, 2.4092612510674165]}
+{"elapsed_s": 17.391127536, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 17.424880205000022, "topic": "/odom", "last": [6.650651849168472, 2.434744364817454]}
+{"elapsed_s": 17.43719277599996, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 17.437934618999975, "topic": "/cmd_vel", "last": [0.018246923579181028, 0.0009400329475416063]}
+{"elapsed_s": 17.44711078900002, "topic": "/diagnostics", "actuator": {"mode": "auto", "left_pwm": "1531", "right_pwm": "1532", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.018", "angular_cmd": "0.001", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 17.450764833999983, "topic": "/odom", "last": [6.650651849168472, 2.434744364817454]}
+{"elapsed_s": 17.474935114999994, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 17.484859143999984, "topic": "/odom", "last": [6.650651849168472, 2.434744364817454]}
+{"elapsed_s": 17.51372234500002, "topic": "/odom", "last": [6.650651849168472, 2.434744364817454]}
+{"elapsed_s": 17.52584838200005, "topic": "/cmd_vel", "last": [0.018246923579181028, 0.023729754876786517]}
+{"elapsed_s": 17.53957858900003, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 17.547937137999952, "topic": "/odom", "last": [6.647906738885598, 2.4235852718467057]}
+{"elapsed_s": 17.580917116000023, "topic": "/odom", "last": [6.646636545399316, 2.4394711221171086]}
+{"elapsed_s": 17.608258709999973, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 17.615739061, "topic": "/odom", "last": [6.646636545399316, 2.4394711221171086]}
+{"elapsed_s": 17.640191140999946, "topic": "/cmd_vel", "last": [0.018246923579181028, 0.023729754876786517]}
+{"elapsed_s": 17.64769981200004, "topic": "/odom", "last": [6.646636545399316, 2.4394711221171086]}
+{"elapsed_s": 17.653721278000035, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 17.680536073999974, "topic": "/odom", "last": [6.6473016063918395, 2.4287785519202165]}
+{"elapsed_s": 17.711825224999984, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 17.714680241999986, "topic": "/odom", "last": [6.6473016063918395, 2.4287785519202165]}
+{"elapsed_s": 17.745967503999964, "topic": "/cmd_vel", "last": [0.018246923579181028, 0.023729754876786517]}
+{"elapsed_s": 17.756216598000037, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 17.758020035999948, "topic": "/odom", "last": [6.6473016063918395, 2.4287785519202165]}
+{"elapsed_s": 17.78093607699998, "topic": "/odom", "last": [6.646066803448356, 2.4432985246433763]}
+{"elapsed_s": 17.80418617400005, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 17.814854286000013, "topic": "/odom", "last": [6.646066803448356, 2.4432985246433763]}
+{"elapsed_s": 17.829956111, "topic": "/cmd_vel", "last": [0.018246923579181028, 0.003905158423181407]}
+{"elapsed_s": 17.841054121999946, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 17.84865473100001, "topic": "/odom", "last": [6.6332934237817796, 2.4464617399236284]}
+{"elapsed_s": 17.88045480599999, "topic": "/odom", "last": [6.6332934237817796, 2.4464617399236284]}
+{"elapsed_s": 17.88244045700003, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 17.913759046999985, "topic": "/odom", "last": [6.630009291157997, 2.460634264969272]}
+{"elapsed_s": 17.92811381299998, "topic": "/cmd_vel", "last": [0.018246923579181028, 0.030702022689941155]}
+{"elapsed_s": 17.938626400999965, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 17.948150771999963, "topic": "/odom", "last": [6.625195803866877, 2.4592292073185757]}
+{"elapsed_s": 17.980733074, "topic": "/odom", "last": [6.625195803866877, 2.4592292073185757]}
+{"elapsed_s": 18.014112261000037, "topic": "/odom", "last": [6.626240397921454, 2.4678953570817432]}
+{"elapsed_s": 18.040464068999995, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 18.05086337399996, "topic": "/odom", "last": [6.626240397921454, 2.4678953570817432]}
+{"elapsed_s": 18.071645311999987, "topic": "/cmd_vel", "last": [0.018246923579181028, 0.0142904730967016]}
+{"elapsed_s": 18.07920041600005, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 18.093355273000043, "topic": "/odom", "last": [6.622699303727689, 2.4704419060978546]}
+{"elapsed_s": 18.116541976000008, "topic": "/odom", "last": [6.622699303727689, 2.4704419060978546]}
+{"elapsed_s": 18.147673970000028, "topic": "/odom", "last": [6.622420907830848, 2.4571062861027375]}
+{"elapsed_s": 18.151910589999943, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 18.180446900999982, "topic": "/odom", "last": [6.622420907830848, 2.4571062861027375]}
+{"elapsed_s": 18.19311397599995, "topic": "/cmd_vel", "last": [0.018246923579181028, 0.03383569739604328]}
+{"elapsed_s": 18.20106393900005, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 18.216149219000044, "topic": "/odom", "last": [6.6228624547856585, 2.455472463880742]}
+{"elapsed_s": 18.244771997000043, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 18.24883158800003, "topic": "/odom", "last": [6.6228624547856585, 2.455472463880742]}
+{"elapsed_s": 18.268012589000023, "topic": "/cmd_vel", "last": [0.018246923579181028, 0.056965944379235266]}
+{"elapsed_s": 18.27790164099997, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 18.293980834999957, "topic": "/odom", "last": [6.6228624547856585, 2.455472463880742]}
+{"elapsed_s": 18.314942137999992, "topic": "/odom", "last": [6.625166677092825, 2.443667918096214]}
+{"elapsed_s": 18.319922232999943, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 18.341892488999974, "topic": "/cmd_vel", "last": [0.018246923579181028, 0.06999367836083362]}
+{"elapsed_s": 18.35248978300001, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 18.354422311999997, "topic": "/odom", "last": [6.625166677092825, 2.443667918096214]}
+{"elapsed_s": 18.380370205999952, "topic": "/odom", "last": [6.625166677092825, 2.443667918096214]}
+{"elapsed_s": 18.39415804500004, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 18.415831205000018, "topic": "/odom", "last": [6.625166677092825, 2.443667918096214]}
+{"elapsed_s": 18.422445390000007, "topic": "/cmd_vel", "last": [0.018246923579181028, 0.07293877147329512]}
+{"elapsed_s": 18.439397085999985, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 18.44663906300002, "topic": "/diagnostics", "actuator": {"mode": "auto", "left_pwm": "1454", "right_pwm": "1559", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.018", "angular_cmd": "0.073", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 18.44875329299998, "topic": "/odom", "last": [6.625166677092825, 2.443667918096214]}
+{"elapsed_s": 18.468822251999995, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 18.484515355999974, "topic": "/odom", "last": [6.626073620282905, 2.4608880986938204]}
+{"elapsed_s": 18.515740056000027, "topic": "/odom", "last": [6.626073620282905, 2.4608880986938204]}
+{"elapsed_s": 18.53662926100003, "topic": "/cmd_vel", "last": [0.018246923579181028, 0.0617121118360509]}
+{"elapsed_s": 18.548471131000042, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 18.55017107799995, "topic": "/odom", "last": [6.77261844586139, 2.3349671887637817]}
+{"elapsed_s": 18.58052791600005, "topic": "/odom", "last": [6.77261844586139, 2.3349671887637817]}
+{"elapsed_s": 18.614012832999947, "topic": "/odom", "last": [6.77261844586139, 2.3349671887637817]}
+{"elapsed_s": 18.621672260999958, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 18.647305009999968, "topic": "/cmd_vel", "last": [0.018246923579181028, 0.0617121118360509]}
+{"elapsed_s": 18.64969627100004, "topic": "/odom", "last": [6.77261844586139, 2.3349671887637817]}
+{"elapsed_s": 18.657964321999998, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 18.682929022000053, "topic": "/odom", "last": [6.718987311938621, 2.3694079581817475]}
+{"elapsed_s": 18.71040287400001, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 18.71520440500001, "topic": "/odom", "last": [6.771262435362724, 2.3334434541626337]}
+{"elapsed_s": 18.73993271500001, "topic": "/cmd_vel", "last": [0.018246923579181028, 0.0617121118360509]}
+{"elapsed_s": 18.75158382799998, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 18.75338435399999, "topic": "/odom", "last": [6.771262435362724, 2.3334434541626337]}
+{"elapsed_s": 18.78173416499999, "topic": "/odom", "last": [6.708531171283053, 2.375791453870421]}
+{"elapsed_s": 18.81261594299997, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 18.816512395000018, "topic": "/odom", "last": [6.708531171283053, 2.375791453870421]}
+{"elapsed_s": 18.83656148099999, "topic": "/cmd_vel", "last": [0.018246923579181028, -0.05056854761093518]}
+{"elapsed_s": 18.84891728399998, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 18.850541389, "topic": "/odom", "last": [6.708531171283053, 2.375791453870421]}
+{"elapsed_s": 18.880837327999984, "topic": "/odom", "last": [6.6814719916943535, 2.402899822959747]}
+{"elapsed_s": 18.88623720999999, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 18.91656681400002, "topic": "/odom", "last": [6.6814719916943535, 2.402899822959747]}
+{"elapsed_s": 18.917681786000003, "topic": "/cmd_vel", "last": [0.018246923579181028, -0.053550238389244845]}
+{"elapsed_s": 18.925757288, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 18.947566930999983, "topic": "/odom", "last": [6.655791500257539, 2.4408244578319556]}
+{"elapsed_s": 18.966737627000043, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 18.98003755000002, "topic": "/odom", "last": [6.734849968283816, 2.370817125161267]}
+{"elapsed_s": 19.014306422000004, "topic": "/odom", "last": [6.734849968283816, 2.370817125161267]}
+{"elapsed_s": 19.03031403, "topic": "/cmd_vel", "last": [0.018246923579181028, -0.020937069021335308]}
+{"elapsed_s": 19.039137710999967, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 19.046795825999993, "topic": "/odom", "last": [6.734849968283816, 2.370817125161267]}
+{"elapsed_s": 19.085198339000044, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 19.086671016999958, "topic": "/odom", "last": [6.687528130688964, 2.4198029664685974]}
+{"elapsed_s": 19.115325217999953, "topic": "/odom", "last": [6.687528130688964, 2.4198029664685974]}
+{"elapsed_s": 19.12032896200003, "topic": "/cmd_vel", "last": [0.018246923579181028, 0.018529750001473982]}
+{"elapsed_s": 19.130323264000026, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 19.150157529000012, "topic": "/odom", "last": [6.687528130688964, 2.4198029664685974]}
+{"elapsed_s": 19.184083865000048, "topic": "/odom", "last": [6.6671131998606885, 2.431766651414148]}
+{"elapsed_s": 19.214085045000047, "topic": "/odom", "last": [6.6671131998606885, 2.431766651414148]}
+{"elapsed_s": 19.239514492000012, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 19.247052860000053, "topic": "/odom", "last": [6.660809547153319, 2.42152295760971]}
+{"elapsed_s": 19.261916886999984, "topic": "/cmd_vel", "last": [0.018246923579181028, 0.018529750001473982]}
+{"elapsed_s": 19.27032842899996, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 19.281304611999985, "topic": "/odom", "last": [6.660809547153319, 2.42152295760971]}
+{"elapsed_s": 19.314970269000014, "topic": "/odom", "last": [6.647007310561621, 2.42907986432353]}
+{"elapsed_s": 19.319314252000026, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 19.352710814000034, "topic": "/odom", "last": [6.647007310561621, 2.42907986432353]}
+{"elapsed_s": 19.35397798300005, "topic": "/cmd_vel", "last": [0.018246923579181028, 0.018529750001473982]}
+{"elapsed_s": 19.36644793200003, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 19.38108123300003, "topic": "/odom", "last": [6.647007310561621, 2.42907986432353]}
+{"elapsed_s": 19.419089944000007, "topic": "/odom", "last": [6.647007310561621, 2.42907986432353]}
+{"elapsed_s": 19.434304060000045, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 19.44756286100005, "topic": "/diagnostics", "actuator": {"mode": "auto", "left_pwm": "1475", "right_pwm": "1539", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.018", "angular_cmd": "0.019", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 19.449029042999996, "topic": "/odom", "last": [6.64670912688101, 2.4460889578754457]}
+{"elapsed_s": 19.468832746999965, "topic": "/cmd_vel", "last": [0.018246923579181028, 0.018529750001473982]}
+{"elapsed_s": 19.47631917700005, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 19.48295384200003, "topic": "/odom", "last": [6.645158647894277, 2.4422350270717805]}
+{"elapsed_s": 19.515538608000043, "topic": "/odom", "last": [6.645158647894277, 2.4422350270717805]}
+{"elapsed_s": 19.534185354999977, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 19.548688827999968, "topic": "/odom", "last": [6.645158647894277, 2.4422350270717805]}
+{"elapsed_s": 19.559936698, "topic": "/cmd_vel", "last": [0.018246923579181028, 0.023726891360855845]}
+{"elapsed_s": 19.568134891, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 19.58531545599999, "topic": "/odom", "last": [6.636058687428012, 2.451229975121333]}
+{"elapsed_s": 19.616357943000025, "topic": "/odom", "last": [6.633700173104547, 2.440631307654545]}
+{"elapsed_s": 19.617764474999944, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 19.642378828999995, "topic": "/cmd_vel", "last": [0.018246923579181028, 0.004699968081070859]}
+{"elapsed_s": 19.65249956699995, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 19.666079560999947, "topic": "/odom", "last": [6.633700173104547, 2.440631307654545]}
+{"elapsed_s": 19.682574541000008, "topic": "/odom", "last": [6.633700173104547, 2.440631307654545]}
+{"elapsed_s": 19.691613106999966, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 19.717079643000034, "topic": "/odom", "last": [6.631559240854926, 2.458390335229587]}
+{"elapsed_s": 19.718201496000006, "topic": "/cmd_vel", "last": [0.018246923579181028, 0.0278515284011618]}
+{"elapsed_s": 19.728112499999952, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 19.74853967599995, "topic": "/odom", "last": [6.72461471262201, 2.3872218687898465]}
+{"elapsed_s": 19.773533464000025, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 19.790421381999977, "topic": "/odom", "last": [6.72461471262201, 2.3872218687898465]}
+{"elapsed_s": 19.816696002999947, "topic": "/odom", "last": [6.676946916879359, 2.423935523657875]}
+{"elapsed_s": 19.83944678900002, "topic": "/cmd_vel", "last": [0.018246923579181028, -0.006575084936948486]}
+{"elapsed_s": 19.853629006000006, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 19.86233994700001, "topic": "/odom", "last": [6.676946916879359, 2.423935523657875]}
+{"elapsed_s": 19.882547981000016, "topic": "/odom", "last": [6.676946916879359, 2.423935523657875]}
+{"elapsed_s": 19.91434411800003, "topic": "/odom", "last": [6.654371959999608, 2.427694522253168]}
+{"elapsed_s": 19.920607220999955, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 19.949172299999987, "topic": "/odom", "last": [6.654371959999608, 2.427694522253168]}
+{"elapsed_s": 19.954557939999972, "topic": "/cmd_vel", "last": [0.018246923579181028, -0.006575084936948486]}
+{"elapsed_s": 19.968306161999976, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 19.995302561000017, "topic": "/odom", "last": [6.737537078224886, 2.370073519121961]}
+{"elapsed_s": 20.014791727999977, "topic": "/odom", "last": [6.737537078224886, 2.370073519121961]}
+{"elapsed_s": 20.043039293999982, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 20.061688152999977, "topic": "/odom", "last": [6.685465737788622, 2.416210398605924]}
+{"elapsed_s": 20.080785917999947, "topic": "/odom", "last": [6.685465737788622, 2.416210398605924]}
+{"elapsed_s": 20.090939360999982, "topic": "/cmd_vel", "last": [0.018246923579181028, 0.015717251644610103]}
+{"elapsed_s": 20.102115485000013, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 20.114799807000054, "topic": "/odom", "last": [6.6743129146105, 2.4135816354108166]}
+{"elapsed_s": 20.148103214000002, "topic": "/odom", "last": [6.6743129146105, 2.4135816354108166]}
+{"elapsed_s": 20.170039387999964, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 20.180356673999995, "topic": "/odom", "last": [6.743584974219163, 2.355162471753301]}
+{"elapsed_s": 20.19877080699996, "topic": "/cmd_vel", "last": [0.018246923579181028, 0.015717251644610103]}
+{"elapsed_s": 20.20667430399999, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 20.216480345000036, "topic": "/odom", "last": [6.781723431639765, 2.323084545002283]}
+{"elapsed_s": 20.260021995999978, "topic": "/odom", "last": [6.781723431639765, 2.323084545002283]}
+{"elapsed_s": 20.28276039800005, "topic": "/odom", "last": [6.781723431639765, 2.323084545002283]}
+{"elapsed_s": 20.29891600899998, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 20.31383667700004, "topic": "/odom", "last": [6.802271681996195, 2.3056014354141823]}
+{"elapsed_s": 20.32494748700003, "topic": "/cmd_vel", "last": [0.018246923579181028, -0.021335061089174025]}
+{"elapsed_s": 20.337861352000004, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 20.350116062999973, "topic": "/odom", "last": [6.802271681996195, 2.3056014354141823]}
+{"elapsed_s": 20.382762877000005, "topic": "/odom", "last": [6.722102754920703, 2.367029374588314]}
+{"elapsed_s": 20.413991703999955, "topic": "/odom", "last": [6.722102754920703, 2.367029374588314]}
+{"elapsed_s": 20.428893937999987, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 20.446557652000024, "topic": "/diagnostics", "actuator": {"mode": "auto", "left_pwm": "1540", "right_pwm": "1474", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.018", "angular_cmd": "-0.021", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 20.448072954000054, "topic": "/odom", "last": [6.772658333016283, 2.338525260323091]}
+{"elapsed_s": 20.460672986999953, "topic": "/cmd_vel", "last": [0.018246923579181028, -0.003083996331413336]}
+{"elapsed_s": 20.469154802000048, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 20.48136170500004, "topic": "/odom", "last": [6.772658333016283, 2.338525260323091]}
+{"elapsed_s": 20.51625475200001, "topic": "/odom", "last": [6.772658333016283, 2.338525260323091]}
+{"elapsed_s": 20.52208670799996, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 20.54738053599999, "topic": "/odom", "last": [6.703682060634481, 2.4131865761896862]}
+{"elapsed_s": 20.555602184999998, "topic": "/cmd_vel", "last": [0.018246923579181028, -0.06647269678391549]}
+{"elapsed_s": 20.563899451999987, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 20.58160985400002, "topic": "/odom", "last": [6.703682060634481, 2.4131865761896862]}
+{"elapsed_s": 20.616355794000015, "topic": "/odom", "last": [6.76000844954504, 2.359580210482288]}
+{"elapsed_s": 20.620386936000045, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 20.649768290999987, "topic": "/cmd_vel", "last": [0.018246923579181028, -0.07969933455181395]}
+{"elapsed_s": 20.661302792000015, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 20.66491251599996, "topic": "/odom", "last": [6.76000844954504, 2.359580210482288]}
+{"elapsed_s": 20.697284602999957, "topic": "/odom", "last": [6.76000844954504, 2.359580210482288]}
+{"elapsed_s": 20.718976451000003, "topic": "/odom", "last": [6.788043477389, 2.3253703012243143]}
+{"elapsed_s": 20.729279528999996, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 20.753550706000055, "topic": "/odom", "last": [6.788043477389, 2.3253703012243143]}
+{"elapsed_s": 20.766699969, "topic": "/cmd_vel", "last": [0.018246923579181028, -0.05555210239365407]}
+{"elapsed_s": 20.77730993399996, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 20.78664927600005, "topic": "/odom", "last": [6.7137782572624065, 2.4000854189385192]}
+{"elapsed_s": 20.816206698999963, "topic": "/odom", "last": [6.7137782572624065, 2.4000854189385192]}
+{"elapsed_s": 20.832008380000048, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 20.84709202700003, "topic": "/odom", "last": [6.7137782572624065, 2.4000854189385192]}
+{"elapsed_s": 20.86367584100003, "topic": "/cmd_vel", "last": [0.018246923579181028, -0.06280123469641845]}
+{"elapsed_s": 20.873810626000022, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 20.88107241, "topic": "/odom", "last": [6.7137782572624065, 2.4000854189385192]}
+{"elapsed_s": 20.914711793000038, "topic": "/odom", "last": [6.7137782572624065, 2.4000854189385192]}
+{"elapsed_s": 20.917486519000022, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 20.942274604999966, "topic": "/cmd_vel", "last": [0.018246923579181028, -0.04671312677133642]}
+{"elapsed_s": 20.953389638999965, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 20.96010792200002, "topic": "/odom", "last": [6.6497819570996715, 2.455755517276586]}
+{"elapsed_s": 20.983093145999987, "topic": "/odom", "last": [6.6497819570996715, 2.455755517276586]}
+{"elapsed_s": 20.993849610999973, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 21.016445352999995, "topic": "/odom", "last": [6.636616439499982, 2.45953190806717]}
+{"elapsed_s": 21.01756346100001, "topic": "/cmd_vel", "last": [0.018246923579181028, -0.07709598630935045]}
+{"elapsed_s": 21.031281474000025, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 21.047690401999944, "topic": "/odom", "last": [6.636616439499982, 2.45953190806717]}
+{"elapsed_s": 21.070359073999953, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 21.08105617800004, "topic": "/odom", "last": [6.630286233990212, 2.4701641134543166]}
+{"elapsed_s": 21.116133708999996, "topic": "/odom", "last": [6.719471223169805, 2.3916413079853767]}
+{"elapsed_s": 21.12834912300002, "topic": "/cmd_vel", "last": [0.018246923579181028, 0.02805614399037665]}
+{"elapsed_s": 21.13804079299996, "topic": "/dock/bspline_path", "last": 49}
+{"elapsed_s": 21.152080830000045, "topic": "/odom", "last": [6.719471223169805, 2.3916413079853767]}
+{"elapsed_s": 21.18044644600002, "topic": "/odom", "last": [6.766560252415255, 2.343335220345785]}
+{"elapsed_s": 21.194374992000007, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 21.215808272000004, "topic": "/odom", "last": [6.766560252415255, 2.343335220345785]}
+{"elapsed_s": 21.217950470999995, "topic": "/cmd_vel", "last": [0.15, 0.005055690980418236]}
+{"elapsed_s": 21.236053330000004, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 21.24895333799998, "topic": "/odom", "last": [6.766560252415255, 2.343335220345785]}
+{"elapsed_s": 21.276726459999963, "topic": "/dock/avoid/status", "last": "FOLLOW: backstop_regen"}
+{"elapsed_s": 21.28173554700004, "topic": "/odom", "last": [6.766560252415255, 2.343335220345785]}
+{"elapsed_s": 21.317589481000027, "topic": "/odom", "last": [6.703985557199502, 2.394647522269598]}
+{"elapsed_s": 21.322285728999987, "topic": "/cmd_vel", "last": [0.018246923579181028, -0.039447594904488376]}
+{"elapsed_s": 21.332122938999987, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 21.34726831499995, "topic": "/odom", "last": [6.703985557199502, 2.394647522269598]}
+{"elapsed_s": 21.38076558199998, "topic": "/odom", "last": [6.703985557199502, 2.394647522269598]}
+{"elapsed_s": 21.414857935999976, "topic": "/odom", "last": [6.703985557199502, 2.394647522269598]}
+{"elapsed_s": 21.447420907000037, "topic": "/odom", "last": [6.674631263283228, 2.4084501690367315]}
+{"elapsed_s": 21.448446884999953, "topic": "/diagnostics", "actuator": {"mode": "auto", "left_pwm": "1547", "right_pwm": "1467", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.018", "angular_cmd": "-0.039", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 21.44972941399999, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 21.472260258000006, "topic": "/cmd_vel", "last": [0.018246923579181028, -0.039447594904488376]}
+{"elapsed_s": 21.48629242200002, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 21.48796363300005, "topic": "/odom", "last": [6.674631263283228, 2.4084501690367315]}
+{"elapsed_s": 21.514043110999978, "topic": "/odom", "last": [6.635840286818439, 2.4468083106293808]}
+{"elapsed_s": 21.54432490399995, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 21.547724127000038, "topic": "/odom", "last": [6.635840286818439, 2.4468083106293808]}
+{"elapsed_s": 21.56820733500001, "topic": "/cmd_vel", "last": [0.018246923579181028, -0.006640358296814912]}
+{"elapsed_s": 21.58117822400004, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 21.583056479999982, "topic": "/odom", "last": [6.637230564933394, 2.447801833367439]}
+{"elapsed_s": 21.613842765999948, "topic": "/odom", "last": [6.637230564933394, 2.447801833367439]}
+{"elapsed_s": 21.626054083999975, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 21.650019045000022, "topic": "/odom", "last": [6.641312605771812, 2.4337159918264972]}
+{"elapsed_s": 21.651178466000033, "topic": "/cmd_vel", "last": [0.018246923579181028, -0.006640358296814912]}
+{"elapsed_s": 21.658647520000045, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 21.68807514699995, "topic": "/odom", "last": [6.629770190566169, 2.450739070490618]}
+{"elapsed_s": 21.698845181000024, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 21.717544824000015, "topic": "/odom", "last": [6.629770190566169, 2.450739070490618]}
+{"elapsed_s": 21.724298147000013, "topic": "/cmd_vel", "last": [0.018246923579181028, -0.006640358296814912]}
+{"elapsed_s": 21.73857258999999, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 21.74754421, "topic": "/odom", "last": [6.7206103325907876, 2.3872460762820435]}
+{"elapsed_s": 21.775117421999994, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 21.781025667999984, "topic": "/odom", "last": [6.7206103325907876, 2.3872460762820435]}
+{"elapsed_s": 21.814244495000025, "topic": "/odom", "last": [6.7206103325907876, 2.3872460762820435]}
+{"elapsed_s": 21.82877612799996, "topic": "/cmd_vel", "last": [0.018246923579181028, -0.004356922226545192]}
+{"elapsed_s": 21.84085336199996, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 21.85515455699999, "topic": "/odom", "last": [6.686831887832602, 2.4093149085186907]}
+{"elapsed_s": 21.880491968, "topic": "/odom", "last": [6.686831887832602, 2.4093149085186907]}
+{"elapsed_s": 21.90139435399999, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 21.918634182999995, "topic": "/odom", "last": [6.662689503517123, 2.430181392212907]}
+{"elapsed_s": 21.93072005800002, "topic": "/cmd_vel", "last": [0.018246923579181028, -0.004356922226545192]}
+{"elapsed_s": 21.94203224900002, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 21.947923085999946, "topic": "/odom", "last": [6.662689503517123, 2.430181392212907]}
+{"elapsed_s": 21.981688263000024, "topic": "/odom", "last": [6.643077763753153, 2.4418676147267293]}
+{"elapsed_s": 22.00567434300001, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 22.014208000000053, "topic": "/odom", "last": [6.643077763753153, 2.4418676147267293]}
+{"elapsed_s": 22.033452583999974, "topic": "/cmd_vel", "last": [0.018246923579181028, -0.004356922226545192]}
+{"elapsed_s": 22.048137629000053, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 22.05798293400005, "topic": "/odom", "last": [6.726725355705746, 2.3780774162476126]}
+{"elapsed_s": 22.080772249000006, "topic": "/odom", "last": [6.726725355705746, 2.3780774162476126]}
+{"elapsed_s": 22.085343308999995, "topic": "/dock/avoid/status", "last": "FOLLOW: violation_wait"}
+{"elapsed_s": 22.115989846000048, "topic": "/cmd_vel", "last": [0.15, -0.017855167971898733]}
+{"elapsed_s": 22.12923114199998, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 22.130166078000002, "topic": "/odom", "last": [6.770081080639661, 2.33900586860074]}
+{"elapsed_s": 22.157579349000002, "topic": "/odom", "last": [6.770081080639661, 2.33900586860074]}
+{"elapsed_s": 22.168238595000048, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 22.185897539000052, "topic": "/odom", "last": [6.770081080639661, 2.33900586860074]}
+{"elapsed_s": 22.22448741400001, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 22.22548622399995, "topic": "/odom", "last": [6.799844899792912, 2.3258346481218632]}
+{"elapsed_s": 22.225821079999946, "topic": "/cmd_vel", "last": [0.15, -0.05026120913134999]}
+{"elapsed_s": 22.250588781000033, "topic": "/odom", "last": [6.799844899792912, 2.3258346481218632]}
+{"elapsed_s": 22.281633951999993, "topic": "/odom", "last": [6.81317885269877, 2.3155153134362356]}
+{"elapsed_s": 22.28572090399996, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 22.31527250099998, "topic": "/odom", "last": [6.81317885269877, 2.3155153134362356]}
+{"elapsed_s": 22.32446131100005, "topic": "/cmd_vel", "last": [0.15, -0.05205082624369269]}
+{"elapsed_s": 22.334628159999966, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 22.350220907999983, "topic": "/odom", "last": [6.81317885269877, 2.3155153134362356]}
+{"elapsed_s": 22.384619861000033, "topic": "/odom", "last": [6.819044390950808, 2.3059686705033133]}
+{"elapsed_s": 22.389178472000026, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 22.41495029400005, "topic": "/odom", "last": [6.819044390950808, 2.3059686705033133]}
+{"elapsed_s": 22.41726952099998, "topic": "/cmd_vel", "last": [0.15, -0.06266952015873681]}
+{"elapsed_s": 22.427027689000056, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 22.449935950000054, "topic": "/diagnostics", "actuator": {"mode": "auto", "left_pwm": "1605", "right_pwm": "1558", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.150", "angular_cmd": "-0.063", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 22.452205190999962, "topic": "/odom", "last": [6.734846931236234, 2.378745775443522]}
+{"elapsed_s": 22.482152574999986, "topic": "/odom", "last": [6.734846931236234, 2.378745775443522]}
+{"elapsed_s": 22.496735089000026, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 22.516924785000015, "topic": "/odom", "last": [6.734846931236234, 2.378745775443522]}
+{"elapsed_s": 22.525385064000034, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 22.526016472000038, "topic": "/cmd_vel", "last": [0.15, -0.07601917106509383]}
+{"elapsed_s": 22.551758981000035, "topic": "/odom", "last": [6.751330246707767, 2.3721274105994743]}
+{"elapsed_s": 22.582703253999966, "topic": "/odom", "last": [6.751330246707767, 2.3721274105994743]}
+{"elapsed_s": 22.617822288999946, "topic": "/odom", "last": [6.751330246707767, 2.3721274105994743]}
+{"elapsed_s": 22.645345098999996, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 22.648780578000014, "topic": "/odom", "last": [6.704053585858544, 2.3959546461442924]}
+{"elapsed_s": 22.663931778000006, "topic": "/cmd_vel", "last": [0.15, -0.07601917106509383]}
+{"elapsed_s": 22.671464001000004, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 22.681646276000038, "topic": "/odom", "last": [6.704053585858544, 2.3959546461442924]}
+{"elapsed_s": 22.713628846999995, "topic": "/odom", "last": [6.704053585858544, 2.3959546461442924]}
+{"elapsed_s": 22.717856729999994, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 22.73615104999999, "topic": "/cmd_vel", "last": [0.15, -0.02997069200496715]}
+{"elapsed_s": 22.746040869000012, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 22.751988379999943, "topic": "/odom", "last": [6.675835305948018, 2.428558412225063]}
+{"elapsed_s": 22.780481999000017, "topic": "/odom", "last": [6.745755591036233, 2.3718284886095087]}
+{"elapsed_s": 22.803853376000006, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 22.814162053000018, "topic": "/odom", "last": [6.745755591036233, 2.3718284886095087]}
+{"elapsed_s": 22.83864516899996, "topic": "/cmd_vel", "last": [0.15, -0.02997069200496715]}
+{"elapsed_s": 22.84665199599999, "topic": "/odom", "last": [6.688413958065176, 2.4257731276099035]}
+{"elapsed_s": 22.854118425000024, "topic": "/dock/bspline_path", "last": 50}
+{"elapsed_s": 22.881791191000048, "topic": "/odom", "last": [6.688413958065176, 2.4257731276099035]}
+{"elapsed_s": 22.908837092, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 22.914102344999947, "topic": "/odom", "last": [6.688413958065176, 2.4257731276099035]}
+{"elapsed_s": 22.918911331000004, "topic": "/dock/avoid/status", "last": "STOP: trial time limit reached; explicit start required"}
+{"elapsed_s": 22.919821434000028, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 22.922254296000006, "topic": "/dock/avoid/status", "last": "STOP: dock stop requested"}
+{"elapsed_s": 22.92257324800005, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 22.923, "event": "stop", "value": "dock_ctrl stopped; explicit start required"}
+{"elapsed_s": 22.95402169299996, "topic": "/odom", "last": [6.688413958065176, 2.4257731276099035]}
+{"elapsed_s": 22.980559484999958, "topic": "/odom", "last": [6.659499227110599, 2.448902470289405]}
+{"elapsed_s": 23.016326662999973, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 23.023947047999968, "topic": "/dock/bspline_path", "last": 0}
+{"elapsed_s": 23.026828144999968, "topic": "/odom", "last": [6.735716475527816, 2.3866359215789923]}
+{"elapsed_s": 23.053179469000042, "topic": "/odom", "last": [6.735716475527816, 2.3866359215789923]}
+{"elapsed_s": 23.07880405399999, "topic": "/dock/avoid/status", "last": "NO PLAN: obstacles=401, front=4.406244693706548, goal=(2.44, 4.66), drive_enabled=True, tank_edge=2.45, walls_excluded=False, dock_phase=-, blocked=ENTRY_PATH_NEAR_BOUNDARY"}
+{"elapsed_s": 23.08063197299998, "topic": "/odom", "last": [6.777879112361777, 2.34897328373121]}
+{"elapsed_s": 23.11394808099999, "topic": "/odom", "last": [6.777879112361777, 2.34897328373121]}
+{"elapsed_s": 23.121458062999977, "topic": "/dock/bspline_path", "last": 0}
+{"elapsed_s": 23.121918298999958, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 23.14708460099996, "topic": "/odom", "last": [6.713079346964836, 2.3867024469582483]}
+{"elapsed_s": 23.180189790999975, "topic": "/odom", "last": [6.713079346964836, 2.3867024469582483]}
+{"elapsed_s": 23.190019863999964, "topic": "/dock/avoid/status", "last": "NO PLAN: obstacles=405, front=4.561162343571505, goal=(2.45, 4.65), drive_enabled=True, tank_edge=2.35, walls_excluded=False, dock_phase=-, blocked=ENTRY_PATH_NEAR_BOUNDARY"}
+{"elapsed_s": 23.216591898000047, "topic": "/odom", "last": [6.678015580886925, 2.4173512825109165]}
+{"elapsed_s": 23.222429678000026, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 23.232350056999962, "topic": "/dock/bspline_path", "last": 0}
+{"elapsed_s": 23.24958441399997, "topic": "/odom", "last": [6.678015580886925, 2.4173512825109165]}
+{"elapsed_s": 23.282045108000034, "topic": "/odom", "last": [6.678015580886925, 2.4173512825109165]}
+{"elapsed_s": 23.296209786999952, "topic": "/dock/avoid/status", "last": "NO PLAN: obstacles=408, front=4.487361517164699, goal=(2.44, 4.64), drive_enabled=True, tank_edge=2.39, walls_excluded=False, dock_phase=-, blocked=ENTRY_PATH_NEAR_BOUNDARY"}
+{"elapsed_s": 23.31424314000003, "topic": "/odom", "last": [6.743643517971064, 2.3627408962023413]}
+{"elapsed_s": 23.317297585000006, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 23.32094814200002, "topic": "/dock/bspline_path", "last": 0}
+{"elapsed_s": 23.355889187000002, "topic": "/odom", "last": [6.784357259941584, 2.3412982499633452]}
+{"elapsed_s": 23.38032247800004, "topic": "/odom", "last": [6.784357259941584, 2.3412982499633452]}
+{"elapsed_s": 23.398957255000028, "topic": "/dock/avoid/status", "last": "NO PLAN: obstacles=408, front=4.487361517164699, goal=(2.44, 4.64), drive_enabled=True, tank_edge=2.39, walls_excluded=False, dock_phase=-, blocked=ENTRY_PATH_NEAR_BOUNDARY"}
+{"elapsed_s": 23.41627740499996, "topic": "/odom", "last": [6.784357259941584, 2.3412982499633452]}
+{"elapsed_s": 23.425206976000027, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 23.430960400999993, "topic": "/dock/bspline_path", "last": 0}
+{"elapsed_s": 23.44685482, "topic": "/diagnostics", "actuator": {"mode": "auto", "left_pwm": "1500", "right_pwm": "1500", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.000", "angular_cmd": "0.000", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"summary": {"outcome": "STOP: trial time limit reached; explicit start required", "armed": true, "entry_xy": [2.372153285417584, 4.428420147578864], "initial_xy": [6.750488541687453, 2.3058239824790996], "final_xy": [6.784357259941584, 2.3412982499633452], "nonzero_commands": 147, "max_linear_cmd": 0.15, "max_angular_cmd": 0.1346796978172054, "final_distance_m": 4.880944757760692, "final_yaw_deg": 155.55063598952037, "actuator": {"mode": "auto", "left_pwm": "1500", "right_pwm": "1500", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.000", "angular_cmd": "0.000", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}, "last_status": "NO PLAN: obstacles=408, front=4.487361517164699, goal=(2.44, 4.64), drive_enabled=True, tank_edge=2.39, walls_excluded=False, dock_phase=-, blocked=ENTRY_PATH_NEAR_BOUNDARY", "log": "/tmp/kaboat_dock_trials/20261108_003313.jsonl"}}

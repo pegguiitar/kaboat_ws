@@ -1,0 +1,118 @@
+Panels:
+- Class: rviz_common/Displays
+  Name: Displays
+Visualization Manager:
+  Class: ''
+  Global Options:
+    Fixed Frame: base_link
+    Background Color: 24; 26; 32
+    Frame Rate: 15
+  Displays:
+  - Class: rviz_default_plugins/Map
+    Name: Dock risk (DRI)
+    Enabled: true
+    Value: true
+    Alpha: 0.45
+    Color Scheme: costmap
+    Draw Behind: true
+    Topic:
+      Value: /avoid/dri
+      Depth: 1
+      History Policy: Keep Last
+      Durability Policy: Volatile
+      Reliability Policy: Best Effort
+  - Class: rviz_default_plugins/LaserScan
+    Name: LiDAR
+    Enabled: true
+    Value: true
+    Topic:
+      Value: /scan
+      Depth: 2
+      History Policy: Keep Last
+      Durability Policy: Volatile
+      Reliability Policy: Best Effort
+    Color: 255; 255; 255
+    Color Transformer: FlatColor
+    Size (Pixels): 3
+    Style: Points
+  - Class: rviz_default_plugins/MarkerArray
+    Name: Camera bearing arrows
+    Enabled: true
+    Value: true
+    Topic:
+      Value: /dock/bearing_markers
+      Depth: 1
+      History Policy: Keep Last
+      Durability Policy: Volatile
+      Reliability Policy: Best Effort
+  - Class: rviz_default_plugins/MarkerArray
+    Name: LiDAR wall lines and normals
+    Enabled: true
+    Value: true
+    Topic:
+      Value: /dock/lidar/markers
+      Depth: 2
+      History Policy: Keep Last
+      Durability Policy: Volatile
+      Reliability Policy: Best Effort
+  - Class: rviz_default_plugins/MarkerArray
+    Name: Inferred markers (1m behind wall)
+    Enabled: true
+    Value: true
+    Topic:
+      Value: /dock/markers_base
+      Depth: 2
+      History Policy: Keep Last
+      Durability Policy: Volatile
+      Reliability Policy: Best Effort
+  - Class: rviz_default_plugins/MarkerArray
+    Name: Dock goal
+    Enabled: true
+    Value: true
+    Topic:
+      Value: /dock/avoid/goal_markers
+      Depth: 2
+      History Policy: Keep Last
+      Durability Policy: Volatile
+      Reliability Policy: Best Effort
+  - Class: rviz_default_plugins/Path
+    Name: Dock B-spline
+    Enabled: true
+    Value: true
+    Topic:
+      Value: /dock/bspline_path
+      Depth: 2
+      History Policy: Keep Last
+      Durability Policy: Volatile
+      Reliability Policy: Reliable
+    Color: 0; 255; 255
+    Line Style: Billboards
+    Line Width: 0.06
+    Buffer Length: 1
+  - Class: rviz_default_plugins/Path
+    Name: Approach - alignment - stop
+    Enabled: true
+    Value: true
+    Color: 255; 180; 0
+    Line Style: Billboards
+    Line Width: 0.04
+    Pose Style: Arrows
+    Topic:
+      Value: /dock/waypoints
+      Depth: 1
+      History Policy: Keep Last
+      Durability Policy: Volatile
+      Reliability Policy: Reliable
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 13
+      Pitch: 1.0
+      Yaw: 0.0
+      Focal Point:
+        X: 3.0
+        Y: 0.0
+        Z: 0.0
+Window Geometry:
+  Width: 1200
+  Height: 850

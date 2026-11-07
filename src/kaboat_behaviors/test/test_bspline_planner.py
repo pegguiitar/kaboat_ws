@@ -344,3 +344,31 @@ def test_left_and_right_detours_are_mirror_images_and_return_to_wp(wp_x):
     for plan in (left, right):
         assert plan.bearings[-1] == pytest.approx(0.0, abs=1e-9)
         assert np.allclose(plan.samples[-1], wp, atol=1e-6)
+
+
+def test_finite_goal_does_not_overshoot_near_marker_goal():
+    p = PlannerParams(finite_goal=True)
+    plan = generate(dri_of([]), BOAT, YAW, V_ZERO, (.8, 0.), p)
+    assert plan is not None and plan.goal_locked
+    np.testing.assert_allclose(plan.samples[-1], (.8, 0.), atol=1e-10)
+    assert np.linalg.norm(plan.cps - BOAT, axis=1).max() <= .8 + 1e-10
+    assert check(plan, dri_of([]), BOAT, p) is None
+
+
+def test_finite_goal_is_preserved_when_repairing_path():
+    p = PlannerParams(finite_goal=True)
+    plan = generate(dri_of([]), BOAT, YAW, V_ZERO, (7., 0.), p)
+    assert plan is not None
+    dri_new = dri_of([(4., 0.)])
+    idx = check(plan, dri_new, BOAT, p)
+    if idx is not None:
+        repair(plan, dri_new, idx, p)
+    np.testing.assert_allclose(plan.cps[-1], (7., 0.), atol=1e-10)
+    np.testing.assert_allclose(plan.samples[-1], (7., 0.), atol=1e-10)
+
+
+def test_finite_goal_inside_obstacle_does_not_get_moved_to_a_free_arc():
+    p = PlannerParams(finite_goal=True)
+    dri = dri_of([(4., 0.)])
+    plan = generate(dri, BOAT, YAW, V_ZERO, (4., 0.), p)
+    assert plan is None or check(plan, dri, BOAT, p) is not None

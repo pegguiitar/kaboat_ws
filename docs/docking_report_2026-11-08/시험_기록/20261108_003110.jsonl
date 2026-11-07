@@ -1,0 +1,140 @@
+{"elapsed_s": 0.111, "event": "phase", "value": "waiting for a continuous valid B-spline and connected actuator"}
+{"elapsed_s": 0.14346464999994168, "topic": "/dock/bspline_path", "last": 52}
+{"elapsed_s": 0.144, "event": "wait", "value": {"status": null, "path_ready": false, "actuator_ready": false, "esp_mode": null}}
+{"elapsed_s": 0.1448302320000039, "topic": "/dock/avoid/status", "last": "PREVIEW: obstacles=354, front=None, goal=(2.41, 4.41), drive_enabled=True, tank_edge=1.55, walls_excluded=False, dock_phase=APPROACH_ENTRY, blocked="}
+{"elapsed_s": 0.14564683499997955, "topic": "/odom", "last": [6.567205455185208, 1.5406831665619296]}
+{"elapsed_s": 0.14804608400004327, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 0.15114372400000775, "topic": "/odom", "last": [6.567205455185208, 1.5406831665619296]}
+{"elapsed_s": 0.15222897599994667, "topic": "/odom", "last": [6.567205455185208, 1.5406831665619296]}
+{"elapsed_s": 0.16368932800003222, "topic": "/odom", "last": [6.567205455185208, 1.5406831665619296]}
+{"elapsed_s": 0.19160680799996044, "topic": "/dock/avoid/status", "last": "PREVIEW: obstacles=354, front=None, goal=(2.42, 4.40), drive_enabled=True, tank_edge=1.55, walls_excluded=False, dock_phase=APPROACH_ENTRY, blocked="}
+{"elapsed_s": 0.19290637200003857, "topic": "/dock/bspline_path", "last": 0}
+{"elapsed_s": 0.1934070290000136, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 0.20124514700000873, "topic": "/odom", "last": [6.566200793123373, 1.5383796239237943]}
+{"elapsed_s": 0.23639550999996573, "topic": "/diagnostics", "actuator": {"mode": "auto", "left_pwm": "1500", "right_pwm": "1500", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.000", "angular_cmd": "0.000", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 0.24228569199999583, "topic": "/odom", "last": [6.565361206807463, 1.5384251357806438]}
+{"elapsed_s": 0.2562829610000108, "topic": "/dock/avoid/status", "last": "WAIT: marker goal stale"}
+{"elapsed_s": 0.26111873900003957, "topic": "/odom", "last": [6.565361206807463, 1.5384251357806438]}
+{"elapsed_s": 0.263, "event": "parameters", "value": {"drive_enabled": true, "approach_only": true, "trial_timeout_sec": 15.0, "max_linear_cmd": 0.15}}
+{"elapsed_s": 0.2942970999999943, "topic": "/odom", "last": [6.56232616689757, 1.5402358125807212]}
+{"elapsed_s": 0.3067639500000041, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 0.3157816279999679, "topic": "/dock/bspline_path", "last": 52}
+{"elapsed_s": 0.32891554000002543, "topic": "/odom", "last": [6.56232616689757, 1.5402358125807212]}
+{"elapsed_s": 0.3585587420000138, "topic": "/dock/avoid/status", "last": "PREVIEW: obstacles=355, front=None, goal=(2.42, 4.40), drive_enabled=True, tank_edge=1.54, walls_excluded=False, dock_phase=APPROACH_ENTRY, blocked="}
+{"elapsed_s": 0.3603608509999958, "topic": "/odom", "last": [6.56232616689757, 1.5402358125807212]}
+{"elapsed_s": 0.3868343139999979, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 0.38803377900001124, "topic": "/dock/bspline_path", "last": 0}
+{"elapsed_s": 0.39347863299997243, "topic": "/odom", "last": [6.551395223956973, 1.5463365735009742]}
+{"elapsed_s": 0.4269119140000157, "topic": "/odom", "last": [6.551395223956973, 1.5463365735009742]}
+{"elapsed_s": 0.45114469500003906, "topic": "/dock/avoid/status", "last": "WAIT: marker goal stale"}
+{"elapsed_s": 0.46179388400003063, "topic": "/odom", "last": [6.551356961888269, 1.5466275210103453]}
+{"elapsed_s": 0.48698000799993224, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 0.4886015030000408, "topic": "/dock/bspline_path", "last": 0}
+{"elapsed_s": 0.49725587299997187, "topic": "/odom", "last": [6.551356961888269, 1.5466275210103453]}
+{"elapsed_s": 0.5268211200000223, "topic": "/odom", "last": [6.536985030883217, 1.5569657606497858]}
+{"elapsed_s": 0.5528766500000302, "topic": "/dock/avoid/status", "last": "WAIT: marker goal stale"}
+{"elapsed_s": 0.5618821360000084, "topic": "/odom", "last": [6.536985030883217, 1.5569657606497858]}
+{"elapsed_s": 0.5919615110000223, "topic": "/dock/bspline_path", "last": 0}
+{"elapsed_s": 0.5925466500000311, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 0.6009483069999533, "topic": "/odom", "last": [6.529819749298794, 1.5636207567490001]}
+{"elapsed_s": 0.6302171899999394, "topic": "/odom", "last": [6.529819749298794, 1.5636207567490001]}
+{"elapsed_s": 0.658118251000019, "topic": "/dock/avoid/status", "last": "WAIT: marker goal stale"}
+{"elapsed_s": 0.6603422929999851, "topic": "/odom", "last": [6.525607102718874, 1.5650624452872108]}
+{"elapsed_s": 0.6874736319999784, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 0.689806190000013, "topic": "/dock/bspline_path", "last": 0}
+{"elapsed_s": 0.6956714100000454, "topic": "/odom", "last": [6.525607102718874, 1.5650624452872108]}
+{"elapsed_s": 0.726519833999987, "topic": "/odom", "last": [6.525607102718874, 1.5650624452872108]}
+{"elapsed_s": 0.7606031179999491, "topic": "/odom", "last": [6.5236134391228315, 1.563878723729745]}
+{"elapsed_s": 0.7940752769999335, "topic": "/odom", "last": [6.5236134391228315, 1.563878723729745]}
+{"elapsed_s": 0.8121118799999749, "topic": "/dock/avoid/status", "last": "WAIT: marker goal stale"}
+{"elapsed_s": 0.8165376919999972, "topic": "/dock/bspline_path", "last": 0}
+{"elapsed_s": 0.8172181310000042, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 0.8274241039999879, "topic": "/odom", "last": [6.521687143803983, 1.5668259082271914]}
+{"elapsed_s": 0.8597427839999909, "topic": "/odom", "last": [6.521687143803983, 1.5668259082271914]}
+{"elapsed_s": 0.8734068569999636, "topic": "/dock/avoid/status", "last": "WAIT: marker goal stale"}
+{"elapsed_s": 0.887565474999974, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 0.8891748409999991, "topic": "/dock/bspline_path", "last": 0}
+{"elapsed_s": 0.896061087000021, "topic": "/odom", "last": [6.521687143803983, 1.5668259082271914]}
+{"elapsed_s": 0.9295744629999945, "topic": "/odom", "last": [6.520663445622432, 1.5664925361797937]}
+{"elapsed_s": 0.9553397409999889, "topic": "/dock/avoid/status", "last": "WAIT: marker goal stale"}
+{"elapsed_s": 0.959711150999965, "topic": "/odom", "last": [6.520663445622432, 1.5664925361797937]}
+{"elapsed_s": 0.9933725649999587, "topic": "/odom", "last": [6.525697652683818, 1.5599865256644931]}
+{"elapsed_s": 1.0167284499999596, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 1.024470756000028, "topic": "/dock/bspline_path", "last": 52}
+{"elapsed_s": 1.0273658290000185, "topic": "/odom", "last": [6.525697652683818, 1.5599865256644931]}
+{"elapsed_s": 1.0598054099999672, "topic": "/odom", "last": [6.532817520660483, 1.5534518447834766]}
+{"elapsed_s": 1.0885072019999598, "topic": "/dock/avoid/status", "last": "PREVIEW: obstacles=355, front=None, goal=(2.42, 4.39), drive_enabled=True, tank_edge=1.57, walls_excluded=False, dock_phase=APPROACH_ENTRY, blocked="}
+{"elapsed_s": 1.0960769590000154, "topic": "/odom", "last": [6.532817520660483, 1.5534518447834766]}
+{"elapsed_s": 1.1157816180000282, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 1.1295252129999653, "topic": "/dock/bspline_path", "last": 52}
+{"elapsed_s": 1.1318806839999525, "topic": "/odom", "last": [6.5347873485455565, 1.5540466330694218]}
+{"elapsed_s": 1.1619331450000345, "topic": "/odom", "last": [6.5347873485455565, 1.5540466330694218]}
+{"elapsed_s": 1.1675802139999405, "topic": "/dock/avoid/status", "last": "PREVIEW: obstacles=355, front=None, goal=(2.42, 4.39), drive_enabled=True, tank_edge=1.57, walls_excluded=False, dock_phase=APPROACH_ENTRY, blocked="}
+{"elapsed_s": 1.1955431650000037, "topic": "/odom", "last": [6.5347873485455565, 1.5540466330694218]}
+{"elapsed_s": 1.2012595799999417, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 1.2176158390000182, "topic": "/dock/bspline_path", "last": 52}
+{"elapsed_s": 1.2271279010000171, "topic": "/diagnostics", "actuator": {"mode": "auto", "left_pwm": "1500", "right_pwm": "1500", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.000", "angular_cmd": "0.000", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 1.2299438029999692, "topic": "/odom", "last": [6.5347873485455565, 1.5540466330694218]}
+{"elapsed_s": 1.2555576830000064, "topic": "/dock/avoid/status", "last": "PREVIEW: obstacles=355, front=None, goal=(2.42, 4.39), drive_enabled=True, tank_edge=1.55, walls_excluded=False, dock_phase=APPROACH_ENTRY, blocked="}
+{"elapsed_s": 1.2618259890000445, "topic": "/odom", "last": [6.532666087546797, 1.5534117825645084]}
+{"elapsed_s": 1.2963381189999836, "topic": "/odom", "last": [6.532666087546797, 1.5534117825645084]}
+{"elapsed_s": 1.307496475999983, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 1.3234046879999823, "topic": "/dock/bspline_path", "last": 52}
+{"elapsed_s": 1.3301840819999597, "topic": "/odom", "last": [6.5332858782635075, 1.5553370354025562]}
+{"elapsed_s": 1.3604157810000288, "topic": "/odom", "last": [6.5332858782635075, 1.5553370354025562]}
+{"elapsed_s": 1.390364911000006, "topic": "/dock/avoid/status", "last": "PREVIEW: obstacles=355, front=None, goal=(2.41, 4.39), drive_enabled=True, tank_edge=1.55, walls_excluded=False, dock_phase=APPROACH_ENTRY, blocked="}
+{"elapsed_s": 1.3928255370000215, "topic": "/odom", "last": [6.529152069835245, 1.557394139043084]}
+{"elapsed_s": 1.4126113510000096, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 1.4258147680000093, "topic": "/dock/bspline_path", "last": 52}
+{"elapsed_s": 1.4279586799999606, "topic": "/odom", "last": [6.529152069835245, 1.557394139043084]}
+{"elapsed_s": 1.4618666940000367, "topic": "/odom", "last": [6.529152069835245, 1.557394139043084]}
+{"elapsed_s": 1.4848189169999841, "topic": "/dock/avoid/status", "last": "PREVIEW: obstacles=355, front=None, goal=(2.41, 4.39), drive_enabled=True, tank_edge=1.55, walls_excluded=False, dock_phase=APPROACH_ENTRY, blocked="}
+{"elapsed_s": 1.4946079799999552, "topic": "/odom", "last": [6.526261282580085, 1.5584936252424586]}
+{"elapsed_s": 1.5112802180000244, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 1.523159494999959, "topic": "/dock/bspline_path", "last": 52}
+{"elapsed_s": 1.5290087470000344, "topic": "/odom", "last": [6.526261282580085, 1.5584936252424586]}
+{"elapsed_s": 1.53, "event": "phase", "value": "sent computer_control_mode with neutral output; waiting for driver feedback"}
+{"elapsed_s": 1.5617674420000185, "topic": "/odom", "last": [6.522833482410935, 1.5666867671611082]}
+{"elapsed_s": 1.5728336040000386, "topic": "/dock/avoid/status", "last": "PREVIEW: obstacles=355, front=None, goal=(2.41, 4.39), drive_enabled=True, tank_edge=1.55, walls_excluded=False, dock_phase=APPROACH_ENTRY, blocked="}
+{"elapsed_s": 1.587, "event": "arm", "value": {"success": true, "message": "avoidance test armed", "entry_xy": [2.413424674672027, 4.391359215365753]}}
+{"elapsed_s": 1.5936498820000224, "topic": "/odom", "last": [6.522833482410935, 1.5666867671611082]}
+{"elapsed_s": 1.6089499759999626, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 1.6245009589999881, "topic": "/dock/bspline_path", "last": 52}
+{"elapsed_s": 1.6310433529999955, "topic": "/odom", "last": [6.52694711356522, 1.5665016273042789]}
+{"elapsed_s": 1.66334267000002, "topic": "/odom", "last": [6.52694711356522, 1.5665016273042789]}
+{"elapsed_s": 1.6966936059999398, "topic": "/dock/avoid/status", "last": "FOLLOW: plan_acquired"}
+{"elapsed_s": 1.6976218290000133, "topic": "/odom", "last": [6.535569566344883, 1.5556115234703347]}
+{"elapsed_s": 1.7175062679999655, "topic": "/cmd_vel", "last": [0.15, -0.02626761989878145]}
+{"elapsed_s": 1.7254464369999596, "topic": "/dock/bspline_path", "last": 52}
+{"elapsed_s": 1.7286839209999698, "topic": "/odom", "last": [6.535569566344883, 1.5556115234703347]}
+{"elapsed_s": 1.7649566500000446, "topic": "/odom", "last": [6.522917326270535, 1.5676375160540115]}
+{"elapsed_s": 1.792207254999994, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 1.7960715760000312, "topic": "/odom", "last": [6.522917326270535, 1.5676375160540115]}
+{"elapsed_s": 1.8122517629999493, "topic": "/cmd_vel", "last": [0.15, -0.02626761989878145]}
+{"elapsed_s": 1.8344983929999898, "topic": "/dock/bspline_path", "last": 52}
+{"elapsed_s": 1.8375568630000316, "topic": "/odom", "last": [6.518902232341874, 1.5682871338354691]}
+{"elapsed_s": 1.860329686, "topic": "/odom", "last": [6.518902232341874, 1.5682871338354691]}
+{"elapsed_s": 1.896750132999955, "topic": "/odom", "last": [6.518902232341874, 1.5682871338354691]}
+{"elapsed_s": 1.9248065560000214, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 1.928263726999944, "topic": "/odom", "last": [6.517806910204412, 1.566007901657841]}
+{"elapsed_s": 1.9458109999999351, "topic": "/cmd_vel", "last": [0.15, -0.014977508595207098]}
+{"elapsed_s": 1.9517061410000451, "topic": "/dock/bspline_path", "last": 52}
+{"elapsed_s": 1.9610800860000381, "topic": "/odom", "last": [6.517806910204412, 1.566007901657841]}
+{"elapsed_s": 1.996631351000019, "topic": "/odom", "last": [6.514942479534806, 1.569979769903219]}
+{"elapsed_s": 2.0268594949999397, "topic": "/odom", "last": [6.514942479534806, 1.569979769903219]}
+{"elapsed_s": 2.0380104270000174, "topic": "/dock/avoid/status", "last": "FOLLOW: following"}
+{"elapsed_s": 2.0510888149999573, "topic": "/dock/bspline_path", "last": 0}
+{"elapsed_s": 2.0516919389999657, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 2.0614361359999975, "topic": "/odom", "last": [6.514942479534806, 1.569979769903219]}
+{"elapsed_s": 2.107098554000004, "topic": "/odom", "last": [6.514672706860049, 1.5681765060954465]}
+{"elapsed_s": 2.117162313999984, "topic": "/dock/avoid/status", "last": "WAIT: marker goal stale"}
+{"elapsed_s": 2.127830413999959, "topic": "/odom", "last": [6.514643928166514, 1.5683653505079378]}
+{"elapsed_s": 2.1425203750000037, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 2.151717577999989, "topic": "/dock/bspline_path", "last": 52}
+{"elapsed_s": 2.162405390999993, "topic": "/odom", "last": [6.514643928166514, 1.5683653505079378]}
+{"elapsed_s": 2.192692127999976, "topic": "/dock/avoid/status", "last": "PREVIEW: obstacles=355, front=None, goal=(2.41, 4.39), drive_enabled=True, tank_edge=1.57, walls_excluded=False, dock_phase=APPROACH_ENTRY, blocked="}
+{"elapsed_s": 2.1967933529999755, "topic": "/odom", "last": [6.5153564713588, 1.5647513161324242]}
+{"elapsed_s": 2.1979028939999807, "topic": "/dock/avoid/status", "last": "STOP: dock stop requested"}
+{"elapsed_s": 2.1982846029999337, "topic": "/cmd_vel", "last": [0.0, 0.0]}
+{"elapsed_s": 2.2, "event": "stop", "value": "dock_ctrl stopped; explicit start required"}
+{"summary": {"outcome": "WAIT: marker goal stale", "armed": true, "entry_xy": [2.413424674672027, 4.391359215365753], "initial_xy": [6.522833482410935, 1.5666867671611082], "final_xy": [6.5153564713588, 1.5647513161324242], "nonzero_commands": 3, "max_linear_cmd": 0.15, "max_angular_cmd": 0.02626761989878145, "final_distance_m": 4.981521522655324, "final_yaw_deg": 148.13409907272407, "actuator": {"mode": "auto", "left_pwm": "1500", "right_pwm": "1500", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.000", "angular_cmd": "0.000", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}, "last_status": "STOP: dock stop requested", "log": "/tmp/kaboat_dock_trials/20261108_003110.jsonl"}}

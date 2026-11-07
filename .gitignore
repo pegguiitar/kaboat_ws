@@ -11,3 +11,10 @@ __pycache__/
 # Editor/OS files
 .vscode/
 .DS_Store
+
+# TensorRT engines are built for the local GPU and TensorRT version.
+*.engine
+*.onnx
+
+# Local CUDA Python environment
+/.venv-dock-yolo/

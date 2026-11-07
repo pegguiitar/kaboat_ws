@@ -1,0 +1,76 @@
+topic,message_type,frame,meaning
+/camera/color/image_raw,sensor_msgs/msg/Image,camera_color_optical_frame,RGB input; 640x480; monitors use counters
+/camera/depth/image_raw,sensor_msgs/msg/Image,camera_color_optical_frame,Aligned depth; 640x480; native stereo 1280x720
+/camera/camera_info,sensor_msgs/msg/CameraInfo,camera_color_optical_frame,Camera intrinsics
+/scan/raw,sensor_msgs/msg/LaserScan,onboard_laser_frame,Raw onboard LiDAR
+/scan,sensor_msgs/msg/LaserScan,onboard_laser_frame,Filtered LiDAR; pitch -1.2..4 degrees
+/imu/data,sensor_msgs/msg/Imu,imu_link,IMU
+/odom,nav_msgs/msg/Odometry,odom,Boat pose
+/tf,tf2_msgs/msg/TFMessage,mixed,Dynamic transforms
+/tf_static,tf2_msgs/msg/TFMessage,mixed,Mounting and camera optical transforms
+/dock/debug_image,sensor_msgs/msg/Image,camera_color_optical_frame,All masks/boxes/classes/confidences; bgr8; 320x240 max 5Hz
+/detections/dock_marks,kaboat_msgs/msg/MarkArray,camera_color_optical_frame,Shape/confidence/bearing/range list with valid depth
+/dock/markers_ground,visualization_msgs/msg/MarkerArray,odom,LiDAR-localized inferred marker points and labels; marker assumed 1m behind fitted wall
+/dock/markers/triangle/ground,geometry_msgs/msg/PointStamped,odom,LiDAR-localized inferred marker 1m behind fitted wall; odom z=0
+/dock/markers/triangle/base,geometry_msgs/msg/PointStamped,base_link,Raw depth-quality-checked triangle 3D measurement
+/dock/markers/circle/ground,geometry_msgs/msg/PointStamped,odom,LiDAR-localized inferred marker 1m behind fitted wall; odom z=0
+/dock/markers/circle/base,geometry_msgs/msg/PointStamped,base_link,Raw depth-quality-checked circle 3D measurement
+/dock/markers/square/ground,geometry_msgs/msg/PointStamped,odom,LiDAR-localized inferred marker 1m behind fitted wall; odom z=0
+/dock/markers/square/base,geometry_msgs/msg/PointStamped,base_link,Raw depth-quality-checked square 3D measurement
+/dock/marker_base,geometry_msgs/msg/PointStamped,base_link,Legacy detector-selected marker 3D alias
+/dock/marker_ground_raw,geometry_msgs/msg/PointStamped,odom,Legacy selected marker before temporal filter; z=0
+/dock/marker_ground,geometry_msgs/msg/PointStamped,odom,Selected LiDAR-localized inferred marker; odom z=0
+/dock/detection_status,std_msgs/msg/String,-,JSON per-class quality/filter validity and input counters
+/dock/avoid/goal_candidate,geometry_msgs/msg/PointStamped,odom,Raw final stop candidate before wall/normal averaging
+/dock/avoid/goal,geometry_msgs/msg/PointStamped,odom,Latest measured stop goal; no time averaging; wall + dock_stop_distance_m * normal
+/dock/final_waypoint,geometry_msgs/msg/PointStamped,odom,"Active control goal; entry on start, live yellow /dock/stop_point within 3m of entry"
+/dock/bspline_path,nav_msgs/msg/Path,odom,Collision-checked docking approach B-spline; empty when no valid path
+/dock/avoid/goal_markers,visualization_msgs/msg/MarkerArray,odom,Cyan ENTRY, orange ALIGN, yellow STOP, white WALL; invalid geometry/path shown red
+/dock/avoid/goal_status,std_msgs/msg/String,-,JSON LiDAR geometry source/shared normal/window=0/latest observation/bounds validity
+/dock/avoid/status,std_msgs/msg/String,-,PREVIEW/WAIT/NO PLAN/FOLLOW/FINISHED and cause
+/dock/avoid/markers,visualization_msgs/msg/MarkerArray,odom,B-spline controls and goal/state visualizations
+/avoid/dri,nav_msgs/msg/OccupancyGrid,odom,DRI visualization
+/avoid/dri_marks,visualization_msgs/msg/MarkerArray,odom,Obstacle risk cells
+/dock/avoid/cmd_preview,geometry_msgs/msg/Twist,-,"Controller command mirror; zero before start in current dock_ctrl; not actuator feedback"
+/occupancy_grid,nav_msgs/msg/OccupancyGrid,odom,LiDAR occupancy grid; onboard offset +0.73m
+/dock/markers/triangle/ground_base,geometry_msgs/msg/PointStamped,base_link,Boat-relative LiDAR-localized inferred marker; z=0
+/dock/markers/circle/ground_base,geometry_msgs/msg/PointStamped,base_link,Boat-relative LiDAR-localized inferred marker; z=0
+/dock/markers/square/ground_base,geometry_msgs/msg/PointStamped,base_link,Boat-relative LiDAR-localized inferred marker; z=0
+/dock/markers_base,visualization_msgs/msg/MarkerArray,base_link,Boat-relative LiDAR-localized inferred marker points; independent of camera depth
+/dock/markers/triangle/ray,geometry_msgs/msg/PointStamped,camera_color_optical_frame,Undistorted camera sight ray endpoint at optical Z=1; not a measured 3D position; independent of depth
+/dock/markers/triangle/depth_ground,geometry_msgs/msg/PointStamped,odom,Legacy camera-depth projection; diagnostics only
+/dock/markers/triangle/depth_ground_base,geometry_msgs/msg/PointStamped,base_link,Legacy camera-depth boat-relative projection; diagnostics only
+/dock/lidar/triangle/wall_point_base,geometry_msgs/msg/PointStamped,base_link,Camera-ray / RANSAC wall intersection
+/dock/lidar/triangle/marker_base,geometry_msgs/msg/PointStamped,base_link,Inferred marker 1m behind LiDAR wall
+/dock/lidar/triangle/normal_base,geometry_msgs/msg/Vector3Stamped,base_link,Unit normal from LiDAR wall towards boat
+/dock/lidar/triangle/wall_point,geometry_msgs/msg/PointStamped,odom,Measured-time wall intersection in odom
+/dock/lidar/triangle/marker_ground,geometry_msgs/msg/PointStamped,odom,Inferred marker 1m behind LiDAR wall; z=0
+/dock/lidar/triangle/normal,geometry_msgs/msg/Vector3Stamped,odom,Measured-time wall unit normal in odom
+/dock/markers/circle/ray,geometry_msgs/msg/PointStamped,camera_color_optical_frame,Undistorted camera sight ray endpoint at optical Z=1; not a measured 3D position; independent of depth
+/dock/markers/circle/depth_ground,geometry_msgs/msg/PointStamped,odom,Legacy camera-depth projection; diagnostics only
+/dock/markers/circle/depth_ground_base,geometry_msgs/msg/PointStamped,base_link,Legacy camera-depth boat-relative projection; diagnostics only
+/dock/lidar/circle/wall_point_base,geometry_msgs/msg/PointStamped,base_link,Camera-ray / RANSAC wall intersection
+/dock/lidar/circle/marker_base,geometry_msgs/msg/PointStamped,base_link,Inferred marker 1m behind LiDAR wall
+/dock/lidar/circle/normal_base,geometry_msgs/msg/Vector3Stamped,base_link,Unit normal from LiDAR wall towards boat
+/dock/lidar/circle/wall_point,geometry_msgs/msg/PointStamped,odom,Measured-time wall intersection in odom
+/dock/lidar/circle/marker_ground,geometry_msgs/msg/PointStamped,odom,Inferred marker 1m behind LiDAR wall; z=0
+/dock/lidar/circle/normal,geometry_msgs/msg/Vector3Stamped,odom,Measured-time wall unit normal in odom
+/dock/markers/square/ray,geometry_msgs/msg/PointStamped,camera_color_optical_frame,Undistorted camera sight ray endpoint at optical Z=1; not a measured 3D position; independent of depth
+/dock/markers/square/depth_ground,geometry_msgs/msg/PointStamped,odom,Legacy camera-depth projection; diagnostics only
+/dock/markers/square/depth_ground_base,geometry_msgs/msg/PointStamped,base_link,Legacy camera-depth boat-relative projection; diagnostics only
+/dock/lidar/square/wall_point_base,geometry_msgs/msg/PointStamped,base_link,Camera-ray / RANSAC wall intersection
+/dock/lidar/square/marker_base,geometry_msgs/msg/PointStamped,base_link,Inferred marker 1m behind LiDAR wall
+/dock/lidar/square/normal_base,geometry_msgs/msg/Vector3Stamped,base_link,Unit normal from LiDAR wall towards boat
+/dock/lidar/square/wall_point,geometry_msgs/msg/PointStamped,odom,Measured-time wall intersection in odom
+/dock/lidar/square/marker_ground,geometry_msgs/msg/PointStamped,odom,Inferred marker 1m behind LiDAR wall; z=0
+/dock/lidar/square/normal,geometry_msgs/msg/Vector3Stamped,odom,Measured-time wall unit normal in odom
+/dock/lidar/markers,visualization_msgs/msg/MarkerArray,base_link,"Per-class wall intersection, RANSAC line, inward normal and direct/shared source"
+/dock/lidar/status,std_msgs/msg/String,-,JSON detected/localized flags; capture-time scan matching; line fit support/RMS/span/source and rejection reason
+/dock/depth_markers_ground,visualization_msgs/msg/MarkerArray,odom,Legacy camera-depth marker visualization; diagnostics only
+/dock/depth_markers_base,visualization_msgs/msg/MarkerArray,base_link,Legacy camera-depth marker visualization; diagnostics only
+/dock/marker_ground_depth,geometry_msgs/msg/PointStamped,odom,Legacy selected filtered camera-depth point; diagnostics only
+/dock/bearing_markers,visualization_msgs/msg/MarkerArray,camera_color_optical_frame,1m bearing arrows from optical origin; length is display only; no depth or LiDAR required
+/dock/approach_point,geometry_msgs/msg/PointStamped,odom,B-spline approach point; wall + 2m inward normal by default
+/dock/alignment_point,geometry_msgs/msg/PointStamped,odom,Alignment point; wall + 1.5m inward normal by default
+/dock/stop_point,geometry_msgs/msg/PointStamped,odom,Stop point; wall + 1m normal by default
+/dock/waypoints,nav_msgs/msg/Path,odom,"Three poses: approach/alignment/stop, all heading towards wall; same measurement stamp as /dock/avoid/goal"

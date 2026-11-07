@@ -1,0 +1,35 @@
+dock_ctrl:
+  ros__parameters:
+    drive_enabled: false
+    wait_for_start: true
+    allow_escape: false
+    fixed_goal_enabled: false
+    final_goal_topic: /dock/final_waypoint
+    goal_topic: /dock/approach_point
+    dock_waypoints_topic: ''
+    dock_final_max_linear_cmd: 0.1
+    dock_final_switch_distance_m: 3.0
+    dock_stop_goal_topic: /dock/stop_point
+    dock_final_replan_distance_m: 0.1
+    goal_timeout_sec: 0.7
+    goal_max_shift_m: 0.5
+    planner.finite_goal: true
+    goal_tolerance: 0.25
+    require_front_obstacle: false
+    start_heading_tolerance_deg: 180.0
+    max_cross_track_error: 0.7
+    max_linear_cmd: 0.25
+    max_angular_cmd: 0.31
+    odom_timeout_sec: 0.5
+    scan_timeout_sec: 0.5
+    grid_timeout_sec: 0.5
+    tank_bounds:
+    - 0.0
+    - 0.0
+    - 10.0
+    - 5.0
+    exclude_tank_walls: false
+    tank_wall_band: 0.5
+    tank_wall_dri: 0.5
+    tank_stop_margin: 0.5
+    require_goal_updates_when_running: false

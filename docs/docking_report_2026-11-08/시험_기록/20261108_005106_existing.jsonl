@@ -1,0 +1,439 @@
+{"elapsed_s": 0.101, "event": "phase", "value": "existing B-spline avoidance controller; waiting for valid entry path"}
+{"elapsed_s": 0.108, "event": "progress", "value": {"armed": false, "status": null, "xy": null, "entry": null, "pwm": [null, null]}}
+{"elapsed_s": 0.109, "event": "odom", "value": [1819.034667832, 8.415233065016226, 0.6192905975297013, 163.59746185269665]}
+{"elapsed_s": 0.11, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 0.111, "event": "odom", "value": [1819.036713078, 8.415514329630614, 0.6186796945670785, 163.6633089653268]}
+{"elapsed_s": 0.121, "event": "odom", "value": [1819.046201431, 8.41710415921121, 0.6153523204814251, 163.7482845721541]}
+{"elapsed_s": 0.128, "event": "command", "value": [1819.053402034, 0.0, 0.0]}
+{"elapsed_s": 0.155, "event": "odom", "value": [1819.081139229, 8.417833587861107, 0.6142646503139126, 163.8261376139642]}
+{"elapsed_s": 0.187, "event": "odom", "value": [1819.112268848, 8.417833587861107, 0.6142646503139126, 163.8261376139642]}
+{"elapsed_s": 0.188, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 0.219, "event": "odom", "value": [1819.144616296, 8.417877076359838, 0.6143979802741844, 163.89529788334343]}
+{"elapsed_s": 0.227, "event": "command", "value": [1819.153019911, 0.0, 0.0]}
+{"elapsed_s": 0.249, "event": "odom", "value": [1819.174701659, 8.417877076359838, 0.6143979802741844, 163.89529788334343]}
+{"elapsed_s": 0.288, "event": "odom", "value": [1819.213617914, 8.417877076359838, 0.6143979802741844, 163.89529788334343]}
+{"elapsed_s": 0.316, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 0.318, "event": "odom", "value": [1819.243240159, 8.417161058889507, 0.6152791462116298, 163.95674793043486]}
+{"elapsed_s": 0.326, "event": "command", "value": [1819.25149049, 0.0, 0.0]}
+{"elapsed_s": 0.35, "event": "odom", "value": [1819.275463315, 8.417161058889507, 0.6152791462116298, 163.95674793043486]}
+{"elapsed_s": 0.382, "event": "odom", "value": [1819.30793755, 8.416959671567543, 0.615740096490019, 164.01259815094014]}
+{"elapsed_s": 0.392, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 0.415, "event": "odom", "value": [1819.34107235, 8.416959671567543, 0.615740096490019, 164.01259815094014]}
+{"elapsed_s": 0.425, "event": "command", "value": [1819.351076014, 0.0, 0.0]}
+{"elapsed_s": 0.45, "event": "odom", "value": [1819.375278254, 8.41726954930231, 0.615458268746482, 164.07805323750702]}
+{"elapsed_s": 0.466, "event": "actuator", "value": {"mode": "auto", "left_pwm": "1500", "right_pwm": "1500", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.000", "angular_cmd": "0.000", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 0.484, "event": "odom", "value": [1819.409383515, 8.41726954930231, 0.615458268746482, 164.07805323750702]}
+{"elapsed_s": 0.49, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 0.515, "event": "odom", "value": [1819.440819959, 8.409917978610826, 0.6161656169601404, 164.15747586763047]}
+{"elapsed_s": 0.525, "event": "command", "value": [1819.45110936, 0.0, 0.0]}
+{"elapsed_s": 0.556, "event": "odom", "value": [1819.481442155, 8.409917978610826, 0.6161656169601404, 164.15747586763047]}
+{"elapsed_s": 0.588, "event": "odom", "value": [1819.513235506, 8.409917978610826, 0.6161656169601404, 164.15747586763047]}
+{"elapsed_s": 0.616, "event": "odom", "value": [1819.542099167, 8.41498012020316, 0.6158551069270273, 164.21994083523975]}
+{"elapsed_s": 0.632, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 0.633, "event": "command", "value": [1819.559103428, 0.0, 0.0]}
+{"elapsed_s": 0.649, "event": "odom", "value": [1819.574605948, 8.41498012020316, 0.6158551069270273, 164.21994083523975]}
+{"elapsed_s": 0.687, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 0.691, "event": "odom", "value": [1819.616807967, 8.415629596504921, 0.6153737427723969, 164.2892152322961]}
+{"elapsed_s": 0.719, "event": "odom", "value": [1819.644871765, 8.415629596504921, 0.6153737427723969, 164.2892152322961]}
+{"elapsed_s": 0.733, "event": "command", "value": [1819.658545364, 0.0, 0.0]}
+{"elapsed_s": 0.754, "event": "odom", "value": [1819.679311852, 8.415672326237413, 0.6150868402804188, 164.35358717714573]}
+{"elapsed_s": 0.78, "event": "status", "value": "NO PLAN: obstacles=281, front=0.6043443217244286, goal=(2.31, 4.32), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 0.783, "event": "odom", "value": [1819.708779564, 8.415672326237413, 0.6150868402804188, 164.35358717714573]}
+{"elapsed_s": 0.83, "event": "odom", "value": [1819.755366324, 8.416450885354223, 0.6146367012587646, 164.4177184831604]}
+{"elapsed_s": 0.838, "event": "command", "value": [1819.763863574, 0.0, 0.0]}
+{"elapsed_s": 0.857, "event": "odom", "value": [1819.78246766, 8.416450885354223, 0.6146367012587646, 164.4177184831604]}
+{"elapsed_s": 0.882, "event": "odom", "value": [1819.807904849, 8.416450885354223, 0.6146367012587646, 164.4177184831604]}
+{"elapsed_s": 0.888, "event": "status", "value": "NO PLAN: obstacles=282, front=0.6041220016223686, goal=(2.32, 4.32), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 0.916, "event": "odom", "value": [1819.841323337, 8.417482586987528, 0.6128819564351063, 164.49500509737868]}
+{"elapsed_s": 0.937, "event": "command", "value": [1819.862994524, 0.0, 0.0]}
+{"elapsed_s": 0.949, "event": "odom", "value": [1819.874755297, 8.401561228107747, 0.6193986573091966, 164.54463634950932]}
+{"elapsed_s": 0.982, "event": "odom", "value": [1819.908111319, 8.401561228107747, 0.6193986573091966, 164.54463634950932]}
+{"elapsed_s": 1.003, "event": "status", "value": "NO PLAN: obstacles=281, front=0.6031940119966246, goal=(2.32, 4.32), drive_enabled=True, tank_edge=0.61, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 1.016, "event": "odom", "value": [1819.942095393, 8.401561228107747, 0.6193986573091966, 164.54463634950932]}
+{"elapsed_s": 1.037, "event": "command", "value": [1819.962473036, 0.0, 0.0]}
+{"elapsed_s": 1.049, "event": "odom", "value": [1819.974569244, 8.401561228107747, 0.6193986573091966, 164.54463634950932]}
+{"elapsed_s": 1.083, "event": "odom", "value": [1820.008584102, 8.393928116479378, 0.6217519977293824, 164.6031365839713]}
+{"elapsed_s": 1.109, "event": "status", "value": "NO PLAN: obstacles=281, front=0.7220377490968782, goal=(2.32, 4.32), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 1.118, "event": "odom", "value": [1820.043237859, 8.392874783628553, 0.619864199537242, 164.68364525879932]}
+{"elapsed_s": 1.151, "event": "odom", "value": [1820.0764037, 8.392874783628553, 0.619864199537242, 164.68364525879932]}
+{"elapsed_s": 1.152, "event": "command", "value": [1820.077790014, 0.0, 0.0]}
+{"elapsed_s": 1.19, "event": "odom", "value": [1820.115305042, 8.403886106925967, 0.6161109174947175, 164.75051095096103]}
+{"elapsed_s": 1.225, "event": "odom", "value": [1820.150362908, 8.403886106925967, 0.6161109174947175, 164.75051095096103]}
+{"elapsed_s": 1.248, "event": "odom", "value": [1820.174033324, 8.408999989408304, 0.6159355156799358, 164.8124989659294]}
+{"elapsed_s": 1.256, "event": "status", "value": "NO PLAN: obstacles=280, front=0.71636877424024, goal=(2.32, 4.32), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 1.273, "event": "command", "value": [1820.198869503, 0.0, 0.0]}
+{"elapsed_s": 1.286, "event": "odom", "value": [1820.211847625, 8.408999989408304, 0.6159355156799358, 164.8124989659294]}
+{"elapsed_s": 1.317, "event": "odom", "value": [1820.242724148, 8.413205107301978, 0.6137277145514293, 164.88914110702765]}
+{"elapsed_s": 1.352, "event": "odom", "value": [1820.277799646, 8.413205107301978, 0.6137277145514293, 164.88914110702765]}
+{"elapsed_s": 1.354, "event": "status", "value": "NO PLAN: obstacles=280, front=0.71636877424024, goal=(2.32, 4.32), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 1.379, "event": "command", "value": [1820.304959352, 0.0, 0.0]}
+{"elapsed_s": 1.386, "event": "odom", "value": [1820.312161779, 8.413205107301978, 0.6137277145514293, 164.88914110702765]}
+{"elapsed_s": 1.418, "event": "odom", "value": [1820.343189122, 8.413205107301978, 0.6137277145514293, 164.88914110702765]}
+{"elapsed_s": 1.429, "event": "status", "value": "NO PLAN: obstacles=278, front=0.71636877424024, goal=(2.32, 4.32), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 1.44, "event": "command", "value": [1820.365763601, 0.0, 0.0]}
+{"elapsed_s": 1.45, "event": "odom", "value": [1820.375391509, 8.413205107301978, 0.6137277145514293, 164.88914110702765]}
+{"elapsed_s": 1.467, "event": "actuator", "value": {"mode": "auto", "left_pwm": "1500", "right_pwm": "1500", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.000", "angular_cmd": "0.000", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 1.481, "event": "status", "value": "NO PLAN: obstacles=278, front=0.7212985288616754, goal=(2.32, 4.32), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 1.485, "event": "odom", "value": [1820.410663718, 8.409606042793728, 0.6170600980292664, 165.0103532525701]}
+{"elapsed_s": 1.515, "event": "odom", "value": [1820.441045793, 8.409606042793728, 0.6170600980292664, 165.0103532525701]}
+{"elapsed_s": 1.538, "event": "command", "value": [1820.463503116, 0.0, 0.0]}
+{"elapsed_s": 1.55, "event": "odom", "value": [1820.475590491, 8.40802386240006, 0.6154727542292227, 165.08200640700878]}
+{"elapsed_s": 1.573, "event": "status", "value": "NO PLAN: obstacles=279, front=0.7259816404732063, goal=(2.32, 4.32), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 1.585, "event": "odom", "value": [1820.510547362, 8.40802386240006, 0.6154727542292227, 165.08200640700878]}
+{"elapsed_s": 1.62, "event": "odom", "value": [1820.545576395, 8.40802386240006, 0.6154727542292227, 165.08200640700878]}
+{"elapsed_s": 1.628, "event": "command", "value": [1820.553512028, 0.0, 0.0]}
+{"elapsed_s": 1.651, "event": "odom", "value": [1820.576275312, 8.39928277294042, 0.6184436467942823, 165.13815343723041]}
+{"elapsed_s": 1.682, "event": "odom", "value": [1820.607981012, 8.39928277294042, 0.6184436467942823, 165.13815343723041]}
+{"elapsed_s": 1.689, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 1.716, "event": "odom", "value": [1820.641650644, 8.394559467585719, 0.6185522451359734, 165.20419674476057]}
+{"elapsed_s": 1.737, "event": "command", "value": [1820.662620401, 0.0, 0.0]}
+{"elapsed_s": 1.749, "event": "odom", "value": [1820.674313301, 8.393001912692261, 0.618618438529342, 165.27716898240953]}
+{"elapsed_s": 1.782, "event": "odom", "value": [1820.707675338, 8.393001912692261, 0.618618438529342, 165.27716898240953]}
+{"elapsed_s": 1.787, "event": "status", "value": "NO PLAN: obstacles=277, front=0.7165789418693327, goal=(2.32, 4.32), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 1.817, "event": "odom", "value": [1820.743130304, 8.393001912692261, 0.618618438529342, 165.27716898240953]}
+{"elapsed_s": 1.833, "event": "command", "value": [1820.758235467, 0.0, 0.0]}
+{"elapsed_s": 1.85, "event": "odom", "value": [1820.775414005, 8.39333003626171, 0.6160018619396455, 165.36323223338354]}
+{"elapsed_s": 1.878, "event": "status", "value": "NO PLAN: obstacles=275, front=0.7155528303931835, goal=(2.32, 4.32), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 1.882, "event": "odom", "value": [1820.80783195, 8.39333003626171, 0.6160018619396455, 165.36323223338354]}
+{"elapsed_s": 1.919, "event": "odom", "value": [1820.844273954, 8.39058027849124, 0.6198892335330926, 165.41380379104044]}
+{"elapsed_s": 1.941, "event": "command", "value": [1820.866973524, 0.0, 0.0]}
+{"elapsed_s": 1.948, "event": "odom", "value": [1820.873867845, 8.39058027849124, 0.6198892335330926, 165.41380379104044]}
+{"elapsed_s": 1.985, "event": "odom", "value": [1820.910849449, 8.390869143839456, 0.6194406088084701, 165.47823895698565]}
+{"elapsed_s": 2.01, "event": "status", "value": "NO PLAN: obstacles=277, front=0.7148102599553137, goal=(2.33, 4.32), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 2.028, "event": "odom", "value": [1820.953472473, 8.390869143839456, 0.6194406088084701, 165.47823895698565]}
+{"elapsed_s": 2.046, "event": "command", "value": [1820.971306327, 0.0, 0.0]}
+{"elapsed_s": 2.048, "event": "odom", "value": [1820.973763937, 8.390869143839456, 0.6194406088084701, 165.47823895698565]}
+{"elapsed_s": 2.091, "event": "odom", "value": [1821.016489172, 8.38900386718116, 0.6215375966871756, 165.5153023078332]}
+{"elapsed_s": 2.103, "event": "status", "value": "NO PLAN: obstacles=277, front=0.7146824087211993, goal=(2.33, 4.32), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 2.124, "event": "odom", "value": [1821.049206934, 8.388969935218448, 0.6212189523660112, 165.56673688565925]}
+{"elapsed_s": 2.146, "event": "command", "value": [1821.072037196, 0.0, 0.0]}
+{"elapsed_s": 2.152, "event": "odom", "value": [1821.078118789, 8.388969935218448, 0.6212189523660112, 165.56673688565925]}
+{"elapsed_s": 2.185, "event": "odom", "value": [1821.110468508, 8.388969935218448, 0.6212189523660112, 165.56673688565925]}
+{"elapsed_s": 2.202, "event": "status", "value": "NO PLAN: obstacles=280, front=0.714675224964069, goal=(2.33, 4.32), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 2.22, "event": "odom", "value": [1821.145313087, 8.38972954146464, 0.6196430565119624, 165.62616258317885]}
+{"elapsed_s": 2.238, "event": "command", "value": [1821.163743087, 0.0, 0.0]}
+{"elapsed_s": 2.25, "event": "odom", "value": [1821.175619224, 8.38972954146464, 0.6196430565119624, 165.62616258317885]}
+{"elapsed_s": 2.282, "event": "odom", "value": [1821.207822507, 8.378426746808236, 0.6241849674574822, 165.66768393712996]}
+{"elapsed_s": 2.317, "event": "odom", "value": [1821.242365285, 8.378426746808236, 0.6241849674574822, 165.66768393712996]}
+{"elapsed_s": 2.352, "event": "odom", "value": [1821.277305258, 8.374072717660122, 0.6253648032460964, 165.71401250105106]}
+{"elapsed_s": 2.352, "event": "status", "value": "NO PLAN: obstacles=279, front=0.7140474865963073, goal=(2.33, 4.32), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 2.367, "event": "command", "value": [1821.292401461, 0.0, 0.0]}
+{"elapsed_s": 2.383, "event": "odom", "value": [1821.308884202, 8.374072717660122, 0.6253648032460964, 165.71401250105106]}
+{"elapsed_s": 2.404, "event": "status", "value": "NO PLAN: obstacles=279, front=0.7140474865963073, goal=(2.33, 4.32), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 2.418, "event": "odom", "value": [1821.344159834, 8.371844608914198, 0.6249361188994069, 165.75853795950798]}
+{"elapsed_s": 2.432, "event": "command", "value": [1821.358027648, 0.0, 0.0]}
+{"elapsed_s": 2.449, "event": "odom", "value": [1821.374540726, 8.371844608914198, 0.6249361188994069, 165.75853795950798]}
+{"elapsed_s": 2.466, "event": "actuator", "value": {"mode": "auto", "left_pwm": "1500", "right_pwm": "1500", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.000", "angular_cmd": "0.000", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 2.479, "event": "status", "value": "NO PLAN: obstacles=280, front=0.7058294066074555, goal=(2.33, 4.32), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 2.485, "event": "odom", "value": [1821.410643615, 8.370051954342994, 0.6231094557335675, 165.82361420627097]}
+{"elapsed_s": 2.516, "event": "odom", "value": [1821.441615244, 8.370051954342994, 0.6231094557335675, 165.82361420627097]}
+{"elapsed_s": 2.536, "event": "command", "value": [1821.461483016, 0.0, 0.0]}
+{"elapsed_s": 2.555, "event": "odom", "value": [1821.48104665, 8.368687314186417, 0.6226447930421003, 165.88733553431373]}
+{"elapsed_s": 2.579, "event": "status", "value": "NO PLAN: obstacles=277, front=0.7032725149131797, goal=(2.33, 4.32), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 2.584, "event": "odom", "value": [1821.510057292, 8.368687314186417, 0.6226447930421003, 165.88733553431373]}
+{"elapsed_s": 2.616, "event": "odom", "value": [1821.541687853, 8.361494903018901, 0.6279009573649197, 165.9291599608964]}
+{"elapsed_s": 2.635, "event": "command", "value": [1821.560828147, 0.0, 0.0]}
+{"elapsed_s": 2.651, "event": "odom", "value": [1821.576958365, 8.361494903018901, 0.6279009573649197, 165.9291599608964]}
+{"elapsed_s": 2.683, "event": "odom", "value": [1821.608523325, 8.361494903018901, 0.6279009573649197, 165.9291599608964]}
+{"elapsed_s": 2.686, "event": "status", "value": "NO PLAN: obstacles=277, front=0.7011824698838192, goal=(2.33, 4.33), drive_enabled=True, tank_edge=0.63, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 2.717, "event": "odom", "value": [1821.643144985, 8.363741696150164, 0.6256763491263893, 165.9956070060746]}
+{"elapsed_s": 2.735, "event": "command", "value": [1821.660275457, 0.0, 0.0]}
+{"elapsed_s": 2.748, "event": "odom", "value": [1821.674144615, 8.363741696150164, 0.6256763491263893, 165.9956070060746]}
+{"elapsed_s": 2.774, "event": "status", "value": "NO PLAN: obstacles=278, front=0.7009934907186219, goal=(2.33, 4.33), drive_enabled=True, tank_edge=0.63, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 2.786, "event": "odom", "value": [1821.71152255, 8.365025811374213, 0.6240591211028987, 166.0586744482839]}
+{"elapsed_s": 2.816, "event": "odom", "value": [1821.74212876, 8.365025811374213, 0.6240591211028987, 166.0586744482839]}
+{"elapsed_s": 2.84, "event": "command", "value": [1821.765774343, 0.0, 0.0]}
+{"elapsed_s": 2.85, "event": "odom", "value": [1821.775911003, 8.362037157600717, 0.6241526545248597, 166.10836739541463]}
+{"elapsed_s": 2.887, "event": "odom", "value": [1821.812843677, 8.362037157600717, 0.6241526545248597, 166.10836739541463]}
+{"elapsed_s": 2.907, "event": "status", "value": "NO PLAN: obstacles=279, front=0.7006331826345907, goal=(2.33, 4.33), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 2.916, "event": "odom", "value": [1821.841669705, 8.362037157600717, 0.6241526545248597, 166.10836739541463]}
+{"elapsed_s": 2.939, "event": "command", "value": [1821.864927275, 0.0, 0.0]}
+{"elapsed_s": 2.949, "event": "odom", "value": [1821.874636498, 8.36060612403968, 0.6246024199047757, 166.16161019504847]}
+{"elapsed_s": 2.988, "event": "odom", "value": [1821.913710037, 8.36060612403968, 0.6246024199047757, 166.16161019504847]}
+{"elapsed_s": 3.005, "event": "status", "value": "NO PLAN: obstacles=280, front=0.6987232856473725, goal=(2.32, 4.34), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 3.016, "event": "odom", "value": [1821.94170628, 8.359880412382921, 0.6241297087766293, 166.21645974818696]}
+{"elapsed_s": 3.034, "event": "command", "value": [1821.959896113, 0.0, 0.0]}
+{"elapsed_s": 3.052, "event": "odom", "value": [1821.978058648, 8.361445237306558, 0.6211242025658914, 166.2944364494573]}
+{"elapsed_s": 3.078, "event": "status", "value": "NO PLAN: obstacles=279, front=0.6972817475599525, goal=(2.32, 4.34), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 3.086, "event": "odom", "value": [1822.011181287, 8.361445237306558, 0.6211242025658914, 166.2944364494573]}
+{"elapsed_s": 3.118, "event": "odom", "value": [1822.043497917, 8.361445237306558, 0.6211242025658914, 166.2944364494573]}
+{"elapsed_s": 3.136, "event": "command", "value": [1822.062083441, 0.0, 0.0]}
+{"elapsed_s": 3.15, "event": "odom", "value": [1822.076114876, 8.355187192732144, 0.6261014012699613, 166.34060187133773]}
+{"elapsed_s": 3.184, "event": "odom", "value": [1822.109218185, 8.355187192732144, 0.6261014012699613, 166.34060187133773]}
+{"elapsed_s": 3.188, "event": "status", "value": "NO PLAN: obstacles=279, front=0.6960618013782116, goal=(2.32, 4.34), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 3.217, "event": "odom", "value": [1822.142896969, 8.356341924775288, 0.626093976520167, 166.3936251704363]}
+{"elapsed_s": 3.233, "event": "command", "value": [1822.158508611, 0.0, 0.0]}
+{"elapsed_s": 3.248, "event": "odom", "value": [1822.174030042, 8.356341924775288, 0.626093976520167, 166.3936251704363]}
+{"elapsed_s": 3.274, "event": "status", "value": "NO PLAN: obstacles=278, front=0.6964357223966615, goal=(2.32, 4.35), drive_enabled=True, tank_edge=0.63, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 3.282, "event": "odom", "value": [1822.207717594, 8.350316053812968, 0.6277651997902329, 166.44351579093922]}
+{"elapsed_s": 3.317, "event": "odom", "value": [1822.242898887, 8.350316053812968, 0.6277651997902329, 166.44351579093922]}
+{"elapsed_s": 3.338, "event": "command", "value": [1822.26405505, 0.0, 0.0]}
+{"elapsed_s": 3.351, "event": "odom", "value": [1822.27617753, 8.350316053812968, 0.6277651997902329, 166.44351579093922]}
+{"elapsed_s": 3.384, "event": "odom", "value": [1822.309901851, 8.34909983644617, 0.6297922313505433, 166.48038396187926]}
+{"elapsed_s": 3.39, "event": "status", "value": "NO PLAN: obstacles=278, front=0.6937726910428169, goal=(2.32, 4.35), drive_enabled=True, tank_edge=0.63, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 3.42, "event": "odom", "value": [1822.345922337, 8.348267870027492, 0.6275021443425819, 166.53547171955057]}
+{"elapsed_s": 3.449, "event": "odom", "value": [1822.374540742, 8.348267870027492, 0.6275021443425819, 166.53547171955057]}
+{"elapsed_s": 3.453, "event": "command", "value": [1822.378374779, 0.0, 0.0]}
+{"elapsed_s": 3.463, "event": "actuator", "value": {"mode": "auto", "left_pwm": "1500", "right_pwm": "1500", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.000", "angular_cmd": "0.000", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 3.486, "event": "odom", "value": [1822.411390502, 8.348100503226583, 0.6264629920049609, 166.58739930171362]}
+{"elapsed_s": 3.509, "event": "status", "value": "NO PLAN: obstacles=277, front=0.6922445293922481, goal=(2.32, 4.35), drive_enabled=True, tank_edge=0.63, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 3.515, "event": "odom", "value": [1822.441139598, 8.348100503226583, 0.6264629920049609, 166.58739930171362]}
+{"elapsed_s": 3.538, "event": "command", "value": [1822.463318032, 0.0, 0.0]}
+{"elapsed_s": 3.549, "event": "odom", "value": [1822.47457175, 8.343809893139042, 0.6254778927373432, 166.64318532319206]}
+{"elapsed_s": 3.583, "event": "odom", "value": [1822.508618864, 8.343809893139042, 0.6254778927373432, 166.64318532319206]}
+{"elapsed_s": 3.586, "event": "status", "value": "NO PLAN: obstacles=277, front=0.6913445131580364, goal=(2.32, 4.36), drive_enabled=True, tank_edge=0.63, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 3.616, "event": "odom", "value": [1822.541546072, 8.343809893139042, 0.6254778927373432, 166.64318532319206]}
+{"elapsed_s": 3.636, "event": "command", "value": [1822.561478614, 0.0, 0.0]}
+{"elapsed_s": 3.653, "event": "odom", "value": [1822.57833743, 8.343809893139042, 0.6254778927373432, 166.64318532319206]}
+{"elapsed_s": 3.681, "event": "status", "value": "NO PLAN: obstacles=277, front=0.6878183851481923, goal=(2.32, 4.36), drive_enabled=True, tank_edge=0.63, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 3.683, "event": "odom", "value": [1822.608865942, 8.342458625623847, 0.6264468886131052, 166.69181032539134]}
+{"elapsed_s": 3.716, "event": "odom", "value": [1822.64134056, 8.342458625623847, 0.6264468886131052, 166.69181032539134]}
+{"elapsed_s": 3.732, "event": "command", "value": [1822.658088557, 0.0, 0.0]}
+{"elapsed_s": 3.749, "event": "odom", "value": [1822.674926829, 8.342720772058634, 0.6284860623733715, 166.7292390437977]}
+{"elapsed_s": 3.782, "event": "odom", "value": [1822.707903766, 8.344930651124777, 0.6264819769507401, 166.78722445497775]}
+{"elapsed_s": 3.812, "event": "status", "value": "NO PLAN: obstacles=279, front=0.6876887785755377, goal=(2.32, 4.36), drive_enabled=True, tank_edge=0.63, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 3.816, "event": "odom", "value": [1822.741994242, 8.344930651124777, 0.6264819769507401, 166.78722445497775]}
+{"elapsed_s": 3.838, "event": "command", "value": [1822.763889723, 0.0, 0.0]}
+{"elapsed_s": 3.848, "event": "odom", "value": [1822.774079408, 8.344930651124777, 0.6264819769507401, 166.78722445497775]}
+{"elapsed_s": 3.885, "event": "odom", "value": [1822.810249371, 8.344930651124777, 0.6264819769507401, 166.78722445497775]}
+{"elapsed_s": 3.918, "event": "odom", "value": [1822.843690994, 8.344930651124777, 0.6264819769507401, 166.78722445497775]}
+{"elapsed_s": 3.94, "event": "status", "value": "NO PLAN: obstacles=279, front=0.6893086754433866, goal=(2.32, 4.36), drive_enabled=True, tank_edge=0.63, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 3.949, "event": "odom", "value": [1822.8744142, 8.341923291492813, 0.6267414827504624, 166.90221489483625]}
+{"elapsed_s": 3.954, "event": "command", "value": [1822.879310284, 0.0, 0.0]}
+{"elapsed_s": 3.983, "event": "odom", "value": [1822.908456578, 8.341923291492813, 0.6267414827504624, 166.90221489483625]}
+{"elapsed_s": 4.01, "event": "status", "value": "NO PLAN: obstacles=279, front=0.6893086754433866, goal=(2.32, 4.36), drive_enabled=True, tank_edge=0.63, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 4.016, "event": "odom", "value": [1822.94125495, 8.340966822380057, 0.6265918641163577, 166.94812420421385]}
+{"elapsed_s": 4.033, "event": "command", "value": [1822.959000609, 0.0, 0.0]}
+{"elapsed_s": 4.049, "event": "odom", "value": [1822.974322162, 8.340966822380057, 0.6265918641163577, 166.94812420421385]}
+{"elapsed_s": 4.083, "event": "odom", "value": [1823.008462847, 8.342695833925427, 0.6229565214099329, 167.01772557068105]}
+{"elapsed_s": 4.087, "event": "status", "value": "NO PLAN: obstacles=277, front=0.6893086754433866, goal=(2.33, 4.36), drive_enabled=True, tank_edge=0.63, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 4.116, "event": "odom", "value": [1823.041652783, 8.342695833925427, 0.6229565214099329, 167.01772557068105]}
+{"elapsed_s": 4.141, "event": "command", "value": [1823.066734473, 0.0, 0.0]}
+{"elapsed_s": 4.149, "event": "odom", "value": [1823.074515189, 8.341187693723043, 0.6251111629917234, 167.058838337963]}
+{"elapsed_s": 4.187, "event": "odom", "value": [1823.112215054, 8.341187693723043, 0.6251111629917234, 167.058838337963]}
+{"elapsed_s": 4.192, "event": "status", "value": "NO PLAN: obstacles=276, front=0.6851737143776122, goal=(2.33, 4.36), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 4.215, "event": "odom", "value": [1823.140747537, 8.33740329322999, 0.6217550705320632, 167.12788753993564]}
+{"elapsed_s": 4.237, "event": "command", "value": [1823.162599209, 0.0, 0.0]}
+{"elapsed_s": 4.25, "event": "odom", "value": [1823.175392077, 8.33740329322999, 0.6217550705320632, 167.12788753993564]}
+{"elapsed_s": 4.283, "event": "odom", "value": [1823.208946504, 8.33740329322999, 0.6217550705320632, 167.12788753993564]}
+{"elapsed_s": 4.29, "event": "status", "value": "NO PLAN: obstacles=275, front=0.6808449823696382, goal=(2.33, 4.37), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 4.316, "event": "odom", "value": [1823.241466852, 8.33740329322999, 0.6217550705320632, 167.12788753993564]}
+{"elapsed_s": 4.34, "event": "command", "value": [1823.265419484, 0.0, 0.0]}
+{"elapsed_s": 4.349, "event": "odom", "value": [1823.274774712, 8.33740329322999, 0.6217550705320632, 167.12788753993564]}
+{"elapsed_s": 4.38, "event": "status", "value": "NO PLAN: obstacles=274, front=0.6808449823696382, goal=(2.33, 4.37), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 4.386, "event": "odom", "value": [1823.311447314, 8.33740329322999, 0.6217550705320632, 167.12788753993564]}
+{"elapsed_s": 4.416, "event": "odom", "value": [1823.341393151, 8.33311505542476, 0.6239004521853558, 167.17263778061871]}
+{"elapsed_s": 4.434, "event": "command", "value": [1823.360072598, 0.0, 0.0]}
+{"elapsed_s": 4.449, "event": "odom", "value": [1823.37505635, 8.33311505542476, 0.6239004521853558, 167.17263778061871]}
+{"elapsed_s": 4.464, "event": "actuator", "value": {"mode": "auto", "left_pwm": "1500", "right_pwm": "1500", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.000", "angular_cmd": "0.000", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 4.471, "event": "status", "value": "NO PLAN: obstacles=275, front=0.679750124312154, goal=(2.33, 4.37), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 4.485, "event": "odom", "value": [1823.410767674, 8.33311505542476, 0.6239004521853558, 167.17263778061871]}
+{"elapsed_s": 4.519, "event": "odom", "value": [1823.444856518, 8.33052692420491, 0.625966322949829, 167.21600736768312]}
+{"elapsed_s": 4.537, "event": "command", "value": [1823.462396058, 0.0, 0.0]}
+{"elapsed_s": 4.55, "event": "odom", "value": [1823.475559306, 8.33052692420491, 0.625966322949829, 167.21600736768312]}
+{"elapsed_s": 4.574, "event": "status", "value": "NO PLAN: obstacles=276, front=0.6797013332432632, goal=(2.33, 4.37), drive_enabled=True, tank_edge=0.63, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 4.583, "event": "odom", "value": [1823.508721689, 8.335694768402728, 0.6224817630142213, 167.3457850919267]}
+{"elapsed_s": 4.617, "event": "odom", "value": [1823.542613087, 8.335694768402728, 0.6224817630142213, 167.3457850919267]}
+{"elapsed_s": 4.634, "event": "command", "value": [1823.559362268, 0.0, 0.0]}
+{"elapsed_s": 4.649, "event": "odom", "value": [1823.57427248, 8.330180117876065, 0.6239769540306648, 167.40908577676845]}
+{"elapsed_s": 4.685, "event": "odom", "value": [1823.610530734, 8.329136629942008, 0.6238488101137492, 167.47102198761206]}
+{"elapsed_s": 4.692, "event": "status", "value": "NO PLAN: obstacles=278, front=0.6803065630725583, goal=(2.33, 4.38), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 4.718, "event": "odom", "value": [1823.644065064, 8.329136629942008, 0.6238488101137492, 167.47102198761206]}
+{"elapsed_s": 4.735, "event": "command", "value": [1823.660373847, 0.0, 0.0]}
+{"elapsed_s": 4.75, "event": "odom", "value": [1823.675255899, 8.3284893765628, 0.6232379145817356, 167.52731750583925]}
+{"elapsed_s": 4.783, "event": "odom", "value": [1823.708613904, 8.3284893765628, 0.6232379145817356, 167.52731750583925]}
+{"elapsed_s": 4.784, "event": "status", "value": "NO PLAN: obstacles=277, front=0.6771821914515906, goal=(2.33, 4.38), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 4.816, "event": "odom", "value": [1823.741854594, 8.324944907809062, 0.6281130430292887, 167.5504058933001]}
+{"elapsed_s": 4.837, "event": "command", "value": [1823.763078214, 0.0, 0.0]}
+{"elapsed_s": 4.86, "event": "odom", "value": [1823.785328074, 8.324944907809062, 0.6281130430292887, 167.5504058933001]}
+{"elapsed_s": 4.869, "event": "status", "value": "NO PLAN: obstacles=277, front=0.6778506172220361, goal=(2.34, 4.38), drive_enabled=True, tank_edge=0.63, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 4.887, "event": "odom", "value": [1823.81242432, 8.32517623657048, 0.6272888780329033, 167.59217695568162]}
+{"elapsed_s": 4.915, "event": "odom", "value": [1823.841156937, 8.32517623657048, 0.6272888780329033, 167.59217695568162]}
+{"elapsed_s": 4.934, "event": "command", "value": [1823.859741501, 0.0, 0.0]}
+{"elapsed_s": 4.949, "event": "odom", "value": [1823.874928522, 8.327146187418005, 0.6237062766923196, 167.66039687024923]}
+{"elapsed_s": 4.971, "event": "status", "value": "NO PLAN: obstacles=277, front=0.6773538893128279, goal=(2.34, 4.38), drive_enabled=True, tank_edge=0.63, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 4.984, "event": "odom", "value": [1823.909250364, 8.327146187418005, 0.6237062766923196, 167.66039687024923]}
+{"elapsed_s": 5.02, "event": "odom", "value": [1823.946043161, 8.322929862204415, 0.6230742919950107, 167.73018296387352]}
+{"elapsed_s": 5.04, "event": "command", "value": [1823.965719087, 0.0, 0.0]}
+{"elapsed_s": 5.053, "event": "odom", "value": [1823.978538164, 8.322929862204415, 0.6230742919950107, 167.73018296387352]}
+{"elapsed_s": 5.085, "event": "odom", "value": [1824.010708517, 8.32318631731091, 0.6250909208621509, 167.78331237008976]}
+{"elapsed_s": 5.119, "event": "odom", "value": [1824.044733614, 8.32318631731091, 0.6250909208621509, 167.78331237008976]}
+{"elapsed_s": 5.119, "event": "progress", "value": {"armed": false, "status": "NO PLAN: obstacles=277, front=0.6773538893128279, goal=(2.34, 4.38), drive_enabled=True, tank_edge=0.63, walls_excluded=False, dock_phase=-, blocked=", "xy": [8.32318631731091, 0.6250909208621509], "entry": [2.3394453278804375, 4.382895357343997], "pwm": ["1500", "1500"]}}
+{"elapsed_s": 5.124, "event": "status", "value": "NO PLAN: obstacles=275, front=0.6726635727892142, goal=(2.34, 4.38), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 5.152, "event": "odom", "value": [1824.077235945, 8.32318631731091, 0.6250909208621509, 167.78331237008976]}
+{"elapsed_s": 5.152, "event": "command", "value": [1824.077648181, 0.0, 0.0]}
+{"elapsed_s": 5.182, "event": "odom", "value": [1824.107563746, 8.32318631731091, 0.6250909208621509, 167.78331237008976]}
+{"elapsed_s": 5.201, "event": "status", "value": "NO PLAN: obstacles=275, front=0.6726635727892142, goal=(2.34, 4.38), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 5.221, "event": "odom", "value": [1824.146657541, 8.32318631731091, 0.6250909208621509, 167.78331237008976]}
+{"elapsed_s": 5.239, "event": "command", "value": [1824.165104853, 0.0, 0.0]}
+{"elapsed_s": 5.255, "event": "odom", "value": [1824.180596843, 8.32012718248998, 0.6227078019206319, 167.8982562710954]}
+{"elapsed_s": 5.307, "event": "odom", "value": [1824.232990146, 8.32012718248998, 0.6227078019206319, 167.8982562710954]}
+{"elapsed_s": 5.32, "event": "odom", "value": [1824.245605313, 8.32012718248998, 0.6227078019206319, 167.8982562710954]}
+{"elapsed_s": 5.324, "event": "status", "value": "NO PLAN: obstacles=278, front=0.6743938264336837, goal=(2.34, 4.39), drive_enabled=True, tank_edge=0.63, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 5.346, "event": "command", "value": [1824.271849086, 0.0, 0.0]}
+{"elapsed_s": 5.353, "event": "odom", "value": [1824.279148604, 8.318975205045705, 0.6234255204123633, 167.94834040269188]}
+{"elapsed_s": 5.386, "event": "odom", "value": [1824.311532083, 8.318975205045705, 0.6234255204123633, 167.94834040269188]}
+{"elapsed_s": 5.402, "event": "status", "value": "NO PLAN: obstacles=278, front=0.6743938264336837, goal=(2.34, 4.39), drive_enabled=True, tank_edge=0.63, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 5.421, "event": "odom", "value": [1824.346455063, 8.317890838468003, 0.6241262693119887, 167.99175417926293]}
+{"elapsed_s": 5.433, "event": "command", "value": [1824.358986932, 0.0, 0.0]}
+{"elapsed_s": 5.455, "event": "odom", "value": [1824.380823243, 8.317890838468003, 0.6241262693119887, 167.99175417926293]}
+{"elapsed_s": 5.464, "event": "actuator", "value": {"mode": "auto", "left_pwm": "1500", "right_pwm": "1500", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.000", "angular_cmd": "0.000", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 5.482, "event": "odom", "value": [1824.40811316, 8.319149847991325, 0.6216474124776954, 168.05133919780425]}
+{"elapsed_s": 5.512, "event": "status", "value": "NO PLAN: obstacles=278, front=0.670329023024411, goal=(2.34, 4.39), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 5.515, "event": "odom", "value": [1824.440512703, 8.319149847991325, 0.6216474124776954, 168.05133919780425]}
+{"elapsed_s": 5.534, "event": "command", "value": [1824.459727335, 0.0, 0.0]}
+{"elapsed_s": 5.55, "event": "odom", "value": [1824.475280799, 8.318434552036162, 0.6227155801801327, 168.09606144786738]}
+{"elapsed_s": 5.57, "event": "status", "value": "NO PLAN: obstacles=277, front=0.6691804822148218, goal=(2.34, 4.39), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 5.588, "event": "odom", "value": [1824.513991862, 8.318434552036162, 0.6227155801801327, 168.09606144786738]}
+{"elapsed_s": 5.616, "event": "odom", "value": [1824.541882693, 8.320007239681743, 0.6198538937493816, 168.1592613463036]}
+{"elapsed_s": 5.632, "event": "command", "value": [1824.557985102, 0.0, 0.0]}
+{"elapsed_s": 5.657, "event": "odom", "value": [1824.583062376, 8.320007239681743, 0.6198538937493816, 168.1592613463036]}
+{"elapsed_s": 5.67, "event": "status", "value": "NO PLAN: obstacles=277, front=0.6683218175373216, goal=(2.34, 4.39), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 5.684, "event": "odom", "value": [1824.609423912, 8.310651402860803, 0.6239957902745354, 168.19184631395223]}
+{"elapsed_s": 5.717, "event": "odom", "value": [1824.642296398, 8.310651402860803, 0.6239957902745354, 168.19184631395223]}
+{"elapsed_s": 5.738, "event": "command", "value": [1824.664060835, 0.0, 0.0]}
+{"elapsed_s": 5.749, "event": "odom", "value": [1824.67438726, 8.310380076039845, 0.62458235242371, 168.23909921034635]}
+{"elapsed_s": 5.785, "event": "status", "value": "NO PLAN: obstacles=276, front=0.6657372339386444, goal=(2.34, 4.40), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 5.799, "event": "odom", "value": [1824.725135297, 8.310380076039845, 0.62458235242371, 168.23909921034635]}
+{"elapsed_s": 5.82, "event": "odom", "value": [1824.745685585, 8.310380076039845, 0.62458235242371, 168.23909921034635]}
+{"elapsed_s": 5.836, "event": "command", "value": [1824.761933182, 0.0, 0.0]}
+{"elapsed_s": 5.849, "event": "odom", "value": [1824.774684705, 8.31074902499939, 0.6236345776003742, 168.29144986568437]}
+{"elapsed_s": 5.887, "event": "odom", "value": [1824.813101231, 8.309804819365695, 0.6248761624137602, 168.32972955388794]}
+{"elapsed_s": 5.896, "event": "status", "value": "NO PLAN: obstacles=276, front=0.6660317958643508, goal=(2.34, 4.41), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 5.916, "event": "odom", "value": [1824.841374057, 8.309804819365695, 0.6248761624137602, 168.32972955388794]}
+{"elapsed_s": 5.939, "event": "command", "value": [1824.864901043, 0.0, 0.0]}
+{"elapsed_s": 5.949, "event": "odom", "value": [1824.874334642, 8.309804819365695, 0.6248761624137602, 168.32972955388794]}
+{"elapsed_s": 5.983, "event": "odom", "value": [1824.908639331, 8.309804819365695, 0.6248761624137602, 168.32972955388794]}
+{"elapsed_s": 5.991, "event": "status", "value": "NO PLAN: obstacles=276, front=0.6659090612069621, goal=(2.34, 4.41), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 6.016, "event": "odom", "value": [1824.941331171, 8.310919686108681, 0.6225590182419639, 168.3819122108352]}
+{"elapsed_s": 6.042, "event": "command", "value": [1824.967437212, 0.0, 0.0]}
+{"elapsed_s": 6.049, "event": "odom", "value": [1824.974783771, 8.30563200258862, 0.6211343110771901, 168.44125934785612]}
+{"elapsed_s": 6.083, "event": "odom", "value": [1825.008695008, 8.30563200258862, 0.6211343110771901, 168.44125934785612]}
+{"elapsed_s": 6.087, "event": "status", "value": "NO PLAN: obstacles=277, front=0.6647727564168655, goal=(2.35, 4.41), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 6.117, "event": "odom", "value": [1825.042712745, 8.29852547650373, 0.6228384559549938, 168.48826409141557]}
+{"elapsed_s": 6.132, "event": "command", "value": [1825.058168702, 0.0, 0.0]}
+{"elapsed_s": 6.15, "event": "odom", "value": [1825.075383112, 8.29852547650373, 0.6228384559549938, 168.48826409141557]}
+{"elapsed_s": 6.171, "event": "status", "value": "NO PLAN: obstacles=276, front=0.65740589521359, goal=(2.35, 4.41), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 6.183, "event": "odom", "value": [1825.108863073, 8.306344872456132, 0.6184862209810135, 168.5582330292774]}
+{"elapsed_s": 6.217, "event": "odom", "value": [1825.142838568, 8.306344872456132, 0.6184862209810135, 168.5582330292774]}
+{"elapsed_s": 6.235, "event": "command", "value": [1825.161093938, 0.0, 0.0]}
+{"elapsed_s": 6.249, "event": "odom", "value": [1825.17451777, 8.299074509208161, 0.6211948451013434, 168.60891109252253]}
+{"elapsed_s": 6.273, "event": "status", "value": "NO PLAN: obstacles=277, front=0.6587442747411181, goal=(2.35, 4.41), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 6.287, "event": "odom", "value": [1825.212583341, 8.299074509208161, 0.6211948451013434, 168.60891109252253]}
+{"elapsed_s": 6.315, "event": "odom", "value": [1825.241100559, 8.299074509208161, 0.6211948451013434, 168.60891109252253]}
+{"elapsed_s": 6.336, "event": "command", "value": [1825.261333045, 0.0, 0.0]}
+{"elapsed_s": 6.352, "event": "odom", "value": [1825.277436638, 8.29484015884497, 0.6229762281266309, 168.65700595977515]}
+{"elapsed_s": 6.383, "event": "odom", "value": [1825.308181603, 8.293199483197771, 0.6223429960862596, 168.71025286396141]}
+{"elapsed_s": 6.384, "event": "status", "value": "NO PLAN: obstacles=276, front=0.6564331153660953, goal=(2.35, 4.41), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 6.415, "event": "odom", "value": [1825.341170508, 8.293199483197771, 0.6223429960862596, 168.71025286396141]}
+{"elapsed_s": 6.443, "event": "command", "value": [1825.368772274, 0.0, 0.0]}
+{"elapsed_s": 6.449, "event": "odom", "value": [1825.374520833, 8.293199483197771, 0.6223429960862596, 168.71025286396141]}
+{"elapsed_s": 6.466, "event": "actuator", "value": {"mode": "auto", "left_pwm": "1500", "right_pwm": "1500", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.000", "angular_cmd": "0.000", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 6.484, "event": "odom", "value": [1825.409192317, 8.291311750206031, 0.6233914455124453, 168.74904405757823]}
+{"elapsed_s": 6.5, "event": "status", "value": "PREVIEW: obstacles=277, front=0.790397175313539, goal=(3.55, 4.36), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=, blocked="}
+{"elapsed_s": 6.516, "event": "odom", "value": [1825.442135461, 8.291311750206031, 0.6233914455124453, 168.74904405757823]}
+{"elapsed_s": 6.534, "event": "command", "value": [1825.460073509, 0.0, 0.0]}
+{"elapsed_s": 6.551, "event": "odom", "value": [1825.476413013, 8.291311750206031, 0.6233914455124453, 168.74904405757823]}
+{"elapsed_s": 6.577, "event": "status", "value": "NO PLAN: obstacles=278, front=0.7896759170156726, goal=(3.55, 4.36), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 6.588, "event": "odom", "value": [1825.513890567, 8.290951647697439, 0.6228868785480796, 168.7984510247844]}
+{"elapsed_s": 6.616, "event": "odom", "value": [1825.541716564, 8.290951647697439, 0.6228868785480796, 168.7984510247844]}
+{"elapsed_s": 6.637, "event": "command", "value": [1825.562421512, 0.0, 0.0]}
+{"elapsed_s": 6.651, "event": "odom", "value": [1825.576805341, 8.290951647697439, 0.6228868785480796, 168.7984510247844]}
+{"elapsed_s": 6.688, "event": "odom", "value": [1825.613451733, 8.28690128950189, 0.6217458307404079, 168.85306312036633]}
+{"elapsed_s": 6.688, "event": "status", "value": "PREVIEW: obstacles=278, front=0.7890718601657442, goal=(3.70, 4.35), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=, blocked="}
+{"elapsed_s": 6.716, "event": "odom", "value": [1825.641993624, 8.28690128950189, 0.6217458307404079, 168.85306312036633]}
+{"elapsed_s": 6.74, "event": "command", "value": [1825.666160693, 0.0, 0.0]}
+{"elapsed_s": 6.752, "event": "odom", "value": [1825.677660658, 8.289373197545267, 0.6215947088097588, 168.90715158696906]}
+{"elapsed_s": 6.785, "event": "odom", "value": [1825.710400819, 8.28812153828349, 0.6197286228544618, 168.9714816621893]}
+{"elapsed_s": 6.788, "event": "status", "value": "NO PLAN: obstacles=278, front=0.7852844702897182, goal=(3.70, 4.35), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 6.816, "event": "odom", "value": [1825.741599334, 8.28812153828349, 0.6197286228544618, 168.9714816621893]}
+{"elapsed_s": 6.839, "event": "command", "value": [1825.764657986, 0.0, 0.0]}
+{"elapsed_s": 6.864, "event": "odom", "value": [1825.789875711, 8.28812153828349, 0.6197286228544618, 168.9714816621893]}
+{"elapsed_s": 6.891, "event": "odom", "value": [1825.816498759, 8.28812153828349, 0.6197286228544618, 168.9714816621893]}
+{"elapsed_s": 6.9, "event": "status", "value": "PREVIEW: obstacles=278, front=0.7848596363027908, goal=(3.70, 4.35), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=, blocked="}
+{"elapsed_s": 6.916, "event": "odom", "value": [1825.841759686, 8.28812153828349, 0.6197286228544618, 168.9714816621893]}
+{"elapsed_s": 6.945, "event": "command", "value": [1825.871052959, 0.0, 0.0]}
+{"elapsed_s": 6.962, "event": "odom", "value": [1825.888155173, 8.292708500302183, 0.6155809446359264, 169.10002040707369]}
+{"elapsed_s": 6.986, "event": "odom", "value": [1825.911718353, 8.293629534460058, 0.6146007408060481, 169.17997638801307]}
+{"elapsed_s": 6.987, "event": "status", "value": "PREVIEW: obstacles=279, front=0.7848596363027908, goal=(3.70, 4.35), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=, blocked="}
+{"elapsed_s": 7.017, "event": "odom", "value": [1825.942410324, 8.293629534460058, 0.6146007408060481, 169.17997638801307]}
+{"elapsed_s": 7.036, "event": "command", "value": [1825.961225743, 0.0, 0.0]}
+{"elapsed_s": 7.05, "event": "odom", "value": [1825.976129107, 8.293629534460058, 0.6146007408060481, 169.17997638801307]}
+{"elapsed_s": 7.084, "event": "odom", "value": [1826.009189822, 8.294300292399809, 0.6144093400369257, 169.2552991301813]}
+{"elapsed_s": 7.116, "event": "odom", "value": [1826.041696793, 8.294300292399809, 0.6144093400369257, 169.2552991301813]}
+{"elapsed_s": 7.126, "event": "status", "value": "PREVIEW: obstacles=277, front=0.7856270163779586, goal=(3.70, 4.35), drive_enabled=True, tank_edge=0.61, walls_excluded=False, dock_phase=, blocked="}
+{"elapsed_s": 7.143, "event": "command", "value": [1826.069166202, 0.0, 0.0]}
+{"elapsed_s": 7.163, "event": "odom", "value": [1826.088254558, 8.294248771946183, 0.6169337887831406, 169.2574917264424]}
+{"elapsed_s": 7.182, "event": "odom", "value": [1826.10816297, 8.294248771946183, 0.6169337887831406, 169.2574917264424]}
+{"elapsed_s": 7.184, "event": "status", "value": "PREVIEW: obstacles=277, front=0.7856270163779586, goal=(3.70, 4.35), drive_enabled=True, tank_edge=0.61, walls_excluded=False, dock_phase=, blocked="}
+{"elapsed_s": 7.216, "event": "odom", "value": [1826.141368745, 8.296867830026581, 0.6165728692531742, 169.26266172625677]}
+{"elapsed_s": 7.242, "event": "command", "value": [1826.167788395, 0.0, 0.0]}
+{"elapsed_s": 7.254, "event": "odom", "value": [1826.179998622, 8.296867830026581, 0.6165728692531742, 169.26266172625677]}
+{"elapsed_s": 7.282, "event": "odom", "value": [1826.207552258, 8.296867830026581, 0.6165728692531742, 169.26266172625677]}
+{"elapsed_s": 7.283, "event": "phase", "value": "computer mode requested, neutral output until start"}
+{"elapsed_s": 7.299, "event": "status", "value": "PREVIEW: obstacles=279, front=0.7893659463529178, goal=(3.70, 4.36), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=, blocked="}
+{"elapsed_s": 7.31, "event": "arm", "value": {"success": true, "message": "avoidance test armed"}}
+{"elapsed_s": 7.321, "event": "odom", "value": [1826.246654468, 8.296867830026581, 0.6165728692531742, 169.26266172625677]}
+{"elapsed_s": 7.347, "event": "command", "value": [1826.272458931, 0.0, 0.0]}
+{"elapsed_s": 7.354, "event": "odom", "value": [1826.279576331, 8.306179604108419, 0.6177457182090949, 169.28195325034778]}
+{"elapsed_s": 7.388, "event": "odom", "value": [1826.313252777, 8.306179604108419, 0.6177457182090949, 169.28195325034778]}
+{"elapsed_s": 7.408, "event": "status", "value": "FOLLOW: plan_acquired"}
+{"elapsed_s": 7.428, "event": "odom", "value": [1826.353711189, 8.306179604108419, 0.6177457182090949, 169.28195325034778]}
+{"elapsed_s": 7.443, "event": "command", "value": [1826.369063111, 0.023601528715548794, -0.31]}
+{"elapsed_s": 7.455, "event": "odom", "value": [1826.380779594, 8.306179604108419, 0.6177457182090949, 169.28195325034778]}
+{"elapsed_s": 7.477, "event": "actuator", "value": {"mode": "auto", "left_pwm": "1540", "right_pwm": "1460", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.024", "angular_cmd": "-0.310", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 7.485, "event": "odom", "value": [1826.410955166, 8.318025281001242, 0.6155456304933596, 169.33064944374132]}
+{"elapsed_s": 7.491, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 7.516, "event": "odom", "value": [1826.441403194, 8.318025281001242, 0.6155456304933596, 169.33064944374132]}
+{"elapsed_s": 7.537, "event": "command", "value": [1826.46296724, 0.023601528715548784, -0.31]}
+{"elapsed_s": 7.549, "event": "odom", "value": [1826.475067095, 8.318025281001242, 0.6155456304933596, 169.33064944374132]}
+{"elapsed_s": 7.585, "event": "odom", "value": [1826.511169055, 8.339711290731238, 0.6121454656969485, 169.4185874639457]}
+{"elapsed_s": 7.606, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 7.62, "event": "odom", "value": [1826.5460024, 8.360486289432709, 0.6083293174828762, 169.44862232859836]}
+{"elapsed_s": 7.643, "event": "command", "value": [1826.569189344, 0.023601528715548794, -0.31]}
+{"elapsed_s": 7.652, "event": "odom", "value": [1826.577268725, 8.382669359157655, 0.6027299718360786, 169.47202098544727]}
+{"elapsed_s": 7.682, "event": "odom", "value": [1826.607892118, 8.382669359157655, 0.6027299718360786, 169.47202098544727]}
+{"elapsed_s": 7.697, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 7.72, "event": "odom", "value": [1826.64560635, 8.39364976649517, 0.6012360802431618, 169.47249732102418]}
+{"elapsed_s": 7.738, "event": "command", "value": [1826.663490861, 0.023601528715548794, -0.31]}
+{"elapsed_s": 7.757, "event": "odom", "value": [1826.682657139, 8.39364976649517, 0.6012360802431618, 169.47249732102418]}
+{"elapsed_s": 7.785, "event": "odom", "value": [1826.710801384, 8.404284570207244, 0.5980720189763751, 169.42065135016634]}
+{"elapsed_s": 7.8, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 7.816, "event": "odom", "value": [1826.741279109, 8.404284570207244, 0.5980720189763751, 169.42065135016634]}
+{"elapsed_s": 7.834, "event": "command", "value": [1826.75959224, 0.023601528715548794, -0.31]}
+{"elapsed_s": 7.85, "event": "odom", "value": [1826.775604886, 8.41108269341096, 0.5951448737664504, 169.08864680704815]}
+{"elapsed_s": 7.877, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 7.885, "event": "odom", "value": [1826.811024937, 8.41108269341096, 0.5951448737664504, 169.08864680704815]}
+{"elapsed_s": 7.916, "event": "odom", "value": [1826.841805967, 8.424140835182216, 0.5924843612363773, 168.55191281904808]}
+{"elapsed_s": 7.942, "event": "command", "value": [1826.86790647, 0.0, 0.0]}
+{"elapsed_s": 7.949, "event": "odom", "value": [1826.874615314, 8.424140835182216, 0.5924843612363773, 168.55191281904808]}
+{"elapsed_s": 7.982, "event": "odom", "value": [1826.907871555, 8.424140835182216, 0.5924843612363773, 168.55191281904808]}
+{"elapsed_s": 7.986, "event": "status", "value": "STOP: ESCAPE requested"}
+{"elapsed_s": 7.989, "event": "command", "value": [1826.91482191, 0.0, 0.0]}
+{"elapsed_s": 7.99, "event": "status", "value": "STOP: dock stop requested"}
+{"elapsed_s": 7.991, "event": "stop", "value": "dock_ctrl stopped"}
+{"elapsed_s": 8.016, "event": "odom", "value": [1826.941748486, 8.430181986148632, 0.5957262363637399, 168.07805969925437]}
+{"elapsed_s": 8.033, "event": "command", "value": [1826.95842064, 0.0, 0.0]}
+{"elapsed_s": 8.051, "event": "odom", "value": [1826.976388161, 8.430181986148632, 0.5957262363637399, 168.07805969925437]}
+{"elapsed_s": 8.07, "event": "status", "value": "NO PLAN: obstacles=275, front=0.595621158299057, goal=(2.31, 4.43), drive_enabled=True, tank_edge=0.60, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 8.082, "event": "odom", "value": [1827.007980224, 8.440720127139251, 0.5938601917923028, 167.659813019987]}
+{"elapsed_s": 8.116, "event": "odom", "value": [1827.042012328, 8.440720127139251, 0.5938601917923028, 167.659813019987]}
+{"elapsed_s": 8.133, "event": "command", "value": [1827.058278517, 0.0, 0.0]}
+{"elapsed_s": 8.151, "event": "odom", "value": [1827.076875274, 8.47417359454794, 0.5883651830954455, 167.26223531419834]}
+{"elapsed_s": 8.172, "event": "status", "value": "NO PLAN: obstacles=273, front=0.5999900085448758, goal=(2.28, 4.41), drive_enabled=True, tank_edge=0.59, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 8.182, "event": "odom", "value": [1827.107224034, 8.47417359454794, 0.5883651830954455, 167.26223531419834]}
+{"elapsed_s": 8.217, "event": "odom", "value": [1827.142578387, 8.492018379719008, 0.5869684564133522, 166.8039395592582]}
+{"elapsed_s": 8.232, "event": "command", "value": [1827.15772435, 0.0, 0.0]}
+{"elapsed_s": 8.25, "event": "odom", "value": [1827.175346933, 8.492018379719008, 0.5869684564133522, 166.8039395592582]}
+{"elapsed_s": 8.267, "event": "status", "value": "NO PLAN: obstacles=273, front=0.6251532544065366, goal=(2.26, 4.41), drive_enabled=True, tank_edge=0.59, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 8.282, "event": "odom", "value": [1827.207583783, 8.505450264505232, 0.5811387628737585, 166.34874476868902]}
+{"elapsed_s": 8.315, "event": "odom", "value": [1827.241125792, 8.505450264505232, 0.5811387628737585, 166.34874476868902]}
+{"elapsed_s": 8.337, "event": "command", "value": [1827.262351396, 0.0, 0.0]}
+{"elapsed_s": 8.36, "event": "odom", "value": [1827.285923471, 8.505450264505232, 0.5811387628737585, 166.34874476868902]}
+{"elapsed_s": 8.384, "event": "odom", "value": [1827.309456057, 8.505450264505232, 0.5811387628737585, 166.34874476868902]}
+{"elapsed_s": 8.39, "event": "status", "value": "PREVIEW: obstacles=275, front=0.6291933938130236, goal=(3.61, 4.36), drive_enabled=True, tank_edge=0.58, walls_excluded=False, dock_phase=, blocked="}
+{"elapsed_s": 8.416, "event": "odom", "value": [1827.341551015, 8.511613822141367, 0.5787851352726653, 165.8538770236869]}
+{"elapsed_s": 8.441, "event": "command", "value": [1827.366446202, 0.0, 0.0]}
+{"elapsed_s": 8.456, "event": "odom", "value": [1827.381324797, 8.51285385287438, 0.579777620770239, 165.3339508785862]}
+{"elapsed_s": 8.463, "event": "actuator", "value": {"mode": "auto", "left_pwm": "1500", "right_pwm": "1500", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.000", "angular_cmd": "0.000", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"summary": {"outcome": "STOP: ESCAPE requested", "armed": true, "entry_xy": [3.6950253144423097, 4.357283050534923], "initial_xy": [8.296867830026581, 0.6165728692531742], "final_xy": [8.51285385287438, 0.579777620770239], "nonzero_commands": 5, "max_linear_cmd": 0.023601528715548794, "max_angular_cmd": 0.31, "final_distance_m": 6.122174376610991, "actuator": {"mode": "auto", "left_pwm": "1500", "right_pwm": "1500", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.000", "angular_cmd": "0.000", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}, "last_status": "PREVIEW: obstacles=275, front=0.6291933938130236, goal=(3.61, 4.36), drive_enabled=True, tank_edge=0.58, walls_excluded=False, dock_phase=, blocked=", "log": "/tmp/kaboat_dock_trials/20261108_005106_existing.jsonl"}}

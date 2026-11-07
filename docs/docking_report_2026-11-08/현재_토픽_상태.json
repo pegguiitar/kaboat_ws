@@ -1,0 +1,313 @@
+{
+  "topics": {
+    "/boat_pose": {
+      "messages": 163,
+      "hz": 13.6,
+      "publishers": 1
+    },
+    "/imu/data": {
+      "messages": 1200,
+      "hz": 99.92,
+      "publishers": 1
+    },
+    "/scan/raw": {
+      "messages": 123,
+      "hz": 10.23,
+      "publishers": 1
+    },
+    "/scan": {
+      "messages": 113,
+      "hz": 9.39,
+      "publishers": 1
+    },
+    "/odom": {
+      "messages": 363,
+      "hz": 30.22,
+      "publishers": 1
+    },
+    "/occupancy_grid": {
+      "messages": 121,
+      "hz": 10.05,
+      "publishers": 1
+    },
+    "/avoid/dri": {
+      "messages": 118,
+      "hz": 9.86,
+      "publishers": 1
+    },
+    "/dock/detection_status": {
+      "messages": 88,
+      "hz": 7.32,
+      "publishers": 1
+    },
+    "/dock/bearing_markers": {
+      "messages": 88,
+      "hz": 7.32,
+      "publishers": 1
+    },
+    "/dock/lidar/status": {
+      "messages": 89,
+      "hz": 7.38,
+      "publishers": 1
+    },
+    "/dock/markers_base": {
+      "messages": 89,
+      "hz": 7.39,
+      "publishers": 1
+    },
+    "/dock/markers_ground": {
+      "messages": 89,
+      "hz": 7.39,
+      "publishers": 1
+    },
+    "/dock/waypoints": {
+      "messages": 120,
+      "hz": 10.04,
+      "publishers": 1
+    },
+    "/dock/bspline_path": {
+      "messages": 120,
+      "hz": 9.97,
+      "publishers": 1
+    },
+    "/dock/avoid/status": {
+      "messages": 119,
+      "hz": 9.93,
+      "publishers": 1
+    },
+    "/dock/avoid/cmd_preview": {
+      "messages": 120,
+      "hz": 9.95,
+      "publishers": 1
+    },
+    "/cmd_vel": {
+      "messages": 120,
+      "hz": 9.95,
+      "publishers": 1
+    },
+    "/diagnostics": {
+      "messages": 18,
+      "hz": 1.48,
+      "publishers": 2
+    }
+  },
+  "nonempty_paths": {
+    "/dock/waypoints": 108,
+    "/dock/bspline_path": 94
+  },
+  "last": {
+    "/imu/data": {
+      "frame": "imu_link"
+    },
+    "/scan/raw": {
+      "frame": "onboard_laser_frame"
+    },
+    "/scan": {
+      "frame": "onboard_laser_frame"
+    },
+    "/odom": {
+      "frame": "odom",
+      "xy": [
+        8.805551335440278,
+        3.8886021897693857
+      ]
+    },
+    "/occupancy_grid": {
+      "frame": "odom"
+    },
+    "/dock/detection_status": {
+      "valid": false,
+      "reason": "target_missing_or_invalid_depth",
+      "target_class": "triangle",
+      "ground_valid": false,
+      "markers": {
+        "square": {
+          "valid": true,
+          "reason": "ok",
+          "filter_state": "tracking",
+          "filter_epoch": 102,
+          "measurement_stamp_s": 1794067703.8213713,
+          "raw_ground_xy": [
+            9.352633458843684,
+            -0.7621252837405503
+          ],
+          "depth_m": 3.6100033777100697,
+          "depth_sigma_m": 0.029651971721649167,
+          "valid_fraction": 1.0,
+          "confidence": 0.958984375,
+          "filtered_ground_xy": [
+            9.471999854955959,
+            -0.7379632123963334
+          ]
+        }
+      },
+      "processing_ms": 103.0,
+      "inference_ms": 49.0801900000406,
+      "input_counts": {
+        "color": 26033,
+        "depth": 26951,
+        "camera_info": 26487
+      },
+      "input_info": {
+        "color": {
+          "width": 640,
+          "height": 480,
+          "frame": "camera_color_optical_frame",
+          "encoding": "rgb8"
+        },
+        "depth": {
+          "width": 640,
+          "height": 480,
+          "frame": "camera_color_optical_frame",
+          "encoding": "16UC1"
+        },
+        "camera_info": {
+          "width": 640,
+          "height": 480,
+          "frame": "camera_color_optical_frame",
+          "encoding": "camera_info"
+        }
+      },
+      "debug_count": 9428,
+      "depth_quality": {
+        "square": {
+          "reason": "ok",
+          "mask_pixels": 308,
+          "valid_pixels": 308,
+          "valid_fraction": 1.0,
+          "raw_depth_m": 3.6100001335144043,
+          "raw_depth_std_m": 0.030082196178359867,
+          "depth_sigma_m": 0.029651971721649167,
+          "inlier_fraction": 1.0,
+          "depth_m": 3.6100033777100697
+        },
+        "circle": {
+          "reason": "insufficient_depth",
+          "mask_pixels": 64,
+          "valid_pixels": 0,
+          "valid_fraction": 0.0
+        }
+      },
+      "sight_rays": {
+        "square": {
+          "pixel_uv": [
+            8.0,
+            192.0
+          ],
+          "optical_ray": [
+            -0.8198134667090297,
+            -0.14118022019280316,
+            1.0
+          ],
+          "bearing_left_deg": 39.345361483093875,
+          "confidence": 0.958984375,
+          "depth_used": false
+        },
+        "circle": {
+          "pixel_uv": [
+            586.0,
+            224.0
+          ],
+          "optical_ray": [
+            0.7142173838752932,
+            -0.05620239182771985,
+            1.0
+          ],
+          "bearing_left_deg": -35.53508531410555,
+          "confidence": 0.8896484375,
+          "depth_used": false
+        }
+      }
+    },
+    "/dock/bearing_markers": {
+      "markers": 6
+    },
+    "/dock/avoid/cmd_preview": {
+      "linear": 0.0,
+      "angular": 0.0
+    },
+    "/cmd_vel": {
+      "linear": 0.0,
+      "angular": 0.0
+    },
+    "/avoid/dri": {
+      "frame": "odom"
+    },
+    "/dock/lidar/status": {
+      "valid": false,
+      "reason": "no station plane satisfies orientation/history",
+      "scan_stamp_s": 1794067703.832668,
+      "marker_behind_wall_m": 1.0,
+      "markers": {
+        "triangle": {
+          "reason": "detection_stale",
+          "detected": false,
+          "localized": false,
+          "ray_age_s": 1.7331104278564453
+        },
+        "circle": {
+          "ray_stamp_s": 1794067703.8213713,
+          "delta_s": -0.011296749114990234,
+          "ray_age_s": 0.1985635757446289,
+          "detected": true,
+          "localized": false,
+          "motion_compensated": true,
+          "reason": "no_supported_lidar_line"
+        },
+        "square": {
+          "ray_stamp_s": 1794067703.8213713,
+          "delta_s": -0.011296749114990234,
+          "ray_age_s": 0.1985635757446289,
+          "detected": true,
+          "localized": false,
+          "motion_compensated": true,
+          "reason": "no_supported_lidar_line"
+        }
+      },
+      "station_selection": {
+        "reason": "no station plane satisfies orientation/history",
+        "support_classes": [],
+        "orientation_prior": true
+      },
+      "processing_ms": 53.70353200032696
+    },
+    "/dock/markers_base": {
+      "markers": 6
+    },
+    "/dock/markers_ground": {
+      "markers": 6
+    },
+    "/dock/bspline_path": {
+      "poses": 0,
+      "end": null
+    },
+    "/boat_pose": {
+      "frame": "odom"
+    },
+    "/dock/waypoints": {
+      "poses": 0,
+      "end": null
+    },
+    "/dock/avoid/status": "WAIT: marker goal stale, stage=ENTRY",
+    "/diagnostics": {
+      "level": "b'\\x00'",
+      "message": "Autonomous Drive Active",
+      "mode": "auto",
+      "left_pwm": "1500",
+      "right_pwm": "1500",
+      "backend_open": "True",
+      "last_send_ok": "True",
+      "send_fail_count": "0",
+      "linear_cmd": "0.000",
+      "angular_cmd": "0.000",
+      "teleop_enabled": "False",
+      "teleop_levels": "(0, 0)",
+      "esp_mode": "computer_control_mode"
+    }
+  },
+  "camera_input_hz": {
+    "color": 7.403037207598218,
+    "depth": 7.57128805322545,
+    "camera_info": 7.487162630411834
+  }
+}
