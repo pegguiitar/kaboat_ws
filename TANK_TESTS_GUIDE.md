@@ -5,8 +5,50 @@
 [SENSOR_CHECK.md](SENSOR_CHECK.md), 알고리즘·코드 API는
 [SKELETON.MD](SKELETON.MD)·[AVOIDANCE.MD](AVOIDANCE.MD)를 봅니다.
 
+## 단축어
+
+이 문서의 명령 대부분은 아래 단축어로 줄일 수 있습니다. 정의와 설치는 [COMMANDS_GUIDE.md](COMMANDS_GUIDE.md)를 봅니다.
+
+**노트북 호스트 (zsh, `~/.zshrc`)**
+
+| 단축어 | 하는 일 | 절 |
+|---|---|---|
+| `set_kaboat` | Jazzy·DOMAIN 43 설정 + Zenoh 브리지 백그라운드 시작 | 2 |
+| `stop_kaboat` | Zenoh 브리지 종료 | 2, 14 |
+| `kaboat_lidar` | 외벽 라이다 컨테이너 셸 진입 | 2 |
+| `rviz_tank [종류]` | 수조 RViz (`straight` `bspline` `circle` `los` `los_circle` `waypoint` `station` `gate` `avoid`) | 2 |
+| `clear_traj` | `rviz_tank`의 실제 궤적(과 gate/avoid 이전 계획) 지우기 | 2 |
+| `rviz_remote` | 선체 `/scan` 단독 RViz | 3, 9 |
+| `view_pitch` | 롤/피치와 스캔 차단 상태 | 3 |
+
+**노트북 컨테이너 (`kaboat_lidar`, 접속 시 환경 자동 로드)**
+
+| 단축어 | 하는 일 | 절 |
+|---|---|---|
+| `cb` / `sb` | `colcon build --symlink-install` / `source install/setup.bash` | 1, 2 |
+| `tracker enable_rviz:=false` | `lidar_boat_tracker.launch.py` (포트는 `port:=` 인자로 지정) | 2 |
+
+**젯슨 (bash, `setup_jetson_bashrc.sh` 설치 후)**
+
+| 단축어 | 하는 일 | 절 |
+|---|---|---|
+| `cb` / `sb` | 빌드 / 환경 리로드 | 3 |
+| `run_zenoh` | Zenoh 브리지 (젯슨 쪽) | 3 |
+| `run_boat_lidar` | GQ7 + 실내 `/odom` + 선체 TG-50 (**포트 `/dev/ttyUSB0` 고정**) | 3 |
+| `run_motor` | 모터 드라이버 (`/dev/ttyCH341USB0`, `allow_port_scan:=false`) | 4 |
+| `view_pitch` | 롤/피치 모니터링 | 3 |
+| `cal_imu` | IMU 정지 보정 (`use_lidar_yaw_truth: false`일 때만 필요) | 3 |
+| `test_bspline` `test_straight` `test_circle` `test_station` | 고정 경로 주행 (**즉시 출발**) | 5 |
+| `test_waypoint` | 5개 웨이포인트 순차 주행 (`thrust_ratio:=0.3`, 즉시 출발) | 7 |
+| `test_los` | LOS B-spline 추종 (`thrust_ratio:=0.3`, 즉시 출발) | 8 |
+| `test_avoid` | 장애물 회피 주행 (`drive_enabled:=true`, 즉시 출발) | 10 |
+
+- `test_*`는 모두 `wait_for_start:=false`라서 **실행하자마자 출발**합니다. 모터 드라이버(`run_motor`)가 켜져 있으면 바로 움직이니 배 주변을 먼저 확인하세요.
+- 단일 waypoint, 11~13절(gate·avoid 미션, DRI), 선체 라이다 없는 `indoor_tank.launch.py`는 단축어가 없어 본문의 전체 명령을 사용합니다.
+
 ## 목차
 
+- [단축어](#단축어)
 - [0. 기본 규칙](#0-기본-규칙)
 - **준비**
   - [1. 외벽 라이다 스캔만 확인](#1-외벽-라이다-스캔만-확인)
@@ -100,15 +142,16 @@ python3 ~/Projects/KABOAT/kaboat_ws/scripts/zenoh_monitor_link.py laptop --jetso
 
 ```bash
 rviz_tank                 # 위치 추적만
-rviz_tank <시험이름>       # straight | bspline | circle | los | los_circle | waypoint | station
+rviz_tank <시험이름>       # straight | bspline | circle | los | los_circle | waypoint | station | gate | avoid
 # 장애물 회피 3인칭 화면 (동시 실행 가능)
 docker exec -it -e DISPLAY="$DISPLAY" kaboat_lidar bash -lc \
   'source /workspace/kaboat_ws/install/setup.bash && ros2 launch kaboat_hardware real_obstacle_avoid_rviz.launch.py'
-# 실제 궤적 지우기 (컨테이너에서)
-ros2 service call /tank_test/clear_trajectory std_srvs/srv/Trigger '{}'
+# 실제 궤적 지우기 (노트북 호스트 터미널에서 alias 입력)
+clear_traj
 ```
 
 - 젯슨 시험 좌표를 바꿨다면 노트북에도 같은 설정을 적용하고 RViz를 다시 엽니다.
+- **`rviz_tank gate` / `rviz_tank avoid`**: 목표 경로(초록)를 젯슨이 계획한 `/gate/path` / `/avoid/plan`에서 받아 그립니다(Zenoh 경유). 주황색 실제 궤적은 외벽 라이다 `/boat_pose`입니다. 가장 최근의 유효한 계획이 화면에 남고, 계획이 바뀌면 갱신됩니다. 시도마다 `/tank_test/clear_trajectory`를 호출하면 궤적과 이전 계획이 함께 지워집니다. gate는 기둥 쌍·중앙(`/gate/pairs`)도 같이 보입니다. 10초 넘게 경로가 안 오면 노트북 로그에 경고가 나오니 12절 미리보기가 떠 있는지, 양쪽 브리지가 새 `zenoh_monitor_link.py`로 재시작됐는지 확인합니다.
 
 ## 3. 젯슨 센서와 오도메트리
 
@@ -264,6 +307,7 @@ ros2 topic echo /los_test/status
 ```
 
 - RViz: `rviz_tank los` / `rviz_tank los_circle`, Path `/los_test/path`.
+- **제어 상수:** LOS 시험은 `bspline_track_test`와 같은 제어를 씁니다. `thrust_ratio`가 전진·회전 출력 **상한**(0.3이면 각각 0.30)이고, 20Hz 제어 주기도 같습니다. 요 PD 게인은 2026-11-06에 kp 1.5→1.4, kd 0.15→0.16으로 바꿔 `bspline_track_test`(1.5/0.15)와 다릅니다. 이전에는 게인과 상한이 약 10~40배 작아서 곡선을 못 따라 경로를 벗어났습니다. 게이트·탐색 미션이 쓰는 공통 `los()` 기본 동작(`LosFollower()`)은 바꾸지 않았습니다.
 - 수조 밖으로 나가는 경로는 시작 시 거부됩니다.
 
 ## 9. 장애물 회피 미리보기
@@ -307,7 +351,6 @@ ros2 service call /real_avoid_test/start std_srvs/srv/Trigger '{}'
 - 선체 폭 충돌 예측은 없으므로 RViz에서 여유를 직접 확인합니다.
 
 ## 11. 게이트 라이다 미리보기
-- **제어 상수:** LOS 시험은 `bspline_track_test`와 같은 제어를 씁니다. `thrust_ratio`가 전진·회전 출력 **상한**(0.3이면 각각 0.30)이고, 20Hz 제어 주기도 같습니다. 요 PD 게인은 2026-11-06에 kp 1.5→1.4, kd 0.15→0.16으로 바꿔 `bspline_track_test`(1.5/0.15)와 다릅니다. 이전에는 게인과 상한이 약 10~40배 작아서 곡선을 못 따라 경로를 벗어났습니다. 게이트·탐색 미션이 쓰는 공통 `los()` 기본 동작(`LosFollower()`)은 바꾸지 않았습니다.
 
 3절로 `/odom`·선체 `/scan`을 준비합니다. `goal_x/y`는 **마지막 게이트 뒤쪽 실측 좌표**(출구에서 4m 이내).
 
@@ -321,7 +364,7 @@ ros2 topic echo /gate/cmd_preview
 ```
 
 - `cmd_mux`·모터는 시작하지 않으며 `/cmd/gate`는 0입니다.
-- RViz: Fixed Frame `odom`, Path `/gate/path`, MarkerArray `/gate/pairs`(빨강=기둥, 초록=중앙).
+- RViz: Fixed Frame `odom`, Path `/gate/path`, MarkerArray `/gate/pairs`(빨강=기둥, 초록=중앙). 노트북에서는 `rviz_tank gate`(두 토픽이 Zenoh로 전달됨).
 - 설정: [`gate_params.yaml`](src/kaboat_bringup/config/gate_params.yaml) (`required_pairs`, 게이트 폭, `min_clearance` 등).
 - 동작 원리는 [SKELETON.MD](SKELETON.MD)의 `gate_follower` 항목을 봅니다.
 
@@ -350,8 +393,10 @@ ros2 service call /tank_mission/stop  std_srvs/srv/Trigger '{}'
 ```
 
 - 확인 토픽: `/mission/state`, gate `/gate/status` `/gate/path`, avoid `/avoid/plan` `/avoid/dri`.
-- 주행 시 `start` 서비스가 성공해야 움직입니다. 입력이 끊기거나 E-Stop이면 정지 후 재시작을 요구합니다.
-- 상한 전진 0.05·회전 0.02, 후진 차단. 시작 자세까지의 직선 접근은 회피하지 않으므로 그 구간을 비웁니다.
+- 노트북에서 보기: `rviz_tank gate` 또는 `rviz_tank avoid`(목표=계획 경로, 실제=외벽 라이다). `/tank_mission/status`도 Zenoh로 넘어옵니다.
+- 주행 시 `start` 서비스가 성공해야 움직입니다. `/odom`, `/occupancy_grid`, 원시 명령이 끊기거나 E-Stop이면 정지 후 재시작을 요구합니다.
+- **가드는 `/scan`을 검사하지 않습니다.** 라이다가 끊기거나 기울기 필터가 스캔을 막아도 배는 마지막 지도로 계속 움직이므로(점유 셀 시간 감쇠 없음), 시험 중 노트북 RViz에서 `/scan`을 계속 보고 이상하면 바로 `/tank_mission/stop`이나 `/emergency_stop`을 보냅니다. gate는 자체 검사(`gate.scan_timeout_sec` 0.7초)가 있어 스캔이 끊기면 스스로 멈춥니다.
+- 상한 전진 0.30·회전 0.40(`max_linear_cmd`·`max_angular_cmd`, 게이트 LOS 0.3/0.3·회피 0.25/0.31이 잘리지 않게), 후진 차단. 시작 자세까지의 직선 접근은 회피하지 않으므로 그 구간을 비웁니다.
 - 이미 `/occupancy_grid`가 있으면 `start_occupancy_grid:=false`.
 
 ## 13. 무선 조종 중 DRI 모니터링

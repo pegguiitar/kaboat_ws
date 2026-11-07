@@ -309,7 +309,7 @@ waypoint 방향으로 두고 곧바로 직선 경로를 만든다.
   수조에서 검증한 LOS(`LosFollower.bspline_track`, `test_los`)와 같은 PD 제어를 쓴다
   (요 게인 kp 1.4 / kd 0.16 — 2026-11-04 실물 튜닝, 11-06 kp 1.5→1.4, kd 0.15→0.16(kp 1.3,
   kd 0.18·0.17·0.14·0.12 도 시험). 전진 출력 비율 `cmd_full` 0.25 를 전진 상한으로, 회전 상한은 0.31 — 2026-11-06 실물 튜닝
-  (전진 0.3→0.25, 회전 0.3→0.31. 수조 SOTA 는 0.23/0.33, AVOID_TEST_LOG.md). 이전에는 sim 의 `waypoint()` 게인 0.152/0.076 이었다). 목표점이 waypoint 보다 멀어지면 waypoint 로
+  (전진 0.3→0.25, 회전 0.3→0.31. 수조 SOTA 는 이 값과 lookahead 0.8, AVOID_TEST_LOG.md). 이전에는 sim 의 `waypoint()` 게인 0.152/0.076 이었다). 목표점이 waypoint 보다 멀어지면 waypoint 로
   잘라낸다. 순수 FSM에는 도착 판정을 만들지 않는다. ROS 노드인
   `obstacle_planner`가 완료 신호를 보내고, 최종 미션 전환은
   `mission_manager`가 웨이포인트 4m 조건과 함께 판정한다.

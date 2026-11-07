@@ -45,13 +45,13 @@ Zenoh가 전달하는 토픽([`zenoh_monitor_link.py`](scripts/zenoh_monitor_lin
 
 | 방향 | 토픽 |
 |---|---|
-| 젯슨 → 노트북 | `/scan`, `/scan/raw`, `/odom`, `/tf`, `/tf_static`, `/occupancy_grid`, `/avoid/plan`, `/avoid/cps`, `/avoid/dri`, `/real_avoid_test/{path,markers,dri,status}`, `/manual_dri/{dri,status}`, `/straight_drive/markers`, `/bspline_test/{path,markers}`, `/circle_drive/markers`, `/station_keeping/markers`, `/dock/{waypoints,entrance_base,marker_base,detection_status}`, `/mission/state`, `/mission/goal`, `/imu/data`, `/gps/fix`, `/gnss_1/velocity`, `/ekf/status`, `/ekf/odometry_map`, `/teleop/{status,event}` |
+| 젯슨 → 노트북 | `/scan`, `/scan/raw`, `/odom`, `/tf`, `/tf_static`, `/occupancy_grid`, `/avoid/{plan,cps,dri}`, `/gate/{path,pairs,status,cmd_preview}`, `/tank_mission/status`, `/real_avoid_test/{path,markers,dri,status}`, `/manual_dri/{dri,status}`, `/straight_drive/markers`, `/bspline_test/{path,markers}`, `/circle_drive/markers`, `/station_keeping/markers`, `/dock/{waypoints,entrance_base,marker_base,detection_status}`, `/mission/{state,goal,entry_goal}`, `/imu/data`, `/gps/fix`, `/gnss_1/velocity`, `/ekf/status`, `/ekf/odometry_map`, `/teleop/{status,event}` |
 | 노트북 → 젯슨 | `/boat_pose`, `/teleop/{enable,levels,gps_mark,esp_mode}` |
 | 전달 안 함 | `/cmd_vel`, `/cmd/*`, `/start_mission`, `/emergency_stop`, 서비스, 액션, 카메라 원본 영상 |
 
 출발·정지·비상 정지는 브리지를 통과하지 않으므로 **젯슨 도메인 42의 터미널**에서
-실행합니다. 새 토픽을 노트북에서 보려면 위 스크립트의 허용 목록에 추가하고
-양쪽 브리지를 재시작해야 합니다.
+실행합니다. 허용 목록은 브리지를 시작할 때 적용되므로, 새 토픽을 노트북에서 보려면 위 스크립트의
+허용 목록에 추가하고 **양쪽 브리지를 모두 재시작**해야 합니다(젯슨 `run_zenoh`, 노트북 `stop_kaboat` → `set_kaboat`).
 
 ---
 
@@ -116,7 +116,8 @@ RViz 프로세스는 라이다와 같은 Humble 컨테이너에서 실행됩니�
 | **`set_default`** | Jazzy 로드, DOMAIN 0으로 복귀 |
 | **`kaboat_lidar`** | 외벽 라이다 컨테이너 셸 진입 (`DISPLAY` 전달) |
 | **`kaboat_sim`** | 시뮬레이터 컨테이너 셸 진입 (`DISPLAY` 전달) |
-| **`rviz_tank [시험종류]`** | 수조 추적·경로 비교 RViz. `straight`, `bspline`, `circle`, `los`, `los_circle`, `waypoint`, `station`. 생략하면 추적 화면과 실제 궤적만 |
+| **`rviz_tank [시험종류]`** | 수조 추적·경로 비교 RViz. `straight`, `bspline`, `circle`, `los`, `los_circle`, `waypoint`, `station`은 고정 목표 경로, `gate`·`avoid`는 젯슨이 계획한 경로(`/gate/path`, `/avoid/plan`, Zenoh 경유)를 목표로 표시. 생략하면 추적 화면과 실제 궤적만 |
+| **`clear_traj`** | `rviz_tank`의 실제 궤적(주황) 지우기. `gate`·`avoid`는 직전 계획 경로도 함께 지움. [`scripts/clear_tank_trajectory.sh`](scripts/clear_tank_trajectory.sh)가 `kaboat_lidar` 컨테이너의 `/tank_test/clear_trajectory`를 호출 |
 | **`rviz_remote`** | 선체 `/scan`을 `onboard_laser_frame` 기준으로 표시 |
 | **`view_pitch`** | 롤/피치 각도와 Pitch [-4.0°, +2.0°], Roll ±3.0° 스캔 차단 상태 출력 |
 | **`python3 scripts/teleop_laptop.py`** | 노트북 키보드 조종 창 (7절) |
@@ -292,7 +293,7 @@ python3 scripts/teleop_laptop.py
 | 순서 | 위치 | 명령 |
 |---|---|---|
 | 1 | 노트북 터미널 1 | `ROS_DOMAIN_ID=43 docker compose -f docker-compose.lidar.yml up -d` → `kaboat_lidar` → `tracker enable_rviz:=false` |
-| 2 | 노트북 터미널 2 | `set_kaboat` → `rviz_tank los` (시험에 맞게 `straight`, `bspline` 등) |
+| 2 | 노트북 터미널 2 | `set_kaboat` → `rviz_tank los` (시험에 맞게 `straight`, `bspline`, `gate`, `avoid` 등) |
 | 3 | 젯슨 터미널 1 | `run_zenoh` |
 | 4 | 젯슨 터미널 2 | `run_boat_lidar` → `/odom` 30 Hz, 발행자 1개 확인 |
 | 5 | 젯슨 터미널 4 | `run_motor` (주행할 때만, `ls -l /dev/ttyCH341USB0` 먼저) |

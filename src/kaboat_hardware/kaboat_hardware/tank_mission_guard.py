@@ -2,7 +2,9 @@
 
 The production behavior and cmd_mux run in preview mode without a motor-output
 publisher. Drive mode additionally requires an explicit start service and fresh
-odom, scan, occupancy grid and raw command. Any lost input disarms the test.
+odom, occupancy grid and raw command. Any lost input disarms the test.
+The onboard /scan is deliberately not checked here: the operator watches it
+in RViz over the Zenoh link during tank tests.
 """
 
 import math
@@ -12,8 +14,7 @@ import rclpy
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import OccupancyGrid, Odometry
 from rclpy.node import Node
-from rclpy.qos import DurabilityPolicy, QoSProfile, qos_profile_sensor_data
-from sensor_msgs.msg import LaserScan
+from rclpy.qos import DurabilityPolicy, QoSProfile
 from std_msgs.msg import Bool, String
 from std_srvs.srv import Trigger
 
@@ -28,7 +29,6 @@ class TankMissionGuard(Node):
             'max_linear_cmd': 0.05,
             'max_angular_cmd': 0.02,
             'odom_timeout_sec': 0.5,
-            'scan_timeout_sec': 0.5,
             'grid_timeout_sec': 0.5,
             'cmd_timeout_sec': 0.3,
         }
@@ -44,7 +44,6 @@ class TankMissionGuard(Node):
         self.max_angular = float(p('max_angular_cmd'))
         self.timeouts = {
             'odom': float(p('odom_timeout_sec')),
-            'scan': float(p('scan_timeout_sec')),
             'grid': float(p('grid_timeout_sec')),
             'cmd': float(p('cmd_timeout_sec')),
         }
@@ -54,7 +53,6 @@ class TankMissionGuard(Node):
             raise ValueError('command limits and timeouts must be positive and finite')
 
         self.odom = None
-        self.scan = None
         self.grid = None
         self.cmd = None
         self.received = {}
@@ -71,8 +69,6 @@ class TankMissionGuard(Node):
         self.create_subscription(Twist, '/tank_mission/cmd_raw',
                                  self._on_cmd, 10)
         self.create_subscription(Odometry, '/odom', self._on_odom, 10)
-        self.create_subscription(LaserScan, '/scan', self._on_scan,
-                                 qos_profile_sensor_data)
         self.create_subscription(OccupancyGrid, '/occupancy_grid',
                                  self._on_grid, 1)
         latched = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
@@ -93,9 +89,6 @@ class TankMissionGuard(Node):
 
     def _on_odom(self, msg):
         self._record('odom', msg)
-
-    def _on_scan(self, msg):
-        self._record('scan', msg)
 
     def _on_grid(self, msg):
         self._record('grid', msg)
@@ -147,9 +140,6 @@ class TankMissionGuard(Node):
                 or len(self.grid.data) != self.grid.info.width * self.grid.info.height
                 or not any(v >= 0 for v in self.grid.data)):
             return 'occupancy grid empty/unobserved'
-        if not any(self.scan.range_min < r < self.scan.range_max
-                   and math.isfinite(r) for r in self.scan.ranges):
-            return 'scan has no valid returns'
         return None
 
     def _on_start(self, _request, response):

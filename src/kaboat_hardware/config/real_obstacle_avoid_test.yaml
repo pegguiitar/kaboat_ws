@@ -20,7 +20,7 @@ real_obstacle_avoid_test:
     front_corridor_half_width: 1.0
     max_cross_track_error: 0.7
     max_linear_cmd: 0.25                 # 전진 상한 = fsm.cmd_full 0.25 (0.3 이면 회피 경로에서 밀림)
-    max_angular_cmd: 0.31                # 회전 상한 (2026-11-06 실물 튜닝, SOTA 는 0.23/0.33)
+    max_angular_cmd: 0.31                # 회전 상한 (2026-11-06 실물 튜닝, 현재 = SOTA)
     odom_timeout_sec: 0.5
     scan_timeout_sec: 0.5
     grid_timeout_sec: 0.5

@@ -111,7 +111,7 @@
 | `lidar_boat_tracker` (노트북) | `/shore/scan` | `/boat_pose`, `/lidar_tracker/*` | 횡단 판+세로판 모양으로 x, y, yaw 계산 |
 | `indoor_lidar_odom` | `/boat_pose`, `/imu/data` | `/odom`, TF | `use_lidar_yaw_truth: false`면 IMU gyro로 180° 분기 선택(`cal_imu` 필요) |
 | 단독 시험 노드 | `/odom`, `/start_mission`, `/emergency_stop` | `/cmd_vel` | `/odom` 0.5s 끊기면 0 명령. 벽면 자동 정지 없음 |
-| `tank_mission_guard` | `/tank_mission/cmd_raw`, `/odom`, `/scan`, `/occupancy_grid` | `/cmd_vel` | `drive_enabled:=true`일 때만 발행, 입력 끊기면 해제 |
+| `tank_mission_guard` | `/tank_mission/cmd_raw`, `/odom`, `/occupancy_grid` | `/cmd_vel` | `drive_enabled:=true`일 때만 발행, 입력 끊기면 해제. `/scan`은 검사하지 않음(RViz로 직접 감시) |
 | `thruster_driver` | `/cmd_vel`, `/rc/cmd_vel`, `/teleop/*`, `/emergency_stop` | 시리얼 PWM, `/diagnostics`, `/teleop/status` | 노드 기본 백엔드 `dummy` |
 
 ⚠️ 세 경로는 모두 최종적으로 `/cmd_vel`을 쓰므로 동시에 실행하면 안 됩니다.

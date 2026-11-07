@@ -186,6 +186,17 @@ Visualization Manager:
       Value: true
     - Class: rviz_default_plugins/MarkerArray
       Enabled: true
+      Name: "게이트 기둥 쌍·중앙 (/gate/pairs)"
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /gate/pairs
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
       Name: "직선 주행 테스트 마커 (/straight_drive/markers)"
       Topic:
         Depth: 5

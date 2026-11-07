@@ -1,7 +1,13 @@
 """Show tank test reference paths and shore-LiDAR measured boat trajectory.
 
-This runs on the shore laptop. It never publishes propulsion commands and does
-not require the Jetson's MarkerArray topics to cross the Zenoh bridge.
+This runs on the shore laptop. It never publishes propulsion commands.
+
+Fixed tests (straight, bspline, circle, los, ...) draw their default route
+locally and need nothing from the Jetson. The ``gate`` and ``avoid`` mission
+kinds instead follow the path the Jetson behavior is currently planning
+(``/gate/path`` or ``/avoid/plan``), which the Zenoh bridge forwards. The
+latest non-empty plan stays on screen until the trajectory is cleared, so the
+last plan can be compared with where the boat actually went.
 """
 
 import math
@@ -22,12 +28,15 @@ from kaboat_hardware.waypoint_sequence_test import DEFAULT_X, DEFAULT_Y
 
 
 TEST_KINDS = ('none', 'straight', 'bspline', 'circle', 'los',
-              'los_circle', 'waypoint', 'station')
+              'los_circle', 'waypoint', 'station', 'gate', 'avoid')
+
+# Mission kinds take their target from a path published by the Jetson.
+MISSION_PATH_TOPICS = {'gate': '/gate/path', 'avoid': '/avoid/plan'}
 
 
 def reference_points(kind):
     """Return the default test route in the same tank/odom coordinates."""
-    if kind == 'none':
+    if kind == 'none' or kind in MISSION_PATH_TOPICS:
         return []
     if kind == 'straight':
         return [(STRAIGHT_LINE['start_x'], STRAIGHT_LINE['start_y']),
@@ -51,6 +60,23 @@ def reference_points(kind):
     raise ValueError(f'unknown tank test kind: {kind}')
 
 
+def mission_path_points(msg, z=0.05):
+    """Return (x, y, z) points of a usable odom-frame plan, else None.
+
+    Empty or one-point paths (published while a behavior has no plan), other
+    frames and non-finite poses are ignored so they never erase a good plan.
+    """
+    if msg.header.frame_id != 'odom' or len(msg.poses) < 2:
+        return None
+    points = []
+    for pose in msg.poses:
+        x, y = float(pose.pose.position.x), float(pose.pose.position.y)
+        if not (math.isfinite(x) and math.isfinite(y)):
+            return None
+        points.append((x, y, z))
+    return points
+
+
 class TankTestVisualization(Node):
     def __init__(self):
         super().__init__('tank_test_visualization')
@@ -63,6 +89,8 @@ class TankTestVisualization(Node):
                           for x, y in reference_points(self.kind)]
         self.history = BoundedTrajectoryHistory()
         self.last_pose_time = None
+        self.last_plan_time = None
+        self.started_at = time.monotonic()
 
         self.actual_pub = self.create_publisher(
             Path, '/tank_test/actual_path', 10)
@@ -70,14 +98,20 @@ class TankTestVisualization(Node):
             Path, '/tank_test/target_path', 10)
         self.create_subscription(
             PoseWithCovarianceStamped, '/boat_pose', self._on_pose, 10)
+        self.mission_topic = MISSION_PATH_TOPICS.get(self.kind)
+        if self.mission_topic is not None:
+            self.create_subscription(
+                Path, self.mission_topic, self._on_mission_path, 10)
         self.create_service(
             Trigger, '/tank_test/clear_trajectory', self._clear_trajectory)
         self.create_timer(0.5, self._publish_paths)
         self.create_timer(5.0, self._check_pose)
         self._publish_paths()
+        target = (self.mission_topic if self.mission_topic
+                  else 'local test defaults')
         self.get_logger().info(
             f'tank test visualization: {self.kind}; actual=/boat_pose, '
-            'target=local test defaults; no motor commands')
+            f'target={target}; no motor commands')
 
     def _on_pose(self, msg):
         if msg.header.frame_id != 'odom':
@@ -93,6 +127,13 @@ class TankTestVisualization(Node):
         self.history.add_point(x, y)
         self.last_pose_time = time.monotonic()
 
+    def _on_mission_path(self, msg):
+        points = mission_path_points(msg)
+        if points is None:
+            return
+        self.reference = points
+        self.last_plan_time = time.monotonic()
+
     def _publish_paths(self):
         stamp = self.get_clock().now().to_msg()
         self.target_pub.publish(create_trajectory_path(
@@ -102,6 +143,12 @@ class TankTestVisualization(Node):
 
     def _clear_trajectory(self, request, response):
         self.history.clear()
+        if self.mission_topic is not None:
+            # A mission plan is per attempt; drop it so a stale plan from the
+            # previous run is not compared with the next trajectory.
+            self.reference = []
+            self.last_plan_time = None
+            self.started_at = time.monotonic()
         self._publish_paths()
         response.success = True
         response.message = 'shore-LiDAR trajectory cleared'
@@ -113,6 +160,13 @@ class TankTestVisualization(Node):
             self.get_logger().warn(
                 'No recent /boat_pose; actual path cannot grow',
                 throttle_duration_sec=10.0)
+        if (self.mission_topic is not None and self.last_plan_time is None
+                and time.monotonic() - self.started_at > 10.0):
+            self.get_logger().warn(
+                f'No {self.mission_topic} received; start the mission preview '
+                'on the Jetson and check both Zenoh bridges (restart them '
+                'after updating zenoh_monitor_link.py)',
+                throttle_duration_sec=30.0)
 
 
 def main(args=None):

@@ -8,8 +8,8 @@ fi
 
 test_kind="${1:-none}"
 case "$test_kind" in
-    none|straight|bspline|circle|los|los_circle|waypoint|station) ;;
-    *) echo "사용법: rviz_tank [none|straight|bspline|circle|los|los_circle|waypoint|station]" >&2; exit 2 ;;
+    none|straight|bspline|circle|los|los_circle|waypoint|station|gate|avoid) ;;
+    *) echo "사용법: rviz_tank [none|straight|bspline|circle|los|los_circle|waypoint|station|gate|avoid]" >&2; exit 2 ;;
 esac
 
 # Use the same ROS environment as the shore LiDAR tracker.

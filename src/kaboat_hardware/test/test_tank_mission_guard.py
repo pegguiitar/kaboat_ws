@@ -6,7 +6,6 @@ import pytest
 import rclpy
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import OccupancyGrid, Odometry
-from sensor_msgs.msg import LaserScan
 from std_msgs.msg import Bool, String
 from std_srvs.srv import Trigger
 
@@ -25,10 +24,6 @@ def _inputs(node):
     odom.header.frame_id = 'odom'
     odom.pose.pose.orientation.w = 1.0
     node._on_odom(odom)
-    scan = LaserScan()
-    scan.range_min, scan.range_max = 0.1, 10.0
-    scan.ranges = [1.0]
-    node._on_scan(scan)
     grid = OccupancyGrid()
     grid.header.frame_id = 'odom'
     grid.info.resolution = 0.2
@@ -53,7 +48,7 @@ def test_preview_has_no_cmd_vel_publisher():
         rclpy.shutdown()
 
 
-def test_drive_clamps_and_disarms_on_stale_scan():
+def test_drive_clamps_and_disarms_on_stale_odom():
     rclpy.init(args=['--ros-args', '-p', 'drive_enabled:=true'])
     node = TankMissionGuard()
     try:
@@ -81,7 +76,7 @@ def test_drive_clamps_and_disarms_on_stale_scan():
         assert node.armed and published[-1] == (0.0, 0.0)
         node._on_cmd(Twist())
 
-        node.received['scan'] = time.monotonic() - 1.0
+        node.received['odom'] = time.monotonic() - 1.0
         node._tick()
         assert not node.armed
         assert published[-1] == (0.0, 0.0)
