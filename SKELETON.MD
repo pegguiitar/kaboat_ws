@@ -262,7 +262,8 @@ cell 과 구분되는 "좌표 랜드마크". 극좌표는 소비자가 자기 od
 [`waypoint_controller.py`](src/kaboat_behaviors/kaboat_behaviors/waypoint_controller.py).
 `odom` 좌표 목표(m)와 선택적 최종 헤딩(도, 0°=+X, 90°=+Y, 180°=-X). 각도를 주면
 위치에 접근한 뒤 헤딩을 맞춘다. 기본 도착 조건은 위치 0.35m 이내, 각도를 준
-경우 헤딩 8° 이내가 0.5초 유지.
+경우 헤딩 8° 이내이면서 회전 속도 0.1 rad/s 이하가 0.5초 유지. 한 번 도착하면 반경의
+2배를 벗어나야 다시 접근한다(히스테리시스, 2026-11-09).
 
 ```python
 def compute_cmd(self):

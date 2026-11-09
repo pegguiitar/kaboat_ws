@@ -70,9 +70,10 @@ def test_ros_node_holds_each_goal_then_reacquires_final_position():
         node._on_odom(_odom(first.x, first.y))
         node._tick()
         assert node.index == 0 and node.last_status == 'WAYPOINT_1/5_HOLD'
-        # A drift outside tolerance resets the continuous hold timer.
+        # A drift beyond twice the tolerance (hysteresis exit radius 0.7 m)
+        # resets the continuous hold timer.
         clock[0] = 101.0
-        node._on_odom(_odom(first.x + 0.5, first.y))
+        node._on_odom(_odom(first.x + 0.8, first.y))
         node._tick()
         assert node._hold_since is None and node.index == 0
         clock[0] = 102.0
@@ -103,7 +104,7 @@ def test_ros_node_holds_each_goal_then_reacquires_final_position():
         assert node.completed and node.last_status == 'COMPLETE_HOLD'
         final = node.targets[-1]
         clock[0] += 0.1
-        node._on_odom(_odom(final.x + 0.6, final.y))
+        node._on_odom(_odom(final.x + 0.8, final.y))   # 히스테리시스 반경 0.7 m 밖
         node._tick()
         assert node.index == 4 and sent[-1].linear.x > 0.0
         assert node.last_status == 'PREVIEW_WAYPOINT_5/5_REACQUIRE'

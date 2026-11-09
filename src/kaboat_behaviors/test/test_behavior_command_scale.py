@@ -12,7 +12,7 @@ from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 
 from kaboat_behaviors.behavior_base import (
-    DEFAULT_MAX_ANGULAR, DEFAULT_MAX_LINEAR, BehaviorBase)
+    DEFAULT_MAX_ANGULAR, DEFAULT_MAX_LINEAR, WAYPOINT_MAX_ANGULAR, BehaviorBase)
 from kaboat_behaviors.los_controller import LosFollower, bspline_path
 from kaboat_behaviors.waypoint_controller import WaypointController, WaypointParams
 
@@ -77,7 +77,19 @@ def test_waypoint_keeps_the_behavior_scale():
     tick(state)
     cmd = sent[-1]
     assert 0.0 < cmd.linear.x <= DEFAULT_MAX_LINEAR * 0.5 + 1e-9
-    assert abs(cmd.angular.z) <= DEFAULT_MAX_ANGULAR * 0.5 + 1e-9
+    assert abs(cmd.angular.z) <= WAYPOINT_MAX_ANGULAR * 0.5 + 1e-9
+
+
+def test_waypoint_turn_cap_is_strong_enough_to_align():
+    """목표 각도 정렬 회전 상한 = 0.31 × 비율 (예전 0.025 × 비율은 배가 거의 안 돌았다)."""
+    state, sent = make_state(5.0, 2.5, 0.0,
+                             lambda s: BehaviorBase.waypoint(s, 5.0, 2.5, 180.0, 0.5)[0])
+    state._waypoint_controller = WaypointController(WaypointParams(
+        max_linear=DEFAULT_MAX_LINEAR, max_angular=WAYPOINT_MAX_ANGULAR,
+        yaw_kp=1.4, yaw_kd=0.16))
+    tick(state)
+    assert WAYPOINT_MAX_ANGULAR == pytest.approx(0.31)
+    assert abs(sent[-1].angular.z) == pytest.approx(0.31 * 0.5)
 
 
 def test_commands_without_waypoint_or_los_use_the_plain_behavior_limits():

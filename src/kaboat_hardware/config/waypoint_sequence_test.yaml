@@ -17,4 +17,8 @@ waypoint_sequence_test:
     yaw_kp: 1.2               # 헤딩 P 게인
     yaw_kd: 0.15              # 요레이트 D 게인
     slow_radius: 1.5          # 목표점 접근 감속 반경 [m]
+    # 2026-11-09 맴돌기 수정: 도착 반경에 한 번 들어오면 반경 × exit_factor 를 벗어나야
+    # 다시 접근한다(0.9 m 반경이면 1.8 m). 도착 판정은 회전 속도도 settle_yaw_rate 이하여야 함
+    exit_factor: 2.0
+    settle_yaw_rate: 0.1      # [rad/s]
     wait_for_start: false     # 외부 서비스 시작 대기 없이 즉시 시작 (기본: false)

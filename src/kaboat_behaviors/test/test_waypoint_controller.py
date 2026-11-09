@@ -31,7 +31,7 @@ class TestWaypointController(unittest.TestCase):
         self.assertEqual((stopped.linear, stopped.angular), (0.0, 0.0))
         self.assertFalse(stopped.reached)
 
-    def test_thrust_ratio_scales_heading_alignment(self):
+    def test_thrust_ratio_scales_heading_alignment_cap(self):
         self.ctrl.set_goal(waypoint(5.0, 2.5, 180.0, 0.5))
         half = self.ctrl.step(5.0, 2.5, 0.0, 0.0, 0.0)
         self.ctrl.set_goal(waypoint(5.0, 2.5, 180.0, 1.0))
@@ -95,10 +95,50 @@ class TestWaypointController(unittest.TestCase):
         self.assertEqual(near_wrap.phase, 'SETTLING')
         self.assertTrue(self.ctrl.step(5.0, 2.5, math.radians(179),
                                        0.0, 0.6).reached)
-        drift = self.ctrl.step(5.6, 2.5, math.radians(179), 0.0, 0.7)
+        # 도착 반경(0.35)의 2배(0.7)를 넘게 밀려나야 다시 접근한다
+        drift = self.ctrl.step(5.8, 2.5, math.radians(179), 0.0, 0.7)
         self.assertEqual(drift.phase, 'APPROACH')
         self.assertFalse(self.ctrl.step(5.0, 2.5, math.radians(179),
                                         0.0, 0.8).reached)
+
+    def test_hysteresis_keeps_aligning_after_small_drift(self):
+        """경계를 조금 넘어도 APPROACH 로 돌아가지 않는다 (APPROACH↔ALIGN 맴돌기 방지)."""
+        self.ctrl.set_goal(waypoint(5.0, 2.5, 180.0))
+        self.assertEqual(self.ctrl.step(5.3, 2.5, 0.0, 0.0, 0.0).phase, 'ALIGN')
+        for x in (5.4, 5.55, 5.69):                    # 0.35 < 거리 ≤ 0.7
+            out = self.ctrl.step(x, 2.5, 0.5, 0.0, 0.1)
+            self.assertEqual(out.phase, 'ALIGN')
+            self.assertEqual(out.linear, 0.0)
+            self.assertGreater(out.angular, 0.0)       # 목표 각도(180°) 쪽으로만 돈다
+        self.assertEqual(self.ctrl.step(5.71, 2.5, 0.5, 0.0, 0.2).phase, 'APPROACH')
+
+    def test_slows_down_more_inside_twice_the_tolerance(self):
+        self.ctrl.set_goal(waypoint(5.0, 2.5))
+        p = self.ctrl.params
+        out = self.ctrl.step(4.5, 2.5, 0.0, 0.0, 0.0)  # 거리 0.5 m (< 0.7)
+        expected = p.max_linear * (0.5 / p.slow_radius) * (0.5 / 0.7)
+        self.assertAlmostEqual(out.linear, expected)
+
+    def test_settling_keeps_heading_pd_and_waits_for_rotation_to_stop(self):
+        self.ctrl.set_goal(waypoint(5.0, 2.5, 180.0))
+        # 허용 오차 안이지만 아직 빠르게 돌고 있음 → 정착 아님, 감쇠 명령을 낸다
+        spinning = self.ctrl.step(5.0, 2.5, math.radians(175), 0.3, 0.0)
+        self.assertEqual(spinning.phase, 'ALIGN')
+        self.assertLess(spinning.angular, 0.0)
+        settling = self.ctrl.step(5.0, 2.5, math.radians(175), 0.0, 0.1)
+        self.assertEqual(settling.phase, 'SETTLING')
+        self.assertGreater(settling.angular, 0.0)      # 정착 중에도 남은 오차를 계속 줄임
+
+    def test_thrust_ratio_caps_output_but_keeps_pd_gain(self):
+        ctrl = WaypointController(WaypointParams(max_angular=1.0, yaw_kp=1.4, yaw_kd=0.16))
+        small = []
+        for ratio in (0.5, 1.0):
+            ctrl.set_goal(waypoint(5.0, 2.5, 180.0, ratio))
+            small.append(ctrl.step(5.0, 2.5, math.radians(170), 0.0, 0.0).angular)
+        self.assertAlmostEqual(small[0], small[1])     # 작은 오차: 비율과 무관한 같은 PD 출력
+        ctrl.set_goal(waypoint(5.0, 2.5, 180.0, 0.2))
+        big = ctrl.step(5.0, 2.5, 0.0, 0.0, 0.0).angular
+        self.assertAlmostEqual(abs(big), 0.2)          # 큰 오차: 상한 max_angular × 비율
 
     def test_invalid_odom_cannot_finish_goal(self):
         self.ctrl.set_goal(waypoint(5.0, 2.5, 0.0))

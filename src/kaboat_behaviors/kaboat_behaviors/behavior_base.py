@@ -27,7 +27,9 @@ from nav_msgs.msg import Odometry, OccupancyGrid
 from kaboat_msgs.msg import BuoyArray
 from .waypoint_controller import (
     WaypointController, WaypointParams, waypoint as make_waypoint)
-from .los_controller import LOS_FORWARD_RATIO, LOS_TURN_RATIO, LosFollower
+from .los_controller import (
+    BSPLINE_TRACK_YAW_KD, BSPLINE_TRACK_YAW_KP, LOS_FORWARD_RATIO, LOS_TURN_RATIO,
+    LosFollower)
 from .bspline_planner import SampledPlan
 
 # 부표맵은 뒤쪽·먼 것까지 보관하므로, "지금 카메라에 보이는" 것만 쓰려는
@@ -46,6 +48,8 @@ DEFAULT_MAX_LINEAR = 12.0 / MAX_THRUST    # 전진 12N (최대의 ~10%) — 직�
 DEFAULT_MAX_ANGULAR = 3.0 / MAX_THRUST    # 차동추력 ±3N
 YAW_KP = 18.0 / MAX_THRUST                # 방위 P: 오차 1rad 당 차동 18N
 YAW_KD = 9.0 / MAX_THRUST                 # 요레이트 감쇠: 1rad/s 당 9N (발진 방지)
+# waypoint() 회전 상한 (× thrust_ratio). 공용 LOS 회전 상한과 같은 값.
+WAYPOINT_MAX_ANGULAR = LOS_TURN_RATIO
 
 
 def yaw_from_quaternion(q) -> float:
@@ -80,9 +84,12 @@ class BehaviorBase(Node):
         self.goal = None          # PoseStamped | None
         self.odom = None          # Odometry | None
         self._last_odom_received = None
+        # waypoint() 회전: 공용 LOS 요 게인(1.4/0.16)과 회전 상한 0.31(× thrust_ratio).
+        # 예전 max_angular 0.025 × ratio(0.5) ≈ 0.013 은 ESC 가 거의 반응하지 않아 목표 각도
+        # 정렬을 끝내지 못했다(2026-11-09). 전진 상한은 max_linear 그대로.
         self._waypoint_controller = WaypointController(WaypointParams(
-            max_linear=self.max_linear, max_angular=self.max_angular,
-            yaw_kp=YAW_KP, yaw_kd=YAW_KD))
+            max_linear=self.max_linear, max_angular=WAYPOINT_MAX_ANGULAR,
+            yaw_kp=BSPLINE_TRACK_YAW_KP, yaw_kd=BSPLINE_TRACK_YAW_KD))
         # LOS 는 수조 회피 SOTA 제어(kp 1.4, kd 0.16, lookahead 0.8, 직진 0.25·회전 0.31
         # 상한)를 쓴다. 이 경로의 명령은 이 behavior 의 max_linear/max_angular(waypoint 용
         # 작은 스케일)가 아니라 직진·회전 상한으로 직접 제한한다(_command_full_scale).
@@ -263,14 +270,15 @@ class BehaviorBase(Node):
         X/Y are metres; the optional final heading is degrees. Missions call
         this every tick and return ``cmd`` through their /cmd/<mission> route.
         When angle is omitted, reaching the position alone completes the goal.
-        ``thrust_ratio`` scales the configured safe linear/angular limits, 0..1.
+        ``thrust_ratio`` scales the output caps (forward max_linear, turn 0.31), 0..1;
+        the heading PD gains do not change with it.
         ``slow_radius`` overrides the default approach slowdown distance.
         A missing, stale or invalid odom always returns a zero command.
         """
         target = make_waypoint(x, y, angle, thrust_ratio)
         self._waypoint_controller.set_goal(target)
         self._command_thrust_ratio = target.thrust_ratio
-        self._command_full_scale = (self.max_linear, self.max_angular)
+        self._command_full_scale = (self.max_linear, WAYPOINT_MAX_ANGULAR)
         cmd = Twist()
         if not self.waypoint_odom_ready():
             self._waypoint_controller.reset_progress()

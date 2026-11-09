@@ -72,6 +72,9 @@ class WaypointSequenceTest(Node):
             'tank_margin': 0.25,
             'odom_timeout_sec': 0.5,
             'hold_duration_sec': 3.0,
+            # 도착 후 이 배수의 반경을 벗어나야 다시 접근 / 도착 판정 회전 속도 상한
+            'exit_factor': WaypointParams.exit_factor,
+            'settle_yaw_rate': WaypointParams.settle_yaw_rate,
         }
         for name, value in defaults.items():
             self.declare_parameter(name, value)
@@ -100,6 +103,8 @@ class WaypointSequenceTest(Node):
             position_tolerance=float(p('position_tolerance')),
             heading_tolerance_deg=float(p('heading_tolerance_deg')),
             settle_time=0.5,
+            exit_factor=float(p('exit_factor')),
+            settle_yaw_rate=float(p('settle_yaw_rate')),
         )
         self.controller = WaypointController(tuning)
         self.index = 0
