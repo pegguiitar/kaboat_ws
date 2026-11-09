@@ -161,6 +161,13 @@ class LosStep:
 BSPLINE_TRACK_YAW_KP = 1.4
 BSPLINE_TRACK_YAW_KD = 0.16
 
+# 공용 LOS 출력 기본값 = 수조 장애물 회피 SOTA (2026-11-06, AVOID_TEST_LOG.md 설정 4).
+# 직진(전진 기준이자 상한)과 회전 상한을 따로 둔다. los()(게이트·탐색)·test_los 가 쓰고,
+# 회피(FsmParams·노드 상한)와 같은 값이다. 2026-11-09 적용, 이전엔 둘 다 0.3·lookahead 1.0.
+LOS_FORWARD_RATIO = 0.25
+LOS_TURN_RATIO = 0.31
+LOS_LOOKAHEAD = 0.8   # 경로 위 목표점 전방 거리 [m]
+
 
 class LosFollower:
     """Stateful, ROS-free progress tracker around the shared LOS control law.
@@ -179,7 +186,7 @@ class LosFollower:
                  max_angular: float = 3.0 / 118.6,
                  goal_tolerance: float = 0.4,
                  ratio_limits_only: bool = False):
-        self.params = params or replace(FsmParams(), lookahead=1.0,
+        self.params = params or replace(FsmParams(), lookahead=LOS_LOOKAHEAD,
                                         slow_radius=1.5,
                                         cmd_full=max_linear)
         self.yaw_kp, self.yaw_kd = yaw_kp, yaw_kd
@@ -192,8 +199,9 @@ class LosFollower:
     def bspline_track(cls, *, goal_tolerance: float = 0.4) -> 'LosFollower':
         """bspline_track_test 와 같은 제어 상수·출력 규칙의 follower.
 
-        thrust_ratio=r 이면 전진 상한과 cmd_full 이 r, 회전 상한이 r 이고 게인은
-        kp 1.4 / kd 0.16 그대로다(bspline_track_test 는 kp 1.5 / kd 0.15).
+        step(thrust_ratio=r, turn_ratio=t) 이면 전진 상한과 cmd_full 이 r, 회전 상한이 t
+        (생략하면 r) 이고 게인은 kp 1.4 / kd 0.16, lookahead 0.8 m 다
+        (bspline_track_test 는 kp 1.5 / kd 0.15, lookahead 1.0).
         """
         return cls(yaw_kp=BSPLINE_TRACK_YAW_KP, yaw_kd=BSPLINE_TRACK_YAW_KD,
                    max_linear=1.0, max_angular=1.0,
@@ -243,10 +251,12 @@ class LosFollower:
         self.progress_idx = max(self.progress_idx, nearest)
 
     def step(self, path: SampledPlan, boat_xy, yaw: float, yaw_rate: float,
-             thrust_ratio: float = 1.0) -> LosStep:
+             thrust_ratio: float = 1.0, turn_ratio: float | None = None) -> LosStep:
+        """turn_ratio 를 주면 회전 상한만 따로 정한다(생략하면 thrust_ratio 와 같음)."""
         ratio = float(thrust_ratio)
-        if not math.isfinite(ratio) or not 0.0 <= ratio <= 1.0:
-            raise ValueError('thrust_ratio must be between 0 and 1')
+        turn = ratio if turn_ratio is None else float(turn_ratio)
+        if not all(math.isfinite(v) and 0.0 <= v <= 1.0 for v in (ratio, turn)):
+            raise ValueError('thrust_ratio and turn_ratio must be between 0 and 1')
         self.set_path(path)
         boat = np.asarray(boat_xy, dtype=np.float64)
         if (boat.shape != (2,) or not np.all(np.isfinite(boat))
@@ -283,7 +293,7 @@ class LosFollower:
             # bspline_track_test 와 같은 규칙: ratio 는 cmd_full 과 출력 상한에만,
             # 요 PD 게인은 그대로.
             linear_cap = self.max_linear * ratio
-            angular_cap = self.max_angular * ratio
+            angular_cap = self.max_angular * turn
             linear, angular = follow_cmd(
                 plan, boat, yaw, yaw_rate, waypoint_xy,
                 replace(self.params, cmd_full=linear_cap),
@@ -299,6 +309,6 @@ class LosFollower:
         return LosStep(
             linear=min(max(linear, 0.0), self.max_linear) * ratio,
             angular=max(-self.max_angular,
-                        min(self.max_angular, angular)) * ratio,
+                        min(self.max_angular, angular)) * turn,
             phase='FOLLOW', progress_idx=self.progress_idx,
             curvature=curvature)

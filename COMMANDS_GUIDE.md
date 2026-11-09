@@ -172,7 +172,7 @@ docker compose up -d
 | **`test_circle`** | `circle_drive_test.launch.py wait_for_start:=false` | 원형 선회 즉시 시작 |
 | **`test_station`** | `station_keeping_test.launch.py wait_for_start:=false` | 정점 유지 즉시 시작 |
 | **`test_waypoint`** | `waypoint_sequence_test.launch.py motion_enabled:=true thrust_ratio:=0.3 wait_for_start:=false` | 5개 웨이포인트 순차 주행 즉시 시작 |
-| **`test_los`** | `los_path_test.launch.py path_kind:=bspline motion_enabled:=true thrust_ratio:=0.3 wait_for_start:=false` | LOS 경로 추종 즉시 시작 |
+| **`test_los`** | `los_path_test.launch.py path_kind:=bspline motion_enabled:=true wait_for_start:=false` | LOS 경로 추종 즉시 시작 (SOTA 직진 0.25·회전 0.31) |
 | **`test_avoid`** | `real_obstacle_avoid_test.launch.py drive_enabled:=true wait_for_start:=false` | 실시간 장애물 회피 즉시 시작 |
 
 > `test_*` 단축어는 외부 시작 신호(`/start_mission`) 없이 **실행 즉시 출발**합니다. 출발 명령을 기다리게 하려면 `wait_for_start:=true`를 덧붙입니다.

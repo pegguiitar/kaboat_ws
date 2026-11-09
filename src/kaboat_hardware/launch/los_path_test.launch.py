@@ -6,13 +6,20 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 
+# 기본값은 공용 LOS SOTA 상수에서 읽는다 — 런치에 숫자를 따로 적어 두면 노드 기본값과
+# 어긋난다(예전 kp 1.2 가 그랬다).
+from kaboat_behaviors.los_controller import (
+    BSPLINE_TRACK_YAW_KD, BSPLINE_TRACK_YAW_KP, LOS_FORWARD_RATIO, LOS_TURN_RATIO)
+
 
 def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('path_kind', default_value='bspline',
                               description='bspline or circle'),
-        DeclareLaunchArgument('thrust_ratio', default_value='0.3',
-                              description='Ratio of motor thrust output [0..1] (0.3 = 30%)'),
+        DeclareLaunchArgument('thrust_ratio', default_value=str(LOS_FORWARD_RATIO),
+                              description='Forward thrust ratio and cap [0..1] (SOTA 0.25)'),
+        DeclareLaunchArgument('turn_ratio', default_value=str(LOS_TURN_RATIO),
+                              description='Turn output cap [0..1] (SOTA 0.31)'),
         DeclareLaunchArgument('motion_enabled', default_value='true',
                               description='false: preview only; true: publish /cmd_vel'),
         DeclareLaunchArgument('wait_for_start', default_value='false',
@@ -21,9 +28,9 @@ def generate_launch_description():
                               description='Max linear output normalization factor'),
         DeclareLaunchArgument('max_angular', default_value='1.0',
                               description='Max angular output normalization factor'),
-        DeclareLaunchArgument('yaw_kp', default_value='1.2',
+        DeclareLaunchArgument('yaw_kp', default_value=str(BSPLINE_TRACK_YAW_KP),
                               description='Heading P gain'),
-        DeclareLaunchArgument('yaw_kd', default_value='0.15',
+        DeclareLaunchArgument('yaw_kd', default_value=str(BSPLINE_TRACK_YAW_KD),
                               description='Heading D gain'),
         DeclareLaunchArgument('center_x', default_value='5.0'),
         DeclareLaunchArgument('center_y', default_value='2.5'),
@@ -38,6 +45,8 @@ def generate_launch_description():
                 'path_kind': LaunchConfiguration('path_kind'),
                 'thrust_ratio': ParameterValue(LaunchConfiguration('thrust_ratio'),
                                                value_type=float),
+                'turn_ratio': ParameterValue(LaunchConfiguration('turn_ratio'),
+                                             value_type=float),
                 'motion_enabled': ParameterValue(LaunchConfiguration('motion_enabled'),
                                                  value_type=bool),
                 'wait_for_start': ParameterValue(LaunchConfiguration('wait_for_start'),

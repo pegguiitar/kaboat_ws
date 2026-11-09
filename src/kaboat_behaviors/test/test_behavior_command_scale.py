@@ -51,23 +51,23 @@ def test_los_output_limit_is_thrust_ratio_not_the_small_behavior_scale():
     tangent = math.atan2(q[1] - p[1], q[0] - p[0])
     x, y = p[0] - 0.3 * math.sin(tangent), p[1] + 0.3 * math.cos(tangent)
     state, sent = make_state(x, y, tangent + math.radians(20),
-                             lambda s: BehaviorBase.los(s, path, 0.3)[0])
+                             lambda s: BehaviorBase.los(s, path)[0])   # 기본값 = SOTA
     tick(state)
     cmd = sent[-1]
-    assert abs(cmd.angular.z) == pytest.approx(0.30)          # 예전엔 0.0076 으로 잘렸다
-    assert 0.05 < cmd.linear.x <= 0.30
-    assert cmd.linear.x > 3 * DEFAULT_MAX_LINEAR * 0.3
+    assert abs(cmd.angular.z) == pytest.approx(0.31)          # 회전 상한 (예전엔 0.0076 으로 잘림)
+    assert 0.05 < cmd.linear.x <= 0.25                         # 직진 상한
+    assert cmd.linear.x > 3 * DEFAULT_MAX_LINEAR * 0.25         # waypoint 스케일로 잘리지 않음
 
 
 def test_los_ratio_is_the_cap_for_both_axes():
     path = bspline_path(CPS, spacing=0.05)
     p, q = path.samples[60], path.samples[61]
     tangent = math.atan2(q[1] - p[1], q[0] - p[0])
-    for ratio in (0.1, 0.2, 0.3):
+    for ratio, turn in ((0.1, 0.15), (0.2, 0.2), (0.25, 0.31)):
         state, sent = make_state(p[0], p[1], tangent + math.radians(40),
-                                 lambda s, r=ratio: BehaviorBase.los(s, path, r)[0])
+                                 lambda s, r=ratio, t=turn: BehaviorBase.los(s, path, r, t)[0])
         tick(state)
-        assert abs(sent[-1].angular.z) <= ratio + 1e-9
+        assert abs(sent[-1].angular.z) == pytest.approx(turn)     # 40° 오차 → 회전 상한
         assert 0.0 <= sent[-1].linear.x <= ratio + 1e-9
 
 

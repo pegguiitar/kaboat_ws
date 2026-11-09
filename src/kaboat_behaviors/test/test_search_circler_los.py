@@ -27,14 +27,14 @@ def test_search_uses_stable_circle_path_and_keeps_orbiting_outside_entry_radius(
     state.distance_to_goal = lambda: state.distance
     state.get_clock = lambda: SimpleNamespace(now=FakeTime)
     state.visible_buoys = lambda color: [object()] if color == state.color else []
-    state.los = lambda path, ratio: (calls.append((path, ratio)) or Twist(), False)
+    state.los = lambda path, ratio, turn: (calls.append((path, ratio, turn)) or Twist(), False)
     state.report_complete = lambda: None
 
     SearchCircler.compute_cmd(state)
     state.distance = 1.2  # orbit radius exceeds the 0.8 m entry threshold
     SearchCircler.compute_cmd(state)
     assert calls[0][0] is calls[1][0]
-    assert calls[0][1] == calls[1][1] == 0.3
+    assert calls[0][1:] == calls[1][1:] == (0.25, 0.31)   # 공용 LOS SOTA
     assert np.all(calls[0][0].curvatures > 0)  # green -> CCW
 
     state.color = 'red'

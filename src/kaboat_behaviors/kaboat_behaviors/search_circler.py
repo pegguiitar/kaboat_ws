@@ -11,7 +11,7 @@ import rclpy
 from geometry_msgs.msg import Twist
 
 from .behavior_base import BehaviorBase
-from .los_controller import circle_path
+from .los_controller import LOS_FORWARD_RATIO, LOS_TURN_RATIO, circle_path
 from .obstacle_avoidance_utils import apply_repulsion
 
 # 탐색은 목표점 0.8m 이내에서 시작한다. 따라서 완료 신호가 발생할 때
@@ -19,7 +19,8 @@ from .obstacle_avoidance_utils import apply_repulsion
 ARRIVE_RADIUS = 0.8
 SEARCH_TIME = 5.0
 SEARCH_CIRCLE_RADIUS = 1.2
-SEARCH_THRUST_RATIO = 0.3   # los_path_test 에서 검증된 LOS 출력 상한
+SEARCH_THRUST_RATIO = LOS_FORWARD_RATIO   # 공용 LOS SOTA 직진 0.25 (이전 0.3)
+SEARCH_TURN_RATIO = LOS_TURN_RATIO       # 공용 LOS SOTA 회전 상한 0.31
 
 
 class SearchCircler(BehaviorBase):
@@ -81,7 +82,7 @@ class SearchCircler(BehaviorBase):
                     point.x, point.y, SEARCH_CIRCLE_RADIUS,
                     direction=direction, target_laps=None)
                 self._circle_key = key
-            cmd, _ = self.los(self._circle_path, SEARCH_THRUST_RATIO)
+            cmd, _ = self.los(self._circle_path, SEARCH_THRUST_RATIO, SEARCH_TURN_RATIO)
         return apply_repulsion(cmd, self.occupancy_grid, self.odom)
 
 

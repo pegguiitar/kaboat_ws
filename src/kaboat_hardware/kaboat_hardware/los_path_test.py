@@ -16,7 +16,8 @@ from std_msgs.msg import Bool, String
 from std_srvs.srv import Trigger
 
 from kaboat_behaviors.los_controller import (
-    BSPLINE_TRACK_YAW_KD, BSPLINE_TRACK_YAW_KP, LosFollower, bspline_path, circle_path)
+    BSPLINE_TRACK_YAW_KD, BSPLINE_TRACK_YAW_KP, LOS_FORWARD_RATIO, LOS_TURN_RATIO,
+    LosFollower, bspline_path, circle_path)
 from kaboat_hardware.test_coordinates import BSPLINE_TRACK, CIRCLE_DRIVE
 
 
@@ -44,7 +45,9 @@ class LosPathTest(Node):
             'direction': str(CIRCLE_DRIVE['direction']),
             'target_laps': float(CIRCLE_DRIVE['target_laps']),
             'sample_spacing': 0.05,
-            'thrust_ratio': 0.3,
+            # 수조 회피 SOTA 와 같은 출력 (2026-11-09, 이전 0.3/0.3)
+            'thrust_ratio': LOS_FORWARD_RATIO,   # 직진(전진 기준·상한)
+            'turn_ratio': LOS_TURN_RATIO,        # 회전 상한
             'motion_enabled': False,
             'wait_for_start': False,
             # bspline_track_test 와 같은 제어: max_linear/max_angular 는 thrust_ratio=1 일
@@ -71,14 +74,17 @@ class LosPathTest(Node):
             float(p('center_y')), float(p('radius')), str(p('direction')),
             float(p('target_laps')), float(p('sample_spacing')))
         self.ratio = float(p('thrust_ratio'))
+        self.turn_ratio = float(p('turn_ratio'))
         self.motion_enabled = bool(p('motion_enabled'))
         self.size_x = float(p('tank_size_x'))
         self.size_y = float(p('tank_size_y'))
         self.margin = float(p('tank_margin'))
         self.odom_timeout = float(p('odom_timeout_sec'))
         if (not all(math.isfinite(v) for v in (
-                self.ratio, self.size_x, self.size_y, self.margin, self.odom_timeout))
+                self.ratio, self.turn_ratio, self.size_x, self.size_y, self.margin,
+                self.odom_timeout))
                 or not 0.0 <= self.ratio <= 1.0
+                or not 0.0 <= self.turn_ratio <= 1.0
                 or self.odom_timeout <= 0.0
                 or self.size_x <= 0.0 or self.size_y <= 0.0
                 or not 0.0 <= self.margin < min(self.size_x, self.size_y) / 2.0
@@ -125,7 +131,8 @@ class LosPathTest(Node):
             self._status('WAIT_START')
         self.get_logger().info(
             f'LOS {p("path_kind")}: {len(self.path.samples)} samples; '
-            f'thrust_ratio={self.ratio:.2f}; motion_enabled={self.motion_enabled}')
+            f'thrust_ratio={self.ratio:.2f}; turn_ratio={self.turn_ratio:.2f}; '
+            f'motion_enabled={self.motion_enabled}')
 
     def _publish_path(self):
         msg = Path()
@@ -218,7 +225,7 @@ class LosPathTest(Node):
                          1.0 - 2.0 * (q.y*q.y + q.z*q.z))
         step = self.follower.step(
             self.path, (pose.position.x, pose.position.y), yaw,
-            self.odom.twist.twist.angular.z, self.ratio)
+            self.odom.twist.twist.angular.z, self.ratio, self.turn_ratio)
         cmd = Twist()
         if not step.reached:
             cmd.linear.x, cmd.angular.z = step.linear, step.angular

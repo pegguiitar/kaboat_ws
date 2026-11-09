@@ -27,7 +27,7 @@ from nav_msgs.msg import Odometry, OccupancyGrid
 from kaboat_msgs.msg import BuoyArray
 from .waypoint_controller import (
     WaypointController, WaypointParams, waypoint as make_waypoint)
-from .los_controller import LosFollower
+from .los_controller import LOS_FORWARD_RATIO, LOS_TURN_RATIO, LosFollower
 from .bspline_planner import SampledPlan
 
 # 부표맵은 뒤쪽·먼 것까지 보관하므로, "지금 카메라에 보이는" 것만 쓰려는
@@ -83,10 +83,9 @@ class BehaviorBase(Node):
         self._waypoint_controller = WaypointController(WaypointParams(
             max_linear=self.max_linear, max_angular=self.max_angular,
             yaw_kp=YAW_KP, yaw_kd=YAW_KD))
-        # LOS 는 los_path_test/bspline_track_test 에서 검증된 제어(kp 1.4, kd 0.16,
-        # thrust_ratio 가 출력 상한)를 쓴다. 이 경로의 명령은 이 behavior 의
-        # max_linear/max_angular(waypoint 용 작은 스케일)가 아니라 1.0 을 전체
-        # 스케일로 보고 thrust_ratio 만큼으로 제한한다(_command_full_scale).
+        # LOS 는 수조 회피 SOTA 제어(kp 1.4, kd 0.16, lookahead 0.8, 직진 0.25·회전 0.31
+        # 상한)를 쓴다. 이 경로의 명령은 이 behavior 의 max_linear/max_angular(waypoint 용
+        # 작은 스케일)가 아니라 직진·회전 상한으로 직접 제한한다(_command_full_scale).
         self._los_follower = LosFollower.bspline_track()
         self._command_thrust_ratio = None
         self._command_full_scale = None
@@ -157,7 +156,7 @@ class BehaviorBase(Node):
         if cmd is None:
             return
         # waypoint() 는 이 behavior 의 max_linear/max_angular 가 전체 스케일이고,
-        # los() 는 1.0 이다(thrust_ratio 가 곧 출력 상한).
+        # los() 는 (직진 상한, 회전 상한) 이 곧 전체 스케일이다.
         full_linear, full_angular = (self._command_full_scale
                                      or (self.max_linear, self.max_angular))
         cmd.linear.x = max(-full_linear, min(full_linear, cmd.linear.x))
@@ -287,20 +286,23 @@ class BehaviorBase(Node):
         return cmd, step.reached
 
     def los(self, path: SampledPlan,
-            thrust_ratio: float = 1.0) -> tuple[Twist, bool]:
+            thrust_ratio: float = LOS_FORWARD_RATIO,
+            turn_ratio: float = LOS_TURN_RATIO) -> tuple[Twist, bool]:
         """Follow an odom-frame sampled B-spline/circle path.
 
         Prepare the path once with ``bspline_path()``, ``circle_path()`` or
         ``sampled_path()`` and pass that same object on each control tick.
         Returns (command, reached); a continuous circle never reaches.
+        thrust_ratio 는 직진(전진 기준·상한), turn_ratio 는 회전 상한이다.
+        기본값은 수조 회피 SOTA (직진 0.25, 회전 0.31).
         """
-        ratio = float(thrust_ratio)
-        if not math.isfinite(ratio) or not 0.0 <= ratio <= 1.0:
-            raise ValueError('thrust_ratio must be between 0 and 1')
+        ratio, turn = float(thrust_ratio), float(turn_ratio)
+        if not all(math.isfinite(v) and 0.0 <= v <= 1.0 for v in (ratio, turn)):
+            raise ValueError('thrust_ratio and turn_ratio must be between 0 and 1')
         if not isinstance(path, SampledPlan):
             raise TypeError('path must be built with sampled_path, bspline_path or circle_path')
-        self._command_thrust_ratio = ratio
-        self._command_full_scale = (1.0, 1.0)
+        # 뒤에 repulsion 이 명령을 바꿔도 _tick 이 이 상한으로 다시 자른다
+        self._command_full_scale = (ratio, turn)
         cmd = Twist()
         if not self.waypoint_odom_ready() or path.frame_id != 'odom':
             return cmd, False
@@ -308,7 +310,7 @@ class BehaviorBase(Node):
         step = self._los_follower.step(
             path, (pose.position.x, pose.position.y),
             yaw_from_quaternion(pose.orientation),
-            self.odom.twist.twist.angular.z, ratio)
+            self.odom.twist.twist.angular.z, ratio, turn)
         cmd.linear.x = step.linear
         cmd.angular.z = step.angular
         return cmd, step.reached

@@ -40,7 +40,7 @@
 | `cal_imu` | IMU 정지 보정 (`use_lidar_yaw_truth: false`일 때만 필요) | 3 |
 | `test_bspline` `test_straight` `test_circle` `test_station` | 고정 경로 주행 (**즉시 출발**) | 5 |
 | `test_waypoint` | 5개 웨이포인트 순차 주행 (`thrust_ratio:=0.3`, 즉시 출발) | 7 |
-| `test_los` | LOS B-spline 추종 (`thrust_ratio:=0.3`, 즉시 출발) | 8 |
+| `test_los` | LOS B-spline 추종 (SOTA 직진 0.25·회전 0.31, 즉시 출발) | 8 |
 | `test_avoid` | 장애물 회피 주행 (`drive_enabled:=true`, 즉시 출발) | 10 |
 
 - `test_*`는 모두 `wait_for_start:=false`라서 **실행하자마자 출발**합니다. 모터 드라이버(`run_motor`)가 켜져 있으면 바로 움직이니 배 주변을 먼저 확인하세요.
@@ -297,9 +297,9 @@ ros2 launch kaboat_hardware los_path_test.launch.py path_kind:=bspline
 ros2 launch kaboat_hardware los_path_test.launch.py path_kind:=circle \
   center_x:=5.0 center_y:=2.5 radius:=1.2 direction:=ccw target_laps:=2.0
 
-# 실제 주행 (4절 모터 드라이버 실행 후; test_los = bspline, 출력 0.3, 즉시 출발)
+# 실제 주행 (4절 모터 드라이버 실행 후; test_los = bspline, SOTA 출력, 즉시 출발)
 ros2 launch kaboat_hardware los_path_test.launch.py \
-  path_kind:=circle thrust_ratio:=0.3 motion_enabled:=true
+  path_kind:=circle motion_enabled:=true
 
 # 다른 터미널
 ros2 service call /los_test/start std_srvs/srv/Trigger '{}'
@@ -307,7 +307,7 @@ ros2 topic echo /los_test/status
 ```
 
 - RViz: `rviz_tank los` / `rviz_tank los_circle`, Path `/los_test/path`.
-- **제어 상수:** LOS 시험은 `bspline_track_test`와 같은 제어를 씁니다. `thrust_ratio`가 전진·회전 출력 **상한**(0.3이면 각각 0.30)이고, 20Hz 제어 주기도 같습니다. 요 PD 게인은 2026-11-06에 kp 1.5→1.4, kd 0.15→0.16으로 바꿔 `bspline_track_test`(1.5/0.15)와 다릅니다. 이전에는 게인과 상한이 약 10~40배 작아서 곡선을 못 따라 경로를 벗어났습니다. 게이트·탐색 미션이 쓰는 공통 `los()` 기본 동작(`LosFollower()`)은 바꾸지 않았습니다.
+- **제어 상수:** LOS 시험과 게이트·탐색 미션의 공통 `los()`는 **수조 회피 SOTA**와 같은 값을 씁니다(2026-11-09): 직진 `thrust_ratio` 0.25(전진 기준·상한), 회전 상한 `turn_ratio` 0.31, 요 PD 1.4/0.16, lookahead 0.8 m, 20Hz. 값은 [`los_controller.py`](src/kaboat_behaviors/kaboat_behaviors/los_controller.py)의 `LOS_*`·`BSPLINE_TRACK_YAW_*` 상수 한 곳에서 정하고, 런치 기본값도 이 상수를 읽습니다(예전엔 런치에 kp 1.2가 따로 적혀 있었음). `bspline_track_test`(1.5/0.15, lookahead 1.0)와는 다릅니다.
 - 수조 밖으로 나가는 경로는 시작 시 거부됩니다.
 
 ## 9. 장애물 회피 미리보기
@@ -396,7 +396,7 @@ ros2 service call /tank_mission/stop  std_srvs/srv/Trigger '{}'
 - 노트북에서 보기: `rviz_tank gate` 또는 `rviz_tank avoid`(목표=계획 경로, 실제=외벽 라이다). `/tank_mission/status`도 Zenoh로 넘어옵니다.
 - 주행 시 `start` 서비스가 성공해야 움직입니다. `/odom`, `/occupancy_grid`, 원시 명령이 끊기거나 E-Stop이면 정지 후 재시작을 요구합니다.
 - **가드는 `/scan`을 검사하지 않습니다.** 라이다가 끊기거나 기울기 필터가 스캔을 막아도 배는 마지막 지도로 계속 움직이므로(점유 셀 시간 감쇠 없음), 시험 중 노트북 RViz에서 `/scan`을 계속 보고 이상하면 바로 `/tank_mission/stop`이나 `/emergency_stop`을 보냅니다. gate는 자체 검사(`gate.scan_timeout_sec` 0.7초)가 있어 스캔이 끊기면 스스로 멈춥니다.
-- 상한 전진 0.30·회전 0.40(`max_linear_cmd`·`max_angular_cmd`, 게이트 LOS 0.3/0.3·회피 0.25/0.31이 잘리지 않게), 후진 차단. 시작 자세까지의 직선 접근은 회피하지 않으므로 그 구간을 비웁니다.
+- 상한 전진 0.30·회전 0.40(`max_linear_cmd`·`max_angular_cmd`, 게이트 LOS·회피 0.25/0.31이 잘리지 않게), 후진 차단. 시작 자세까지의 직선 접근은 회피하지 않으므로 그 구간을 비웁니다.
 - 이미 `/occupancy_grid`가 있으면 `start_occupancy_grid:=false`.
 
 ## 13. 무선 조종 중 DRI 모니터링

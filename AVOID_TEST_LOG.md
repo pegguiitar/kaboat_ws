@@ -123,6 +123,7 @@ rviz2 -d ~/Projects/KABOAT/kaboat_ws/src/kaboat_hardware/rviz/real_obstacle_avoi
 | 11-06 | D 게인 0.14 → 0.16, 회전 0.33 → 0.31 (직진 0.25) | 목표 방향을 지나쳐 더 도는 것을 줄이려고 감쇠를 키우고 최대 회전을 낮춤 |
 | 11-06 | **lookahead 1.0 → 0.8 m** (현재: 직진 0.25, 회전 0.31, P/D 1.4/0.16) | 회피 경로를 더 바짝 따라가게. `test_los`·게이트는 1.0 그대로 |
 | 11-06 | ★ **현재 값을 SOTA 로 기록** (설정 4, `e768828`): 직진 0.25, 회전 0.31, P/D 1.4/0.16, lookahead 0.8 | |
+| 11-09 | SOTA 를 **공용 LOS(`los()`), 게이트 LOS 구간, 탐색 원 돌기, `test_los`** 에도 적용 (직진 0.25·회전 0.31·lookahead 0.8, P/D 는 원래 공용) | 값은 `los_controller.py` 의 `LOS_*` 상수 한 곳 |
 
 ## 실험 결과
 

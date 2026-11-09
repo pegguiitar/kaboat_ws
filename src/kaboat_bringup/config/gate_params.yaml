@@ -5,7 +5,8 @@ gate_follower:
     # 경로 명령은 기본적으로 미리보기만 발행한다.
     gate.motion_enabled: false
     gate.thrust_ratio: 0.5              # waypoint(첫 게이트 접근) 구간
-    gate.los_thrust_ratio: 0.3          # LOS 경로 추종 구간 — los_path_test 검증값
+    gate.los_thrust_ratio: 0.25         # LOS 경로 추종 구간 직진 — 수조 회피 SOTA (이전 0.3)
+    gate.los_turn_ratio: 0.31           # LOS 경로 추종 구간 회전 상한 — 수조 회피 SOTA
     gate.occ_threshold: 95
     gate.min_cluster_cells: 2
     gate.max_cluster_extent: 1.2

@@ -114,7 +114,8 @@ import numpy as np
 
 from kaboat_behaviors.avoid_fsm import FsmParams, follow_cmd
 from kaboat_behaviors.los_controller import (
-    BSPLINE_TRACK_YAW_KD, BSPLINE_TRACK_YAW_KP, LosFollower, bspline_path)
+    BSPLINE_TRACK_YAW_KD, BSPLINE_TRACK_YAW_KP, LOS_FORWARD_RATIO, LOS_LOOKAHEAD,
+    LOS_TURN_RATIO, LosFollower, bspline_path)
 
 TRACK_CPS = [(8.5, 2.0), (7.0, 3.5), (5.0, 1.5), (3.0, 3.5), (1.5, 2.5)]
 
@@ -124,9 +125,10 @@ def bspline_test_reference(path, progress_idx, boat, yaw, yaw_rate,
                            kp=BSPLINE_TRACK_YAW_KP, kd=BSPLINE_TRACK_YAW_KD):
     """bspline_track_test._control_loop 의 명령 계산을 그대로 옮긴 기준값.
 
-    요 게인만 LOS 공용 상수를 따른다(2026-11-06 kp 1.4·kd 0.16 — bspline_track_test 는 1.5/0.15).
+    요 게인과 lookahead 만 LOS 공용 SOTA 값을 따른다(kp 1.4·kd 0.16·lookahead 0.8 —
+    bspline_track_test 는 1.5/0.15·1.0).
     """
-    params = replace(FsmParams(), lookahead=1.0, slow_radius=1.5, cmd_full=cruise)
+    params = replace(FsmParams(), lookahead=LOS_LOOKAHEAD, slow_radius=1.5, cmd_full=cruise)
     plan = replace(path, progress_idx=progress_idx)
     linear, angular = follow_cmd(plan, boat, yaw, yaw_rate, path.samples[-1],
                                  params, kp, kd)
@@ -211,3 +213,19 @@ def test_ratio_zero_and_invalid_ratio_still_safe_in_bspline_mode():
     for ratio in (-0.1, 1.1, float('nan')):
         with pytest.raises(ValueError):
             LosFollower.bspline_track().step(path, boat, yaw, rate, ratio)
+
+
+def test_sota_defaults_and_separate_turn_cap():
+    assert (LOS_FORWARD_RATIO, LOS_TURN_RATIO, LOS_LOOKAHEAD) == (0.25, 0.31, 0.8)
+    path = bspline_path(TRACK_CPS, spacing=0.05)
+    p, q = path.samples[60], path.samples[61]
+    tangent = math.atan2(q[1] - p[1], q[0] - p[0])
+    follower = LosFollower.bspline_track()
+    assert follower.params.lookahead == pytest.approx(0.8)
+    step = follower.step(path, tuple(p), tangent + math.radians(40), 0.0,
+                         LOS_FORWARD_RATIO, LOS_TURN_RATIO)
+    assert 0.0 <= step.linear <= 0.25 + 1e-12
+    assert abs(step.angular) == pytest.approx(0.31)     # 회전은 직진 상한(0.25)보다 크게 가능
+    same = LosFollower.bspline_track().step(path, tuple(p), tangent + math.radians(40),
+                                            0.0, 0.25)
+    assert abs(same.angular) == pytest.approx(0.25)     # turn_ratio 생략 = thrust_ratio
