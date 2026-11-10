@@ -77,8 +77,8 @@ class ThrusterDriver(Node):
         # 키보드 속도 1~4 단계의 PWM 폭 [µs] (중립 1500 기준 ±). 후진은 같은 폭으로 내린다.
         # 기본 50/100/150/200 → 전진 1550/1600/1650/1700, 후진 1450/1400/1350/1300.
         self.declare_parameter('teleop_level_pwm_offsets', [50, 100, 150, 200])
-        # A/D 선회 폭 [µs]: A 면 좌 -폭, 우 +폭 (D 는 반대). 중립 + A 면 1400/1600.
-        self.declare_parameter('teleop_turn_pwm_offset', 100)
+        # A/D 선회 폭 [µs]: A 면 좌 -폭, 우 +폭 (D 는 반대). 중립 + A 면 1350/1650.
+        self.declare_parameter('teleop_turn_pwm_offset', 150)
 
         hw_type = str(self.get_parameter('hardware_type').value).lower()
         self.port = str(self.get_parameter('port').value)

@@ -47,17 +47,17 @@ def test_laptop_levels_override_auto_and_timeout_stays_neutral():
         assert node.active_mode == 'teleop'
         assert (node.backend.last_left, node.backend.last_right) == (1650, 1650)
 
-        node._on_teleop_levels(levels(3, 1))        # 전진 3단계 + A (선회 폭 100 µs)
+        node._on_teleop_levels(levels(3, 1))        # 전진 3단계 + A (선회 폭 150 µs)
         node._control_loop()
-        assert (node.backend.last_left, node.backend.last_right) == (1550, 1750)
+        assert (node.backend.last_left, node.backend.last_right) == (1500, 1800)
 
         node._on_teleop_levels(levels(3, -1))       # 전진 3단계 + D
         node._control_loop()
-        assert (node.backend.last_left, node.backend.last_right) == (1750, 1550)
+        assert (node.backend.last_left, node.backend.last_right) == (1800, 1500)
 
         node._on_teleop_levels(levels(0, 1))        # 중립 + A = 제자리 좌회전
         node._control_loop()
-        assert (node.backend.last_left, node.backend.last_right) == (1400, 1600)
+        assert (node.backend.last_left, node.backend.last_right) == (1350, 1650)
 
         node.last_teleop_cmd_time = time.monotonic() - 2.0
         node._control_loop()
@@ -108,9 +108,9 @@ def test_max_output_ratio_still_caps_keyboard_levels():
         node._on_teleop_levels(levels(4, 0))
         node._control_loop()
         assert (node.backend.last_left, node.backend.last_right) == (1600, 1600)
-        node._on_teleop_levels(levels(-4, 1))
+        node._on_teleop_levels(levels(-4, 1))       # 1300 ∓ 150 → 좌 1150 은 1400 으로 잘림
         node._control_loop()
-        assert (node.backend.last_left, node.backend.last_right) == (1400, 1400)
+        assert (node.backend.last_left, node.backend.last_right) == (1400, 1450)
     finally:
         node.destroy_node()
         rclpy.shutdown()
@@ -138,13 +138,14 @@ def test_turn_width_and_inversion():
     node = ThrusterDriver()
     try:
         node._on_teleop_enable(Bool(data=True))
-        node.teleop_turn_offset = 150
-        node._on_teleop_levels(levels(1, 1))        # 1550 ± 150
+        assert node.teleop_turn_offset == 150       # 기본 선회 폭 (2026-11-11)
+        node.teleop_turn_offset = 200
+        node._on_teleop_levels(levels(1, 1))        # 1550 ± 200
         node._control_loop()
-        assert (node.backend.last_left, node.backend.last_right) == (1400, 1700)
+        assert (node.backend.last_left, node.backend.last_right) == (1350, 1750)
         node.config.invert_left = True              # 좌 배선 반전 → 중립 기준 대칭
         node._control_loop()
-        assert (node.backend.last_left, node.backend.last_right) == (1600, 1700)
+        assert (node.backend.last_left, node.backend.last_right) == (1650, 1750)
     finally:
         node.destroy_node()
         rclpy.shutdown()
