@@ -45,8 +45,8 @@ Zenoh가 전달하는 토픽([`zenoh_monitor_link.py`](scripts/zenoh_monitor_lin
 
 | 방향 | 토픽 |
 |---|---|
-| 젯슨 → 노트북 | `/scan`, `/scan/raw`, `/odom`, `/tf`, `/tf_static`, `/occupancy_grid`, `/avoid/{plan,cps,dri}`, `/gate/{path,pairs,status,cmd_preview}`, `/tank_mission/status`, `/real_avoid_test/{path,markers,dri,status}`, `/manual_dri/{dri,status}`, `/straight_drive/markers`, `/bspline_test/{path,markers}`, `/circle_drive/markers`, `/station_keeping/markers`, `/dock/{waypoints,entrance_base,marker_base,detection_status}`, `/mission/{state,goal,entry_goal}`, `/imu/data`, `/gps/fix`, `/gnss_1/velocity`, `/ekf/status`, `/ekf/odometry_map`, `/teleop/{status,event}` |
-| 노트북 → 젯슨 | `/boat_pose`, `/teleop/{enable,levels,gps_mark,esp_mode}` |
+| 젯슨 → 노트북 | `/scan`, `/scan/raw`, `/odom`, `/tf`, `/tf_static`, `/occupancy_grid`, `/avoid/{plan,cps,dri}`, `/gate/{path,pairs,status,cmd_preview}`, `/tank_mission/status`, `/real_avoid_test/{path,markers,dri,status}`, `/manual_dri/{dri,status}`, `/straight_drive/markers`, `/bspline_test/{path,markers}`, `/circle_drive/markers`, `/station_keeping/markers`, `/dock/{waypoints,entrance_base,marker_base,detection_status}`, `/mission/{state,goal,entry_goal}`, `/imu/data`, `/gps/fix`, `/gnss_1/velocity`, `/ekf/status`, `/ekf/odometry_map`, `/teleop/{status,event}`, `/geo/{position,targets,target_markers,origin,status}`, `/mission_points/{result,markers}` |
+| 노트북 → 젯슨 | `/boat_pose`, `/teleop/{enable,levels,gps_mark,esp_mode}`, `/mission_points/request` |
 | 전달 안 함 | `/cmd_vel`, `/cmd/*`, `/start_mission`, `/emergency_stop`, 서비스, 액션, 카메라 원본 영상 |
 
 출발·정지·비상 정지는 브리지를 통과하지 않으므로 **젯슨 도메인 42의 터미널**에서
@@ -165,6 +165,8 @@ docker compose up -d
 | **`run_zenoh`** | `python3 scripts/zenoh_monitor_link.py jetson` | 노트북 모니터링 브리지 |
 | **`run_boat_lidar`** | `ros2 launch kaboat_hardware indoor_tank.launch.py enable_thrusters:=false enable_onboard_lidar:=true onboard_lidar_port:=/dev/ttyUSB0` | GQ7·실내 `/odom`·선체 TG-50을 한 번에 실행. 외벽 라이다와 모터는 별도 |
 | **`run_motor`** | `ros2 launch kaboat_hardware thrusters.launch.py hardware_type:=serial port:=/dev/ttyCH341USB0 allow_port_scan:=false` | 아두이노(CH340) 모터 드라이버 |
+| **`run_points`** | `ros2 run kaboat_hardware point_recorder` | 미션 지점 기록기 (7-1절) |
+| **`rec_point [이름]`** / **`list_points`** | `python3 scripts/rec_point.py [이름]` / `--list` | 지금 위치 기록 / 기록한 지점 보기 |
 | **`cal_imu`** | `ros2 run kaboat_hardware calibrate_indoor_imu` | **[선택]** IMU 정지 보정. 기본 설정(외벽 라이다 yaw 직접 사용)에서는 불필요 |
 | **`view_pitch`** | `python3 scripts/view_roll_pitch.py` | 실시간 롤/피치 모니터링 |
 | **`test_bspline`** | `bspline_track_test.launch.py wait_for_start:=false` | B-Spline 곡선 주행 즉시 시작 |
@@ -283,6 +285,36 @@ python3 scripts/teleop_laptop.py
 - **안전**: 창이 포커스를 잃거나 젯슨 상태가 끊기면 즉시 0단계로 돌아갑니다(다시 포커스를 줘도 이전 속도로 출발하지 않음). 통신이 끊기면 젯슨이 0.5초 후 PWM 중립으로 전환하며 **자율주행으로 자동 복귀하지 않습니다**.
 - `R`로 복귀하기 전에 자율주행 노드가 실행 중이고 현재 목표가 유효한지 확인합니다.
 - 젯슨에서 `ros2 topic echo /teleop/status`로 `TELEOP`, `TELEOP_TIMEOUT`, `AUTO`, `RC_OVERRIDE`, `ESTOP`, `BACKEND_ERROR`를 확인합니다.
+
+### 7-1. 미션 지점 기록 (노트북 → 젯슨)
+
+배를 원하는 자리·방향에 둔 채 노트북에서 이름을 보내면, 젯슨 `point_recorder`가 그
+순간의 `/odom` x, y, 선수각을 `~/kaboat_mission_points.json`에 저장합니다. 나중에
+`mission_manager`가 이 파일을 미션 시작·목표 지점으로 읽습니다
+([`mission_points.py`](src/kaboat_mission/kaboat_mission/mission_points.py)).
+서비스는 브리지를 지나지 못하므로 짧은 String 토픽 두 개(`/mission_points/request`,
+`/mission_points/result`)로 주고받습니다.
+
+```bash
+# 젯슨: 원점이 고정된 /odom 이 필요하다
+run_gq7_outdoor
+run_points            # 다른 터미널
+```
+
+```zsh
+# 노트북: set_kaboat 로 브리지가 켜진 상태에서
+cd ~/Projects/KABOAT/kaboat_ws
+python3 scripts/rec_point.py gate_entry   # ✓ gate_entry: x=+5.50 m, y=-2.25 m, 선수각 +90.0°
+python3 scripts/rec_point.py              # 이름 생략 → p1, p2 …
+python3 scripts/rec_point.py --list       # 저장된 지점 보기
+```
+
+- 같은 이름으로 다시 보내면 덮어쓰고, 결과에 이전 값을 함께 보여 줍니다. 이름은 영문·숫자·한글·`_`·`-`만 씁니다.
+- 결과가 안 오면 같은 요청 id로 1.5초마다 다시 보냅니다. 젯슨은 같은 id를 두 번 기록하지 않습니다.
+- `✗ 받는 쪽이 없음`이면 젯슨 `run_points`·`run_zenoh`, 노트북 `set_kaboat`를 확인합니다.
+- `/odom`이 0.5초 넘게 끊겼거나 `frame_id`가 `odom`이 아니면 기록하지 않습니다.
+- 기록할 때의 GQ7 원점(`~/kaboat_geo_origin.yaml`)과 위도·경도를 같이 저장하고, 원점이 다른 지점은 한 파일에 섞지 않습니다. 원점을 새로 잡았으면 `run_gq7_outdoor`를 다시 켠 뒤 기록합니다.
+- RViz에 `/mission_points/markers`(화살표 = 선수각)를 추가하면 기록한 지점이 보입니다.
 
 ---
 

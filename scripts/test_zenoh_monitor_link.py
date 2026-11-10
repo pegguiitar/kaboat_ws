@@ -43,9 +43,17 @@ def test_laptop_only_sends_pose_and_teleop_and_no_services():
     jetson_pub, jetson_sub = _allowed('jetson')
     laptop_pub, _ = _allowed('laptop')
     expected = {'/boat_pose', '/teleop/enable', '/teleop/levels',
-                '/teleop/gps_mark', '/teleop/esp_mode'}
+                '/teleop/gps_mark', '/teleop/esp_mode', '/mission_points/request'}
     assert laptop_pub == expected and jetson_sub == expected
     config = link.build_config('jetson', JETSON_IP)
     allow = config['plugins']['ros2dds']['allow']
     assert allow['service_servers'] == [] and allow['action_servers'] == []
     json.dumps(config)
+
+
+def test_mission_point_request_and_result_cross_the_bridge():
+    jetson_pub, jetson_sub = _allowed('jetson')
+    laptop_pub, laptop_sub = _allowed('laptop')
+    assert '/mission_points/request' in laptop_pub and '/mission_points/request' in jetson_sub
+    for topic in ('/mission_points/result', '/mission_points/markers'):
+        assert topic in jetson_pub and topic in laptop_sub

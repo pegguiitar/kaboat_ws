@@ -1,18 +1,27 @@
-"""point_recorder — 서비스를 부르면 배의 지금 위치(/odom x, y, 선수각)를 이름 붙여 JSON 에 저장.
+"""point_recorder — 요청 토픽을 받으면 배의 지금 위치(/odom x, y, 선수각)를 이름 붙여 JSON 에 저장.
 
 나중에 mission_manager 가 이 파일(kaboat_mission/mission_points.py 형식)을 읽어 미션
-시작·목표 지점으로 쓴다. 젯슨 터미널(ssh)에서:
+시작·목표 지점으로 쓴다.
 
-  ros2 run kaboat_hardware point_recorder              # 단축어 run_points
-  ros2 service call /mission_points/record kaboat_msgs/srv/RecordPoint "{name: gate_entry}"
-                                                       # 단축어 rec_point gate_entry
-  ros2 service call /mission_points/list std_srvs/srv/Trigger '{}'   # 단축어 list_points
+  젯슨:   ros2 run kaboat_hardware point_recorder          # 단축어 run_points
+  노트북: python3 scripts/rec_point.py gate_entry          # 지금 위치를 gate_entry 로 기록
+          python3 scripts/rec_point.py                     # 이름 생략 → p1, p2 …
+          python3 scripts/rec_point.py --list              # 저장된 지점 보기
+  (젯슨에서도 같은 스크립트가 된다 — 단축어 rec_point / list_points)
 
-- 이름을 비우면 p1, p2, … 로 자동. 같은 이름으로 다시 부르면 덮어쓴다(이전 값은 로그·응답에).
-- 저장 파일: ~/kaboat_mission_points.json (points_file 파라미터). 한 번 기록할 때마다 저장한다.
+서비스는 Zenoh 브리지로 안 넘어가서 짧은 String 토픽 두 개로 주고받는다(둘 다 브리지 허용 목록에 있음).
+  /mission_points/request (String, 노트북 → 젯슨)
+      JSON {"id": "a1b2c3d4", "cmd": "record" | "list", "name": "gate_entry"}
+      JSON 이 아닌 글자를 보내면 그 글자를 이름으로 기록한다(ros2 topic pub 으로 직접 보낼 때).
+  /mission_points/result (String, 젯슨 → 노트북)
+      JSON {"id", "cmd", "success", "message", "name", "x", "y", "yaw_deg"}  (list 면 "points")
+  같은 id 가 다시 오면 다시 기록하지 않고 앞서 낸 결과를 다시 보낸다 — 노트북 스크립트가
+  결과를 못 받았을 때 같은 id 로 재전송해도 두 번 기록되지 않는다.
+
+- 같은 이름으로 다시 기록하면 덮어쓴다(이전 값은 결과 메시지에). 기록할 때마다 파일에 저장.
+- 저장 파일: ~/kaboat_mission_points.json (points_file 파라미터).
 - RViz: /mission_points/markers (MarkerArray, latched, frame odom) — 화살표 = 선수각.
 
-⚠ 서비스는 Zenoh 브리지로 넘어가지 않는다 — 노트북에서는 젯슨에 ssh 로 들어가서 부른다.
 ⚠ x/y 는 GQ7 /odom 기준이다. run_gq7_outdoor 가 ~/kaboat_geo_origin.yaml 로 원점을 고정한
   상태에서 기록해야 다음에 다시 켜도 같은 자리다. 기록할 때 그 원점을 파일에 같이 남기고,
   원점이 다른 파일에는 섞어 기록하지 않는다(거부 — points_file 을 바꾸거나 파일을 옮긴다).
@@ -20,7 +29,9 @@
   알아챌 수 없다 — 원점을 바꿨으면 run_gq7_outdoor 를 다시 켠 뒤 기록한다.
 """
 
+from collections import OrderedDict
 from datetime import datetime
+import json
 import math
 import os
 import time
@@ -31,7 +42,7 @@ import rclpy
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile
-from std_srvs.srv import Trigger
+from std_msgs.msg import String
 from visualization_msgs.msg import Marker, MarkerArray
 import yaml
 
@@ -40,7 +51,23 @@ from kaboat_hardware.geo_local import LocalFrame
 from kaboat_hardware.gq7_origin import load_origin_file
 from kaboat_mission.mission_points import (
     DEFAULT_POINTS_FILE, FRAME_ID, MissionPoint, PointStore, auto_name)
-from kaboat_msgs.srv import RecordPoint
+
+REQUEST_TOPIC = '/mission_points/request'
+RESULT_TOPIC = '/mission_points/result'
+REMEMBERED_IDS = 32          # 재전송 판별용으로 기억하는 최근 요청 수
+
+
+def parse_request(data: str) -> dict:
+    """요청 문자열 → {'id', 'cmd', 'name'}. JSON 이 아니면 글자 전체를 이름으로 본다."""
+    text = data.strip()
+    try:
+        req = json.loads(text)
+    except ValueError:
+        req = None
+    if not isinstance(req, dict):
+        return {'id': '', 'cmd': 'record', 'name': text}
+    return {'id': str(req.get('id', '')), 'cmd': str(req.get('cmd', 'record')),
+            'name': str(req.get('name', '') or '').strip()}
 
 
 class PointRecorder(Node):
@@ -50,15 +77,15 @@ class PointRecorder(Node):
         self.declare_parameter('origin_file', '~/kaboat_geo_origin.yaml')
         self.declare_parameter('odom_topic', '/odom')
         self.declare_parameter('max_odom_age_sec', 0.5)   # 이보다 오래된 /odom 으로는 기록 안 함
-        p = lambda name: self.get_parameter(name).value
-        self.points_file = os.path.expanduser(str(p('points_file')))
-        self.origin_file = str(p('origin_file'))
-        self.max_odom_age = float(p('max_odom_age_sec'))
+        self.points_file = os.path.expanduser(str(self.get_parameter('points_file').value))
+        self.origin_file = str(self.get_parameter('origin_file').value)
+        self.max_odom_age = float(self.get_parameter('max_odom_age_sec').value)
         if not (math.isfinite(self.max_odom_age) and self.max_odom_age > 0):
             raise ValueError('max_odom_age_sec must be > 0')
 
         self.odom = None
         self.odom_at = None
+        self.answered = OrderedDict()      # 요청 id → 결과 JSON
         self.load_error = None
         try:
             self.store = PointStore.load(self.points_file)
@@ -70,9 +97,10 @@ class PointRecorder(Node):
 
         latched = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.markers_pub = self.create_publisher(MarkerArray, '/mission_points/markers', latched)
-        self.create_subscription(Odometry, str(p('odom_topic')), self._on_odom, 10)
-        self.create_service(RecordPoint, '/mission_points/record', self._on_record)
-        self.create_service(Trigger, '/mission_points/list', self._on_list)
+        self.result_pub = self.create_publisher(String, RESULT_TOPIC, 10)
+        self.create_subscription(Odometry, str(self.get_parameter('odom_topic').value),
+                                 self._on_odom, 10)
+        self.create_subscription(String, REQUEST_TOPIC, self._on_request, 10)
 
         self._publish_markers()
         if self.load_error is None:
@@ -84,7 +112,26 @@ class PointRecorder(Node):
         self.odom = msg
         self.odom_at = time.monotonic()
 
-    # ── 기록 ─────────────────────────────────────────────
+    # ── 요청 ─────────────────────────────────────────────
+    def _on_request(self, msg: String):
+        req = parse_request(msg.data)
+        if req['id'] and req['id'] in self.answered:      # 재전송: 다시 기록하지 않음
+            self.result_pub.publish(String(data=self.answered[req['id']]))
+            return
+        if req['cmd'] == 'list':
+            result = self.list_points()
+        elif req['cmd'] == 'record':
+            result = self.record(req['name'])
+        else:
+            result = {'success': False, 'message': f"모르는 cmd: {req['cmd']!r}"}
+        result = {'id': req['id'], 'cmd': req['cmd'], **result}
+        text = json.dumps(result, ensure_ascii=False)
+        if req['id']:
+            self.answered[req['id']] = text
+            while len(self.answered) > REMEMBERED_IDS:
+                self.answered.popitem(last=False)
+        self.result_pub.publish(String(data=text))
+
     def _current_pose(self):
         """(x, y, yaw_deg) 또는 기록할 수 없는 이유(str)."""
         if self.odom is None:
@@ -101,62 +148,56 @@ class PointRecorder(Node):
             return '/odom 위치가 유한한 수가 아님'
         return pos.x, pos.y, yaw
 
-    def _on_record(self, request, response):
-        response.success = False
+    def record(self, name: str) -> dict:
+        """지금 위치를 name 으로 기록. 결과 dict (success, message, 성공 시 name/x/y/yaw_deg)."""
         if self.load_error:
-            response.message = self.load_error
-            return response
+            return {'success': False, 'message': self.load_error}
         pose = self._current_pose()
         if isinstance(pose, str):
-            response.message = pose
-            return response
+            return {'success': False, 'message': pose}
         x, y, yaw_deg = round(pose[0], 3), round(pose[1], 3), round(pose[2], 2)
 
         try:
             origin = load_origin_file(self.origin_file)
         except (OSError, KeyError, TypeError, ValueError, yaml.YAMLError) as exc:
-            response.message = f'원점 파일을 읽지 못함 ({self.origin_file}): {exc}'
-            return response
+            return {'success': False,
+                    'message': f'원점 파일을 읽지 못함 ({self.origin_file}): {exc}'}
         lat = lon = None
         if origin is not None:
             lat, lon, _ = LocalFrame(*origin).to_llh(x, y)
             lat, lon = round(lat, 9), round(lon, 9)
 
-        name = request.name.strip() or auto_name(self.store.points)
+        name = name or auto_name(self.store.points)
         point = MissionPoint(x, y, yaw_deg, lat, lon,
                              datetime.now().isoformat(timespec='seconds'))
         try:
             store, previous = self.store.with_point(name, point, origin)
             store.save(self.points_file)
         except (OSError, ValueError) as exc:
-            response.message = f'기록 실패: {exc}'
-            self.get_logger().error(response.message)
-            return response
+            message = f'기록 실패: {exc}'
+            self.get_logger().error(message)
+            return {'success': False, 'message': message}
         self.store = store
 
-        response.success = True
-        response.name, response.x, response.y, response.yaw_deg = name, x, y, yaw_deg
-        response.message = f'{name}: x={x:+.2f} m, y={y:+.2f} m, 선수각 {yaw_deg:+.1f}°'
+        message = f'{name}: x={x:+.2f} m, y={y:+.2f} m, 선수각 {yaw_deg:+.1f}°'
         if previous is not None:
-            response.message += (f' (덮어씀 — 이전 x={previous.x:+.2f}, y={previous.y:+.2f}, '
-                                 f'{previous.yaw_deg:+.1f}°)')
+            message += (f' (덮어씀 — 이전 x={previous.x:+.2f}, y={previous.y:+.2f}, '
+                        f'{previous.yaw_deg:+.1f}°)')
         if origin is None:
-            response.message += (' ⚠ 원점 파일 없음 — GQ7 원점이 켤 때마다 바뀌어 '
-                                 '다음 실행에서는 다른 자리다')
-        self.get_logger().info(response.message)
+            message += ' ⚠ 원점 파일 없음 — GQ7 원점이 켤 때마다 바뀌어 다음 실행에서는 다른 자리다'
+        self.get_logger().info(message)
         self._publish_markers()
-        return response
+        return {'success': True, 'message': message, 'name': name,
+                'x': x, 'y': y, 'yaw_deg': yaw_deg}
 
-    def _on_list(self, _request, response):
-        response.success = self.load_error is None
+    def list_points(self) -> dict:
         if self.load_error:
-            response.message = self.load_error
-            return response
+            return {'success': False, 'message': self.load_error}
         lines = [f'{len(self.store.points)}개 ({self.points_file})']
-        lines += [f'{name}: x={p.x:+.2f} y={p.y:+.2f} 선수각 {p.yaw_deg:+.1f}° [{p.recorded_at}]'
-                  for name, p in self.store.points.items()]
-        response.message = '\n'.join(lines)
-        return response
+        lines += [f'  {name}: x={p.x:+.2f} y={p.y:+.2f} 선수각 {p.yaw_deg:+.1f}° '
+                  f'[{p.recorded_at}]' for name, p in self.store.points.items()]
+        return {'success': True, 'message': '\n'.join(lines),
+                'points': {name: p.pose() for name, p in self.store.points.items()}}
 
     # ── RViz ─────────────────────────────────────────────
     def _publish_markers(self):

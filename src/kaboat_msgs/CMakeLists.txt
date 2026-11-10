@@ -13,7 +13,6 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/MarkArray.msg"
   "msg/Buoy.msg"
   "msg/BuoyArray.msg"
-  "srv/RecordPoint.srv"
   DEPENDENCIES std_msgs geometry_msgs
 )
 

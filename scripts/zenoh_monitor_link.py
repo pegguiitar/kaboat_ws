@@ -71,6 +71,7 @@ MONITOR_TOPICS = (
     '/geo/origin',
     '/geo/status',
     '/mission_points/markers',
+    '/mission_points/result',
 )
 
 LAPTOP_TO_JETSON_TOPICS = (
@@ -79,6 +80,7 @@ LAPTOP_TO_JETSON_TOPICS = (
     '/teleop/levels',
     '/teleop/gps_mark',
     '/teleop/esp_mode',
+    '/mission_points/request',
 )
 
 

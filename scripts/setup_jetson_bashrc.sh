@@ -61,10 +61,8 @@ alias run_geo="ros2 launch kaboat_hardware geo_origin.launch.py"
 
 # 미션 지점 기록 (지금 /odom 위치 → ~/kaboat_mission_points.json)
 alias run_points="ros2 run kaboat_hardware point_recorder"
-alias list_points="ros2 service call /mission_points/list std_srvs/srv/Trigger '{}'"
-rec_point() {
-    ros2 service call /mission_points/record kaboat_msgs/srv/RecordPoint "{name: '${1:-}'}"
-}
+alias rec_point='python3 "$KABOAT_WS/scripts/rec_point.py"'
+alias list_points='python3 "$KABOAT_WS/scripts/rec_point.py" --list'
 alias run_motor="ros2 launch kaboat_hardware thrusters.launch.py hardware_type:=serial port:=/dev/ttyCH341USB0 allow_port_scan:=false"
 
 # 노트북 원격 모니터링 통신 (Zenoh 브리지)

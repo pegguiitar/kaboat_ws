@@ -13,7 +13,6 @@
   <exec_depend>kaboat_behaviors</exec_depend>
   <exec_depend>kaboat_control</exec_depend>
   <exec_depend>kaboat_mission</exec_depend>
-  <exec_depend>kaboat_msgs</exec_depend>
   <exec_depend>camera_calibration</exec_depend>
   <exec_depend>camera_ros</exec_depend>
   <exec_depend>diagnostic_msgs</exec_depend>
