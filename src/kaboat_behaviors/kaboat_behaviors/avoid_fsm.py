@@ -9,10 +9,20 @@ rosbag tick 재생 디버깅이 된다.
 
 구성:
   follow_cmd  — 경로 추종 (lookahead 점 PD 조향 + waypoint 캡 + 곡률 감속)
-  escape_pick/escape_cmd — 후진 탈출 (후방 선분 최소 위험 방향, 선미 기준 조향)
+  Trail       — 지나온 궤적 기록 (FOLLOW 중 odom 위치를 일정 간격으로 저장)
+  retrace_cmd — 후진 탈출: 기록한 궤적을 거꾸로 되짚는다 (선미 기준 조향)
   AvoidFsm    — 상태기계. 따라가기 사다리(검사→수리→재생성→긴급도 분기)와
                 탈출 진입·복귀(최소 이탈 + 연속 성공) 판정을 갖는다.
+
+후진 방향을 궤적으로 정하는 이유 (2026-11-10): 선체 라이다는 선미 120°
+(onboard_scan_filter 의 120~240°)를 못 본다. occupancy_grid 는 안 보이는 칸을
+갱신하지 않고, DRI 는 unknown 을 빈 물로 본다. 예전 escape_pick(후방 선분 DRI
+argmin)은 그 사각지대를 근거로 방향을 골라, 제자리 회전 뒤처럼 선미 쪽이
+한 번도 안 본 칸이면 unknown(=위험 0) 쪽으로 후진할 수 있었다. 배가 실제로
+지나온 길은 그 자리가 비어 있었다는 물리적 증거이고 경기장 부표는 움직이지
+않으므로, 그 길만 거꾸로 되짚는다.
 """
+from collections import deque
 from dataclasses import dataclass
 import math
 
@@ -48,8 +58,11 @@ class FsmParams:
     #   근거: 전속 1.48 에서 타력 감쇠 실측(3s 에 0.11 로) → 제동거리 ~2m + 여유
     t_retry: float = 5.0          # 📝 plan 재확보/위반 교착 누적 상한 [s] → ESCAPE
     delta_r1: float = 1.0         # 📝 트리거 (a') r1 급락 판정 폭 [m]
-    escape_radius: float = 2.5    # 📝 ESCAPE 방위 후보 반경 [m] — 단거리 선분 시험
-    escape_n_bearings: int = 31   # 반평면 후보 수 (생성기 n_candidates 와 동급)
+    # ESCAPE 는 FOLLOW 중 기록한 궤적을 거꾸로 되짚는다 (모듈 docstring 참고).
+    trail_spacing: float = 0.1       # 궤적 기록 간격 [m] — 이만큼 움직일 때마다 1점
+    trail_max_length: float = 10.0   # 보관할 궤적 길이 [m] — 넘으면 오래된 점부터 버림
+    retrace_lookahead: float = 0.8   # 되짚기 조향 목표점 거리 [m] (follow lookahead 와 같음)
+    retrace_end_tolerance: float = 0.2   # 궤적 끝까지 이 거리 남으면 정지 [m]
     # ESCAPE 후진 출력 비율 (직접 지정). 예전엔 v_escape 0.5 m/s 를 속도 곡선으로 바꿨는데
     # 실물 cmd_full(0.23) 기준 0.04 밖에 안 나와 수조에서 배가 움직이지 않았다
     # (2026-11-06 실물 튜닝, 수조 테스트에 ESCAPE 를 켜면서 0.1 로 정함).
@@ -163,59 +176,108 @@ def follow_cmd(plan: Plan | SampledPlan, boat_xy, yaw: float, yaw_rate: float, w
     return out.linear_x, out.angular_z
 
 
-def escape_pick(dri, boat_xy, yaw: float, planner: PlannerParams,
-                fsm: FsmParams) -> tuple[float, bool]:
-    """ESCAPE 조향 방위 선택  — (방위, 포위 여부) 반환.
+RETRACE_SPACING = 0.05   # 되짚기 경로 샘플 간격 [m] (LOS·회피 경로와 같은 0.05)
 
-    후방 반평면(선미 ±90°) 후보를 배→후보점 **선분 max DRI argmin** 으로
-    고른다 — 탐색을 후방으로 제한하는 이유: ① 전방은 이미 더 강한 시험
-    (스플라인 완주+하드 필터)에서 탈락했는데 선분(단거리)만 통과하는 전방
-    주머니로 전진하면 갇힘 심화, ② 후방 = 방금 지나온 물 = 실측 보증 free,
-    ③ ESCAPE 의 목적은 항법이 아니라 generate 전제 리셋(surge↓→p1 수축).
-    후방 **전원 threshold 초과(포위)일 때만** 전방위로 확장. 방향 선정은
-    어느 범위에서든 **무조건 argmin — 후보를 기준치로 거르지 않는다**
-    (ESCAPE 는 사다리 최후 단이라 실패 불허: 하드 필터는 실패를 받아줄
-    다음 단이 있는 generate 만의 특권).
+
+class Trail:
+    """FOLLOW 중 지나온 odom 위치 — ESCAPE 가 거꾸로 되짚을 길.
+
+    spacing 이상 움직였을 때만 한 점을 더하므로 제자리 회전·정지 중엔 늘지 않는다.
+    누적 길이가 max_length 를 넘으면 가장 오래된 점부터 버린다.
     """
+
+    def __init__(self, spacing: float, max_length: float):
+        if not (spacing > 0.0 and max_length > spacing):
+            raise ValueError('trail spacing must be positive and below max_length')
+        self.spacing = float(spacing)
+        self.max_length = float(max_length)
+        self.points: deque = deque()   # 오래된 점 → 최신 점, np.ndarray(2,)
+        self._length = 0.0
+
+    def clear(self) -> None:
+        self.points.clear()
+        self._length = 0.0
+
+    def record(self, boat_xy) -> None:
+        point = np.asarray(boat_xy, dtype=np.float64)
+        if point.shape != (2,) or not np.all(np.isfinite(point)):
+            return
+        if self.points:
+            step = float(np.hypot(*(point - self.points[-1])))
+            if step < self.spacing - 1e-9:
+                return
+            self._length += step
+        self.points.append(point)
+        while self._length > self.max_length + 1e-9 and len(self.points) > 2:
+            dropped = self.points.popleft()
+            self._length -= float(np.hypot(*(self.points[0] - dropped)))
+
+    def length(self) -> float:
+        return self._length
+
+    def retrace_samples(self, boat_xy, spacing: float) -> np.ndarray | None:
+        """현재 위치 → 최신 점 → … → 가장 오래된 점을 spacing 간격으로 고른 샘플.
+
+        되짚을 길이 spacing 보다 짧으면 None.
+        """
+        if not self.points:
+            return None
+        boat = np.asarray(boat_xy, dtype=np.float64)
+        pts = np.vstack([boat[None, :]] + list(reversed(self.points)))
+        seg = np.hypot(*np.diff(pts, axis=0).T)
+        keep = np.concatenate([[True], seg > 1e-9])   # 겹친 점 제거 (보간 분모 0 방지)
+        pts = pts[keep]
+        if len(pts) < 2:
+            return None
+        arc = np.concatenate([[0.0], np.cumsum(np.hypot(*np.diff(pts, axis=0).T))])
+        if arc[-1] < spacing:
+            return None
+        s = np.append(np.arange(0.0, arc[-1], spacing), arc[-1])
+        return np.stack([np.interp(s, arc, pts[:, 0]),
+                         np.interp(s, arc, pts[:, 1])], axis=1)
+
+    def keep_older_than(self, samples: np.ndarray, idx: int) -> None:
+        """되짚기를 samples[idx] 까지 마쳤다 — 그 앞(이미 되짚은 최신 쪽)을 버린다."""
+        older = samples[idx:][::-1]        # 오래된 점 → 지금 위치 (시간순)
+        self.clear()
+        for point in older:
+            self.record(point)
+
+
+def retrace_progress(samples: np.ndarray, idx: int, boat_xy,
+                     spacing: float) -> int:
+    """되짚기 진행 인덱스 — 앞쪽 창에서 가장 가까운 샘플, 뒤로는 안 간다."""
     boat = np.asarray(boat_xy, dtype=np.float64)
-
-    def seg_risks(bearings):
-        pts = boat[None, :] + fsm.escape_radius * np.stack(
-            [np.cos(bearings), np.sin(bearings)], axis=1)
-        ts = np.linspace(0.125, 1.0, 8)[:, None, None]
-        seg = boat[None, None, :] + ts * (pts[None, :, :] - boat[None, None, :])
-        r = dri.risk_at_many(seg[..., 0].ravel(), seg[..., 1].ravel())
-        return r.reshape(8, -1).max(axis=0)
-
-    stern = yaw + math.pi
-    rear = stern + np.linspace(-0.5 * math.pi, 0.5 * math.pi,
-                               fsm.escape_n_bearings)
-    risks = seg_risks(rear)
-    surrounded = bool(np.min(risks) > planner.safe_threshold)
-    if not surrounded:
-        return float(rear[int(np.argmin(risks))]), False
-    full = stern + np.linspace(-math.pi, math.pi, 2 * fsm.escape_n_bearings,
-                               endpoint=False)
-    risks = seg_risks(full)
-    return float(full[int(np.argmin(risks))]), True
+    back = max(1, int(math.ceil(0.25 / spacing)))
+    ahead = max(1, int(math.ceil(1.5 / spacing)))
+    lo = max(0, idx - back)
+    hi = min(len(samples) - 1, idx + ahead)
+    window = samples[lo:hi + 1]
+    nearest = lo + int(np.argmin(np.hypot(*(window - boat).T)))
+    return max(idx, nearest)
 
 
-def escape_cmd(dri, boat_xy, yaw: float, yaw_rate: float,
-               planner: PlannerParams, fsm: FsmParams,
-               yaw_kp: float, yaw_kd: float) -> tuple[float, float, bool]:
-    """후진 + 저DRI 조향 (linear_x, angular_z, surrounded).
+def retrace_cmd(samples: np.ndarray, idx: int, boat_xy, yaw: float,
+                yaw_rate: float, spacing: float, fsm: FsmParams,
+                yaw_kp: float, yaw_kd: float) -> tuple[float, float]:
+    """후진 + 궤적 위 lookahead 점으로 선미를 돌리는 조향 (linear_x, angular_z).
 
     기준각은 **선미**: 오차 = wrap(target − (yaw+π)) — 후진 중엔
     꽁무니가 진행 방향이므로. 차동추력의 요 모멘트는 속도 부호와 무관해
     조향 부호는 전진과 동일 (2026-07-18 sim 실측: wz +0.44 vs +0.49).
     """
-    target, surrounded = escape_pick(dri, boat_xy, yaw, planner, fsm)
+    boat = np.asarray(boat_xy, dtype=np.float64)
+    steps = max(1, int(round(fsm.retrace_lookahead / spacing)))
+    target = samples[min(idx + steps, len(samples) - 1)]
+    direction = target - boat
+    if float(np.hypot(*direction)) < 1e-6:
+        return 0.0, 0.0
     desired = DesiredVelocity(
-        vx=math.cos(target), vy=math.sin(target), reverse=True)
+        vx=float(direction[0]), vy=float(direction[1]), reverse=True)
     out = control_velocity(
         desired, yaw, yaw_rate, _controller_params(fsm, yaw_kp, yaw_kd))
     # 조향은 선미 기준 PD 그대로, 후진 출력은 escape_thrust 를 직접 쓴다
-    return -fsm.escape_thrust, out.angular_z, surrounded
+    return -fsm.escape_thrust, out.angular_z
 
 
 class AvoidFsm:
@@ -242,43 +304,77 @@ class AvoidFsm:
         self._stuck_t0 = None      # 위반 미해소(수리·재생성 다 실패) 시작 시각
         self._escape_t0 = None     # ESCAPE 진입 시각 — 최소 이탈 판정
         self._escape_ok = 0        # ESCAPE 중 generate 연속 성공 tick 수
+        # 지나온 궤적 — 재활성화 때 지운다 (이전 activation 의 길은 근거가 아님)
+        self.trail = Trail(self.fsm.trail_spacing, self.fsm.trail_max_length)
+        self._retrace = None       # ESCAPE 되짚기 샘플 (지금 위치 → 오래된 점)
+        self._retrace_idx = 0
+        self._retrace_stopped = False   # 궤적 없음/끝 — 정지 이벤트 1회만
 
     # ── tick ─────────────────────────────────────────
     def step(self, dri, boat_xy, yaw: float, vel_xy, yaw_rate: float,
              wp_xy, now_t: float) -> StepOut:
         """tick 진입점 (§4). dri 는 노드가 매 tick build_dri 로 재계산해 넘긴다."""
         if self.state == 'ESCAPE':
+            # 되짚는 중엔 기록하지 않는다 — 되짚은 만큼은 복귀 때 잘라낸다
             return self._escape_tick(dri, boat_xy, yaw, vel_xy, yaw_rate,
                                      wp_xy, now_t)
+        self.trail.record(boat_xy)
         return self._follow_tick(dri, boat_xy, yaw, vel_xy, yaw_rate,
                                  wp_xy, now_t)
 
-    def _enter_escape(self, now_t: float, ev: str) -> StepOut:
+    def _enter_escape(self, now_t: float, ev: str, boat_xy) -> StepOut:
         self.state = 'ESCAPE'
         self.plan = None           # ESCAPE 는 plan 없이 산다 — 복귀 시 새로
         self._escape_t0 = now_t
         self._escape_ok = 0
         self._no_plan_t0 = self._stuck_t0 = None
+        # 진입 순간 위치 → 최신 점 → … → 가장 오래된 점. 없으면 None (정지)
+        self._retrace = self.trail.retrace_samples(boat_xy, RETRACE_SPACING)
+        self._retrace_idx = 0
+        self._retrace_stopped = False
         return StepOut(0.0, 0.0, self.state, None, ev)
 
     def _escape_tick(self, dri, boat_xy, yaw, vel_xy, yaw_rate, wp_xy,
                      now_t: float) -> StepOut:
-        """ESCAPE (§4): 후진 + 후방 argmin 조향, 매 tick generate 재시도.
+        """ESCAPE (§4): 지나온 궤적을 거꾸로 후진, 매 tick generate 재시도.
         복귀는 **최소 이탈 시간 + 연속 성공** 둘 다 — 후진→p1 수축→generate
-        재성공→전진→재막힘 채터링의 이중 차단 (확정 설계)."""
+        재성공→전진→재막힘 채터링의 이중 차단 (확정 설계).
+
+        궤적이 없거나(활성화 직후 포위 등) 끝까지 되짚었으면 정지한 채로
+        generate 만 재시도한다 — 선미 사각지대(라이다 120°)로 근거 없이
+        후진하지 않는다."""
         f = self.fsm
         new = self.generate(dri, boat_xy, yaw, vel_xy, wp_xy, self.p, now_t)
         self._escape_ok = self._escape_ok + 1 if new is not None else 0
+        if self._retrace is not None:
+            self._retrace_idx = retrace_progress(
+                self._retrace, self._retrace_idx, boat_xy, RETRACE_SPACING)
         if (new is not None
                 and now_t - self._escape_t0 >= f.escape_min_t
                 and self._escape_ok >= f.escape_n_ok):
+            if self._retrace is not None:
+                # 되짚은 구간은 버리고, 남은(더 오래된) 길만 다음 ESCAPE 용으로 둔다
+                self.trail.keep_older_than(self._retrace, self._retrace_idx)
+                self.trail.record(boat_xy)
             self.state = 'FOLLOW'
             self.plan = new
             return StepOut(0.0, 0.0, self.state, new, 'escape_recovered')
-        lin, ang, surrounded = escape_cmd(dri, boat_xy, yaw, yaw_rate,
-                                          self.p, f, self.yaw_kp, self.yaw_kd)
-        return StepOut(lin, ang, self.state, None,
-                       'escape_surrounded' if surrounded else None)
+
+        if self._retrace is None:
+            return self._escape_hold('escape_no_trail')
+        remaining = (len(self._retrace) - 1 - self._retrace_idx) * RETRACE_SPACING
+        if remaining <= f.retrace_end_tolerance:
+            return self._escape_hold('escape_trail_end')
+        lin, ang = retrace_cmd(self._retrace, self._retrace_idx, boat_xy, yaw,
+                               yaw_rate, RETRACE_SPACING, f,
+                               self.yaw_kp, self.yaw_kd)
+        return StepOut(lin, ang, self.state, None, None)
+
+    def _escape_hold(self, ev: str) -> StepOut:
+        """되짚을 길이 없음 — 정지하고 generate 재시도만 (이벤트는 처음 1회)."""
+        first = not self._retrace_stopped
+        self._retrace_stopped = True
+        return StepOut(0.0, 0.0, self.state, None, ev if first else None)
 
     def _follow_tick(self, dri, boat_xy, yaw, vel_xy, yaw_rate,
                      wp_xy, now_t: float) -> StepOut:
@@ -294,7 +390,7 @@ class AvoidFsm:
             if self._no_plan_t0 is None:
                 self._no_plan_t0 = now_t
             if now_t - self._no_plan_t0 > f.t_retry:
-                return self._enter_escape(now_t, 'escape_no_plan')
+                return self._enter_escape(now_t, 'escape_no_plan', boat_xy)
             return StepOut(0.0, 0.0, self.state, None, 'generate_none')
 
         ev = None
@@ -346,7 +442,7 @@ class AvoidFsm:
                     d_viol = (violation - self.plan.progress_idx) * self.plan.spacing
                     if (d_viol < f.d_panic
                             or now_t - self._stuck_t0 > f.t_retry):
-                        return self._enter_escape(now_t, 'escape_panic')
+                        return self._enter_escape(now_t, 'escape_panic', boat_xy)
                     ev, slow = 'violation_wait', True   # 감속 + 다음 tick 재시도
 
         lin, ang = follow_cmd(self.plan, boat_xy, yaw, yaw_rate, wp_xy,

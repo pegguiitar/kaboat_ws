@@ -282,8 +282,18 @@ def test_escape_after_no_plan_retry_timeout():
 
 # ---------- ESCAPE ----------
 
-def enter_escape(fsm):
-    """빈 밭에서 plan 확보 → 포위 벽으로 ESCAPE 진입시키는 공통 준비."""
+# 배가 -x 쪽에서 +x 로 직진해 BOAT(0,0) 에 왔다 — ESCAPE 는 이 길을 거꾸로 되짚는다.
+STRAIGHT_TRAIL = [(x, 0.0) for x in np.arange(-3.0, 0.0001, 0.1)]
+
+
+def lay_trail(fsm, points):
+    for point in points:
+        fsm.trail.record(point)
+
+
+def enter_escape(fsm, trail=STRAIGHT_TRAIL):
+    """지나온 궤적 + 빈 밭에서 plan 확보 → 포위 벽으로 ESCAPE 진입시키는 공통 준비."""
+    lay_trail(fsm, trail)
     acquire(fsm, dri_of([]))
     out = fsm.step(dri_of(WALL), BOAT, YAW, V_FULL, 0.0, WP_FAR, 0.1)
     assert fsm.state == 'ESCAPE', out.event
@@ -308,43 +318,101 @@ def test_escape_reverse_output_is_escape_thrust():
     assert FsmParams().escape_thrust == pytest.approx(0.1)
 
 
-def test_escape_steers_stern_to_low_dri():
-    """후방 좌측(방위 135~180°)이 막힘 — 선미가 우후방으로 향하도록 조향.
-    yaw=0 이라 선미 기준 오차 = wrap(target−π) < 0 쪽(우후방) → ang < 0
-    ...가 아니라 target≈-135° 면 err=wrap(-2.36−π)=+0.78 → ang > 0."""
+def test_escape_straight_trail_backs_straight():
+    """직선으로 왔으면 선미가 이미 지나온 길을 향한다 — 조향 0."""
     fsm = make_fsm(t_backstop=1e9, d_panic=3.0)
     enter_escape(fsm)
-    rear_left = WALL + [(2.5 * math.cos(a), 2.5 * math.sin(a))
-                        for a in np.linspace(math.radians(120),
-                                             math.radians(180), 8)]
-    out = fsm.step(dri_of(rear_left), BOAT, YAW, V_FULL, 0.0, WP_FAR, 0.2)
+    out = fsm.step(dri_of(WALL), BOAT, YAW, V_FULL, 0.0, WP_FAR, 0.2)
+    assert out.angular_z == pytest.approx(0.0, abs=1e-9)
+
+
+def test_escape_follows_trail_not_dri():
+    """좌후방에서 대각선으로 왔다 — 뒤쪽 DRI 와 무관하게 선미를 그 길(-135°)로 돌린다.
+    yaw=0 → 선미 π, 오차 = wrap(-3π/4 − π) = +π/4 → ang > 0.
+    정후방(π)에 장애물을 둬도(예전 argmin 이면 피했을 방향과 무관) 같은 답이다."""
+    fsm = make_fsm(t_backstop=1e9, d_panic=3.0)
+    diagonal = [(-d / math.sqrt(2.0), -d / math.sqrt(2.0))
+                for d in np.arange(3.0, -0.0001, -0.1)]
+    enter_escape(fsm, trail=diagonal)
+    out = fsm.step(dri_of(WALL + [(-2.0, 0.0)]), BOAT, YAW, V_FULL, 0.0, WP_FAR, 0.2)
     assert out.linear_x < 0.0
-    assert out.angular_z > 0.0     # 선미를 자유로운 우후방(-135°권)으로
+    assert out.angular_z > 0.0
 
 
-def test_escape_surrounded_still_commands():
-    """완전 포위 — 실패 없이 전방위 argmin 으로 명령을 낸다 (최후 단 불허)."""
+def test_escape_without_trail_holds_still():
+    """궤적이 없으면(활성화 직후 포위 등) 선미 사각지대로 후진하지 않고 정지."""
+    fsm = make_fsm(t_backstop=1e9, d_panic=3.0)
+    enter_escape(fsm, trail=[])
+    out = fsm.step(dri_of(WALL), BOAT, YAW, V_FULL, 0.0, WP_FAR, 0.2)
+    assert out.state == 'ESCAPE' and out.event == 'escape_no_trail'
+    assert (out.linear_x, out.angular_z) == (0.0, 0.0)
+    out = fsm.step(dri_of(WALL), BOAT, YAW, V_FULL, 0.0, WP_FAR, 0.3)
+    assert out.event is None                          # 이벤트는 처음 1회만
+    assert (out.linear_x, out.angular_z) == (0.0, 0.0)
+
+
+def test_escape_stops_at_trail_end():
+    """궤적 가장 오래된 점까지 되짚었으면 정지한 채로 generate 만 재시도."""
     fsm = make_fsm(t_backstop=1e9, d_panic=3.0)
     enter_escape(fsm)
-    ring = [(2.2 * math.cos(a), 2.2 * math.sin(a))
-            for a in np.linspace(-math.pi, math.pi, 40, endpoint=False)]
-    out = fsm.step(dri_of(ring), BOAT, YAW, V_FULL, 0.0, WP_FAR, 0.2)
-    assert out.state == 'ESCAPE' and out.event == 'escape_surrounded'
-    assert out.linear_x < 0.0
+    fsm.step(dri_of(WALL), BOAT, YAW, V_FULL, 0.0, WP_FAR, 0.2)   # 되짚기 시작
+    t, out, events = 0.3, None, []
+    for x in np.arange(-0.2, -3.0001, -0.2):          # 배가 길을 따라 뒤로 물러남
+        out = fsm.step(dri_of(WALL, boat_xy=(x, 0.0)), (x, 0.0), YAW,
+                       (-0.3, 0.0), 0.0, WP_FAR, t)
+        events.append(out.event)
+        t += 0.1
+    assert out.state == 'ESCAPE'
+    assert events.count('escape_trail_end') == 1      # 이벤트는 처음 1회만
+    assert (out.linear_x, out.angular_z) == (0.0, 0.0)
 
 
-def test_escape_rear_softening_still_repels():
-    """a_head 는 후방을 연하게 그림 — 그래도 정후방
-    장애물 방향이 argmin 으로 뽑히면 안 된다 (후진 진행 방향 충돌)."""
-    from kaboat_behaviors.avoid_fsm import escape_pick
-    dri = dri_of([(-2.0, 0.0)])   # 정후방 2m
-    bearing, surrounded = escape_pick(dri, BOAT, YAW, PlannerParams(), FsmParams())
-    assert not surrounded
-    assert abs(_wrap_t(bearing - math.pi)) > 0.3   # 정후방(π) 회피
+def test_trail_records_only_in_follow():
+    """FOLLOW tick 은 위치를 기록하고, ESCAPE 중(되짚는 중)엔 기록하지 않는다."""
+    fsm = make_fsm(t_backstop=1e9, d_panic=3.0)
+    for i, x in enumerate(np.arange(-1.0, 0.0001, 0.2)):
+        fsm.step(dri_of([], boat_xy=(x, 0.0)), (x, 0.0), YAW, V_FULL, 0.0,
+                 WP_FAR, 0.1 * i)
+    assert len(fsm.trail.points) == 6
+    fsm.step(dri_of(WALL), BOAT, YAW, V_FULL, 0.0, WP_FAR, 1.0)    # → ESCAPE
+    assert fsm.state == 'ESCAPE'
+    n = len(fsm.trail.points)
+    fsm.step(dri_of(WALL, boat_xy=(-0.5, 0.0)), (-0.5, 0.0), YAW,
+             (-0.3, 0.0), 0.0, WP_FAR, 1.1)
+    assert len(fsm.trail.points) == n
 
 
-def _wrap_t(a):
-    return (a + math.pi) % (2.0 * math.pi) - math.pi
+def test_trail_spacing_and_max_length():
+    """간격 미만 이동은 무시, 최대 길이를 넘으면 오래된 점부터 버린다."""
+    from kaboat_behaviors.avoid_fsm import Trail
+    trail = Trail(spacing=0.1, max_length=1.0)
+    trail.record((0.0, 0.0))
+    trail.record((0.05, 0.0))                         # 0.1 m 미만 — 무시
+    assert len(trail.points) == 1
+    for x in np.arange(0.1, 3.0001, 0.1):
+        trail.record((x, 0.0))
+    assert trail.length() <= 1.0 + 1e-9
+    assert trail.points[-1][0] == pytest.approx(3.0)
+    assert trail.points[0][0] == pytest.approx(2.0)
+
+
+def test_reset_clears_trail():
+    fsm = make_fsm()
+    lay_trail(fsm, STRAIGHT_TRAIL)
+    fsm.reset()
+    assert len(fsm.trail.points) == 0
+
+
+def test_escape_recovery_drops_retraced_part():
+    """복귀하면 이미 되짚은(최신) 구간은 버리고 남은 오래된 길만 둔다."""
+    fsm = make_fsm(t_backstop=1e9, d_panic=3.0, escape_min_t=0.0, escape_n_ok=1)
+    enter_escape(fsm)
+    boat = (-1.0, 0.0)                                # 1 m 되짚은 지점
+    out = fsm.step(dri_of([], boat_xy=boat), boat, YAW, V_FULL, 0.0, WP_FAR, 0.2)
+    assert out.state == 'FOLLOW' and out.event == 'escape_recovered'
+    xs = [p[0] for p in fsm.trail.points]
+    assert max(xs) <= -1.0 + 1e-6                     # (0,0)~(-1,0) 구간은 사라짐
+    assert min(xs) == pytest.approx(-3.0)
 
 
 def test_escape_no_chatter_before_min_time():
@@ -381,3 +449,35 @@ def test_escape_streak_resets_on_failure():
     assert out.state == 'ESCAPE'                       # 아직 2연속 아님
     out = fsm.step(open_dri, BOAT, YAW, V_FULL, 0.0, WP_FAR, 0.5)  # 성공 2
     assert out.state == 'FOLLOW'
+
+
+@pytest.mark.parametrize('radius', [3.0, 6.0])
+def test_closed_loop_retrace_follows_curved_trail(radius):
+    """곡선으로 왔으면 후진도 그 곡선을 따라간다 — 이상화 운동학(dock 테스트와 같은 모델).
+
+    배가 원호(반경 radius, 90°)를 반시계로 돌아 왔고, generate 가 계속 실패해
+    ESCAPE 로 들어간다. 후진 중 궤적과의 거리가 계속 작아야 한다.
+    """
+    f = FsmParams(t_retry=0.0)
+    fsm = AvoidFsm(PlannerParams(), f, yaw_kp=KP, yaw_kd=KD,
+                   generator=lambda *a: None)
+    angles = np.linspace(-math.pi / 2, 0.0, 200)       # (0,-r) 에서 (r,0) 까지
+    trail = np.stack([radius * np.cos(angles), radius * np.sin(angles) + radius], axis=1)
+    trail -= trail[-1]                                   # 끝점 = 배 위치 (0,0)
+    lay_trail(fsm, trail)
+    xy, yaw, rate = np.array([0.0, 0.0]), math.pi / 2, 0.0   # 원호 끝 접선 = +y
+    dense = fsm.trail.retrace_samples(xy, 0.01)
+    worst, out = 0.0, None
+    for tick in range(600):
+        out = fsm.step(None, xy, yaw, (0.0, 0.0), rate, WP_FAR, tick * 0.05)
+        if out.event == 'escape_trail_end':
+            break
+        cmd = min(0.0, out.linear_x)
+        speed = -f.v_full * (abs(cmd) / f.cmd_full) ** (1 / f.cmd_exp)
+        rate = float(np.clip(out.angular_z, -0.31, 0.31)) * 0.52 / 0.31
+        yaw += rate * 0.05
+        xy = xy + speed * np.array([math.cos(yaw), math.sin(yaw)]) * 0.05
+        worst = max(worst, float(np.min(np.hypot(*(dense - xy).T))))
+    assert out.event == 'escape_trail_end'
+    assert np.hypot(*(xy - trail[0])) < 0.5          # 지나온 길의 시작점까지 되짚음
+    assert worst < 0.3, worst                          # 궤적에서 30 cm 안
