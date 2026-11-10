@@ -114,11 +114,11 @@ def generate_launch_description():
             'onboard_lidar_tilt_threshold_deg', default_value='3.0',
             description='선체 롤/피치 기울기 스캔 차단 임계값 [deg] (기본: 3.0)'),
         DeclareLaunchArgument(
-            'onboard_lidar_pitch_min_deg', default_value='-4.0',
-            description='선체 피치 하한 스캔 차단 임계값 [deg] (기본: -4.0)'),
+            'onboard_lidar_pitch_min_deg', default_value='-1.2',
+            description='선체 피치 하한 스캔 차단 임계값 [deg] (기본: -1.2)'),
         DeclareLaunchArgument(
-            'onboard_lidar_pitch_max_deg', default_value='2.0',
-            description='선체 피치 상한 스캔 차단 임계값 [deg] (기본: 2.0)'),
+            'onboard_lidar_pitch_max_deg', default_value='4.0',
+            description='선체 피치 상한 스캔 차단 임계값 [deg] (기본: 4.0)'),
         DeclareLaunchArgument(
             'onboard_lidar_roll_min_deg', default_value='-3.0',
             description='선체 롤 하한 스캔 차단 임계값 [deg] (기본: -3.0)'),

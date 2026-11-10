@@ -106,8 +106,8 @@ def generate_launch_description():
             'dock_weights', default_value='',
             description='검증된 YOLO26n-seg .pt 절대 경로; 비워두면 검출 fail-closed'),
         DeclareLaunchArgument(
-            'dock_target_class', default_value='red_triangle',
-            description='red_triangle / green_circle / blue_square'),
+            'dock_target_class', default_value='triangle',
+            description='triangle / circle / square'),
         DeclareLaunchArgument(
             'dock_device', default_value='cpu',
             description='Ultralytics device: cpu 또는 Jetson CUDA 0'),

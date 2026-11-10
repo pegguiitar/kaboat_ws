@@ -25,7 +25,7 @@
   t_look=1.0s 는 실측 전속 1.48 m/s 기준 재산출값(§3-2) — 5.0s 초안은
   p1 이 7.4m 로 튀어 스플라인이 나갔다 되돌아오는 첨점을 만들었다.
 """
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import math
 
 import numpy as np
@@ -50,6 +50,7 @@ class PlannerParams:
     # waypoint 가 코앞이어도 r_end 하한 [m]. 3.0 → 2.0 (2026-11-04 실물 튜닝): 3 m 로 두면
     # 벽 앞 목표에서 마지막 제어점이 목표를 지나 벽 위에 놓여 NO PLAN 이 났다.
     # 퇴화 방지 하한(p1_len + 2·cp_min_gap = 2.0 m)이 따로 있어 2.0 보다 낮출 의미는 없다.
+    finite_goal: bool = False     # marker mission: terminate at the goal, including near goals
     min_horizon: float = 2.0
     cp_min_gap: float = 0.5        # r_end 퇴화 방지: r_end ≥ ‖p1‖ + 2·이 값 [m]
     # 후보 부채꼴 = wp 중심 ±search_fov/2. 원래 180°(wp 전진 반평면 전체, §3-2)
@@ -103,6 +104,10 @@ class Plan:
     created_t: float         # 생성 시각 [s] — 재생성 트리거 (c) 기준
     wp_bearing: float        # waypoint 방위 — 후보 부채꼴 중심 (수리 한계 판정용)
     spacing: float           # 샘플 간격 [m] (= 0.5·res)
+    goal_locked: bool = False
+    terminal_heading: float | None = None
+    tail_samples: np.ndarray | None = None
+    docking_phase: str = ''
     progress_idx: int = 0    # 배가 지나온 samples 진행 인덱스 — check 가 갱신(단조)
 
 
@@ -223,7 +228,8 @@ def _arc_pick(dri, origin, radius, wp_bearing, prev_pt, prev_bearing,
 
 
 def generate(dri, boat_xy, boat_yaw: float, boat_vel_xy, waypoint_xy,
-             p: PlannerParams, now_t: float = 0.0) -> Plan | None:
+             p: PlannerParams, now_t: float = 0.0, *, goal_heading: float | None = None,
+             terminal_handle_m: float = .75) -> Plan | None:
     """제어점 6개 생성 + spline 샘플링 (§3-2). 전진 반평면에 답이 없으면 None."""
     boat = np.asarray(boat_xy, dtype=np.float64)
     vel = np.asarray(boat_vel_xy, dtype=np.float64)
@@ -248,10 +254,25 @@ def generate(dri, boat_xy, boat_yaw: float, boat_vel_xy, waypoint_xy,
     x0, y0 = dri.anchor[0] * res, dri.anchor[1] * res
     inscribed = min(boat[0] - x0, x0 + wid * res - boat[0],
                     boat[1] - y0, y0 + hgt * res - boat[1])
-    r_end = inscribed - p.boundary_margin
-    r_end = min(r_end, max(wp_dist, p.min_horizon))
-    r_end = max(r_end, p1_len + 2.0 * p.cp_min_gap)   # 퇴화 방지
+    available = inscribed - p.boundary_margin
+    goal_locked = False
+    if p.finite_goal:
+        if wp_dist <= 1e-6 or available <= 1e-6:
+            return None
+        r_end = min(available, wp_dist)
+        # Keep all control points inside the remaining distance to the goal.
+        p1_len = min(p1_len, 0.25 * r_end)
+        p1 = boat + p1_len * hdg
+        goal_locked = wp_dist <= available
+    else:
+        r_end = min(available, max(wp_dist, p.min_horizon))
+        r_end = max(r_end, p1_len + 2.0 * p.cp_min_gap)
 
+    if goal_heading is not None and (not math.isfinite(goal_heading) or terminal_handle_m<=0):
+        raise ValueError('invalid terminal heading constraint')
+    heading_locked=goal_heading is not None and goal_locked
+    terminal_control=(wp-terminal_handle_m*np.array([math.cos(goal_heading),math.sin(goal_heading)])
+                      if heading_locked else None)
     r1 = pick_ref_obstacle(dri.occ_xy, boat, boat_yaw, p)
 
     # CP 사다리는 r1 과 무관 — 항상 ‖p1‖ ↔ r_end 균등 4분할.
@@ -269,7 +290,20 @@ def generate(dri, boat_xy, boat_yaw: float, boat_vel_xy, waypoint_xy,
         bearings = []
         prev_pt = p1                  # 선분 필터의 시작점 사슬: p1 → p2 → …
         prev_b = boat_yaw             # 첫 arc 의 연속성 기준 = p1 방향 = heading
-        for r in radii:
+        for j, r in enumerate(radii):
+            if heading_locked and j==2:
+                segment=np.linspace(prev_pt,terminal_control,16)
+                if np.any(dri.risk_at_many(segment[:,0],segment[:,1])>p.safe_threshold*p.gen_margin):return None
+                prev_pt=terminal_control
+                bearings.append(math.atan2(prev_pt[1]-boat[1],prev_pt[0]-boat[0]))
+                continue
+            if goal_locked and j == 3:
+                segment = np.linspace(prev_pt, wp, 16)
+                risk = dri.risk_at_many(segment[:, 0], segment[:, 1])
+                if np.any(risk > p.safe_threshold * p.gen_margin):
+                    return None
+                bearings.append(wp_bearing)
+                break
             picked = _arc_pick(dri, boat, r, wp_bearing, prev_pt, prev_b, p)
             if picked is None:
                 return None            # 안전 후보 전멸 → 호출측이 ESCAPE)
@@ -280,11 +314,68 @@ def generate(dri, boat_xy, boat_yaw: float, boat_vel_xy, waypoint_xy,
     cps = np.vstack([boat, p1]
                     + [boat + r * np.array([math.cos(b), math.sin(b)])
                        for r, b in zip(radii, bearings)])
+    if goal_locked:
+        cps[-1] = wp
+    if heading_locked:
+        cps[-2]=terminal_control
+        radii[-2]=float(np.linalg.norm(terminal_control-boat))
+        bearings[-2]=math.atan2(terminal_control[1]-boat[1],terminal_control[0]-boat[0])
     spacing = 0.5 * res
-    return Plan(cps=cps, samples=_sample_spline(cps, spacing),
+    samples=_sample_spline(cps,spacing)
+    if heading_locked and np.any(dri.risk_at_many(samples[:,0],samples[:,1])>p.safe_threshold*p.gen_margin):return None
+    return Plan(cps=cps, samples=samples,
                 origin=(float(boat[0]), float(boat[1])), r1=r1,
                 radii=radii, bearings=bearings, created_t=now_t,
-                wp_bearing=wp_bearing, spacing=spacing)
+                wp_bearing=wp_bearing, spacing=spacing, goal_locked=goal_locked,
+                terminal_heading=goal_heading if heading_locked else None)
+
+
+def generate_docking(dri, boat_xy, boat_yaw, boat_vel_xy, waypoints_xy, goal_heading,
+                     p, now_t=0.):
+    """B-spline to normal-aligned approach, then a checked straight docking tail."""
+    waypoints=np.asarray(waypoints_xy,float)
+    if waypoints.shape!=(3,2) or not np.isfinite(waypoints).all() or not math.isfinite(goal_heading):
+        raise ValueError('docking requires three finite waypoints and heading')
+    approach,alignment,stop=waypoints
+    heading=np.array([math.cos(goal_heading),math.sin(goal_heading)])
+    steps=np.diff(waypoints,axis=0)
+    if np.any(steps@heading<=.05) or np.any(abs(steps[:,0]*heading[1]-steps[:,1]*heading[0])>.02):
+        raise ValueError('docking waypoints must advance along terminal heading')
+    boat=np.asarray(boat_xy,float)
+    along=float((boat-approach)@heading)
+    cross=abs(float((boat-approach)@np.array([-heading[1],heading[0]])))
+    final_phase=(along>=-.15 and cross<=.35 and abs(_wrap(boat_yaw-goal_heading))<=math.radians(20))
+    finite=replace(p,finite_goal=True)
+    if final_phase:
+        remaining=float((stop-boat)@heading)
+        if remaining<=1e-4:return None
+        # Respect the observed starting heading while converging onto the axis.
+        distance=float(np.linalg.norm(stop-boat));handle=min(.4,.2*distance)
+        cps=np.vstack([boat,boat+handle*np.array([math.cos(boat_yaw),math.sin(boat_yaw)]),
+                       boat+(stop-boat)*.4,boat+(stop-boat)*.65,stop-handle*heading,stop])
+        spacing=.5*dri.resolution;samples=_sample_spline(cps,spacing)
+        if np.any(dri.risk_at_many(samples[:,0],samples[:,1])>p.safe_threshold*p.gen_margin):return None
+        delta=cps[2:]-boat
+        return Plan(cps,samples,tuple(boat),pick_ref_obstacle(dri.occ_xy,boat,boat_yaw,p),
+                    np.linalg.norm(delta,axis=1).tolist(),np.arctan2(delta[:,1],delta[:,0]).tolist(),
+                    now_t,math.atan2(stop[1]-boat[1],stop[0]-boat[0]),spacing,
+                    goal_locked=True,terminal_heading=goal_heading,docking_phase='FINAL')
+    distance=float(np.linalg.norm(approach-boat))
+    plan=generate(dri,boat,boat_yaw,boat_vel_xy,approach,finite,now_t,
+                  goal_heading=goal_heading,terminal_handle_m=min(.75,max(.15,.3*distance)))
+    if plan is None:return None
+    plan.docking_phase='APPROACH'
+    if not plan.goal_locked:return plan   # local horizon; attach tail when approach is reached
+    length=float(np.linalg.norm(stop-approach))
+    ts=np.r_[np.arange(plan.spacing,length,plan.spacing),length]
+    tail=approach+ts[:,None]*heading
+    # Include the explicitly published alignment waypoint exactly.
+    tail=np.vstack([tail,alignment]);order=np.argsort((tail-approach)@heading)
+    tail=tail[order];keep=np.r_[True,np.linalg.norm(np.diff(tail,axis=0),axis=1)>1e-8];tail=tail[keep]
+    tail[-1]=stop
+    if np.any(dri.risk_at_many(tail[:,0],tail[:,1])>p.safe_threshold*p.gen_margin):return None
+    plan.tail_samples=tail;plan.samples=np.vstack([plan.samples,tail])
+    return plan
 
 
 def check(plan: Plan, dri, boat_xy, p: PlannerParams) -> int | None:
@@ -322,6 +413,7 @@ def repair(plan: Plan, dri, violation_idx: int, p: PlannerParams) -> bool:
     radii 단조(= 전진 보장)는 수리로 깨지지 않는다. violation_idx 는 위반
     존재 확인용(호출 계약)으로만 받는다.
     """
+    if plan.docking_phase=='FINAL':return False
     origin = np.asarray(plan.origin)
     cur = dri.risk_at_many(plan.samples[plan.progress_idx:, 0],
                            plan.samples[plan.progress_idx:, 1])
@@ -330,6 +422,8 @@ def repair(plan: Plan, dri, violation_idx: int, p: PlannerParams) -> bool:
 
     best = None
     for j in range(4):                          # radii/bearings 인덱스 (CP j+2)
+        if (plan.goal_locked and j == 3) or (plan.terminal_heading is not None and j==2):
+            continue                           # preserve the final marker mission goal
         for sgn in (1.0, -1.0):
             nb = plan.bearings[j] + sgn * p.repair_dtheta
             if abs(_wrap(nb - plan.wp_bearing)) > 0.5 * p.search_fov + 1e-12:
@@ -338,6 +432,7 @@ def repair(plan: Plan, dri, violation_idx: int, p: PlannerParams) -> bool:
             cps[j + 2] = origin + plan.radii[j] * np.array([math.cos(nb),
                                                             math.sin(nb)])
             samples = _sample_spline(cps, plan.spacing)
+            if plan.tail_samples is not None:samples=np.vstack([samples,plan.tail_samples])
             prog = int(np.argmin(np.hypot(samples[:, 0] - ref[0],
                                           samples[:, 1] - ref[1])))
             worst = float(np.max(dri.risk_at_many(samples[prog:, 0],
@@ -380,6 +475,7 @@ def curvature_ahead(plan: Plan | SampledPlan, window: float) -> float:
     pts = np.asarray(spl(u))
     s = np.concatenate([[0.0], np.cumsum(np.hypot(*np.diff(pts, axis=0).T))])
     s0 = plan.progress_idx * plan.spacing
+    if plan.tail_samples is not None and s0>=s[-1]:return 0.
     mask = (s >= s0) & (s <= s0 + window)
     if not np.any(mask):
         mask[-1] = True                 # 경로 끝 도달 — 끝점 곡률이라도

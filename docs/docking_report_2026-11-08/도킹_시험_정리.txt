@@ -1,0 +1,375 @@
+도킹 실험 결과·운용 명령·문제점·LOS 제어 비교
+2026-11-08T01:12:39+09:00
+
+
+1. 현재 결과와 문서 기준
+============================================================
+작성 시각: 2026-11-08T01:12:39+09:00. 브랜치 feature/docking-real, 기준 HEAD e768828c764dc8d6c82e482060fa23c3c6900f10. 이번 세션의 코드 변경은 미커밋 상태다. 현재 소스와 설정 사본을 code_snapshot 폴더에 함께 보관했다.
+
+실제 모터 구동과 B-spline 경로 추종, 진입점 3m 이내에서 노란 최종 목표로 전환하는 동작까지 확인했다. 최종 도킹 완료(FINISHED)와 무충돌 접안은 아직 확인하지 못했다. 마지막 시험은 최종 목표 관측 지연으로 정지했다.
+
+사용자는 진입점 근처에서 목표가 부정확해져 실제 충돌했다고 보고했다. 접촉 시각·좌표·충돌 물체를 로그만으로 확정하지는 못했다. 추종이 진행됐다는 사실을 도킹 성공으로 해석하면 안 된다.
+
+최신 설정: 목표 위치/법선의 시간 평균 0초, 최신 유효 관측 한 개 사용. 진입점 3m 이내에서 /dock/stop_point로 전환, 최종 단계 목표 갱신 지속. 현재 모터는 중립이며 출발 대기다. 이 문서 생성 중 실제 주행 명령은 보내지 않았다.
+
+
+2. 실행 구조와 좌표 규약
+============================================================
+D455 RGB → YOLO 마스크 → 깊이와 무관한 광학 방위 ray
+                                  ↓
+선체 LiDAR /scan → 방위 부근 RANSAC 벽선 → 교점 + 수조 안쪽 법선
+                                  ↓ 측정 시각 TF
+                    odom 벽 좌표 + 단위 법선
+                                  ↓ 현재는 평균 없음
+             진입점 / 정렬점 / 노란 최종 정지점
+                                  ↓
+occupancy_grid → DRI → B-spline generate/check/repair → 기존 LOS형 follow_cmd
+                                  ↓
+                         /cmd_vel → thruster_driver
+                                  ↓ 115200 baud, LLLLRRRR + LF
+                      MCU 컴퓨터 모드 → 좌우 ESC PWM
+
+외벽 라이다의 /boat_pose와 GQ7 IMU를 indoor_lidar_odom이 받아 /odom 및 odom→base_link TF를 만든다. 이 배 위치 추적 입력은 노트북에서 별도로 유지해야 한다. 최종 목표와 경로는 odom 기준이며, base_link 시각화 토픽은 선체 상대값이다.
+
+변환/항목 | 현재 설정
+base_link → onboard_laser_frame | (+0.73, 0, 0)m; 장착 회전 0 가정
+onboard_laser_frame → camera_link | (-0.73, 0, +0.63)m; 장착 회전 0 가정
+base_link → camera_link 합성 | (0, 0, +0.63)m; 카메라는 라이다보다 73cm 뒤
+카메라 optical TF | D455 드라이버가 제공
+목표/지도/경로 좌표 | odom; 평면 투영 point.z=0
+pitch 필터 | -1.2° ~ +4.0°; /scan 및 occupancy 처리. /scan/raw는 원본
+roll 필터 | ±3° (현재 런치 설정)
+수조 경계 | odom x=0..10m, y=0..5m, 정지 여유 0.5m
+스테이션 법선 사전값 | odom +X 방향 [1,0]; 좌표계 회전 시 다시 확인 필요
+
+카메라 촬영 시각에 가장 가까운 라이다 스캔을 선택한다. ray/scan 허용 차이는 0.12초. 서로 다른 측정 시각의 상대 운동은 lookup_transform_full(..., fixed_frame=odom)로 보정한다. 보정 TF가 없을 때는 시각 차이 0.035초 이내에서만 정적 변환으로 대체한다. odom 변환은 라이다 측정 시각을 쓴다.
+
+따라서 시간 보정이 전혀 없는 구현은 아니다. 그러나 TF/odom 자체가 부정확하거나 벽선 연결이 바뀌면 고정된 스테이션의 odom 목표가 이동할 수 있다. 설치 회전 0 가정과 실제 시야-라이다 각도 정합은 별도 정밀 검증이 남아 있다.
+
+
+3. 목표 생성과 현재 제어 상태 전환
+============================================================
+현재 선택 목표는 triangle이다. triangle/circle/square 모두 방위와 벽 교점·법선·투영점을 계산하지만, 제어는 선택 목표 한 개를 사용한다. depth 측정은 진단용으로 남아 있고 현재 도킹 목표 위치 생성에는 카메라 depth를 쓰지 않는다.
+
+wall = 선택 마커의 카메라 ray와 LiDAR 벽선 교점 (odom)
+n = 벽에서 수조 안쪽/선박 쪽을 향하는 단위 법선
+STOP(노랑) = wall + 1.0m × n
+ALIGN(주황) = wall + 1.5m × n
+ENTRY(하늘색) = wall + 2.0m × n  # 명목값, DRI 검색으로 조정 가능
+추정 marker = wall - 1.0m × n  # 벽 뒤 1m 가정의 시각화 좌표
+
+사용자가 선택한 “벽 뒤 1m 마커에서 안쪽으로 1m 당기기 = 벽선 위 목표”라는 중간 합의와 달리, 현재 실행 코드의 STOP은 벽선보다 수조 안쪽 1m이다. 현재 실제 런치 dock_stop_distance_m=1.0을 기준으로 문서화했다. 두 의미를 혼동하지 말아야 한다. 이 보고서 작성 중 목표 오프셋은 변경하지 않았다.
+
+명목 진입 경로가 안 나오면 기존 DRI를 사용해 진입점을 법선 축 방향으로 0.15m씩, 최대 ±1.5m 범위에서 검색한다. 노란 STOP 좌표는 이 검색으로 옮기지 않는다. 현재는 approach_only_entry_search=true이며 진입점까지의 충돌 회피 가능성을 평가한다.
+
+상태 | 목표 갱신 및 제어
+WAIT/PREVIEW | 신선한 센서·목표와 유효 경로를 확보한다. /dock/start 전에는 모터 명령 0.
+ENTRY | 출발 시 진입점을 고정해 기존 DRI/B-spline 회피 추종. 이 단계는 마커 갱신 중단만으로 즉시 정지하지 않는다.
+전환 조건 | 현재 선체 위치와 출발 때 고정한 진입점 사이 거리 ≤3.0m. 최신 진입점과의 거리를 쓰는 것은 아니다.
+FINAL | 신선한 노란 /dock/stop_point로 목표 변경. 이후 ENTRY로 되돌아가지 않는다. 목표 수신값을 제어 tick에서 반영한다.
+FINAL 경로 갱신 | 전환 시 또는 경로 생성 기준 목표에서 ≥0.10m 변하면 FSM/경로를 초기화해 재생성한다.
+FINAL 정지 | 목표 관측/수신이 0.7초를 넘기면 정지. 직전 제어 목표보다 한 번에 0.5m 넘게 바뀌어도 정지.
+도착 | 현재 활성 목표까지 ≤0.25m면 FINISHED 및 중립. 최종 선수 방향과 속도까지 포함한 접안 완료 판정은 아니다.
+회피 실패 | 수리·재생성 실패 후 ESCAPE가 필요하면 정지. allow_escape=false이므로 자동 후진하지 않는다.
+
+현재 /dock/waypoints의 세 pose를 순서대로 추종하는 모드는 비활성이다(dock_waypoints_topic 빈 문자열). ALIGN은 시각화 좌표이며 독립 제어 단계가 아니다. 최종 선수각을 법선 방향으로 강제 고정하는 동작도 현재 FINAL 경로에는 없다. 일반 B-spline/LOS형 추종으로 노란 점을 향한다.
+
+goal_average_window_s=0.0은 목표 생성기의 벽 위치와 법선 시간 평균을 모두 끈다. RANSAC, 벽 방향 사전값·이전 벽 이력(1.5초), depth 진단 필터, 입력 시각 검사는 유지된다. 목표 생성기는 10Hz timer지만 새 측정 시각이 있는 유효 관측만 제어기에 새로 반영된다.
+
+
+4. 현재 주요 파라미터
+============================================================
+항목 | 값 / 의미
+ENTRY 전진 / 회전 상한 | 0.25 / 0.31
+FINAL 전진 상한 | 0.10; 회전 상한은 0.31 유지
+명령 단위 | /cmd_vel linear.x, angular.z 모두 정규화 추력 비율. m/s 또는 rad/s 명령이 아님
+선수각 P / 요레이트 D | 1.4 / 0.16
+lookahead / 곡률 창 | 0.8m / 2.0m
+곡률 기반 목표 속도 | v_min=0.3, v_max=1.4m/s, omega_max=0.52rad/s; 실제 추력 변환 모델에 입력
+속도→추력 | cmd_full=0.25, v_full=1.48, 지수=1.64; 실선 재교정 여부는 미확정
+목표 근접 감속 반경 | 1.5m
+제어 / 지도 timer | 각 10Hz
+센서 수신 timeout | odom/scan/grid 각 0.5초
+경로 횡이탈 제한 | 0.7m
+DRI 안전 기준 | safe_threshold=1.2; 생성 margin=0.93
+드라이버 주기 / 워치독 | 50Hz / cmd_vel 0.3초 미수신 시 중립
+모터 serial | /dev/ttyCH341USB0, 115200, 8N1, LLLLRRRR\n
+모터 PWM | 중립 1500/1500, 설정 전진 1900/후진1100 상한, deadband ±25μs
+드라이버 max_output_ratio | 1.0; 실제 추력은 제어기 명령 및 믹싱 결과로 결정
+D455 / YOLO | RGB 640×480×15, native depth 1280×720×15 → aligned640×480; GPU device0 / TensorRT best.engine
+영상 오버레이 | bgr8, 최대 320px 폭/5Hz; 검출 자체 빈도와 구별
+
+
+5. 필요한 프로세스·토픽과 실행 명령
+============================================================
+토픽은 따로 “켜는” 것이 아니라 해당 노드를 시작하면 발행된다. 기본 순서는 외벽 위치 추적/브리지 → IMU·선체 LiDAR·odom → D455/YOLO/TF → 모터 드라이버 → 목표·지도·도킹 제어기다.
+
+외벽 위치 추적은 노트북 DOMAIN43에서 lidar_boat_tracker.launch.py를 사용한다. 현재 설치·포트는 해당 노트북의 TANK_TESTS_GUIDE.md 2절 기준을 따른다. Jetson에는 /boat_pose가 들어와야 한다. /odom 및 odom→base_link의 발행자는 하나만 유지한다.
+
+# 모든 젯슨 터미널: ROS Humble / 도메인 42
+cd /home/msga2026/Desktop/kaboat_ws/repo
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+export ROS_DOMAIN_ID=42
+export ROS_LOCALHOST_ONLY=0
+
+# 터미널 1: GQ7 + 선체 TG-50 + indoor_lidar_odom (모터 및 D455 별도)
+ros2 launch kaboat_hardware indoor_tank.launch.py \
+  enable_thrusters:=false enable_onboard_lidar:=true \
+  onboard_lidar_port:=/dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0 \
+  onboard_lidar_pitch_min_deg:=-1.2 onboard_lidar_pitch_max_deg:=4.0
+
+# 터미널 2: D455 + GPU YOLO + 카메라/라이다 장착 TF
+scripts/run_dock_yolo.sh \
+  dock_weights:=/home/msga2026/Desktop/kaboat_ws/repo/src/kaboat_perception/models/best.engine
+
+# 터미널 3: 기존 모터 드라이버. 물리 컨트롤러를 컴퓨터 제어 모드로 설정.
+ros2 launch kaboat_hardware thrusters.launch.py \
+  hardware_type:=serial port:=/dev/ttyCH341USB0 allow_port_scan:=false gps_logger:=false
+
+# 터미널 4: 마커-라이다 연결 + 목표 생성 + DRI + B-spline + dock_ctrl
+# 터미널 3에서 모터를 이미 켰으므로 start_thrusters:=false
+scripts/run_dock_ctrl.sh start_thrusters:=false goal_average_window_s:=0.0
+
+# 별도 모터 터미널을 쓰지 않는 대안: 터미널 3 없이 아래 하나만 실행
+# scripts/run_dock_ctrl.sh goal_average_window_s:=0.0
+# 두 방식을 동시에 실행하지 않는다. 같은 포트와 /cmd_vel 발행자를 중복 실행하지 않는다.
+
+# 컴퓨터 모드 문자열 전송: 물리 컨트롤러의 선택 스위치를 대신 보장하지 않음
+ros2 topic pub --once /teleop/esp_mode std_msgs/msg/String '{data: computer_control_mode}'
+
+# 유효 경로 확인 후 수동 시작. 아래 서비스는 60초 후 자동 종료하지 않음.
+ros2 service call /dock/start std_srvs/srv/Trigger '{}'
+
+# 즉시 도킹 정지 / 출발 해제
+ros2 service call /dock/stop std_srvs/srv/Trigger '{}'
+
+# 비상 정지 (복귀 후에도 /dock/start 명시적 호출 필요)
+ros2 topic pub --once /emergency_stop std_msgs/msg/Bool '{data: true}'
+# 비상 상태 해제만 수행하며 자동 출발시키지 않음
+ros2 topic pub --once /emergency_stop std_msgs/msg/Bool '{data: false}'
+
+# 모터 없이 지도·목표·경로만 보고 싶을 때: 기존 도킹 런치를 종료한 뒤 실행
+# ros2 launch kaboat_bringup dock_ctrl.launch.py \
+#   drive_enabled:=false start_thrusters:=false goal_average_window_s:=0.0
+
+# 진단 / 파라미터 / 실제 모터 출력 확인
+ros2 topic echo /dock/avoid/status
+ros2 topic echo /dock/avoid/goal_status
+ros2 topic echo /dock/lidar/status
+ros2 param get /dock_marker_goal goal_average_window_s
+ros2 param get /dock_ctrl dock_final_switch_distance_m
+ros2 topic echo /diagnostics --field status
+ros2 topic info /cmd_vel -v
+ros2 topic info /odom -v
+ros2 topic hz /scan
+ros2 topic hz /dock/bspline_path
+# Path가 발행돼도 poses가 비어 있으면 유효 경로가 없는 것
+ros2 topic echo /dock/bspline_path --once --field poses
+
+# 로컬 RViz: 카메라 원점의 bearing 화살표, 마커, 목표, DRI, 경로
+rviz2 -d scripts/dock_lidar.rviz
+# 영상 오버레이 (원본 RGB를 반복 구독할 필요 없음)
+ros2 run rqt_image_view rqt_image_view /dock/debug_image
+
+# 토픽별 터미널 모니터 (기존 파이프라인을 중복 시작하지 않음)
+python3 scripts/open_dock_terminals.py
+# 추가 핵심 토픽은 각각 다른 터미널에서
+scripts/watch_dock_topic.sh /dock/stop_point
+scripts/watch_dock_topic.sh /dock/final_waypoint
+scripts/watch_dock_topic.sh /dock/bspline_path
+
+# 외벽 추적: 노트북 DOMAIN43의 기존 ROS/Docker 환경에서 별도 실행
+# 해당 노트북 workspace를 source한 뒤 실행. 이 포트는 노트북 외벽 센서의 기존 값.
+export ROS_DOMAIN_ID=43
+ros2 launch kaboat_hardware lidar_boat_tracker.launch.py \
+  port:=/dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_344ff5135095724097887d9c6d4b91ce-if00-port0 \
+  enable_rviz:=false
+
+# 브리지: 각각 별도 터미널, 각 장비의 repo에서 실행
+# Jetson (domain42)
+python3 scripts/zenoh_monitor_link.py jetson
+# 노트북 (domain43): 아래 100.A.B.C를 실제 Jetson Tailscale IPv4로 치환
+python3 scripts/zenoh_monitor_link.py laptop --jetson-ip 100.A.B.C
+# 현재 allowlist에는 새 도킹 토픽 일부가 없음. 원격 RViz 전달 경로는 별도 확인.
+
+scripts/run_dock_ctrl.sh는 기본적으로 모터 드라이버도 시작한다. 본 문서의 권장 분리 실행에서는 start_thrusters:=false를 명시한다. 기존 런치가 켜져 있으면 flock으로 중복 실행이 거부되므로 해당 터미널에서 Ctrl+C로 종료한 뒤 다시 시작한다.
+
+라이다 포트 /dev/ttyUSB0(또는 CP2102 by-id)와 모터 포트 /dev/ttyCH341USB0를 혼동하지 않는다. 카메라가 이미 별도 실행 중이면 run_dock_yolo.sh start_camera:=false를 사용한다. 중복된 static TF도 추가하지 않는다.
+
+현재 보존한 trial_monitor_60s.py는 이번 시험용 보조 스크립트다. 유효 경로를 기다린 뒤 시작 서비스를 호출하고, 시작 후 최대60초 관측한 다음 정지한다. 컨트롤러 자체의 60초 제한이 아니다. 직접 /dock/start만 호출하면 이 관측 시간 제한은 적용되지 않는다. 모니터와 직접 시작 서비스를 동시에 실행하지 않는다.
+
+
+6. 토픽 이름·형식·원격 시각화
+============================================================
+토픽 | 메시지 (패키지는 전체 CSV 참조) | 용도
+/boat_pose | PoseWithCovarianceStamped | 외벽 라이다의 배 위치; 노트북→Jetson
+/imu/data | Imu | GQ7 자세·요레이트
+/scan/raw / /scan | LaserScan | 선체 라이다 원본 / 기울기 필터 후
+/odom / /tf / /tf_static | Odometry / TFMessage | 현재 선체 위치와 동적/정적 TF
+/camera/color/image_raw | Image | YOLO RGB 입력640×480
+/camera/depth/image_raw | Image | 정합 depth 진단용
+/camera/camera_info | CameraInfo | RGB 내부 파라미터
+/dock/debug_image | Image | bgr8 오버레이; 무검출 상태도 표시
+/dock/detection_status | String JSON | YOLO 검출·입력 카운터·depth 진단
+/dock/bearing_markers | MarkerArray | 카메라 원점에서 뻗는 길이1m 방위 화살표; 실제 거리 아님
+/dock/lidar/markers / /dock/lidar/status | MarkerArray / String | RANSAC 벽·법선 및 연결 실패 원인
+/dock/markers_ground / /dock/markers_base | MarkerArray | 3종 추정 마커의 odom / 선체 상대 시각화
+/dock/marker_ground | PointStamped | 선택한 목표 마커의 odom 추정 위치; STOP과 다름
+/dock/approach_point | PointStamped | 명목 wall+2m, DRI 검색으로 변할 수 있는 진입점
+/dock/alignment_point | PointStamped | 명목 wall+1.5m, 현재 독립 추종 단계 없음
+/dock/stop_point | PointStamped | 노란 최종 목표; 현재 wall+1m
+/dock/final_waypoint | PointStamped | 제어기가 실제 사용하는 활성 목표; ENTRY에서는 진입점, FINAL에서는 노란점
+/dock/waypoints | Path | ENTRY/ALIGN/STOP pose 3개; 제어 경로와 구별
+/dock/bspline_path | Path | DRI 검사한 실제 B-spline 경로; 빈 poses면 유효 경로 없음
+/dock/avoid/goal / goal_candidate | PointStamped | 최종 목표 / 평균 처리 전 후보. 현재 평균0으로 유효 시 동일
+/dock/avoid/goal_markers | MarkerArray | 하늘색 ENTRY / 주황 ALIGN / 노랑 STOP / 흰색 WALL; 무효는 빨강
+/dock/avoid/goal_status | String JSON | geometry_valid, 평균 표본수, entry_search 등
+/dock/avoid/status | String | FOLLOW/WAIT/STOP/FINISHED 및 stage=ENTRY/FINAL
+/occupancy_grid | OccupancyGrid | 선체 라이다 관측 기반 점유지도
+/avoid/dri / /avoid/dri_marks | OccupancyGrid / MarkerArray | 기존 토픽명을 유지한 위험지도 / 위험 셀
+/dock/avoid/cmd_preview / /cmd_vel | Twist | 제어 명령 표시 / 드라이버 입력; 현재 출발 전 둘 다0
+/diagnostics / /teleop/status / /teleop/event | DiagnosticArray / String | 모터 출력·워치독·모드 요청 결과
+
+전체 정확한 타입·frame 목록은 토픽_목록.csv에 있다. 아래 {class}에는 triangle, circle, square가 들어간다.
+
+패턴 | 좌표계 / 의미
+/dock/markers/{class}/ray | camera_color_optical_frame; optical Z=1인 정규화 방위 끝점, 깊이 독립
+/dock/markers/{class}/ground | odom; LiDAR 벽 뒤 1m로 추정한 마커
+/dock/markers/{class}/ground_base | base_link; 위 추정 마커의 선체 상대 좌표
+/dock/lidar/{class}/wall_point_base, marker_base, normal_base | base_link; 벽 교점 / 추정 마커 / 단위 법선
+/dock/lidar/{class}/wall_point, marker_ground, normal | odom; 측정 시각으로 변환한 교점 / 추정 마커 / 법선
+/dock/markers/{class}/depth_ground, depth_ground_base | 구형 카메라 depth 투영 결과; 진단용
+/dock/markers/{class}/base | 원래 카메라 depth 기반 3D 좌표; ground_base와 구별
+
+/dock/marker_groung는 오타이며 올바른 이름은 /dock/marker_ground이다. /dock/avoid/dri 대신 기존 /avoid/dri를 사용한다. /dock/final_waypoint는 이름과 달리 ENTRY에서도 활성 진입점을 발행하므로 노란 물리 STOP과 구별해야 한다.
+
+원격 RViz에서는 MarkerArray/Path/Map/Image 표시를 각각 추가하고 TF가 전달되는지 확인한다. 마커와 영상은 Best Effort / Volatile로 수신 가능하게 한다. Image 권장 depth2, Point depth1. Map도 현재 발행자에 맞게 Volatile로 설정한다. 화면에 남은 마지막 점은 새로운 검출을 의미하지 않으므로 /dock/lidar/status와 /dock/avoid/goal_status를 함께 본다.
+
+Jetson DOMAIN42, 노트북 DOMAIN43 간에는 DDS 도메인만 다르게 설정해서 직접 연결되지 않는다. 기존 Zenoh/별도 전달 경로가 필요하다. 현재 scripts/zenoh_monitor_link.py의 MONITOR_TOPICS에는 일부 구형 /dock 토픽만 포함되고 새 /dock/bspline_path·/dock/stop_point·/dock/bearing_markers 등이 빠져 있다. 다른 기기에서 이 토픽들이 실제 보이는 전달 경로/허용 목록을 확인해야 한다. 이 문서 작업에서는 브리지 설정을 수정하지 않았다. /cmd_vel은 기존 브리지에서 원격 전달하지 않는다.
+
+
+7. 실제 시험 결과와 해석
+============================================================
+로그 (KST) | 시작 후 관측초 | 종료 원인 | 종료 거리(m) | 해석
+20261108_002727.jsonl | 8.77 | WAIT: marker moved away from the latched goal; reset and reacquire | 6.842 | 초기 추가 제어 제한 시기; 마커 이동 제한 정지. 실제 모터 반응 확인 안 됨.
+20261108_003110.jsonl | 0.61 | WAIT: marker goal stale | 4.982 | 초기 목표 유실 정지. 이후 현재 ENTRY는 관측 유실만으로 정지하지 않도록 변경.
+20261108_003313.jsonl | 15.02 | STOP: trial time limit reached; explicit start required | 4.881 | 초기 15초 내부 제한; 이 추가 제한은 현재 제거됨.
+20261108_003942_existing.jsonl | 44.7 | STOP: dock stop requested | 5.734 | 원래 회피 제어·출력으로 복원 후에도 당시 사용자는 모터 미동작 보고.
+20261108_004958_existing.jsonl | 47.81 | STOP: dock stop requested | 7.468 | 제어기는 FOLLOW지만 재시작한 드라이버는 timeout. 제어 노드 재시작으로 연결 복구.
+20261108_005106_existing.jsonl | 0.68 | STOP: ESCAPE requested | 6.122 | 경계0.58m/전방관측0.63m 부근, ESCAPE 조건으로 정지.
+20261108_005207_existing.jsonl | 12.7 | STOP: cross-track limit | 7.636 | 횡이탈 제한0.7m 정지. 원인(실제 이탈/odom 변화)은 미확정.
+20261108_005328_existing.jsonl | 8.7 | STOP: ESCAPE requested | 2.528 | 고정 진입점까지 약7.25→2.53m, 이후 ESCAPE 정지.
+20261108_005554_existing.jsonl | 60.08 | observation window ended; controller stopped by monitor | 1.191 | RC→컴퓨터 모드 전환 후 이동. 진입점 최소0.282m까지 접근했으나 기준0.25m 미달. 이후 충돌 사용자 보고.
+20261108_010128_existing.jsonl | 8.31 | WAIT: final yellow stop goal stale, stage=ENTRY | 2.863 | 3m FINAL 전환 적용, 평균1초. 최종 목표 관측 지연 정지.
+20261108_010549_existing.jsonl | 5.73 | WAIT: final yellow stop goal stale, stage=ENTRY | 2.390 | 평균0초 시험. FINAL 전환 후 관측 지연 정지; 목표까지 약2.39m.
+
+날짜/시간은 파일명과 Jetson KST 시계를 기준으로 했다. 종료 거리는 그 시험에서 마지막으로 기록한 활성 목표까지의 odom 거리이며 실측 접안 거리와 다르다. FINAL 도입 후 JSON의 entry_xy라는 구형 필드명에는 최종 활성 STOP 좌표가 담길 수 있다.
+
+기존 straight_line_test를 코드·파라미터 변경 없이 반복 실행했고, 나중 시험에서 사용자 확인으로 모터 구동과 실제 이동이 검증됐다. 모터가 돌지 않던 주된 원인은 물리 컨트롤러가 RC 조종기 모드였던 것으로 사용자가 확인했다. USB 송신 성공/esp_mode 진단만으로 실제 컴퓨터 모드나 모터 회전을 확정할 수 없었다.
+
+319개 관련 회귀 테스트가 3m 전환 변경 후 통과했고, 평균0초 변경 후 관련25개 테스트가 통과했다. 단위·회귀 테스트 통과는 실제 접안 성공을 뜻하지 않는다. 시험용 타임아웃60초와 컨트롤러 내부 제한을 구별한다.
+
+
+8. 발견된 문제와 현재 처리 상태
+============================================================
+문제 | 관측/원인 상태 | 현재 처리 / 남은 확인
+모터 미동작 | 사용자가 RC 모드 선택을 원인으로 확인 | 실물 컴퓨터 모드 선택 필수. 기존 드라이버 사용, 출력 상향으로 해결한 것이 아님.
+드라이버 재시작 후 명령 미수신 | FOLLOW 명령은 있었으나 드라이버 timeout, 당시 DDS 목록에 드라이버 구독 누락 관측 | 제어 노드 재시작 후 auto와 PWM 전달 복구. 일반적인 상시 결함 여부는 미확정.
+원본 영상 대역폭/프로세스 부담 | 원본 고해상도 반복 수신 부담을 줄여달라는 현장 요청 | RGB640×480, 오버레이320px/최대5Hz, 모니터는 가능한 입력 카운터 사용. 현재 CPU/GPU 프로파일링 전체 완료 주장은 아님.
+원거리 depth, 특히 사각형 불안정 | 근거리 안정·원거리 흔들림 및 오차 사용자 관측 | 현재 제어 목표는 depth에서 분리, 방위+LiDAR 벽 사용. 원래 depth 정확도 자체 해결/교정 완료는 아님.
+측면벽/뒷벽 법선 혼동 | 직교 벽 선택 사례 관측 | 법선 방향 사전값·이전 벽과의 일관성 및 공유법선 적용. 실제 ㄷ자3칸(폭1.3m, 깊이약2m) 형상 인식은 보류.
+이동 중 목표 좌표 불안정 | 사용자 관측. 벽 선택·bearing 외부보정·odom/TF·시각/노출 지연 중 원인 분리 미완료 | 측정 시각 보정 유지, 시간 평균을0으로 꺼 비교 중. 평균 제거만으로 해결됐다는 증거 없음.
+진입점 고정 후 지나침/접촉 | 고정 진입점 최소0.282m 접근 후 정지판정 실패, 사용자 충돌 보고 | 3m 이내에서 최신 STOP으로 전환. 무충돌 최종 접안은 아직 미검증.
+최종 목표 유실 | 최근 평균1초·0초 시험 모두 final yellow stop goal stale로 정지 | 0.7초 stale 정지는 유지. YOLO 미검출/벽 연결 실패/TF/목표 생성 차단 중 실제 원인을 별도 기록 필요.
+조금씩 누적되는 목표 오차 | 현재 코드는 한 번의0.5m 이상 이동만 차단 | 작은 연속 오차는 제어기에 반영됨. 정적 스테이션 일관성/목표 속도/품질 기반 갱신 검사가 없음.
+목표 갱신마다 경로 재시작 | FINAL 목표가 기준점에서10cm 움직이면 FSM reset | 연속 갱신 때 반복 정지·경로 재생성/진행률 손실이 생길 수 있음. 현재 실제 영향량은 미측정.
+목표 유실 후 상태표시 | _disarm이 final_stage를 초기화 | stale 정지 문자열에 stage=ENTRY가 붙어도 전환이 없었다는 뜻이 아님. 개선 미적용.
+물리 제동/최종 자세 | 현재 완료 판정은 거리0.25m 중심 | 현재 속도·정지거리·최종 선수각·접안벽 실제 간격을 함께 검증하는 로직은 아직 없음.
+목표와 경계/좌표 의존 | 10×5m 경계와 +X 법선 사전값 고정 | 외벽 라이다 원점/방향을 바꾸면 관련 파라미터와 TF를 함께 재검증.
+
+앞선 bring-up 단계에서는 부팅 후 D455/센서/TF/검출 노드를 다시 띄워야 하는 상태, 원본 RGB 구독 부담, 저속 debug_image와 실제 YOLO 추론 빈도의 혼동도 있었다. 현재는 TensorRT/GPU 설정과 스트림 크기를 명시한다. 과거의 모든 끊김을 CPU 추론 또는 D455 하드웨어 고장으로 확정한 것은 아니다. 카메라/라이다 장착 좌표는 사용자 수정값을 반영한 현재 합성 위치를 기준으로 한다.
+
+DRI 계산에서는 Gaussian 영향 범위 캐시로 계산량을 줄였으며 위험도 수식/안전 기준 자체를 완화한 것은 아니다. DRI remap 이후 구독자 수 검사 문제는 실제 publisher의 구독자 수를 조회하도록 수정했다. 지도는 기존 /avoid/dri, /avoid/dri_marks를 유지한다. /dock/lidar/markers의 길게 보이는 벽 직선은 시각화이며 그 선분 전체를 occupancy_grid에 장애물로 추가하는 구조는 아니다.
+
+현재 중요한 다음 확인은 이동 중 wall_point_base와 normal_base가 안정적인데 odom 값만 달라지는지, 아니면 선체 상대 관측부터 벽 연결이 바뀌는지의 분리다. 동시에 ray/scan 시각 차이, compensated 플래그, TF, /boat_pose, /odom, 활성 목표, 경로, 실제 PWM을 같은 시각축으로 기록해야 한다. 작은 목표 변동을 무조건 추종하는 정책과 단순 stale timeout 증가는 해결책으로 확정되지 않았다.
+
+
+9. 현재 제어와 기존 LOS의 실제 차이
+============================================================
+현재 도킹과 LosFollower는 둘 다 avoid_fsm.follow_cmd()를 호출한다. 따라서 “B-spline 제어 대신 LOS로 바꾸면 다른 기본 조향기가 된다”는 해석은 맞지 않는다. B-spline은 경로 형태/생성 방법이고, 현재 그 경로를 추종하는 방법 자체가 lookahead 기반 LOS형 조향이다.
+
+target = 경로 진행 위치에서 lookahead만큼 앞선 샘플
+heading_error = wrap(atan2(target_y-boat_y, target_x-boat_x) - yaw)
+angular_cmd = Kp * heading_error - Kd * yaw_rate
+v = clamp(omega_max / max_curvature_ahead, v_min, v_max)
+v *= min(distance_to_goal / slow_radius, 1)
+linear_cmd = cmd_full * (v / v_full) ** cmd_exp
+# 큰 선수각 오차에서는 추가 속도 제한, 최종 명령은 각각 상한으로 clip
+
+비교 | 현재 dock_ctrl / 회피 FSM | LosPathTest / LosFollower
+추종 핵심 | follow_cmd → control_velocity | 같은 follow_cmd → control_velocity
+경로 입력 | 센서·DRI로 생성/수리/재생성하는 동적 B-spline | 한 번 만든 odom 고정 B-spline 또는 circle SampledPlan
+장애물 검사 | scan/grid/DRI, check→repair→generate, 실패 시 ESCAPE 또는 정지 | LosFollower 자체에는 DRI 회피/경로 수리 없음
+목표 | ENTRY 고정→3m 이내 live STOP, 변화 시 재계획 | 고정 경로 끝점 또는 원형 경로 바퀴 수
+lookahead | 0.8m | 기본1.0m
+제어 주기 | 10Hz | LosPathTest20Hz
+요 P / D | 공유 상수1.4 / 0.16 | 노드 기본1.4 / 0.16이지만 런치가1.2 / 0.15로 덮어씀
+전진/회전 상한 | 0.25 / 0.31, FINAL 전진0.10 | 기본 launch thrust_ratio=.3, max_*1.0 →0.30 / 0.30
+출력 ratio 적용 | 노드 상한, 공통 속도→추력 변환 | LosPathTest ratio_limits_only=true: 전진cmd_full과 상한에 ratio 적용, PD 게인에는 곱하지 않음
+진행률 | check가 현재 이후 progress_window에서 갱신; 재생성으로 새 plan | LosFollower._advance가 검색창 기반 단조 진행률 유지
+도착 | 활성 목표 거리≤0.25m; 별도 선수각 정렬 없음 | 고정 종점 거리≤0.4m 및 남은 경로≤lookahead
+정지 검사 | 센서 timeout, 경계0.5m, 횡이탈0.7m, FINAL stale/jump, ESCAPE 비활성 | odom timeout/좌표 검사, 경계0.25m, 발행자 중복 검사, 완료 검사
+
+별도 BSplineTrackTest는 같은 follow_cmd를 쓰지만 기본 lookahead1.0m, P/D1.5/0.15, 전진/회전0.30, 도착0.40m다. 코드의 공유 상수와 이 노드의 별도 기본값을 혼동하지 않는다.
+
+직선 시험 straight_line_test는 또 다른 LOS 구성이다. 직선 횡이탈 e_ct를 구하고 desired_yaw=path_heading+atan2(-e_ct, lookahead1.2m)로 보정한다. P/D1.5/0.15, 전진0.30·회전0.30, 40°/20° 선수각 오차에서0.4/0.7배 감속, 도착기준0.35m다. 이 성공은 모터 명령 경로를 검증하지만, 도킹 마커 목표 정확도나 회피 경로의 접안 성능을 검증한 것은 아니다.
+
+현재 문제의 우선 검증 대상은 공통 LOS 조향식 교체보다 이동 중 목표 추정의 일관성, 경로 재생성의 연속성, 근접 감속과 최종 정지 조건이다. 이번 문서화에서는 게인이나 제어 코드를 추가 변경하지 않았다.
+
+
+10. 문서 작성 시 실제 발행 상태
+============================================================
+아래 수치는 작성 중 약12초 관측값이며 주행 중 성능 보장은 아니다. 마지막 상태는 WAIT: marker goal stale, stage=ENTRY이고 PWM1500/1500, backend_open=True, send_fail_count=0이었다. Path/waypoints는 발행 중이지만 마지막 메시지는 빈 poses였다.
+
+토픽 | 발행자 수 | 관측 Hz | 메시지 수
+/boat_pose | 1 | 13.6 | 163
+/imu/data | 1 | 99.92 | 1200
+/scan/raw | 1 | 10.23 | 123
+/scan | 1 | 9.39 | 113
+/odom | 1 | 30.22 | 363
+/occupancy_grid | 1 | 10.05 | 121
+/avoid/dri | 1 | 9.86 | 118
+/dock/detection_status | 1 | 7.32 | 88
+/dock/bearing_markers | 1 | 7.32 | 88
+/dock/lidar/status | 1 | 7.38 | 89
+/dock/markers_base | 1 | 7.39 | 89
+/dock/markers_ground | 1 | 7.39 | 89
+/dock/waypoints | 1 | 10.04 | 120
+/dock/bspline_path | 1 | 9.97 | 120
+/dock/avoid/status | 1 | 9.93 | 119
+/dock/avoid/cmd_preview | 1 | 9.95 | 120
+/cmd_vel | 1 | 9.95 | 120
+/diagnostics | 2 | 1.48 | 18
+
+/diagnostics 발행자2개는 여러 장치가 진단을 보내는 구조일 수 있다. 이 수치만으로 모터 드라이버 중복이라고 판단하지 않는다. 해당 시점 /cmd_vel 및 /odom 발행자는 각각1개였다. 카메라 native stream 설정15FPS와 실제 검출 입력 카운터 약7.4Hz는 다른 지표다.
+
+
+11. 소스·로그·재현 자료
+============================================================
+code_snapshot은 문서 작성 시점의 현재 소스 사본이다. 기존 Git HEAD만으로는 이번 미커밋 변경을 재현할 수 없다. 변경을 배포하거나 커밋하는 작업은 이 문서화에 포함하지 않았다.
+
+구현 | 실제 소스 경로
+3m 전환·최종 목표 갱신 | src/kaboat_hardware/kaboat_hardware/dock_ctrl.py
+회피 노드·센서/완료 검사 | src/kaboat_hardware/kaboat_hardware/real_obstacle_avoid_test.py
+목표 좌표·평균0·시각화 | src/kaboat_hardware/kaboat_hardware/dock_marker_goal.py
+측정 시각 TF·벽선 연결 | src/kaboat_hardware/kaboat_hardware/dock_lidar_markers.py
+DRI 진입점 검색 | src/kaboat_behaviors/kaboat_behaviors/dock_entry_search.py
+회피 FSM와 공통 추종식 | src/kaboat_behaviors/kaboat_behaviors/avoid_fsm.py
+공통 yaw PD·속도→추력 | src/kaboat_behaviors/kaboat_behaviors/motion_controller.py
+LOS follower와 경로 진행률 | src/kaboat_behaviors/kaboat_behaviors/los_controller.py
+LOS 실제 런치 기본값 | src/kaboat_hardware/launch/los_path_test.launch.py
+
+시험_기록에는 현재 /tmp에 남아 있던11개 JSONL 원본을 복사했다. 과거 모든 세션의 전체 rosbag은 아니며, 이번 시험 로그는 odom·cmd·상태·PWM 위주다. 각 단계의 원시 마스크·라이다·TF 전체를 재생할 수 있는 기록은 아니다. 따라서 움직일 때 목표가 왜 이동하는지를 이 자료만으로 완전히 확정할 수 없다.
+
+실행_명령.txt, 토픽_목록.csv, 시험_요약.json, 현재_토픽_상태.json을 함께 보관했다. trial_monitor_60s.py는 /tmp 시험 모니터의 사본이고 공식 설치 명령은 아니다. 스크립트가 자동 시작 서비스를 호출한다는 점을 알고 사용할 것.

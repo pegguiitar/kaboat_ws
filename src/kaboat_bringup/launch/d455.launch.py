@@ -1,7 +1,8 @@
 """Intel RealSense D455를 KABOAT 표준 카메라 토픽으로 연결한다.
 
-이 launch는 카메라 드라이버만 담당한다. 기본 해상도/주기는 Jetson에서
-최초 배선 검증을 하기 위한 보수적인 값이며, 현장 성능 측정 후 올린다.
+이 launch는 카메라 드라이버만 담당한다.
+RGB는 검출용 640x480, 깊이는 측정 정밀도를 위한 native HD를 사용한다.
+정렬 깊이 출력은 RGB와 같은 크기이므로 네트워크 영상 크기는 증가하지 않는다.
 """
 
 import os
@@ -28,6 +29,8 @@ def generate_launch_description():
     camera = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(rs_launch),
         launch_arguments={
+            'config_file': os.path.join(
+                get_package_share_directory('kaboat_bringup'), 'config', 'd455_streams.yaml'),
             'camera_namespace': 'camera',
             'camera_name': 'camera',
             'enable_color': 'true',
@@ -35,8 +38,8 @@ def generate_launch_description():
             'enable_sync': 'true',
             'align_depth.enable': 'true',
             'pointcloud.enable': enable_pointcloud,
-            'rgb_camera.profile': color_profile,
-            'depth_module.profile': depth_profile,
+            'rgb_camera.color_profile': color_profile,
+            'depth_module.depth_profile': depth_profile,
             'publish_tf': 'true',
             'use_sim_time': use_sim_time,
         }.items(),
@@ -50,8 +53,8 @@ def generate_launch_description():
             'color_profile', default_value='640x480x15',
             description='Jetson 초기 검증용 RGB width x height x fps'),
         DeclareLaunchArgument(
-            'depth_profile', default_value='640x480x15',
-            description='Jetson 초기 검증용 depth width x height x fps'),
+            'depth_profile', default_value='1280x720x15',
+            description='Native HD stereo depth for metric precision; aligned output follows RGB size'),
         DeclareLaunchArgument(
             'enable_pointcloud', default_value='false',
             description='초기 검증에서는 CPU/USB 부하를 줄이기 위해 비활성'),

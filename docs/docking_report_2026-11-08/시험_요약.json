@@ -1,0 +1,441 @@
+[
+  {
+    "file": "20261108_002727.jsonl",
+    "summary": {
+      "outcome": "WAIT: marker moved away from the latched goal; reset and reacquire",
+      "armed": true,
+      "entry_xy": [
+        2.257435093342572,
+        3.683016201337577
+      ],
+      "initial_xy": [
+        8.62385641662087,
+        0.9611662854030132
+      ],
+      "final_xy": [
+        8.515949004456896,
+        0.9180098811726191
+      ],
+      "nonzero_commands": 86,
+      "max_linear_cmd": 0.15,
+      "max_angular_cmd": 0.31,
+      "final_distance_m": 6.8420944400208095,
+      "actuator": {
+        "mode": "auto",
+        "left_pwm": "1500",
+        "right_pwm": "1500",
+        "backend_open": "True",
+        "last_send_ok": "True",
+        "send_fail_count": "0",
+        "linear_cmd": "0.000",
+        "angular_cmd": "0.000",
+        "teleop_enabled": "False",
+        "teleop_levels": "(0, 0)",
+        "esp_mode": "computer_control_mode"
+      },
+      "last_status": "PREVIEW: obstacles=261, front=1.23624505768097, goal=(2.19, 4.21), drive_enabled=True, tank_edge=0.92, walls_excluded=False, dock_phase=APPROACH_ENTRY, blocked=",
+      "log": "/tmp/kaboat_dock_trials/20261108_002727.jsonl"
+    },
+    "active_seconds": 8.77,
+    "closest_fixed_goal_m": null
+  },
+  {
+    "file": "20261108_003110.jsonl",
+    "summary": {
+      "outcome": "WAIT: marker goal stale",
+      "armed": true,
+      "entry_xy": [
+        2.413424674672027,
+        4.391359215365753
+      ],
+      "initial_xy": [
+        6.522833482410935,
+        1.5666867671611082
+      ],
+      "final_xy": [
+        6.5153564713588,
+        1.5647513161324242
+      ],
+      "nonzero_commands": 3,
+      "max_linear_cmd": 0.15,
+      "max_angular_cmd": 0.02626761989878145,
+      "final_distance_m": 4.981521522655324,
+      "final_yaw_deg": 148.13409907272407,
+      "actuator": {
+        "mode": "auto",
+        "left_pwm": "1500",
+        "right_pwm": "1500",
+        "backend_open": "True",
+        "last_send_ok": "True",
+        "send_fail_count": "0",
+        "linear_cmd": "0.000",
+        "angular_cmd": "0.000",
+        "teleop_enabled": "False",
+        "teleop_levels": "(0, 0)",
+        "esp_mode": "computer_control_mode"
+      },
+      "last_status": "STOP: dock stop requested",
+      "log": "/tmp/kaboat_dock_trials/20261108_003110.jsonl"
+    },
+    "active_seconds": 0.61,
+    "closest_fixed_goal_m": null
+  },
+  {
+    "file": "20261108_003313.jsonl",
+    "summary": {
+      "outcome": "STOP: trial time limit reached; explicit start required",
+      "armed": true,
+      "entry_xy": [
+        2.372153285417584,
+        4.428420147578864
+      ],
+      "initial_xy": [
+        6.750488541687453,
+        2.3058239824790996
+      ],
+      "final_xy": [
+        6.784357259941584,
+        2.3412982499633452
+      ],
+      "nonzero_commands": 147,
+      "max_linear_cmd": 0.15,
+      "max_angular_cmd": 0.1346796978172054,
+      "final_distance_m": 4.880944757760692,
+      "final_yaw_deg": 155.55063598952037,
+      "actuator": {
+        "mode": "auto",
+        "left_pwm": "1500",
+        "right_pwm": "1500",
+        "backend_open": "True",
+        "last_send_ok": "True",
+        "send_fail_count": "0",
+        "linear_cmd": "0.000",
+        "angular_cmd": "0.000",
+        "teleop_enabled": "False",
+        "teleop_levels": "(0, 0)",
+        "esp_mode": "computer_control_mode"
+      },
+      "last_status": "NO PLAN: obstacles=408, front=4.487361517164699, goal=(2.44, 4.64), drive_enabled=True, tank_edge=2.39, walls_excluded=False, dock_phase=-, blocked=ENTRY_PATH_NEAR_BOUNDARY",
+      "log": "/tmp/kaboat_dock_trials/20261108_003313.jsonl"
+    },
+    "active_seconds": 15.02,
+    "closest_fixed_goal_m": null
+  },
+  {
+    "file": "20261108_003942_existing.jsonl",
+    "summary": {
+      "outcome": "STOP: dock stop requested",
+      "armed": true,
+      "entry_xy": [
+        2.2098100206633466,
+        3.955240322846964
+      ],
+      "initial_xy": [
+        8.522635992359206,
+        2.738694762870352
+      ],
+      "final_xy": [
+        7.877499436815645,
+        3.0826538972184325
+      ],
+      "nonzero_commands": 442,
+      "max_linear_cmd": 0.22822371681247317,
+      "max_angular_cmd": 0.13789876821128053,
+      "final_distance_m": 5.734466879157639,
+      "actuator": {
+        "mode": "auto",
+        "left_pwm": "1500",
+        "right_pwm": "1500",
+        "backend_open": "True",
+        "last_send_ok": "True",
+        "send_fail_count": "0",
+        "linear_cmd": "0.000",
+        "angular_cmd": "0.000",
+        "teleop_enabled": "False",
+        "teleop_levels": "(0, 0)",
+        "esp_mode": "computer_control_mode"
+      },
+      "last_status": "PREVIEW: obstacles=272, front=1.7129997494287585, goal=(2.21, 3.89), drive_enabled=True, tank_edge=1.92, walls_excluded=False, dock_phase=, blocked=",
+      "log": "/tmp/kaboat_dock_trials/20261108_003942_existing.jsonl"
+    },
+    "active_seconds": 44.7,
+    "closest_fixed_goal_m": null
+  },
+  {
+    "file": "20261108_004958_existing.jsonl",
+    "summary": {
+      "outcome": "STOP: dock stop requested",
+      "armed": true,
+      "entry_xy": [
+        2.2485559591548476,
+        4.390476957992209
+      ],
+      "initial_xy": [
+        9.078365421116668,
+        1.1745815397139472
+      ],
+      "final_xy": [
+        8.710989331881002,
+        0.6484808957138021
+      ],
+      "nonzero_commands": 469,
+      "max_linear_cmd": 0.22822371681247317,
+      "max_angular_cmd": 0.31,
+      "final_distance_m": 7.46763547764832,
+      "actuator": {
+        "mode": "timeout",
+        "left_pwm": "1500",
+        "right_pwm": "1500",
+        "backend_open": "True",
+        "last_send_ok": "True",
+        "send_fail_count": "0",
+        "linear_cmd": "0.100",
+        "angular_cmd": "0.300",
+        "teleop_enabled": "False",
+        "teleop_levels": "(0, 0)",
+        "esp_mode": "computer_control_mode"
+      },
+      "last_status": "STOP: dock stop requested",
+      "log": "/tmp/kaboat_dock_trials/20261108_004958_existing.jsonl"
+    },
+    "active_seconds": 47.81,
+    "closest_fixed_goal_m": null
+  },
+  {
+    "file": "20261108_005106_existing.jsonl",
+    "summary": {
+      "outcome": "STOP: ESCAPE requested",
+      "armed": true,
+      "entry_xy": [
+        3.6950253144423097,
+        4.357283050534923
+      ],
+      "initial_xy": [
+        8.296867830026581,
+        0.6165728692531742
+      ],
+      "final_xy": [
+        8.51285385287438,
+        0.579777620770239
+      ],
+      "nonzero_commands": 5,
+      "max_linear_cmd": 0.023601528715548794,
+      "max_angular_cmd": 0.31,
+      "final_distance_m": 6.122174376610991,
+      "actuator": {
+        "mode": "auto",
+        "left_pwm": "1500",
+        "right_pwm": "1500",
+        "backend_open": "True",
+        "last_send_ok": "True",
+        "send_fail_count": "0",
+        "linear_cmd": "0.000",
+        "angular_cmd": "0.000",
+        "teleop_enabled": "False",
+        "teleop_levels": "(0, 0)",
+        "esp_mode": "computer_control_mode"
+      },
+      "last_status": "PREVIEW: obstacles=275, front=0.6291933938130236, goal=(3.61, 4.36), drive_enabled=True, tank_edge=0.58, walls_excluded=False, dock_phase=, blocked=",
+      "log": "/tmp/kaboat_dock_trials/20261108_005106_existing.jsonl"
+    },
+    "active_seconds": 0.68,
+    "closest_fixed_goal_m": null
+  },
+  {
+    "file": "20261108_005207_existing.jsonl",
+    "summary": {
+      "outcome": "STOP: cross-track limit",
+      "armed": true,
+      "entry_xy": [
+        2.1041441071677087,
+        4.197787180565281
+      ],
+      "initial_xy": [
+        8.758975800882983,
+        0.8101628510818496
+      ],
+      "final_xy": [
+        9.187001985640185,
+        1.3432967435889704
+      ],
+      "nonzero_commands": 125,
+      "max_linear_cmd": 0.22822371681247317,
+      "max_angular_cmd": 0.31,
+      "final_distance_m": 7.636425301240681,
+      "actuator": {
+        "mode": "auto",
+        "left_pwm": "1500",
+        "right_pwm": "1500",
+        "backend_open": "True",
+        "last_send_ok": "True",
+        "send_fail_count": "0",
+        "linear_cmd": "0.000",
+        "angular_cmd": "0.000",
+        "teleop_enabled": "False",
+        "teleop_levels": "(0, 0)",
+        "esp_mode": "computer_control_mode"
+      },
+      "last_status": "STOP: dock stop requested",
+      "log": "/tmp/kaboat_dock_trials/20261108_005207_existing.jsonl"
+    },
+    "active_seconds": 12.7,
+    "closest_fixed_goal_m": null
+  },
+  {
+    "file": "20261108_005328_existing.jsonl",
+    "summary": {
+      "outcome": "STOP: ESCAPE requested",
+      "armed": true,
+      "entry_xy": [
+        2.1566473955174583,
+        4.063350162955412
+      ],
+      "initial_xy": [
+        9.053208421287007,
+        1.814197959672072
+      ],
+      "final_xy": [
+        4.5405262701681774,
+        3.223473722208561
+      ],
+      "nonzero_commands": 84,
+      "max_linear_cmd": 0.22822371681247317,
+      "max_angular_cmd": 0.31,
+      "final_distance_m": 2.527502903010712,
+      "actuator": {
+        "mode": "auto",
+        "left_pwm": "1500",
+        "right_pwm": "1500",
+        "backend_open": "True",
+        "last_send_ok": "True",
+        "send_fail_count": "0",
+        "linear_cmd": "0.000",
+        "angular_cmd": "0.000",
+        "teleop_enabled": "False",
+        "teleop_levels": "(0, 0)",
+        "esp_mode": "computer_control_mode"
+      },
+      "last_status": "PREVIEW: obstacles=418, front=2.230478450334754, goal=(2.43, 4.13), drive_enabled=True, tank_edge=1.85, walls_excluded=False, dock_phase=, blocked=",
+      "log": "/tmp/kaboat_dock_trials/20261108_005328_existing.jsonl"
+    },
+    "active_seconds": 8.7,
+    "closest_fixed_goal_m": null
+  },
+  {
+    "file": "20261108_005554_existing.jsonl",
+    "summary": {
+      "outcome": "observation window ended; controller stopped by monitor",
+      "armed": true,
+      "entry_xy": [
+        2.228342876158637,
+        2.695328922082338
+      ],
+      "initial_xy": null,
+      "final_xy": [
+        3.285081581814582,
+        3.244122763421913
+      ],
+      "nonzero_commands": 599,
+      "max_linear_cmd": 0.22822371681247317,
+      "max_angular_cmd": 0.31,
+      "final_distance_m": 1.1907440414814805,
+      "actuator": {
+        "mode": "auto",
+        "left_pwm": "1500",
+        "right_pwm": "1500",
+        "backend_open": "True",
+        "last_send_ok": "True",
+        "send_fail_count": "0",
+        "linear_cmd": "0.000",
+        "angular_cmd": "0.000",
+        "teleop_enabled": "False",
+        "teleop_levels": "(0, 0)",
+        "esp_mode": "computer_control_mode"
+      },
+      "last_status": "PREVIEW: obstacles=433, front=1.380453584128557, goal=(2.36, 2.48), drive_enabled=True, tank_edge=1.75, walls_excluded=False, dock_phase=, blocked=",
+      "log": "/tmp/kaboat_dock_trials/20261108_005554_existing.jsonl"
+    },
+    "active_seconds": 60.08,
+    "closest_fixed_goal_m": 0.2816507384412776
+  },
+  {
+    "file": "20261108_010128_existing.jsonl",
+    "summary": {
+      "outcome": "WAIT: final yellow stop goal stale, stage=ENTRY",
+      "armed": true,
+      "entry_xy": [
+        1.5420491213725405,
+        2.668235936239829
+      ],
+      "initial_xy": [
+        9.157272161887349,
+        1.3736818181390658
+      ],
+      "final_xy": [
+        4.354773766113032,
+        2.134754221881393
+      ],
+      "nonzero_commands": 80,
+      "max_linear_cmd": 0.22822371681247317,
+      "max_angular_cmd": 0.31,
+      "final_distance_m": 2.8628696559021583,
+      "actuator": {
+        "mode": "auto",
+        "left_pwm": "1500",
+        "right_pwm": "1500",
+        "backend_open": "True",
+        "last_send_ok": "True",
+        "send_fail_count": "0",
+        "linear_cmd": "0.000",
+        "angular_cmd": "0.000",
+        "teleop_enabled": "False",
+        "teleop_levels": "(0, 0)",
+        "esp_mode": "computer_control_mode"
+      },
+      "last_status": "PREVIEW: obstacles=477, front=None, goal=(2.53, 2.51), drive_enabled=True, tank_edge=2.19, walls_excluded=False, dock_phase=, blocked=, stage=ENTRY",
+      "log": "/tmp/kaboat_dock_trials/20261108_010128_existing.jsonl"
+    },
+    "active_seconds": 8.31,
+    "closest_fixed_goal_m": null
+  },
+  {
+    "file": "20261108_010549_existing.jsonl",
+    "summary": {
+      "outcome": "WAIT: final yellow stop goal stale, stage=ENTRY",
+      "armed": true,
+      "entry_xy": [
+        1.4514043169086819,
+        2.1768913227156994
+      ],
+      "initial_xy": [
+        6.925602443379288,
+        1.7282125879702255
+      ],
+      "final_xy": [
+        3.8409196916439736,
+        2.154707131121359
+      ],
+      "nonzero_commands": 54,
+      "max_linear_cmd": 0.22822371681247317,
+      "max_angular_cmd": 0.31,
+      "final_distance_m": 2.3896183512128117,
+      "actuator": {
+        "mode": "auto",
+        "left_pwm": "1500",
+        "right_pwm": "1500",
+        "backend_open": "True",
+        "last_send_ok": "True",
+        "send_fail_count": "0",
+        "linear_cmd": "0.000",
+        "angular_cmd": "0.000",
+        "teleop_enabled": "False",
+        "teleop_levels": "(0, 0)",
+        "esp_mode": "computer_control_mode"
+      },
+      "last_status": "WAIT: marker goal stale, stage=ENTRY",
+      "log": "/tmp/kaboat_dock_trials/20261108_010549_existing.jsonl"
+    },
+    "active_seconds": 5.73,
+    "closest_fixed_goal_m": null
+  }
+]

@@ -1,0 +1,9 @@
+# rs_launch.py config_file expects a flat parameter dictionary.
+# Live images should not retain/retransmit old frames over Wi-Fi.
+color_qos: SENSOR_DATA
+depth_qos: SENSOR_DATA
+color_info_qos: SENSOR_DATA
+depth_info_qos: SENSOR_DATA
+
+# D400 High Accuracy runtime preset; camera calibration table is preserved.
+depth_module.visual_preset: 3

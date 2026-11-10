@@ -1,0 +1,1473 @@
+{"elapsed_s": 0.172, "event": "phase", "value": "existing B-spline avoidance controller; waiting for valid entry path"}
+{"elapsed_s": 0.224, "event": "progress", "value": {"armed": false, "status": null, "xy": null, "entry": null, "pwm": [null, null]}}
+{"elapsed_s": 0.364, "event": "status", "value": "PREVIEW: obstacles=321, front=0.5353005435961203, goal=(3.77, 4.01), drive_enabled=True, tank_edge=0.51, walls_excluded=False, dock_phase=, blocked="}
+{"elapsed_s": 0.438, "event": "command", "value": [1880.410997905, 0.0, 0.0]}
+{"elapsed_s": 0.515, "event": "status", "value": "PREVIEW: obstacles=320, front=0.5353005435961203, goal=(3.77, 4.02), drive_enabled=True, tank_edge=0.51, walls_excluded=False, dock_phase=, blocked="}
+{"elapsed_s": 0.543, "event": "command", "value": [1880.515861041, 0.0, 0.0]}
+{"elapsed_s": 0.609, "event": "status", "value": "PREVIEW: obstacles=320, front=0.5301284400824335, goal=(3.77, 4.02), drive_enabled=True, tank_edge=0.51, walls_excluded=False, dock_phase=, blocked="}
+{"elapsed_s": 0.637, "event": "command", "value": [1880.609180247, 0.0, 0.0]}
+{"elapsed_s": 0.659, "event": "odom", "value": [1880.631435056, 8.435191846524136, 0.5065502582106801, 115.5322477014236]}
+{"elapsed_s": 0.67, "event": "odom", "value": [1880.642531196, 8.43454528240172, 0.5062680997666218, 115.48421138809482]}
+{"elapsed_s": 0.703, "event": "odom", "value": [1880.675220909, 8.43454528240172, 0.5062680997666218, 115.48421138809482]}
+{"elapsed_s": 0.741, "event": "odom", "value": [1880.71407135, 8.434180744651908, 0.5079620278941303, 115.41231671062904]}
+{"elapsed_s": 0.773, "event": "odom", "value": [1880.745245626, 8.434180744651908, 0.5079620278941303, 115.41231671062904]}
+{"elapsed_s": 0.798, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 0.804, "event": "odom", "value": [1880.776617444, 8.432966034713907, 0.5084928226381558, 115.34186970505222]}
+{"elapsed_s": 0.805, "event": "command", "value": [1880.777150356, 0.0, 0.0]}
+{"elapsed_s": 0.839, "event": "odom", "value": [1880.811227022, 8.432966034713907, 0.5084928226381558, 115.34186970505222]}
+{"elapsed_s": 0.86, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 0.868, "event": "odom", "value": [1880.841026889, 8.432054795726792, 0.5081803505923881, 115.28711150677142]}
+{"elapsed_s": 0.891, "event": "command", "value": [1880.863706895, 0.0, 0.0]}
+{"elapsed_s": 0.916, "event": "odom", "value": [1880.888124329, 8.432054795726792, 0.5081803505923881, 115.28711150677142]}
+{"elapsed_s": 0.936, "event": "odom", "value": [1880.908292164, 8.432054795726792, 0.5081803505923881, 115.28711150677142]}
+{"elapsed_s": 0.94, "event": "status", "value": "PREVIEW: obstacles=319, front=0.5262834149919945, goal=(3.78, 4.04), drive_enabled=True, tank_edge=0.51, walls_excluded=False, dock_phase=, blocked="}
+{"elapsed_s": 0.969, "event": "odom", "value": [1880.941866159, 8.432054795726792, 0.5081803505923881, 115.28711150677142]}
+{"elapsed_s": 0.992, "event": "command", "value": [1880.964615927, 0.0, 0.0]}
+{"elapsed_s": 1.022, "event": "odom", "value": [1880.994500501, 8.430100440385727, 0.5084226991740313, 115.24804444589061]}
+{"elapsed_s": 1.04, "event": "odom", "value": [1881.012659379, 8.429438420390893, 0.508593391583354, 115.20427044723714]}
+{"elapsed_s": 1.041, "event": "status", "value": "PREVIEW: obstacles=316, front=0.5261858080571878, goal=(3.78, 4.04), drive_enabled=True, tank_edge=0.51, walls_excluded=False, dock_phase=, blocked="}
+{"elapsed_s": 1.07, "event": "odom", "value": [1881.043034399, 8.429438420390893, 0.508593391583354, 115.20427044723714]}
+{"elapsed_s": 1.094, "event": "command", "value": [1881.066708131, 0.0, 0.0]}
+{"elapsed_s": 1.124, "event": "odom", "value": [1881.096583648, 8.426478191834615, 0.5086672432178186, 115.15535775752619]}
+{"elapsed_s": 1.138, "event": "odom", "value": [1881.110179702, 8.426478191834615, 0.5086672432178186, 115.15535775752619]}
+{"elapsed_s": 1.139, "event": "status", "value": "PREVIEW: obstacles=318, front=0.5248601258730778, goal=(3.78, 4.04), drive_enabled=True, tank_edge=0.51, walls_excluded=False, dock_phase=, blocked="}
+{"elapsed_s": 1.17, "event": "odom", "value": [1881.142412218, 8.424247626409837, 0.5100751468005867, 115.0991972827894]}
+{"elapsed_s": 1.182, "event": "command", "value": [1881.154237307, 0.0, 0.0]}
+{"elapsed_s": 1.202, "event": "odom", "value": [1881.174411094, 8.424247626409837, 0.5100751468005867, 115.0991972827894]}
+{"elapsed_s": 1.237, "event": "odom", "value": [1881.209503023, 8.422523091610733, 0.5101604837046886, 115.03851918461959]}
+{"elapsed_s": 1.256, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 1.27, "event": "odom", "value": [1881.242377094, 8.422523091610733, 0.5101604837046886, 115.03851918461959]}
+{"elapsed_s": 1.279, "event": "command", "value": [1881.251115787, 0.0, 0.0]}
+{"elapsed_s": 1.302, "event": "odom", "value": [1881.275035766, 8.422523091610733, 0.5101604837046886, 115.03851918461959]}
+{"elapsed_s": 1.331, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 1.337, "event": "odom", "value": [1881.310016172, 8.42403075050619, 0.51173379122958, 114.97703336977655]}
+{"elapsed_s": 1.369, "event": "odom", "value": [1881.341393654, 8.422862668512563, 0.5102688398228291, 114.92800053458362]}
+{"elapsed_s": 1.381, "event": "command", "value": [1881.353512736, 0.0, 0.0]}
+{"elapsed_s": 1.419, "event": "odom", "value": [1881.391506095, 8.422862668512563, 0.5102688398228291, 114.92800053458362]}
+{"elapsed_s": 1.423, "event": "actuator", "value": {"mode": "auto", "left_pwm": "1500", "right_pwm": "1500", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.000", "angular_cmd": "0.000", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 1.431, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 1.438, "event": "odom", "value": [1881.410101979, 8.422862668512563, 0.5102688398228291, 114.92800053458362]}
+{"elapsed_s": 1.472, "event": "odom", "value": [1881.444558881, 8.42063634742248, 0.5088005490524408, 114.89150803982409]}
+{"elapsed_s": 1.479, "event": "command", "value": [1881.451307723, 0.0, 0.0]}
+{"elapsed_s": 1.508, "event": "odom", "value": [1881.480758843, 8.42063634742248, 0.5088005490524408, 114.89150803982409]}
+{"elapsed_s": 1.53, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 1.54, "event": "odom", "value": [1881.512525137, 8.421587327593226, 0.5100590938372356, 114.83598955628865]}
+{"elapsed_s": 1.569, "event": "odom", "value": [1881.541680984, 8.42080701980895, 0.5108052140117707, 114.77802471596948]}
+{"elapsed_s": 1.577, "event": "command", "value": [1881.549547299, 0.0, 0.0]}
+{"elapsed_s": 1.604, "event": "odom", "value": [1881.576973911, 8.42080701980895, 0.5108052140117707, 114.77802471596948]}
+{"elapsed_s": 1.637, "event": "odom", "value": [1881.609366079, 8.42080701980895, 0.5108052140117707, 114.77802471596948]}
+{"elapsed_s": 1.661, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 1.671, "event": "odom", "value": [1881.643969962, 8.419463677563922, 0.5108254140314005, 114.72501434753949]}
+{"elapsed_s": 1.677, "event": "command", "value": [1881.649381836, 0.0, 0.0]}
+{"elapsed_s": 1.71, "event": "odom", "value": [1881.68211891, 8.419463677563922, 0.5108254140314005, 114.72501434753949]}
+{"elapsed_s": 1.736, "event": "odom", "value": [1881.708878782, 8.419268441508272, 0.5112611060454764, 114.67105748694803]}
+{"elapsed_s": 1.75, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 1.769, "event": "odom", "value": [1881.74129607, 8.419268441508272, 0.5112611060454764, 114.67105748694803]}
+{"elapsed_s": 1.777, "event": "command", "value": [1881.749849958, 0.0, 0.0]}
+{"elapsed_s": 1.802, "event": "odom", "value": [1881.774431204, 8.419268441508272, 0.5112611060454764, 114.67105748694803]}
+{"elapsed_s": 1.836, "event": "odom", "value": [1881.808399292, 8.415210047905193, 0.5095910230225527, 114.6410179280187]}
+{"elapsed_s": 1.844, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 1.874, "event": "odom", "value": [1881.846384875, 8.415210047905193, 0.5095910230225527, 114.6410179280187]}
+{"elapsed_s": 1.88, "event": "command", "value": [1881.852480161, 0.0, 0.0]}
+{"elapsed_s": 1.903, "event": "odom", "value": [1881.875469008, 8.41300598268377, 0.509687741204355, 114.60378423819392]}
+{"elapsed_s": 1.936, "event": "odom", "value": [1881.908550156, 8.41300598268377, 0.509687741204355, 114.60378423819392]}
+{"elapsed_s": 1.943, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 1.971, "event": "odom", "value": [1881.943160759, 8.41300598268377, 0.509687741204355, 114.60378423819392]}
+{"elapsed_s": 1.977, "event": "command", "value": [1881.94975622, 0.0, 0.0]}
+{"elapsed_s": 2.012, "event": "odom", "value": [1881.984910262, 8.41300598268377, 0.509687741204355, 114.60378423819392]}
+{"elapsed_s": 2.029, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 2.035, "event": "odom", "value": [1882.007722976, 8.40966621828913, 0.5092353103513073, 114.52190749363636]}
+{"elapsed_s": 2.072, "event": "odom", "value": [1882.044344902, 8.40966621828913, 0.5092353103513073, 114.52190749363636]}
+{"elapsed_s": 2.081, "event": "command", "value": [1882.053345619, 0.0, 0.0]}
+{"elapsed_s": 2.105, "event": "odom", "value": [1882.077459972, 8.409435932274645, 0.5092839948888723, 114.48658340361148]}
+{"elapsed_s": 2.123, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 2.135, "event": "odom", "value": [1882.107591144, 8.409435932274645, 0.5092839948888723, 114.48658340361148]}
+{"elapsed_s": 2.17, "event": "odom", "value": [1882.14209704, 8.406632862946232, 0.5085799790993722, 114.45062105712097]}
+{"elapsed_s": 2.177, "event": "command", "value": [1882.14986316, 0.0, 0.0]}
+{"elapsed_s": 2.202, "event": "odom", "value": [1882.174686269, 8.406632862946232, 0.5085799790993722, 114.45062105712097]}
+{"elapsed_s": 2.235, "event": "odom", "value": [1882.207711736, 8.406632862946232, 0.5085799790993722, 114.45062105712097]}
+{"elapsed_s": 2.269, "event": "odom", "value": [1882.241751634, 8.407071644920197, 0.5090997098261913, 114.404537373056]}
+{"elapsed_s": 2.302, "event": "odom", "value": [1882.274260861, 8.407315436321827, 0.5112641326725249, 114.35478806074728]}
+{"elapsed_s": 2.307, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 2.31, "event": "command", "value": [1882.282386832, 0.0, 0.0]}
+{"elapsed_s": 2.335, "event": "odom", "value": [1882.307865513, 8.407315436321827, 0.5112641326725249, 114.35478806074728]}
+{"elapsed_s": 2.355, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 2.372, "event": "odom", "value": [1882.344729527, 8.407315436321827, 0.5112641326725249, 114.35478806074728]}
+{"elapsed_s": 2.377, "event": "command", "value": [1882.34992245, 0.0, 0.0]}
+{"elapsed_s": 2.405, "event": "odom", "value": [1882.377393127, 8.405212219515926, 0.5100822753304557, 114.32556619597692]}
+{"elapsed_s": 2.416, "event": "actuator", "value": {"mode": "auto", "left_pwm": "1500", "right_pwm": "1500", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.000", "angular_cmd": "0.000", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 2.43, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 2.435, "event": "odom", "value": [1882.407464618, 8.405212219515926, 0.5100822753304557, 114.32556619597692]}
+{"elapsed_s": 2.468, "event": "odom", "value": [1882.440955986, 8.403152196541098, 0.5084687144435089, 114.31815665998454]}
+{"elapsed_s": 2.477, "event": "command", "value": [1882.449272459, 0.0, 0.0]}
+{"elapsed_s": 2.503, "event": "odom", "value": [1882.475524412, 8.403152196541098, 0.5084687144435089, 114.31815665998454]}
+{"elapsed_s": 2.533, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 2.535, "event": "odom", "value": [1882.507670844, 8.403152196541098, 0.5084687144435089, 114.31815665998454]}
+{"elapsed_s": 2.569, "event": "odom", "value": [1882.541999774, 8.40124674959632, 0.5089006095527886, 114.29802693216878]}
+{"elapsed_s": 2.576, "event": "command", "value": [1882.549078578, 0.0, 0.0]}
+{"elapsed_s": 2.602, "event": "odom", "value": [1882.575048858, 8.40124674959632, 0.5089006095527886, 114.29802693216878]}
+{"elapsed_s": 2.949, "event": "odom", "value": [1882.921263842, 8.400319960377352, 0.5081597561184783, 114.27654027284781]}
+{"elapsed_s": 2.95, "event": "odom", "value": [1882.923042455, 8.39980712501397, 0.5086567547406391, 114.21862770679633]}
+{"elapsed_s": 2.951, "event": "command", "value": [1882.923383873, 0.0, 0.0]}
+{"elapsed_s": 2.953, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 2.956, "event": "odom", "value": [1882.928495866, 8.39980712501397, 0.5086567547406391, 114.21862770679633]}
+{"elapsed_s": 2.956, "event": "command", "value": [1882.929038154, 0.0, 0.0]}
+{"elapsed_s": 2.957, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 2.958, "event": "odom", "value": [1882.930988068, 8.398472663682941, 0.50843649655398, 114.19502075812869]}
+{"elapsed_s": 2.959, "event": "command", "value": [1882.931374512, 0.0, 0.0]}
+{"elapsed_s": 2.961, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 2.965, "event": "odom", "value": [1882.93748423, 8.399277155941054, 0.5101819821885797, 114.14763981421704]}
+{"elapsed_s": 2.965, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 2.97, "event": "odom", "value": [1882.94281255, 8.399277155941054, 0.5101819821885797, 114.14763981421704]}
+{"elapsed_s": 2.974, "event": "odom", "value": [1882.945863905, 8.399277155941054, 0.5101819821885797, 114.14763981421704]}
+{"elapsed_s": 2.981, "event": "command", "value": [1882.953657482, 0.0, 0.0]}
+{"elapsed_s": 3.002, "event": "odom", "value": [1882.974967494, 8.396744423998458, 0.5097673300640798, 114.13087785644694]}
+{"elapsed_s": 3.05, "event": "odom", "value": [1883.022346286, 8.396744423998458, 0.5097673300640798, 114.13087785644694]}
+{"elapsed_s": 3.078, "event": "odom", "value": [1883.050509111, 8.39725537608976, 0.5110260637055087, 114.08254951877993]}
+{"elapsed_s": 3.103, "event": "odom", "value": [1883.07552109, 8.39725537608976, 0.5110260637055087, 114.08254951877993]}
+{"elapsed_s": 3.11, "event": "command", "value": [1883.082875806, 0.0, 0.0]}
+{"elapsed_s": 3.111, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 3.136, "event": "odom", "value": [1883.10872205, 8.39630957746994, 0.5104930209230336, 114.06719835749897]}
+{"elapsed_s": 3.172, "event": "odom", "value": [1883.14451944, 8.39630957746994, 0.5104930209230336, 114.06719835749897]}
+{"elapsed_s": 3.19, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 3.205, "event": "command", "value": [1883.177223521, 0.0, 0.0]}
+{"elapsed_s": 3.219, "event": "odom", "value": [1883.191763667, 8.396829952872476, 0.5158204382339322, 113.98863635974637]}
+{"elapsed_s": 3.236, "event": "odom", "value": [1883.208797808, 8.396829952872476, 0.5158204382339322, 113.98863635974637]}
+{"elapsed_s": 3.253, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 3.269, "event": "odom", "value": [1883.241542178, 8.395774306964556, 0.5133123468323437, 113.96266936042345]}
+{"elapsed_s": 3.284, "event": "command", "value": [1883.256686535, 0.0, 0.0]}
+{"elapsed_s": 3.305, "event": "odom", "value": [1883.277343952, 8.395774306964556, 0.5133123468323437, 113.96266936042345]}
+{"elapsed_s": 3.324, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 3.34, "event": "odom", "value": [1883.312074654, 8.395774306964556, 0.5133123468323437, 113.96266936042345]}
+{"elapsed_s": 3.373, "event": "odom", "value": [1883.345567046, 8.393984955419656, 0.5137189545347838, 113.92430581154986]}
+{"elapsed_s": 3.377, "event": "command", "value": [1883.349556381, 0.0, 0.0]}
+{"elapsed_s": 3.404, "event": "odom", "value": [1883.376984081, 8.393984955419656, 0.5137189545347838, 113.92430581154986]}
+{"elapsed_s": 3.419, "event": "actuator", "value": {"mode": "auto", "left_pwm": "1500", "right_pwm": "1500", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.000", "angular_cmd": "0.000", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 3.425, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 3.438, "event": "odom", "value": [1883.410228466, 8.393231005905164, 0.5150625409432877, 113.86575562007562]}
+{"elapsed_s": 3.472, "event": "odom", "value": [1883.444763834, 8.391161504585291, 0.5129281583255278, 113.84205616495062]}
+{"elapsed_s": 3.482, "event": "command", "value": [1883.454309911, 0.0, 0.0]}
+{"elapsed_s": 3.504, "event": "odom", "value": [1883.476872473, 8.391161504585291, 0.5129281583255278, 113.84205616495062]}
+{"elapsed_s": 3.535, "event": "odom", "value": [1883.508049117, 8.391161504585291, 0.5129281583255278, 113.84205616495062]}
+{"elapsed_s": 3.545, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 3.571, "event": "odom", "value": [1883.543298138, 8.391161504585291, 0.5129281583255278, 113.84205616495062]}
+{"elapsed_s": 3.579, "event": "command", "value": [1883.55114938, 0.0, 0.0]}
+{"elapsed_s": 3.612, "event": "odom", "value": [1883.584193695, 8.389124497663405, 0.5123144652741903, 113.8214006174515]}
+{"elapsed_s": 3.639, "event": "odom", "value": [1883.611565169, 8.389780725920366, 0.5122903218215121, 113.7924177185849]}
+{"elapsed_s": 3.672, "event": "odom", "value": [1883.644546827, 8.389780725920366, 0.5122903218215121, 113.7924177185849]}
+{"elapsed_s": 3.705, "event": "odom", "value": [1883.67779614, 8.388449686028174, 0.51235803922889, 113.76054660101312]}
+{"elapsed_s": 3.712, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 3.714, "event": "command", "value": [1883.686204615, 0.0, 0.0]}
+{"elapsed_s": 3.738, "event": "odom", "value": [1883.710775973, 8.388449686028174, 0.51235803922889, 113.76054660101312]}
+{"elapsed_s": 3.761, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 3.769, "event": "odom", "value": [1883.741484218, 8.388449686028174, 0.51235803922889, 113.76054660101312]}
+{"elapsed_s": 3.777, "event": "command", "value": [1883.749244098, 0.0, 0.0]}
+{"elapsed_s": 3.805, "event": "odom", "value": [1883.777359242, 8.386473121105158, 0.5147650223712227, 113.71367438497667]}
+{"elapsed_s": 3.839, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 3.842, "event": "odom", "value": [1883.814171061, 8.386473121105158, 0.5147650223712227, 113.71367438497667]}
+{"elapsed_s": 3.87, "event": "odom", "value": [1883.84231443, 8.384599407898701, 0.5138775901172651, 113.69298666810752]}
+{"elapsed_s": 3.877, "event": "command", "value": [1883.849813406, 0.0, 0.0]}
+{"elapsed_s": 3.905, "event": "odom", "value": [1883.877576891, 8.384599407898701, 0.5138775901172651, 113.69298666810752]}
+{"elapsed_s": 3.934, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 3.937, "event": "odom", "value": [1883.909816926, 8.385214644034214, 0.5143802863802112, 113.64698944832872]}
+{"elapsed_s": 3.969, "event": "odom", "value": [1883.941579731, 8.385214644034214, 0.5143802863802112, 113.64698944832872]}
+{"elapsed_s": 3.978, "event": "command", "value": [1883.950455708, 0.0, 0.0]}
+{"elapsed_s": 4.007, "event": "odom", "value": [1883.979399996, 8.382975208298202, 0.5129370836407446, 113.6332174326919]}
+{"elapsed_s": 4.035, "event": "odom", "value": [1884.00804338, 8.382975208298202, 0.5129370836407446, 113.6332174326919]}
+{"elapsed_s": 4.037, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 4.069, "event": "odom", "value": [1884.041906535, 8.383323484680123, 0.513351024593149, 113.60493090886499]}
+{"elapsed_s": 4.077, "event": "command", "value": [1884.049529899, 0.0, 0.0]}
+{"elapsed_s": 4.104, "event": "odom", "value": [1884.076947326, 8.383323484680123, 0.513351024593149, 113.60493090886499]}
+{"elapsed_s": 4.135, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 4.137, "event": "odom", "value": [1884.109983705, 8.383323484680123, 0.513351024593149, 113.60493090886499]}
+{"elapsed_s": 4.169, "event": "odom", "value": [1884.141570632, 8.382908131259306, 0.5145422747168786, 113.55706686998695]}
+{"elapsed_s": 4.177, "event": "command", "value": [1884.149621849, 0.0, 0.0]}
+{"elapsed_s": 4.203, "event": "odom", "value": [1884.175615201, 8.38038702108581, 0.5139200960845816, 113.53090390179047]}
+{"elapsed_s": 4.237, "event": "odom", "value": [1884.209207788, 8.38038702108581, 0.5139200960845816, 113.53090390179047]}
+{"elapsed_s": 4.242, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 4.273, "event": "odom", "value": [1884.245173855, 8.378099777160347, 0.5127377498465717, 113.52204076903632]}
+{"elapsed_s": 4.277, "event": "command", "value": [1884.249909036, 0.0, 0.0]}
+{"elapsed_s": 4.302, "event": "odom", "value": [1884.274776147, 8.378099777160347, 0.5127377498465717, 113.52204076903632]}
+{"elapsed_s": 4.322, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 4.336, "event": "odom", "value": [1884.308152088, 8.378099777160347, 0.5127377498465717, 113.52204076903632]}
+{"elapsed_s": 4.369, "event": "odom", "value": [1884.341468443, 8.378099777160347, 0.5127377498465717, 113.52204076903632]}
+{"elapsed_s": 4.379, "event": "command", "value": [1884.351452101, 0.0, 0.0]}
+{"elapsed_s": 4.408, "event": "odom", "value": [1884.380099453, 8.378868200510139, 0.5128448413786805, 113.50587253595444]}
+{"elapsed_s": 4.418, "event": "actuator", "value": {"mode": "auto", "left_pwm": "1500", "right_pwm": "1500", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.000", "angular_cmd": "0.000", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 4.444, "event": "odom", "value": [1884.416829798, 8.37870550372622, 0.51491540720986, 113.46427090843531]}
+{"elapsed_s": 4.445, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 4.47, "event": "odom", "value": [1884.442592775, 8.37870550372622, 0.51491540720986, 113.46427090843531]}
+{"elapsed_s": 4.483, "event": "command", "value": [1884.455970135, 0.0, 0.0]}
+{"elapsed_s": 4.502, "event": "odom", "value": [1884.474386781, 8.376444617015276, 0.5151965037822233, 113.43502752794834]}
+{"elapsed_s": 4.537, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 4.539, "event": "odom", "value": [1884.511968415, 8.376444617015276, 0.5151965037822233, 113.43502752794834]}
+{"elapsed_s": 4.57, "event": "odom", "value": [1884.542202278, 8.374046725464767, 0.5154020518061231, 113.41536329618152]}
+{"elapsed_s": 4.577, "event": "command", "value": [1884.549346716, 0.0, 0.0]}
+{"elapsed_s": 4.604, "event": "odom", "value": [1884.576203902, 8.374046725464767, 0.5154020518061231, 113.41536329618152]}
+{"elapsed_s": 4.635, "event": "odom", "value": [1884.607988787, 8.373063756632678, 0.5162212229396892, 113.37972476331063]}
+{"elapsed_s": 4.637, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 4.669, "event": "odom", "value": [1884.64157011, 8.373063756632678, 0.5162212229396892, 113.37972476331063]}
+{"elapsed_s": 4.677, "event": "command", "value": [1884.649435593, 0.0, 0.0]}
+{"elapsed_s": 4.702, "event": "odom", "value": [1884.674572984, 8.372526758804195, 0.5155289476912043, 113.3559558081196]}
+{"elapsed_s": 4.736, "event": "odom", "value": [1884.708260134, 8.372526758804195, 0.5155289476912043, 113.3559558081196]}
+{"elapsed_s": 4.756, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 4.769, "event": "odom", "value": [1884.741587145, 8.372526758804195, 0.5155289476912043, 113.3559558081196]}
+{"elapsed_s": 4.776, "event": "command", "value": [1884.748835426, 0.0, 0.0]}
+{"elapsed_s": 4.802, "event": "odom", "value": [1884.774361404, 8.373761364441554, 0.5155545426558341, 113.33138330436522]}
+{"elapsed_s": 4.825, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 4.837, "event": "odom", "value": [1884.809445268, 8.373761364441554, 0.5155545426558341, 113.33138330436522]}
+{"elapsed_s": 4.871, "event": "odom", "value": [1884.843636465, 8.373477457841112, 0.5173875855628229, 113.27744733304763]}
+{"elapsed_s": 4.885, "event": "command", "value": [1884.857176133, 0.0, 0.0]}
+{"elapsed_s": 4.902, "event": "odom", "value": [1884.874970456, 8.373477457841112, 0.5173875855628229, 113.27744733304763]}
+{"elapsed_s": 4.933, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 4.938, "event": "odom", "value": [1884.910278327, 8.373477457841112, 0.5173875855628229, 113.27744733304763]}
+{"elapsed_s": 4.972, "event": "odom", "value": [1884.94494621, 8.372891391108897, 0.517695344111653, 113.2302198125307]}
+{"elapsed_s": 4.977, "event": "command", "value": [1884.950048826, 0.0, 0.0]}
+{"elapsed_s": 5.002, "event": "odom", "value": [1884.974362192, 8.370956922855644, 0.5174302530471501, 113.19840222670832]}
+{"elapsed_s": 5.035, "event": "odom", "value": [1885.007661843, 8.370956922855644, 0.5174302530471501, 113.19840222670832]}
+{"elapsed_s": 5.036, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 5.071, "event": "odom", "value": [1885.043100597, 8.370001877827622, 0.518520799304113, 113.14932957391517]}
+{"elapsed_s": 5.077, "event": "command", "value": [1885.049477619, 0.0, 0.0]}
+{"elapsed_s": 5.102, "event": "odom", "value": [1885.074824424, 8.370001877827622, 0.518520799304113, 113.14932957391517]}
+{"elapsed_s": 5.138, "event": "odom", "value": [1885.110802522, 8.369976511978425, 0.5190469606047805, 113.09946370774183]}
+{"elapsed_s": 5.169, "event": "odom", "value": [1885.14147531, 8.369976511978425, 0.5190469606047805, 113.09946370774183]}
+{"elapsed_s": 5.171, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 5.176, "event": "command", "value": [1885.148733415, 0.0, 0.0]}
+{"elapsed_s": 5.206, "event": "odom", "value": [1885.1787538, 8.369976511978425, 0.5190469606047805, 113.09946370774183]}
+{"elapsed_s": 5.222, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 5.237, "event": "odom", "value": [1885.209296792, 8.368031218376172, 0.5189080373846677, 113.07016233573927]}
+{"elapsed_s": 5.238, "event": "progress", "value": {"armed": false, "status": "WAIT: marker goal stale", "xy": [8.368031218376172, 0.5189080373846677], "entry": [3.777564813320721, 4.036441788751842], "pwm": ["1500", "1500"]}}
+{"elapsed_s": 5.269, "event": "odom", "value": [1885.241466488, 8.368031218376172, 0.5189080373846677, 113.07016233573927]}
+{"elapsed_s": 5.284, "event": "command", "value": [1885.25667171, 0.0, 0.0]}
+{"elapsed_s": 5.302, "event": "odom", "value": [1885.274573813, 8.366122620765358, 0.5166635238742879, 113.05133443062809]}
+{"elapsed_s": 5.328, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 5.336, "event": "odom", "value": [1885.308793203, 8.366122620765358, 0.5166635238742879, 113.05133443062809]}
+{"elapsed_s": 5.372, "event": "odom", "value": [1885.344362489, 8.363366596210595, 0.5172368663527561, 113.0228007386473]}
+{"elapsed_s": 5.377, "event": "command", "value": [1885.349123527, 0.0, 0.0]}
+{"elapsed_s": 5.403, "event": "odom", "value": [1885.375702113, 8.363366596210595, 0.5172368663527561, 113.0228007386473]}
+{"elapsed_s": 5.416, "event": "actuator", "value": {"mode": "auto", "left_pwm": "1500", "right_pwm": "1500", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.000", "angular_cmd": "0.000", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 5.426, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 5.436, "event": "odom", "value": [1885.408548918, 8.363295999933555, 0.5194052560978402, 112.9699322423093]}
+{"elapsed_s": 5.473, "event": "odom", "value": [1885.445371937, 8.363295999933555, 0.5194052560978402, 112.9699322423093]}
+{"elapsed_s": 5.477, "event": "command", "value": [1885.449357656, 0.0, 0.0]}
+{"elapsed_s": 5.503, "event": "odom", "value": [1885.475132698, 8.363295999933555, 0.5194052560978402, 112.9699322423093]}
+{"elapsed_s": 5.525, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 5.535, "event": "odom", "value": [1885.507197815, 8.36384999895164, 0.5190048781527423, 112.93318627853245]}
+{"elapsed_s": 5.569, "event": "odom", "value": [1885.541151597, 8.36384999895164, 0.5190048781527423, 112.93318627853245]}
+{"elapsed_s": 5.577, "event": "command", "value": [1885.549655787, 0.0, 0.0]}
+{"elapsed_s": 5.605, "event": "odom", "value": [1885.577706417, 8.36384999895164, 0.5190048781527423, 112.93318627853245]}
+{"elapsed_s": 5.637, "event": "odom", "value": [1885.609434916, 8.363750713459597, 0.5179697215592387, 112.90806751857578]}
+{"elapsed_s": 5.638, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 5.669, "event": "odom", "value": [1885.641714184, 8.361561685758705, 0.5167767756042037, 112.88318993427427]}
+{"elapsed_s": 5.678, "event": "command", "value": [1885.650669588, 0.0, 0.0]}
+{"elapsed_s": 5.704, "event": "odom", "value": [1885.67632757, 8.361561685758705, 0.5167767756042037, 112.88318993427427]}
+{"elapsed_s": 5.733, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 5.735, "event": "odom", "value": [1885.707843295, 8.361052120806264, 0.5172899762808598, 112.85351103704427]}
+{"elapsed_s": 5.772, "event": "odom", "value": [1885.743964949, 8.361052120806264, 0.5172899762808598, 112.85351103704427]}
+{"elapsed_s": 5.777, "event": "command", "value": [1885.749467577, 0.0, 0.0]}
+{"elapsed_s": 5.802, "event": "odom", "value": [1885.774118329, 8.361052120806264, 0.5172899762808598, 112.85351103704427]}
+{"elapsed_s": 5.826, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 5.843, "event": "odom", "value": [1885.815237221, 8.361052120806264, 0.5172899762808598, 112.85351103704427]}
+{"elapsed_s": 5.869, "event": "odom", "value": [1885.841173579, 8.361052120806264, 0.5172899762808598, 112.85351103704427]}
+{"elapsed_s": 5.877, "event": "command", "value": [1885.849559877, 0.0, 0.0]}
+{"elapsed_s": 5.902, "event": "odom", "value": [1885.874213317, 8.360041969372373, 0.5178199219704457, 112.79145740409648]}
+{"elapsed_s": 5.937, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 5.944, "event": "odom", "value": [1885.916980322, 8.35918402157669, 0.5173257309700007, 112.76049114769287]}
+{"elapsed_s": 5.969, "event": "odom", "value": [1885.941230806, 8.35918402157669, 0.5173257309700007, 112.76049114769287]}
+{"elapsed_s": 5.977, "event": "command", "value": [1885.949505869, 0.0, 0.0]}
+{"elapsed_s": 6.002, "event": "odom", "value": [1885.974360595, 8.35918402157669, 0.5173257309700007, 112.76049114769287]}
+{"elapsed_s": 6.023, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 6.037, "event": "odom", "value": [1886.009505836, 8.357213476413214, 0.516613899748029, 112.7438541876551]}
+{"elapsed_s": 6.074, "event": "odom", "value": [1886.046920681, 8.357213476413214, 0.516613899748029, 112.7438541876551]}
+{"elapsed_s": 6.077, "event": "command", "value": [1886.04914606, 0.0, 0.0]}
+{"elapsed_s": 6.102, "event": "odom", "value": [1886.074833835, 8.356959187496754, 0.5165821770862653, 112.72139202111777]}
+{"elapsed_s": 6.135, "event": "odom", "value": [1886.108061803, 8.356959187496754, 0.5165821770862653, 112.72139202111777]}
+{"elapsed_s": 6.151, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 6.169, "event": "odom", "value": [1886.141107141, 8.355867880012802, 0.5156862412832577, 112.70053973203339]}
+{"elapsed_s": 6.177, "event": "command", "value": [1886.149272921, 0.0, 0.0]}
+{"elapsed_s": 6.204, "event": "odom", "value": [1886.176522343, 8.355867880012802, 0.5156862412832577, 112.70053973203339]}
+{"elapsed_s": 6.236, "event": "odom", "value": [1886.208336604, 8.355867880012802, 0.5156862412832577, 112.70053973203339]}
+{"elapsed_s": 6.241, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 6.27, "event": "odom", "value": [1886.242834306, 8.35395828402272, 0.5161289737786935, 112.68221769866176]}
+{"elapsed_s": 6.28, "event": "command", "value": [1886.252908719, 0.0, 0.0]}
+{"elapsed_s": 6.304, "event": "odom", "value": [1886.276751191, 8.35395828402272, 0.5161289737786935, 112.68221769866176]}
+{"elapsed_s": 6.342, "event": "odom", "value": [1886.31411253, 8.35395828402272, 0.5161289737786935, 112.68221769866176]}
+{"elapsed_s": 6.358, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 6.373, "event": "odom", "value": [1886.345621791, 8.35395828402272, 0.5161289737786935, 112.68221769866176]}
+{"elapsed_s": 6.383, "event": "command", "value": [1886.356085431, 0.0, 0.0]}
+{"elapsed_s": 6.405, "event": "odom", "value": [1886.377255791, 8.35395828402272, 0.5161289737786935, 112.68221769866176]}
+{"elapsed_s": 6.417, "event": "actuator", "value": {"mode": "auto", "left_pwm": "1500", "right_pwm": "1500", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.000", "angular_cmd": "0.000", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 6.44, "event": "odom", "value": [1886.412975194, 8.353443117439616, 0.5160984047951069, 112.66477601568894]}
+{"elapsed_s": 6.441, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 6.477, "event": "odom", "value": [1886.449798853, 8.353443117439616, 0.5160984047951069, 112.66477601568894]}
+{"elapsed_s": 6.479, "event": "command", "value": [1886.451362292, 0.0, 0.0]}
+{"elapsed_s": 6.506, "event": "odom", "value": [1886.478284471, 8.353443117439616, 0.5160984047951069, 112.66477601568894]}
+{"elapsed_s": 6.526, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 6.536, "event": "odom", "value": [1886.508714436, 8.353443117439616, 0.5160984047951069, 112.66477601568894]}
+{"elapsed_s": 6.572, "event": "odom", "value": [1886.5449087, 8.352016432648444, 0.5172425380520063, 112.57965235231322]}
+{"elapsed_s": 6.576, "event": "command", "value": [1886.548811409, 0.0, 0.0]}
+{"elapsed_s": 6.602, "event": "odom", "value": [1886.574658069, 8.352142877669838, 0.517644363309882, 112.54244336835326]}
+{"elapsed_s": 6.642, "event": "odom", "value": [1886.614986025, 8.352142877669838, 0.517644363309882, 112.54244336835326]}
+{"elapsed_s": 6.648, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 6.668, "event": "odom", "value": [1886.640883886, 8.349117833456626, 0.5170965883061178, 112.52523218134415]}
+{"elapsed_s": 6.677, "event": "command", "value": [1886.649694261, 0.0, 0.0]}
+{"elapsed_s": 6.702, "event": "odom", "value": [1886.674501529, 8.349117833456626, 0.5170965883061178, 112.52523218134415]}
+{"elapsed_s": 6.737, "event": "odom", "value": [1886.709434444, 8.349117833456626, 0.5170965883061178, 112.52523218134415]}
+{"elapsed_s": 6.772, "event": "odom", "value": [1886.745049235, 8.349489934215091, 0.517940745294463, 112.48264410885241]}
+{"elapsed_s": 6.802, "event": "odom", "value": [1886.774177368, 8.349489934215091, 0.517940745294463, 112.48264410885241]}
+{"elapsed_s": 6.804, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 6.809, "event": "command", "value": [1886.78140792, 0.0, 0.0]}
+{"elapsed_s": 6.836, "event": "odom", "value": [1886.808486456, 8.348595831091549, 0.5174094972928214, 112.46434233985286]}
+{"elapsed_s": 6.869, "event": "odom", "value": [1886.841654902, 8.348595831091549, 0.5174094972928214, 112.46434233985286]}
+{"elapsed_s": 6.874, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 6.88, "event": "command", "value": [1886.852918534, 0.0, 0.0]}
+{"elapsed_s": 6.902, "event": "odom", "value": [1886.874110399, 8.34821222857116, 0.5198661657950547, 112.42079815198402]}
+{"elapsed_s": 6.928, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 6.938, "event": "odom", "value": [1886.910751364, 8.34821222857116, 0.5198661657950547, 112.42079815198402]}
+{"elapsed_s": 6.97, "event": "odom", "value": [1886.942892452, 8.34620771295993, 0.5179900346392398, 112.40624729391136]}
+{"elapsed_s": 6.978, "event": "command", "value": [1886.950165533, 0.0, 0.0]}
+{"elapsed_s": 7.006, "event": "odom", "value": [1886.978880374, 8.34620771295993, 0.5179900346392398, 112.40624729391136]}
+{"elapsed_s": 7.026, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 7.042, "event": "odom", "value": [1887.014974059, 8.345240008663895, 0.5179587268338806, 112.37352425707724]}
+{"elapsed_s": 7.07, "event": "odom", "value": [1887.042303707, 8.345240008663895, 0.5179587268338806, 112.37352425707724]}
+{"elapsed_s": 7.082, "event": "command", "value": [1887.054137244, 0.0, 0.0]}
+{"elapsed_s": 7.103, "event": "odom", "value": [1887.07525125, 8.34624625704732, 0.519360127640183, 112.31876274651044]}
+{"elapsed_s": 7.135, "event": "odom", "value": [1887.107673338, 8.34624625704732, 0.519360127640183, 112.31876274651044]}
+{"elapsed_s": 7.152, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 7.171, "event": "odom", "value": [1887.143501959, 8.34624625704732, 0.519360127640183, 112.31876274651044]}
+{"elapsed_s": 7.179, "event": "command", "value": [1887.151489398, 0.0, 0.0]}
+{"elapsed_s": 7.204, "event": "odom", "value": [1887.176707878, 8.343404153079454, 0.5184662118044434, 112.2887582906077]}
+{"elapsed_s": 7.237, "event": "odom", "value": [1887.209233649, 8.341229370112437, 0.5184628102274946, 112.26499228190823]}
+{"elapsed_s": 7.243, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 7.271, "event": "odom", "value": [1887.243478287, 8.341229370112437, 0.5184628102274946, 112.26499228190823]}
+{"elapsed_s": 7.278, "event": "command", "value": [1887.250481184, 0.0, 0.0]}
+{"elapsed_s": 7.303, "event": "odom", "value": [1887.275899191, 8.341229370112437, 0.5184628102274946, 112.26499228190823]}
+{"elapsed_s": 7.339, "event": "odom", "value": [1887.311847912, 8.339659280997187, 0.517689990609414, 112.2434093265165]}
+{"elapsed_s": 7.34, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 7.369, "event": "odom", "value": [1887.341506461, 8.339659280997187, 0.517689990609414, 112.2434093265165]}
+{"elapsed_s": 7.377, "event": "command", "value": [1887.349124481, 0.0, 0.0]}
+{"elapsed_s": 7.403, "event": "odom", "value": [1887.375563478, 8.3388358363902, 0.5177690981942122, 112.21861187317515]}
+{"elapsed_s": 7.419, "event": "actuator", "value": {"mode": "auto", "left_pwm": "1500", "right_pwm": "1500", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.000", "angular_cmd": "0.000", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 7.425, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 7.437, "event": "odom", "value": [1887.409902487, 8.3388358363902, 0.5177690981942122, 112.21861187317515]}
+{"elapsed_s": 7.469, "event": "odom", "value": [1887.441678283, 8.337037062664656, 0.5179704524493304, 112.18932181309617]}
+{"elapsed_s": 7.478, "event": "command", "value": [1887.450269387, 0.0, 0.0]}
+{"elapsed_s": 7.507, "event": "odom", "value": [1887.479865983, 8.337037062664656, 0.5179704524493304, 112.18932181309617]}
+{"elapsed_s": 7.539, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 7.541, "event": "odom", "value": [1887.513879702, 8.33836901548731, 0.5187014196257129, 112.15021613725615]}
+{"elapsed_s": 7.569, "event": "odom", "value": [1887.541207142, 8.33836901548731, 0.5187014196257129, 112.15021613725615]}
+{"elapsed_s": 7.578, "event": "command", "value": [1887.550435897, 0.0, 0.0]}
+{"elapsed_s": 7.602, "event": "odom", "value": [1887.574793328, 8.336919499211923, 0.5187420280152059, 112.12524903904125]}
+{"elapsed_s": 7.635, "event": "odom", "value": [1887.60795803, 8.336919499211923, 0.5187420280152059, 112.12524903904125]}
+{"elapsed_s": 7.641, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 7.668, "event": "odom", "value": [1887.640755713, 8.336919499211923, 0.5187420280152059, 112.12524903904125]}
+{"elapsed_s": 7.677, "event": "command", "value": [1887.649327521, 0.0, 0.0]}
+{"elapsed_s": 7.703, "event": "odom", "value": [1887.67518426, 8.334577709184792, 0.5195192047475921, 112.10268055982624]}
+{"elapsed_s": 7.737, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 7.74, "event": "odom", "value": [1887.712175572, 8.334577709184792, 0.5195192047475921, 112.10268055982624]}
+{"elapsed_s": 7.77, "event": "odom", "value": [1887.742906985, 8.334577709184792, 0.5195192047475921, 112.10268055982624]}
+{"elapsed_s": 7.777, "event": "command", "value": [1887.750090367, 0.0, 0.0]}
+{"elapsed_s": 7.802, "event": "odom", "value": [1887.774413941, 8.331987629954845, 0.5196320939791363, 112.08524003641935]}
+{"elapsed_s": 7.828, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 7.837, "event": "odom", "value": [1887.809210756, 8.330273221017734, 0.5198196834769649, 112.06447990612831]}
+{"elapsed_s": 7.869, "event": "odom", "value": [1887.841892595, 8.330273221017734, 0.5198196834769649, 112.06447990612831]}
+{"elapsed_s": 7.882, "event": "command", "value": [1887.854157697, 0.0, 0.0]}
+{"elapsed_s": 7.904, "event": "odom", "value": [1887.876551645, 8.33170504026196, 0.5210473759114443, 112.02307767681997]}
+{"elapsed_s": 7.926, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 7.938, "event": "odom", "value": [1887.910267691, 8.33170504026196, 0.5210473759114443, 112.02307767681997]}
+{"elapsed_s": 7.969, "event": "odom", "value": [1887.941505775, 8.33170504026196, 0.5210473759114443, 112.02307767681997]}
+{"elapsed_s": 7.977, "event": "command", "value": [1887.949855336, 0.0, 0.0]}
+{"elapsed_s": 8.002, "event": "odom", "value": [1887.974332963, 8.328207231801962, 0.5211487812512837, 112.00561219177081]}
+{"elapsed_s": 8.026, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 8.037, "event": "odom", "value": [1888.009214164, 8.328207231801962, 0.5211487812512837, 112.00561219177081]}
+{"elapsed_s": 8.072, "event": "odom", "value": [1888.044445903, 8.32877587570845, 0.5216269562477102, 111.9722233086702]}
+{"elapsed_s": 8.077, "event": "command", "value": [1888.049127707, 0.0, 0.0]}
+{"elapsed_s": 8.105, "event": "odom", "value": [1888.077557547, 8.32877587570845, 0.5216269562477102, 111.9722233086702]}
+{"elapsed_s": 8.134, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 8.138, "event": "odom", "value": [1888.110607173, 8.32825091749108, 0.5212862670581279, 111.93880745664556]}
+{"elapsed_s": 8.169, "event": "odom", "value": [1888.141677348, 8.32825091749108, 0.5212862670581279, 111.93880745664556]}
+{"elapsed_s": 8.177, "event": "command", "value": [1888.149187204, 0.0, 0.0]}
+{"elapsed_s": 8.202, "event": "odom", "value": [1888.174206767, 8.325604909534803, 0.520197190674396, 111.91522018972273]}
+{"elapsed_s": 8.238, "event": "odom", "value": [1888.210380358, 8.325604909534803, 0.520197190674396, 111.91522018972273]}
+{"elapsed_s": 8.27, "event": "odom", "value": [1888.242970483, 8.325174780255072, 0.5218757161672889, 111.87771381817541]}
+{"elapsed_s": 8.283, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 8.289, "event": "command", "value": [1888.261869063, 0.0, 0.0]}
+{"elapsed_s": 8.304, "event": "odom", "value": [1888.276114896, 8.325174780255072, 0.5218757161672889, 111.87771381817541]}
+{"elapsed_s": 8.337, "event": "odom", "value": [1888.309337519, 8.325174780255072, 0.5218757161672889, 111.87771381817541]}
+{"elapsed_s": 8.337, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 8.371, "event": "odom", "value": [1888.343119295, 8.32547708624554, 0.5217262620234409, 111.8493020081982]}
+{"elapsed_s": 8.376, "event": "command", "value": [1888.34890126, 0.0, 0.0]}
+{"elapsed_s": 8.403, "event": "odom", "value": [1888.37592117, 8.32547708624554, 0.5217262620234409, 111.8493020081982]}
+{"elapsed_s": 8.417, "event": "actuator", "value": {"mode": "auto", "left_pwm": "1500", "right_pwm": "1500", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.000", "angular_cmd": "0.000", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 8.437, "event": "odom", "value": [1888.409422202, 8.322749655928916, 0.5209039409855551, 111.83069739094636]}
+{"elapsed_s": 8.446, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 8.47, "event": "odom", "value": [1888.44208356, 8.322749655928916, 0.5209039409855551, 111.83069739094636]}
+{"elapsed_s": 8.477, "event": "command", "value": [1888.449547623, 0.0, 0.0]}
+{"elapsed_s": 8.502, "event": "odom", "value": [1888.474921916, 8.322114925939417, 0.5218950455647857, 111.79961965473909]}
+{"elapsed_s": 8.536, "event": "odom", "value": [1888.508573896, 8.322114925939417, 0.5218950455647857, 111.79961965473909]}
+{"elapsed_s": 8.543, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 8.569, "event": "odom", "value": [1888.54125644, 8.319826112592693, 0.5229748780079513, 111.76832287041171]}
+{"elapsed_s": 8.58, "event": "command", "value": [1888.552456742, 0.0, 0.0]}
+{"elapsed_s": 8.602, "event": "odom", "value": [1888.574699325, 8.319826112592693, 0.5229748780079513, 111.76832287041171]}
+{"elapsed_s": 8.636, "event": "odom", "value": [1888.609049886, 8.319826112592693, 0.5229748780079513, 111.76832287041171]}
+{"elapsed_s": 8.642, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 8.67, "event": "odom", "value": [1888.642941522, 8.319826112592693, 0.5229748780079513, 111.76832287041171]}
+{"elapsed_s": 8.679, "event": "command", "value": [1888.651337612, 0.0, 0.0]}
+{"elapsed_s": 8.705, "event": "odom", "value": [1888.677253361, 8.31708354399705, 0.525542982920143, 111.70749906189617]}
+{"elapsed_s": 8.745, "event": "odom", "value": [1888.717566884, 8.31708354399705, 0.525542982920143, 111.70749906189617]}
+{"elapsed_s": 8.766, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 8.771, "event": "odom", "value": [1888.743420519, 8.31708354399705, 0.525542982920143, 111.70749906189617]}
+{"elapsed_s": 8.783, "event": "command", "value": [1888.755897212, 0.0, 0.0]}
+{"elapsed_s": 8.804, "event": "odom", "value": [1888.776976688, 8.31584251613498, 0.5257976771956226, 111.67077757795641]}
+{"elapsed_s": 8.835, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 8.838, "event": "odom", "value": [1888.810230513, 8.314737670489444, 0.524533861838437, 111.64948635509298]}
+{"elapsed_s": 8.869, "event": "odom", "value": [1888.841963555, 8.314737670489444, 0.524533861838437, 111.64948635509298]}
+{"elapsed_s": 8.877, "event": "command", "value": [1888.849108728, 0.0, 0.0]}
+{"elapsed_s": 8.904, "event": "odom", "value": [1888.87699116, 8.314737670489444, 0.524533861838437, 111.64948635509298]}
+{"elapsed_s": 8.936, "event": "odom", "value": [1888.908566374, 8.315323682464946, 0.5257230204069572, 111.6066647412953]}
+{"elapsed_s": 8.944, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 8.972, "event": "odom", "value": [1888.944307504, 8.315323682464946, 0.5257230204069572, 111.6066647412953]}
+{"elapsed_s": 8.977, "event": "command", "value": [1888.94933095, 0.0, 0.0]}
+{"elapsed_s": 9.001, "event": "odom", "value": [1888.973947973, 8.315323682464946, 0.5257230204069572, 111.6066647412953]}
+{"elapsed_s": 9.035, "event": "odom", "value": [1889.007557263, 8.314975972148124, 0.5260080085396388, 111.57449048093963]}
+{"elapsed_s": 9.038, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 9.068, "event": "odom", "value": [1889.040957844, 8.313879240957275, 0.5270297793805574, 111.5257663444772]}
+{"elapsed_s": 9.079, "event": "command", "value": [1889.051773846, 0.0, 0.0]}
+{"elapsed_s": 9.102, "event": "odom", "value": [1889.074461179, 8.313879240957275, 0.5270297793805574, 111.5257663444772]}
+{"elapsed_s": 9.138, "event": "odom", "value": [1889.111004637, 8.313879240957275, 0.5270297793805574, 111.5257663444772]}
+{"elapsed_s": 9.144, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 9.169, "event": "odom", "value": [1889.141159393, 8.313254905005664, 0.5271670068938329, 111.47985659174527]}
+{"elapsed_s": 9.177, "event": "command", "value": [1889.14924789, 0.0, 0.0]}
+{"elapsed_s": 9.202, "event": "odom", "value": [1889.174371456, 8.31230255784755, 0.5276349725688564, 111.43837812455683]}
+{"elapsed_s": 9.227, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 9.238, "event": "odom", "value": [1889.210384306, 8.31230255784755, 0.5276349725688564, 111.43837812455683]}
+{"elapsed_s": 9.269, "event": "odom", "value": [1889.241967648, 8.31230255784755, 0.5276349725688564, 111.43837812455683]}
+{"elapsed_s": 9.28, "event": "command", "value": [1889.252153104, 0.0, 0.0]}
+{"elapsed_s": 9.305, "event": "odom", "value": [1889.277617768, 8.31230255784755, 0.5276349725688564, 111.43837812455683]}
+{"elapsed_s": 9.328, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 9.341, "event": "odom", "value": [1889.313540727, 8.31230255784755, 0.5276349725688564, 111.43837812455683]}
+{"elapsed_s": 9.373, "event": "odom", "value": [1889.34578953, 8.310562988095711, 0.5270965323807171, 111.40142675936053]}
+{"elapsed_s": 9.38, "event": "command", "value": [1889.352976816, 0.0, 0.0]}
+{"elapsed_s": 9.403, "event": "odom", "value": [1889.375348331, 8.310562988095711, 0.5270965323807171, 111.40142675936053]}
+{"elapsed_s": 9.416, "event": "actuator", "value": {"mode": "auto", "left_pwm": "1500", "right_pwm": "1500", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.000", "angular_cmd": "0.000", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 9.43, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 9.435, "event": "odom", "value": [1889.407443209, 8.310562988095711, 0.5270965323807171, 111.40142675936053]}
+{"elapsed_s": 9.469, "event": "odom", "value": [1889.44145744, 8.310562988095711, 0.5270965323807171, 111.40142675936053]}
+{"elapsed_s": 9.478, "event": "command", "value": [1889.450552207, 0.0, 0.0]}
+{"elapsed_s": 9.502, "event": "odom", "value": [1889.474215921, 8.310562988095711, 0.5270965323807171, 111.40142675936053]}
+{"elapsed_s": 9.526, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 9.535, "event": "odom", "value": [1889.507852316, 8.310562988095711, 0.5270965323807171, 111.40142675936053]}
+{"elapsed_s": 9.57, "event": "odom", "value": [1889.542854768, 8.310562988095711, 0.5270965323807171, 111.40142675936053]}
+{"elapsed_s": 9.579, "event": "command", "value": [1889.551812252, 0.0, 0.0]}
+{"elapsed_s": 9.603, "event": "odom", "value": [1889.575867305, 8.309715043121834, 0.5299401516459827, 111.23761682405149]}
+{"elapsed_s": 9.637, "event": "odom", "value": [1889.609428595, 8.309715043121834, 0.5299401516459827, 111.23761682405149]}
+{"elapsed_s": 9.642, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 9.671, "event": "odom", "value": [1889.643517804, 8.309715043121834, 0.5299401516459827, 111.23761682405149]}
+{"elapsed_s": 9.679, "event": "command", "value": [1889.651160976, 0.0, 0.0]}
+{"elapsed_s": 9.707, "event": "odom", "value": [1889.679900361, 8.308390928065002, 0.5302046179631521, 111.09247377578802]}
+{"elapsed_s": 9.736, "event": "odom", "value": [1889.708382426, 8.308390928065002, 0.5302046179631521, 111.09247377578802]}
+{"elapsed_s": 9.771, "event": "odom", "value": [1889.743112518, 8.308390928065002, 0.5302046179631521, 111.09247377578802]}
+{"elapsed_s": 9.793, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 9.796, "event": "command", "value": [1889.768418169, 0.0, 0.0]}
+{"elapsed_s": 9.805, "event": "odom", "value": [1889.777181182, 8.305908372730148, 0.5298946376553512, 111.04220750880077]}
+{"elapsed_s": 9.835, "event": "odom", "value": [1889.808031766, 8.305908372730148, 0.5298946376553512, 111.04220750880077]}
+{"elapsed_s": 9.885, "event": "odom", "value": [1889.85758166, 8.30519766623842, 0.5302839705322256, 110.99021240552936]}
+{"elapsed_s": 9.886, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 9.889, "event": "command", "value": [1889.8620008, 0.0, 0.0]}
+{"elapsed_s": 9.912, "event": "odom", "value": [1889.884173365, 8.30519766623842, 0.5302839705322256, 110.99021240552936]}
+{"elapsed_s": 9.935, "event": "odom", "value": [1889.907580527, 8.302616427994748, 0.5299566026006798, 110.95749343235143]}
+{"elapsed_s": 9.973, "event": "odom", "value": [1889.94523589, 8.302616427994748, 0.5299566026006798, 110.95749343235143]}
+{"elapsed_s": 9.98, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 9.987, "event": "command", "value": [1889.95958643, 0.0, 0.0]}
+{"elapsed_s": 10.007, "event": "odom", "value": [1889.979795353, 8.301910727086874, 0.5297617441469864, 110.91913763531824]}
+{"elapsed_s": 10.036, "event": "odom", "value": [1890.009033057, 8.301910727086874, 0.5297617441469864, 110.91913763531824]}
+{"elapsed_s": 10.061, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 10.07, "event": "odom", "value": [1890.042620235, 8.301910727086874, 0.5297617441469864, 110.91913763531824]}
+{"elapsed_s": 10.085, "event": "command", "value": [1890.057810992, 0.0, 0.0]}
+{"elapsed_s": 10.102, "event": "odom", "value": [1890.074554915, 8.29920782228616, 0.528540972004168, 110.89729935941449]}
+{"elapsed_s": 10.138, "event": "odom", "value": [1890.110292845, 8.29920782228616, 0.528540972004168, 110.89729935941449]}
+{"elapsed_s": 10.156, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 10.169, "event": "odom", "value": [1890.141239912, 8.29920782228616, 0.528540972004168, 110.89729935941449]}
+{"elapsed_s": 10.178, "event": "command", "value": [1890.150744676, 0.0, 0.0]}
+{"elapsed_s": 10.205, "event": "odom", "value": [1890.17729222, 8.29602970493248, 0.5296858609212429, 110.8683695440661]}
+{"elapsed_s": 10.226, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 10.237, "event": "odom", "value": [1890.209234036, 8.294433190681929, 0.5288829516592308, 110.84161091975808]}
+{"elapsed_s": 10.269, "event": "odom", "value": [1890.241798015, 8.294433190681929, 0.5288829516592308, 110.84161091975808]}
+{"elapsed_s": 10.27, "event": "progress", "value": {"armed": false, "status": "WAIT: marker goal stale", "xy": [8.294433190681929, 0.5288829516592308], "entry": [3.777564813320721, 4.036441788751842], "pwm": ["1500", "1500"]}}
+{"elapsed_s": 10.278, "event": "command", "value": [1890.250366815, 0.0, 0.0]}
+{"elapsed_s": 10.303, "event": "odom", "value": [1890.275910841, 8.293618288526831, 0.5296686588513472, 110.79903685920443]}
+{"elapsed_s": 10.334, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 10.339, "event": "odom", "value": [1890.312030222, 8.293618288526831, 0.5296686588513472, 110.79903685920443]}
+{"elapsed_s": 10.37, "event": "odom", "value": [1890.342242579, 8.293618288526831, 0.5296686588513472, 110.79903685920443]}
+{"elapsed_s": 10.376, "event": "command", "value": [1890.348975068, 0.0, 0.0]}
+{"elapsed_s": 10.402, "event": "odom", "value": [1890.374823327, 8.295099316916579, 0.5300473829839136, 110.75500536518386]}
+{"elapsed_s": 10.418, "event": "actuator", "value": {"mode": "auto", "left_pwm": "1500", "right_pwm": "1500", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.000", "angular_cmd": "0.000", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 10.428, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 10.435, "event": "odom", "value": [1890.407901018, 8.293597062747793, 0.5304767170067659, 110.71625636391305]}
+{"elapsed_s": 10.469, "event": "odom", "value": [1890.441763852, 8.293597062747793, 0.5304767170067659, 110.71625636391305]}
+{"elapsed_s": 10.479, "event": "command", "value": [1890.451515054, 0.0, 0.0]}
+{"elapsed_s": 10.506, "event": "odom", "value": [1890.478978721, 8.29260292870117, 0.5302325464098318, 110.67685899574941]}
+{"elapsed_s": 10.527, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 10.54, "event": "odom", "value": [1890.512506505, 8.29260292870117, 0.5302325464098318, 110.67685899574941]}
+{"elapsed_s": 10.571, "event": "odom", "value": [1890.543293024, 8.29260292870117, 0.5302325464098318, 110.67685899574941]}
+{"elapsed_s": 10.58, "event": "command", "value": [1890.552631638, 0.0, 0.0]}
+{"elapsed_s": 10.604, "event": "odom", "value": [1890.576422812, 8.291191555322486, 0.5305265786009093, 110.64316784295615]}
+{"elapsed_s": 10.633, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 10.639, "event": "odom", "value": [1890.611402415, 8.291191555322486, 0.5305265786009093, 110.64316784295615]}
+{"elapsed_s": 10.671, "event": "odom", "value": [1890.643401385, 8.291191555322486, 0.5305265786009093, 110.64316784295615]}
+{"elapsed_s": 10.69, "event": "command", "value": [1890.662106423, 0.0, 0.0]}
+{"elapsed_s": 10.702, "event": "odom", "value": [1890.674878836, 8.290874258038484, 0.5307440123145714, 110.611770452273]}
+{"elapsed_s": 10.738, "event": "odom", "value": [1890.710464857, 8.290538190067094, 0.5319313911927941, 110.57509136259539]}
+{"elapsed_s": 10.771, "event": "odom", "value": [1890.743417584, 8.290538190067094, 0.5319313911927941, 110.57509136259539]}
+{"elapsed_s": 10.791, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 10.794, "event": "command", "value": [1890.766514497, 0.0, 0.0]}
+{"elapsed_s": 10.803, "event": "odom", "value": [1890.775922329, 8.288418120518362, 0.5323358488637633, 110.54242450519997]}
+{"elapsed_s": 10.835, "event": "odom", "value": [1890.807559368, 8.288418120518362, 0.5323358488637633, 110.54242450519997]}
+{"elapsed_s": 10.852, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 10.869, "event": "odom", "value": [1890.841817382, 8.288418120518362, 0.5323358488637633, 110.54242450519997]}
+{"elapsed_s": 10.878, "event": "command", "value": [1890.850710223, 0.0, 0.0]}
+{"elapsed_s": 10.902, "event": "odom", "value": [1890.874282766, 8.289480534755231, 0.532886929503278, 110.49454744537748]}
+{"elapsed_s": 10.925, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 10.936, "event": "odom", "value": [1890.908397031, 8.289480534755231, 0.532886929503278, 110.49454744537748]}
+{"elapsed_s": 10.969, "event": "odom", "value": [1890.941386911, 8.28789068387172, 0.5314641448164038, 110.4584846635086]}
+{"elapsed_s": 10.977, "event": "command", "value": [1890.949583571, 0.0, 0.0]}
+{"elapsed_s": 11.002, "event": "odom", "value": [1890.974364758, 8.28789068387172, 0.5314641448164038, 110.4584846635086]}
+{"elapsed_s": 11.039, "event": "odom", "value": [1891.011469001, 8.286389515757282, 0.5320583331370037, 110.41680274131825]}
+{"elapsed_s": 11.045, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 11.069, "event": "odom", "value": [1891.041468999, 8.286389515757282, 0.5320583331370037, 110.41680274131825]}
+{"elapsed_s": 11.076, "event": "command", "value": [1891.049085866, 0.0, 0.0]}
+{"elapsed_s": 11.102, "event": "odom", "value": [1891.074252505, 8.28670343144913, 0.5330370499477253, 110.36325315719978]}
+{"elapsed_s": 11.13, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 11.135, "event": "odom", "value": [1891.107188911, 8.28670343144913, 0.5330370499477253, 110.36325315719978]}
+{"elapsed_s": 11.169, "event": "odom", "value": [1891.14157192, 8.28763650046828, 0.5345198375820049, 110.2947192110342]}
+{"elapsed_s": 11.178, "event": "command", "value": [1891.150333525, 0.0, 0.0]}
+{"elapsed_s": 11.203, "event": "odom", "value": [1891.175376832, 8.28763650046828, 0.5345198375820049, 110.2947192110342]}
+{"elapsed_s": 11.236, "event": "odom", "value": [1891.208474555, 8.287042530937672, 0.5338275181144514, 110.2485224052324]}
+{"elapsed_s": 11.269, "event": "odom", "value": [1891.241406097, 8.287042530937672, 0.5338275181144514, 110.2485224052324]}
+{"elapsed_s": 11.283, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 11.286, "event": "command", "value": [1891.258127652, 0.0, 0.0]}
+{"elapsed_s": 11.303, "event": "odom", "value": [1891.275314852, 8.285573505816558, 0.533110528087725, 110.20073878788472]}
+{"elapsed_s": 11.33, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 11.335, "event": "odom", "value": [1891.307891087, 8.285573505816558, 0.533110528087725, 110.20073878788472]}
+{"elapsed_s": 11.371, "event": "odom", "value": [1891.343629017, 8.285573505816558, 0.533110528087725, 110.20073878788472]}
+{"elapsed_s": 11.379, "event": "command", "value": [1891.351233468, 0.0, 0.0]}
+{"elapsed_s": 11.402, "event": "odom", "value": [1891.374436592, 8.282703354294746, 0.53212498868721, 110.1687565194037]}
+{"elapsed_s": 11.417, "event": "actuator", "value": {"mode": "auto", "left_pwm": "1500", "right_pwm": "1500", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.000", "angular_cmd": "0.000", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 11.425, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 11.436, "event": "odom", "value": [1891.408261792, 8.282703354294746, 0.53212498868721, 110.1687565194037]}
+{"elapsed_s": 11.471, "event": "odom", "value": [1891.443728834, 8.281970945938152, 0.5336749832545045, 110.10773200010944]}
+{"elapsed_s": 11.476, "event": "command", "value": [1891.448875995, 0.0, 0.0]}
+{"elapsed_s": 11.503, "event": "odom", "value": [1891.475741148, 8.281970945938152, 0.5336749832545045, 110.10773200010944]}
+{"elapsed_s": 11.524, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 11.536, "event": "odom", "value": [1891.508398826, 8.284214778503483, 0.5348212347710976, 110.02857877127113]}
+{"elapsed_s": 11.569, "event": "odom", "value": [1891.541231773, 8.284214778503483, 0.5348212347710976, 110.02857877127113]}
+{"elapsed_s": 11.577, "event": "command", "value": [1891.549219435, 0.0, 0.0]}
+{"elapsed_s": 11.602, "event": "odom", "value": [1891.574261238, 8.284214778503483, 0.5348212347710976, 110.02857877127113]}
+{"elapsed_s": 11.629, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 11.636, "event": "odom", "value": [1891.60819377, 8.284214778503483, 0.5348212347710976, 110.02857877127113]}
+{"elapsed_s": 11.669, "event": "odom", "value": [1891.641935288, 8.28186100690866, 0.5335164666032179, 109.97513259350207]}
+{"elapsed_s": 11.678, "event": "command", "value": [1891.650746879, 0.0, 0.0]}
+{"elapsed_s": 11.702, "event": "odom", "value": [1891.674591142, 8.283184436878727, 0.5350584746639756, 109.88827393211213]}
+{"elapsed_s": 11.728, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 11.736, "event": "odom", "value": [1891.708143374, 8.283184436878727, 0.5350584746639756, 109.88827393211213]}
+{"elapsed_s": 11.77, "event": "odom", "value": [1891.742142787, 8.282094696638374, 0.5345315966328985, 109.80020290573889]}
+{"elapsed_s": 11.777, "event": "command", "value": [1891.749575745, 0.0, 0.0]}
+{"elapsed_s": 11.801, "event": "odom", "value": [1891.774024026, 8.282094696638374, 0.5345315966328985, 109.80020290573889]}
+{"elapsed_s": 11.822, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 11.836, "event": "odom", "value": [1891.808727972, 8.282094696638374, 0.5345315966328985, 109.80020290573889]}
+{"elapsed_s": 11.869, "event": "odom", "value": [1891.841921314, 8.282094696638374, 0.5345315966328985, 109.80020290573889]}
+{"elapsed_s": 11.877, "event": "command", "value": [1891.849603719, 0.0, 0.0]}
+{"elapsed_s": 11.901, "event": "odom", "value": [1891.873924348, 8.279455215827099, 0.5367120164729144, 109.25703244121335]}
+{"elapsed_s": 11.928, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 11.938, "event": "odom", "value": [1891.910707524, 8.279455215827099, 0.5367120164729144, 109.25703244121335]}
+{"elapsed_s": 11.97, "event": "odom", "value": [1891.942126445, 8.277338951846183, 0.5359597170562035, 109.21338440143315]}
+{"elapsed_s": 11.977, "event": "command", "value": [1891.949138526, 0.0, 0.0]}
+{"elapsed_s": 12.001, "event": "odom", "value": [1891.974060997, 8.277338951846183, 0.5359597170562035, 109.21338440143315]}
+{"elapsed_s": 12.025, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 12.036, "event": "odom", "value": [1892.008971798, 8.277338951846183, 0.5359597170562035, 109.21338440143315]}
+{"elapsed_s": 12.068, "event": "odom", "value": [1892.041017393, 8.277727650354736, 0.5358732402560715, 109.42452816370407]}
+{"elapsed_s": 12.077, "event": "command", "value": [1892.049681715, 0.0, 0.0]}
+{"elapsed_s": 12.101, "event": "odom", "value": [1892.073944359, 8.277727650354736, 0.5358732402560715, 109.42452816370407]}
+{"elapsed_s": 12.13, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 12.136, "event": "odom", "value": [1892.108634673, 8.273342370428686, 0.5322342405600592, 109.89865274270537]}
+{"elapsed_s": 12.168, "event": "odom", "value": [1892.140897523, 8.275230388250266, 0.5277900025856873, 110.54370689349525]}
+{"elapsed_s": 12.177, "event": "command", "value": [1892.149347631, 0.0, 0.0]}
+{"elapsed_s": 12.203, "event": "odom", "value": [1892.175236274, 8.275230388250266, 0.5277900025856873, 110.54370689349525]}
+{"elapsed_s": 12.233, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 12.235, "event": "odom", "value": [1892.207729531, 8.275230388250266, 0.5277900025856873, 110.54370689349525]}
+{"elapsed_s": 12.269, "event": "odom", "value": [1892.241226114, 8.275230388250266, 0.5277900025856873, 110.54370689349525]}
+{"elapsed_s": 12.277, "event": "command", "value": [1892.24964134, 0.0, 0.0]}
+{"elapsed_s": 12.303, "event": "odom", "value": [1892.275710982, 8.279812195115179, 0.5216433165549514, 111.3321911409017]}
+{"elapsed_s": 12.326, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 12.335, "event": "odom", "value": [1892.3077112, 8.279812195115179, 0.5216433165549514, 111.3321911409017]}
+{"elapsed_s": 12.368, "event": "odom", "value": [1892.341059906, 8.279812195115179, 0.5216433165549514, 111.3321911409017]}
+{"elapsed_s": 12.377, "event": "command", "value": [1892.349161683, 0.0, 0.0]}
+{"elapsed_s": 12.401, "event": "odom", "value": [1892.374030041, 8.279812195115179, 0.5216433165549514, 111.3321911409017]}
+{"elapsed_s": 12.417, "event": "actuator", "value": {"mode": "auto", "left_pwm": "1500", "right_pwm": "1500", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.000", "angular_cmd": "0.000", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 12.424, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 12.438, "event": "odom", "value": [1892.410912388, 8.292091652954085, 0.4983964305699556, 113.3895222691078]}
+{"elapsed_s": 12.469, "event": "odom", "value": [1892.442073701, 8.292091652954085, 0.4983964305699556, 113.3895222691078]}
+{"elapsed_s": 12.48, "event": "command", "value": [1892.45283271, 0.0, 0.0]}
+{"elapsed_s": 12.502, "event": "odom", "value": [1892.474693969, 8.303841940550399, 0.4865243795467889, 114.4964586450862]}
+{"elapsed_s": 12.524, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 12.537, "event": "odom", "value": [1892.509095283, 8.303841940550399, 0.4865243795467889, 114.4964586450862]}
+{"elapsed_s": 12.57, "event": "odom", "value": [1892.542504663, 8.303841940550399, 0.4865243795467889, 114.4964586450862]}
+{"elapsed_s": 12.577, "event": "command", "value": [1892.549203167, 0.0, 0.0]}
+{"elapsed_s": 12.602, "event": "odom", "value": [1892.574785913, 8.31676690188884, 0.4720487727681695, 115.68755787416336]}
+{"elapsed_s": 12.636, "event": "odom", "value": [1892.6081567, 8.330701707011142, 0.4539953780527862, 116.85860195676317]}
+{"elapsed_s": 12.67, "event": "odom", "value": [1892.642555358, 8.330701707011142, 0.4539953780527862, 116.85860195676317]}
+{"elapsed_s": 12.677, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 12.68, "event": "command", "value": [1892.652531495, 0.0, 0.0]}
+{"elapsed_s": 12.701, "event": "odom", "value": [1892.673957414, 8.343289765179495, 0.43635634259336903, 117.96203274456178]}
+{"elapsed_s": 12.729, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 12.736, "event": "odom", "value": [1892.709012698, 8.343289765179495, 0.43635634259336903, 117.96203274456178]}
+{"elapsed_s": 12.769, "event": "odom", "value": [1892.741124279, 8.343289765179495, 0.43635634259336903, 117.96203274456178]}
+{"elapsed_s": 12.777, "event": "command", "value": [1892.749256906, 0.0, 0.0]}
+{"elapsed_s": 12.802, "event": "odom", "value": [1892.774240242, 8.35491981828676, 0.422319302557707, 118.7384786264573]}
+{"elapsed_s": 12.83, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 12.836, "event": "odom", "value": [1892.808399564, 8.35491981828676, 0.422319302557707, 118.7384786264573]}
+{"elapsed_s": 12.869, "event": "odom", "value": [1892.841411876, 8.365869645381109, 0.4127743350157487, 119.07699212516171]}
+{"elapsed_s": 12.879, "event": "command", "value": [1892.851723256, 0.0, 0.0]}
+{"elapsed_s": 12.902, "event": "odom", "value": [1892.874491966, 8.365869645381109, 0.4127743350157487, 119.07699212516171]}
+{"elapsed_s": 12.922, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 12.935, "event": "odom", "value": [1892.907386259, 8.3714619206879, 0.4056132145680236, 119.25970286669902]}
+{"elapsed_s": 12.971, "event": "odom", "value": [1892.943129148, 8.3714619206879, 0.4056132145680236, 119.25970286669902]}
+{"elapsed_s": 12.977, "event": "command", "value": [1892.949528859, 0.0, 0.0]}
+{"elapsed_s": 13.004, "event": "odom", "value": [1892.976113587, 8.373392698193097, 0.4073429877573548, 119.84421100576822]}
+{"elapsed_s": 13.025, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 13.037, "event": "odom", "value": [1893.009252335, 8.373392698193097, 0.4073429877573548, 119.84421100576822]}
+{"elapsed_s": 13.07, "event": "odom", "value": [1893.043049502, 8.373392698193097, 0.4073429877573548, 119.84421100576822]}
+{"elapsed_s": 13.078, "event": "command", "value": [1893.050285142, 0.0, 0.0]}
+{"elapsed_s": 13.102, "event": "odom", "value": [1893.074458822, 8.374316984911808, 0.41252271730768536, 120.81815174312928]}
+{"elapsed_s": 13.128, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 13.135, "event": "odom", "value": [1893.107650883, 8.369751749535235, 0.42807295280441426, 121.95931806577494]}
+{"elapsed_s": 13.17, "event": "odom", "value": [1893.142122727, 8.369751749535235, 0.42807295280441426, 121.95931806577494]}
+{"elapsed_s": 13.19, "event": "command", "value": [1893.162396483, 0.0, 0.0]}
+{"elapsed_s": 13.211, "event": "odom", "value": [1893.183627676, 8.369751749535235, 0.42807295280441426, 121.95931806577494]}
+{"elapsed_s": 13.237, "event": "odom", "value": [1893.209114771, 8.369751749535235, 0.42807295280441426, 121.95931806577494]}
+{"elapsed_s": 13.237, "event": "status", "value": "PREVIEW: obstacles=324, front=0.42473262488730096, goal=(2.49, 4.28), drive_enabled=True, tank_edge=0.43, walls_excluded=False, dock_phase=, blocked="}
+{"elapsed_s": 13.269, "event": "odom", "value": [1893.241688254, 8.359641534848434, 0.4498735159683801, 123.20063621211678]}
+{"elapsed_s": 13.293, "event": "command", "value": [1893.266097494, 0.0, 0.0]}
+{"elapsed_s": 13.309, "event": "odom", "value": [1893.282004528, 8.359641534848434, 0.4498735159683801, 123.20063621211678]}
+{"elapsed_s": 13.338, "event": "odom", "value": [1893.31081105, 8.34461538229752, 0.4803465898212069, 124.33784851221377]}
+{"elapsed_s": 13.34, "event": "status", "value": "PREVIEW: obstacles=325, front=0.43568927009358305, goal=(2.49, 4.26), drive_enabled=True, tank_edge=0.45, walls_excluded=False, dock_phase=, blocked="}
+{"elapsed_s": 13.369, "event": "odom", "value": [1893.342024909, 8.34461538229752, 0.4803465898212069, 124.33784851221377]}
+{"elapsed_s": 13.389, "event": "command", "value": [1893.361666838, 0.0, 0.0]}
+{"elapsed_s": 13.402, "event": "odom", "value": [1893.374144778, 8.275512950211322, 0.5785778405770625, 127.12834515311916]}
+{"elapsed_s": 13.416, "event": "actuator", "value": {"mode": "auto", "left_pwm": "1500", "right_pwm": "1500", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.000", "angular_cmd": "0.000", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 13.428, "event": "status", "value": "NO PLAN: obstacles=322, front=0.5851036324884457, goal=(2.51, 4.25), drive_enabled=True, tank_edge=0.48, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 13.436, "event": "odom", "value": [1893.408514378, 8.275512950211322, 0.5785778405770625, 127.12834515311916]}
+{"elapsed_s": 13.47, "event": "odom", "value": [1893.442902187, 8.244640479664886, 0.6210715281515282, 128.60713154429394]}
+{"elapsed_s": 13.489, "event": "command", "value": [1893.461414515, 0.0, 0.0]}
+{"elapsed_s": 13.503, "event": "odom", "value": [1893.475947876, 8.244640479664886, 0.6210715281515282, 128.60713154429394]}
+{"elapsed_s": 13.528, "event": "status", "value": "NO PLAN: obstacles=314, front=0.6247339553596607, goal=(2.53, 4.25), drive_enabled=True, tank_edge=0.62, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 13.536, "event": "odom", "value": [1893.508997533, 8.244640479664886, 0.6210715281515282, 128.60713154429394]}
+{"elapsed_s": 13.57, "event": "odom", "value": [1893.542528452, 8.216707966526117, 0.659867045152249, 129.96569588906763]}
+{"elapsed_s": 13.591, "event": "command", "value": [1893.563806815, 0.0, 0.0]}
+{"elapsed_s": 13.603, "event": "odom", "value": [1893.575216755, 8.216707966526117, 0.659867045152249, 129.96569588906763]}
+{"elapsed_s": 13.632, "event": "status", "value": "NO PLAN: obstacles=319, front=0.7178306234672293, goal=(2.56, 4.25), drive_enabled=True, tank_edge=0.66, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 13.635, "event": "odom", "value": [1893.607949154, 8.188240936275209, 0.6962976338772827, 131.1137535506863]}
+{"elapsed_s": 13.671, "event": "odom", "value": [1893.643298368, 8.188240936275209, 0.6962976338772827, 131.1137535506863]}
+{"elapsed_s": 13.692, "event": "command", "value": [1893.664624731, 0.0, 0.0]}
+{"elapsed_s": 13.704, "event": "odom", "value": [1893.676822695, 8.140457894240113, 0.752795645873567, 132.1225373769535]}
+{"elapsed_s": 13.735, "event": "odom", "value": [1893.70806273, 8.140457894240113, 0.752795645873567, 132.1225373769535]}
+{"elapsed_s": 13.747, "event": "status", "value": "NO PLAN: obstacles=322, front=0.6882507828715458, goal=(2.56, 4.25), drive_enabled=True, tank_edge=0.70, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 13.773, "event": "odom", "value": [1893.745190588, 8.111327138114767, 0.7900488792865936, 133.37629966380464]}
+{"elapsed_s": 13.789, "event": "command", "value": [1893.761879533, 0.0, 0.0]}
+{"elapsed_s": 13.804, "event": "odom", "value": [1893.776177495, 8.111327138114767, 0.7900488792865936, 133.37629966380464]}
+{"elapsed_s": 13.835, "event": "odom", "value": [1893.807354392, 8.070429303780385, 0.8375303955659957, 134.8877939517299]}
+{"elapsed_s": 13.839, "event": "status", "value": "PREVIEW: obstacles=323, front=0.6179235648003286, goal=(2.57, 4.24), drive_enabled=True, tank_edge=0.79, walls_excluded=False, dock_phase=, blocked="}
+{"elapsed_s": 13.869, "event": "odom", "value": [1893.842039746, 8.070429303780385, 0.8375303955659957, 134.8877939517299]}
+{"elapsed_s": 13.889, "event": "command", "value": [1893.861768206, 0.0, 0.0]}
+{"elapsed_s": 13.904, "event": "odom", "value": [1893.87653463, 8.070429303780385, 0.8375303955659957, 134.8877939517299]}
+{"elapsed_s": 13.933, "event": "status", "value": "PREVIEW: obstacles=323, front=0.5867742921651676, goal=(2.57, 4.24), drive_enabled=True, tank_edge=0.84, walls_excluded=False, dock_phase=, blocked="}
+{"elapsed_s": 13.939, "event": "odom", "value": [1893.91126488, 8.04173489265101, 0.8691114792234713, 136.4352881390082]}
+{"elapsed_s": 13.97, "event": "odom", "value": [1893.942501011, 8.04173489265101, 0.8691114792234713, 136.4352881390082]}
+{"elapsed_s": 13.989, "event": "command", "value": [1893.961370597, 0.0, 0.0]}
+{"elapsed_s": 14.002, "event": "odom", "value": [1893.974090144, 8.025816258789868, 0.8863936544823665, 138.0744417375143]}
+{"elapsed_s": 14.032, "event": "status", "value": "PREVIEW: obstacles=323, front=0.5675167501542493, goal=(2.57, 4.24), drive_enabled=True, tank_edge=0.87, walls_excluded=False, dock_phase=, blocked="}
+{"elapsed_s": 14.035, "event": "odom", "value": [1894.007261981, 8.025816258789868, 0.8863936544823665, 138.0744417375143]}
+{"elapsed_s": 14.069, "event": "odom", "value": [1894.041497721, 7.999667412334619, 0.9113632265556537, 139.9124706794918]}
+{"elapsed_s": 14.091, "event": "command", "value": [1894.063361444, 0.0, 0.0]}
+{"elapsed_s": 14.103, "event": "odom", "value": [1894.075776822, 7.999667412334619, 0.9113632265556537, 139.9124706794918]}
+{"elapsed_s": 14.14, "event": "odom", "value": [1894.112423002, 7.981090606500635, 0.9316391626650427, 141.81585471198068]}
+{"elapsed_s": 14.171, "event": "odom", "value": [1894.143505112, 7.981090606500635, 0.9316391626650427, 141.81585471198068]}
+{"elapsed_s": 14.176, "event": "status", "value": "PREVIEW: obstacles=323, front=0.5425327827840944, goal=(2.57, 4.24), drive_enabled=True, tank_edge=0.91, walls_excluded=False, dock_phase=, blocked="}
+{"elapsed_s": 14.178, "event": "command", "value": [1894.150708815, 0.0, 0.0]}
+{"elapsed_s": 14.18, "event": "status", "value": "WAIT: /scan stale (0.54 s)"}
+{"elapsed_s": 14.202, "event": "odom", "value": [1894.174725659, 7.975838213354656, 0.9447529721101047, 144.16072360936732]}
+{"elapsed_s": 14.235, "event": "odom", "value": [1894.207660336, 7.975838213354656, 0.9447529721101047, 144.16072360936732]}
+{"elapsed_s": 14.268, "event": "odom", "value": [1894.241065555, 7.974267717503507, 0.9504132127875844, 146.81971432137482]}
+{"elapsed_s": 14.277, "event": "command", "value": [1894.249217542, 0.0, 0.0]}
+{"elapsed_s": 14.279, "event": "status", "value": "WAIT: /scan stale (0.64 s)"}
+{"elapsed_s": 14.304, "event": "odom", "value": [1894.276568085, 7.974267717503507, 0.9504132127875844, 146.81971432137482]}
+{"elapsed_s": 14.335, "event": "odom", "value": [1894.307833881, 7.968896365342761, 0.9618713702610806, 149.51934775141464]}
+{"elapsed_s": 14.369, "event": "odom", "value": [1894.341106744, 7.968896365342761, 0.9618713702610806, 149.51934775141464]}
+{"elapsed_s": 14.377, "event": "command", "value": [1894.349407216, 0.0, 0.0]}
+{"elapsed_s": 14.402, "event": "odom", "value": [1894.37425538, 7.968896365342761, 0.9618713702610806, 149.51934775141464]}
+{"elapsed_s": 14.417, "event": "actuator", "value": {"mode": "auto", "left_pwm": "1500", "right_pwm": "1500", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.000", "angular_cmd": "0.000", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 14.433, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 14.44, "event": "odom", "value": [1894.412314786, 7.944135840154843, 0.9833375467527801, 152.21351190377504]}
+{"elapsed_s": 14.47, "event": "odom", "value": [1894.442785614, 7.944135840154843, 0.9833375467527801, 152.21351190377504]}
+{"elapsed_s": 14.479, "event": "command", "value": [1894.451839228, 0.0, 0.0]}
+{"elapsed_s": 14.503, "event": "odom", "value": [1894.476040109, 7.937793249314559, 0.9911725643278793, 154.86265279454057]}
+{"elapsed_s": 14.526, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 14.535, "event": "odom", "value": [1894.507712061, 7.937793249314559, 0.9911725643278793, 154.86265279454057]}
+{"elapsed_s": 14.569, "event": "odom", "value": [1894.541858198, 7.9332002063512785, 0.9979527218571944, 157.03345246703012]}
+{"elapsed_s": 14.577, "event": "command", "value": [1894.549321365, 0.0, 0.0]}
+{"elapsed_s": 14.603, "event": "odom", "value": [1894.575190839, 7.9332002063512785, 0.9979527218571944, 157.03345246703012]}
+{"elapsed_s": 14.631, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 14.636, "event": "odom", "value": [1894.608165134, 7.9332002063512785, 0.9979527218571944, 157.03345246703012]}
+{"elapsed_s": 14.669, "event": "odom", "value": [1894.641643539, 7.9332002063512785, 0.9979527218571944, 157.03345246703012]}
+{"elapsed_s": 14.676, "event": "command", "value": [1894.649076689, 0.0, 0.0]}
+{"elapsed_s": 14.702, "event": "odom", "value": [1894.674767278, 7.93419957661221, 1.0040882246104705, 158.97216860457485]}
+{"elapsed_s": 14.732, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 14.735, "event": "odom", "value": [1894.707511838, 7.93192408129483, 1.0075708951265099, 160.40893768594884]}
+{"elapsed_s": 14.77, "event": "odom", "value": [1894.742237896, 7.93192408129483, 1.0075708951265099, 160.40893768594884]}
+{"elapsed_s": 14.779, "event": "command", "value": [1894.75128335, 0.0, 0.0]}
+{"elapsed_s": 14.802, "event": "odom", "value": [1894.774100125, 7.93192408129483, 1.0075708951265099, 160.40893768594884]}
+{"elapsed_s": 14.828, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 14.837, "event": "odom", "value": [1894.809630624, 7.93192408129483, 1.0075708951265099, 160.40893768594884]}
+{"elapsed_s": 14.869, "event": "odom", "value": [1894.841803806, 7.93192408129483, 1.0075708951265099, 160.40893768594884]}
+{"elapsed_s": 14.895, "event": "command", "value": [1894.867632384, 0.0, 0.0]}
+{"elapsed_s": 14.902, "event": "odom", "value": [1894.874138914, 7.933036810648426, 1.0131134144654745, 162.2838850401756]}
+{"elapsed_s": 14.935, "event": "odom", "value": [1894.907878511, 7.938410995072408, 1.0150235274463975, 162.9307761648194]}
+{"elapsed_s": 14.939, "event": "status", "value": "NO PLAN: obstacles=302, front=0.5302434955492936, goal=(2.57, 4.58), drive_enabled=True, tank_edge=1.01, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 14.97, "event": "odom", "value": [1894.942187501, 7.938410995072408, 1.0150235274463975, 162.9307761648194]}
+{"elapsed_s": 14.991, "event": "command", "value": [1894.963837458, 0.0, 0.0]}
+{"elapsed_s": 15.005, "event": "odom", "value": [1894.977435975, 7.938410995072408, 1.0150235274463975, 162.9307761648194]}
+{"elapsed_s": 15.033, "event": "status", "value": "NO PLAN: obstacles=302, front=0.5398554611011784, goal=(2.56, 4.60), drive_enabled=True, tank_edge=1.02, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 15.039, "event": "odom", "value": [1895.011614369, 7.938410995072408, 1.0150235274463975, 162.9307761648194]}
+{"elapsed_s": 15.07, "event": "odom", "value": [1895.042140078, 7.944354631172354, 1.0195372457895395, 163.38010166950548]}
+{"elapsed_s": 15.088, "event": "command", "value": [1895.060826779, 0.0, 0.0]}
+{"elapsed_s": 15.102, "event": "odom", "value": [1895.074447249, 7.979883968256223, 1.0080261298269477, 163.72946014936176]}
+{"elapsed_s": 15.126, "event": "status", "value": "NO PLAN: obstacles=301, front=0.5473161642999682, goal=(2.53, 4.57), drive_enabled=True, tank_edge=1.02, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 15.135, "event": "odom", "value": [1895.107415623, 7.979883968256223, 1.0080261298269477, 163.72946014936176]}
+{"elapsed_s": 15.17, "event": "odom", "value": [1895.142342647, 8.003377951882372, 1.0010284805025522, 163.89735521960182]}
+{"elapsed_s": 15.192, "event": "command", "value": [1895.164645744, 0.0, 0.0]}
+{"elapsed_s": 15.202, "event": "odom", "value": [1895.174684347, 8.003377951882372, 1.0010284805025522, 163.89735521960182]}
+{"elapsed_s": 15.237, "event": "odom", "value": [1895.209430086, 8.003377951882372, 1.0010284805025522, 163.89735521960182]}
+{"elapsed_s": 15.24, "event": "status", "value": "NO PLAN: obstacles=301, front=0.5865214315958938, goal=(2.53, 4.57), drive_enabled=True, tank_edge=1.00, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 15.269, "event": "odom", "value": [1895.241914318, 8.003377951882372, 1.0010284805025522, 163.89735521960182]}
+{"elapsed_s": 15.27, "event": "progress", "value": {"armed": false, "status": "NO PLAN: obstacles=301, front=0.5865214315958938, goal=(2.53, 4.57), drive_enabled=True, tank_edge=1.00, walls_excluded=False, dock_phase=-, blocked=", "xy": [8.003377951882372, 1.0010284805025522], "entry": [2.526605155433626, 4.57488764798191], "pwm": ["1500", "1500"]}}
+{"elapsed_s": 15.292, "event": "command", "value": [1895.263994239, 0.0, 0.0]}
+{"elapsed_s": 15.302, "event": "odom", "value": [1895.27421464, 8.034703495516755, 0.9925863550399215, 163.87727942798068]}
+{"elapsed_s": 15.335, "event": "odom", "value": [1895.307799672, 8.034703495516755, 0.9925863550399215, 163.87727942798068]}
+{"elapsed_s": 15.339, "event": "status", "value": "NO PLAN: obstacles=299, front=0.5865214315958938, goal=(2.53, 4.57), drive_enabled=True, tank_edge=1.00, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 15.369, "event": "odom", "value": [1895.342035732, 8.034703495516755, 0.9925863550399215, 163.87727942798068]}
+{"elapsed_s": 15.391, "event": "command", "value": [1895.363957473, 0.0, 0.0]}
+{"elapsed_s": 15.402, "event": "odom", "value": [1895.374273749, 8.034703495516755, 0.9925863550399215, 163.87727942798068]}
+{"elapsed_s": 15.416, "event": "actuator", "value": {"mode": "auto", "left_pwm": "1500", "right_pwm": "1500", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.000", "angular_cmd": "0.000", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 15.429, "event": "status", "value": "NO PLAN: obstacles=299, front=0.609519874699771, goal=(2.53, 4.57), drive_enabled=True, tank_edge=0.99, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 15.435, "event": "odom", "value": [1895.407401519, 8.077212845529514, 0.9841009069855877, 163.59999423803518]}
+{"elapsed_s": 15.47, "event": "odom", "value": [1895.442129146, 8.077212845529514, 0.9841009069855877, 163.59999423803518]}
+{"elapsed_s": 15.489, "event": "command", "value": [1895.461877158, 0.0, 0.0]}
+{"elapsed_s": 15.502, "event": "odom", "value": [1895.47414082, 8.077212845529514, 0.9841009069855877, 163.59999423803518]}
+{"elapsed_s": 15.527, "event": "status", "value": "NO PLAN: obstacles=294, front=0.6433411687824692, goal=(2.53, 4.57), drive_enabled=True, tank_edge=0.98, walls_excluded=False, dock_phase=-, blocked="}
+{"elapsed_s": 15.537, "event": "odom", "value": [1895.509564339, 8.112735190661116, 0.8985491482871035, 163.26750642018376]}
+{"elapsed_s": 15.569, "event": "odom", "value": [1895.541225954, 8.21555089415359, 0.9293113437066102, 161.97860643301325]}
+{"elapsed_s": 15.579, "event": "command", "value": [1895.551674873, 0.0, 0.0]}
+{"elapsed_s": 15.601, "event": "odom", "value": [1895.573914288, 8.252814719053912, 0.933677771131457, 161.4801395286382]}
+{"elapsed_s": 15.633, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 15.636, "event": "odom", "value": [1895.608542135, 8.252814719053912, 0.933677771131457, 161.4801395286382]}
+{"elapsed_s": 15.67, "event": "odom", "value": [1895.642557869, 8.288786565375112, 0.9318577491760871, 161.16404296473573]}
+{"elapsed_s": 15.681, "event": "command", "value": [1895.653158281, 0.0, 0.0]}
+{"elapsed_s": 15.702, "event": "odom", "value": [1895.674781773, 8.288786565375112, 0.9318577491760871, 161.16404296473573]}
+{"elapsed_s": 15.734, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 15.735, "event": "odom", "value": [1895.707976937, 8.288786565375112, 0.9318577491760871, 161.16404296473573]}
+{"elapsed_s": 15.769, "event": "odom", "value": [1895.74179452, 8.367322966574658, 0.9114037274781912, 161.1185689358129]}
+{"elapsed_s": 15.781, "event": "command", "value": [1895.75386304, 0.0, 0.0]}
+{"elapsed_s": 15.803, "event": "odom", "value": [1895.775156218, 8.425904846367562, 0.8972901715520448, 161.3034112868335]}
+{"elapsed_s": 15.836, "event": "odom", "value": [1895.80838924, 8.425904846367562, 0.8972901715520448, 161.3034112868335]}
+{"elapsed_s": 15.87, "event": "odom", "value": [1895.842129573, 8.470623359816484, 0.8837327494826887, 161.66349353499012]}
+{"elapsed_s": 15.87, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 15.878, "event": "command", "value": [1895.850960716, 0.0, 0.0]}
+{"elapsed_s": 15.905, "event": "odom", "value": [1895.87715228, 8.470623359816484, 0.8837327494826887, 161.66349353499012]}
+{"elapsed_s": 15.92, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 15.937, "event": "odom", "value": [1895.910006506, 8.470623359816484, 0.8837327494826887, 161.66349353499012]}
+{"elapsed_s": 15.969, "event": "odom", "value": [1895.941315439, 8.499623257584794, 0.8793322820759533, 162.07489698106897]}
+{"elapsed_s": 15.979, "event": "command", "value": [1895.951711876, 0.0, 0.0]}
+{"elapsed_s": 16.006, "event": "odom", "value": [1895.978739209, 8.518475035089477, 0.87496242229408, 162.4877465110262]}
+{"elapsed_s": 16.021, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 16.038, "event": "odom", "value": [1896.010109648, 8.518475035089477, 0.87496242229408, 162.4877465110262]}
+{"elapsed_s": 16.069, "event": "odom", "value": [1896.041100075, 8.53493839361135, 0.8718397422792725, 162.78469044983143]}
+{"elapsed_s": 16.077, "event": "command", "value": [1896.049354752, 0.0, 0.0]}
+{"elapsed_s": 16.102, "event": "odom", "value": [1896.074818263, 8.53493839361135, 0.8718397422792725, 162.78469044983143]}
+{"elapsed_s": 16.124, "event": "status", "value": "WAIT: marker goal stale"}
+{"elapsed_s": 16.136, "event": "odom", "value": [1896.108243514, 8.53493839361135, 0.8718397422792725, 162.78469044983143]}
+{"elapsed_s": 16.17, "event": "odom", "value": [1896.142660347, 8.560203458124118, 0.8652064079503533, 162.95741808179466]}
+{"elapsed_s": 16.189, "event": "command", "value": [1896.161865591, 0.0, 0.0]}
+{"elapsed_s": 16.203, "event": "odom", "value": [1896.175946075, 8.560203458124118, 0.8652064079503533, 162.95741808179466]}
+{"elapsed_s": 16.236, "event": "status", "value": "PREVIEW: obstacles=306, front=0.8929322237799648, goal=(2.06, 4.13), drive_enabled=True, tank_edge=0.87, walls_excluded=False, dock_phase=, blocked="}
+{"elapsed_s": 16.24, "event": "odom", "value": [1896.21307582, 8.614305729218316, 0.8493237769671906, 163.0953565440442]}
+{"elapsed_s": 16.269, "event": "odom", "value": [1896.241335222, 8.614305729218316, 0.8493237769671906, 163.0953565440442]}
+{"elapsed_s": 16.29, "event": "command", "value": [1896.262881688, 0.0, 0.0]}
+{"elapsed_s": 16.311, "event": "odom", "value": [1896.28343926, 8.614305729218316, 0.8493237769671906, 163.0953565440442]}
+{"elapsed_s": 16.337, "event": "odom", "value": [1896.309364384, 8.64338626668654, 0.841925017864494, 163.21817909860968]}
+{"elapsed_s": 16.343, "event": "status", "value": "PREVIEW: obstacles=309, front=0.9088434295571618, goal=(2.08, 4.16), drive_enabled=True, tank_edge=0.85, walls_excluded=False, dock_phase=, blocked="}
+{"elapsed_s": 16.369, "event": "odom", "value": [1896.341124274, 8.64338626668654, 0.841925017864494, 163.21817909860968]}
+{"elapsed_s": 16.389, "event": "command", "value": [1896.361230601, 0.0, 0.0]}
+{"elapsed_s": 16.402, "event": "odom", "value": [1896.374898432, 8.67496864102826, 0.8362670334863576, 163.33511795741356]}
+{"elapsed_s": 16.416, "event": "actuator", "value": {"mode": "auto", "left_pwm": "1500", "right_pwm": "1500", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.000", "angular_cmd": "0.000", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 16.437, "event": "odom", "value": [1896.409743662, 8.67496864102826, 0.8362670334863576, 163.33511795741356]}
+{"elapsed_s": 16.441, "event": "status", "value": "PREVIEW: obstacles=307, front=0.9196310312146242, goal=(2.09, 4.17), drive_enabled=True, tank_edge=0.84, walls_excluded=False, dock_phase=, blocked="}
+{"elapsed_s": 16.469, "event": "odom", "value": [1896.441872267, 8.694675595588254, 0.8299171986128544, 163.46105632896942]}
+{"elapsed_s": 16.492, "event": "command", "value": [1896.464399722, 0.0, 0.0]}
+{"elapsed_s": 16.51, "event": "odom", "value": [1896.482990707, 8.694675595588254, 0.8299171986128544, 163.46105632896942]}
+{"elapsed_s": 16.538, "event": "odom", "value": [1896.511070936, 8.708910016190027, 0.8243274364145271, 163.57874732100987]}
+{"elapsed_s": 16.544, "event": "status", "value": "PREVIEW: obstacles=309, front=0.8297878299793288, goal=(2.09, 4.19), drive_enabled=True, tank_edge=0.83, walls_excluded=False, dock_phase=, blocked="}
+{"elapsed_s": 16.572, "event": "odom", "value": [1896.544099695, 8.708910016190027, 0.8243274364145271, 163.57874732100987]}
+{"elapsed_s": 16.59, "event": "command", "value": [1896.562219467, 0.0, 0.0]}
+{"elapsed_s": 16.606, "event": "phase", "value": "computer mode requested, neutral output until start"}
+{"elapsed_s": 16.612, "event": "odom", "value": [1896.585020594, 8.758975800882983, 0.8101628510818496, 163.68130355872808]}
+{"elapsed_s": 16.637, "event": "odom", "value": [1896.60939364, 8.758975800882983, 0.8101628510818496, 163.68130355872808]}
+{"elapsed_s": 16.638, "event": "status", "value": "PREVIEW: obstacles=312, front=0.8317797383785172, goal=(2.10, 4.20), drive_enabled=True, tank_edge=0.82, walls_excluded=False, dock_phase=, blocked="}
+{"elapsed_s": 16.643, "event": "arm", "value": {"success": true, "message": "avoidance test armed"}}
+{"elapsed_s": 16.67, "event": "odom", "value": [1896.642704616, 8.758975800882983, 0.8101628510818496, 163.68130355872808]}
+{"elapsed_s": 16.703, "event": "odom", "value": [1896.675546234, 8.786161369754751, 0.8028688526971857, 163.80308581779516]}
+{"elapsed_s": 16.707, "event": "command", "value": [1896.679936125, 0.0, 0.0]}
+{"elapsed_s": 16.736, "event": "odom", "value": [1896.708539312, 8.80052840012066, 0.8002869188383731, 163.93178505955265]}
+{"elapsed_s": 16.759, "event": "status", "value": "FOLLOW: plan_acquired"}
+{"elapsed_s": 16.77, "event": "odom", "value": [1896.74285195, 8.80052840012066, 0.8002869188383731, 163.93178505955265]}
+{"elapsed_s": 16.789, "event": "command", "value": [1896.761199216, 0.22822371681247317, -0.17933305917161588]}
+{"elapsed_s": 16.804, "event": "odom", "value": [1896.77609614, 8.80052840012066, 0.8002869188383731, 163.93178505955265]}
+{"elapsed_s": 16.831, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 16.837, "event": "odom", "value": [1896.809627186, 8.811026656911151, 0.7954193048882598, 164.06709566212214]}
+{"elapsed_s": 16.869, "event": "odom", "value": [1896.84165854, 8.811026656911151, 0.7954193048882598, 164.06709566212214]}
+{"elapsed_s": 16.888, "event": "command", "value": [1896.860160723, 0.22822371681247314, -0.18306422446835235]}
+{"elapsed_s": 16.902, "event": "odom", "value": [1896.874442492, 8.822185109017248, 0.7924514193147536, 164.16916902934128]}
+{"elapsed_s": 16.931, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 16.935, "event": "odom", "value": [1896.907586935, 8.822185109017248, 0.7924514193147536, 164.16916902934128]}
+{"elapsed_s": 16.969, "event": "odom", "value": [1896.941469768, 8.835222807070094, 0.7867381612812745, 164.23236688274557]}
+{"elapsed_s": 16.989, "event": "command", "value": [1896.961439323, 0.22822371681247314, -0.18392200763420172]}
+{"elapsed_s": 17.002, "event": "odom", "value": [1896.974353339, 8.835222807070094, 0.7867381612812745, 164.23236688274557]}
+{"elapsed_s": 17.031, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 17.039, "event": "odom", "value": [1897.011729044, 8.847276637486642, 0.7832246428756996, 164.24514514085087]}
+{"elapsed_s": 17.071, "event": "odom", "value": [1897.043881874, 8.847276637486642, 0.7832246428756996, 164.24514514085087]}
+{"elapsed_s": 17.087, "event": "command", "value": [1897.059531076, 0.22822371681247314, -0.18086380876225364]}
+{"elapsed_s": 17.102, "event": "odom", "value": [1897.074742601, 8.865529147056922, 0.775386512280651, 164.24311675077413]}
+{"elapsed_s": 17.135, "event": "odom", "value": [1897.107159918, 8.865529147056922, 0.775386512280651, 164.24311675077413]}
+{"elapsed_s": 17.14, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 17.171, "event": "odom", "value": [1897.14385061, 8.881364796299346, 0.7716521315733902, 164.2133901989358]}
+{"elapsed_s": 17.189, "event": "command", "value": [1897.161842602, 0.22822371681247314, -0.17417426956260484]}
+{"elapsed_s": 17.208, "event": "odom", "value": [1897.180721628, 8.881364796299346, 0.7716521315733902, 164.2133901989358]}
+{"elapsed_s": 17.236, "event": "odom", "value": [1897.208709085, 8.881364796299346, 0.7716521315733902, 164.2133901989358]}
+{"elapsed_s": 17.268, "event": "odom", "value": [1897.241053313, 8.899846548212876, 0.7654387102443754, 164.19647382316856]}
+{"elapsed_s": 17.27, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 17.289, "event": "command", "value": [1897.261169304, 0.22822371681247314, -0.1710958395135751]}
+{"elapsed_s": 17.312, "event": "odom", "value": [1897.284381355, 8.899846548212876, 0.7654387102443754, 164.19647382316856]}
+{"elapsed_s": 17.328, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 17.339, "event": "odom", "value": [1897.311888414, 8.932917530596749, 0.7559805877795067, 164.2063860124164]}
+{"elapsed_s": 17.369, "event": "odom", "value": [1897.341966493, 8.932917530596749, 0.7559805877795067, 164.2063860124164]}
+{"elapsed_s": 17.39, "event": "command", "value": [1897.362893388, 0.22822371681247314, -0.16544959596185213]}
+{"elapsed_s": 17.412, "event": "odom", "value": [1897.384174054, 8.96914176151394, 0.7450278811607004, 164.26373767638373]}
+{"elapsed_s": 17.419, "event": "actuator", "value": {"mode": "auto", "left_pwm": "1673", "right_pwm": "1549", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.228", "angular_cmd": "-0.165", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 17.439, "event": "odom", "value": [1897.411383664, 8.96914176151394, 0.7450278811607004, 164.26373767638373]}
+{"elapsed_s": 17.447, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 17.47, "event": "odom", "value": [1897.442517007, 8.991427799102725, 0.7367258503161564, 164.37673170732398]}
+{"elapsed_s": 17.488, "event": "command", "value": [1897.460507943, 0.22822371681247317, -0.16472756774014022]}
+{"elapsed_s": 17.504, "event": "odom", "value": [1897.476933616, 8.991427799102725, 0.7367258503161564, 164.37673170732398]}
+{"elapsed_s": 17.53, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 17.538, "event": "odom", "value": [1897.510623579, 8.991427799102725, 0.7367258503161564, 164.37673170732398]}
+{"elapsed_s": 17.574, "event": "odom", "value": [1897.547034935, 9.016884614133643, 0.7299128435164726, 164.4621874251929]}
+{"elapsed_s": 17.588, "event": "command", "value": [1897.561062969, 0.22822371681247314, -0.1627462217142808]}
+{"elapsed_s": 17.601, "event": "odom", "value": [1897.573887319, 9.016884614133643, 0.7299128435164726, 164.4621874251929]}
+{"elapsed_s": 17.637, "event": "odom", "value": [1897.609613343, 9.016884614133643, 0.7299128435164726, 164.4621874251929]}
+{"elapsed_s": 17.647, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 17.668, "event": "odom", "value": [1897.640757374, 9.037730274091835, 0.7226356856578877, 164.46907531313155]}
+{"elapsed_s": 17.689, "event": "command", "value": [1897.661125789, 0.22822371681247314, -0.16088363198568412]}
+{"elapsed_s": 17.703, "event": "odom", "value": [1897.675899924, 9.037730274091835, 0.7226356856578877, 164.46907531313155]}
+{"elapsed_s": 17.728, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 17.739, "event": "odom", "value": [1897.711378837, 9.051749341219734, 0.7169221087875105, 164.36595034478458]}
+{"elapsed_s": 17.771, "event": "odom", "value": [1897.74319972, 9.061609384363651, 0.7153280660243662, 164.12182504247218]}
+{"elapsed_s": 17.789, "event": "command", "value": [1897.761406278, 0.22822371681247314, -0.13993963562311038]}
+{"elapsed_s": 17.804, "event": "odom", "value": [1897.776233855, 9.061609384363651, 0.7153280660243662, 164.12182504247218]}
+{"elapsed_s": 17.831, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 17.837, "event": "odom", "value": [1897.809167636, 9.061609384363651, 0.7153280660243662, 164.12182504247218]}
+{"elapsed_s": 17.87, "event": "odom", "value": [1897.843027172, 9.061609384363651, 0.7153280660243662, 164.12182504247218]}
+{"elapsed_s": 17.889, "event": "command", "value": [1897.86143876, 0.22822371681247314, -0.13993963562311038]}
+{"elapsed_s": 17.902, "event": "odom", "value": [1897.874387817, 9.110854215026041, 0.6983705459674757, 163.4417876576092]}
+{"elapsed_s": 17.928, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 17.938, "event": "odom", "value": [1897.910271125, 9.110854215026041, 0.6983705459674757, 163.4417876576092]}
+{"elapsed_s": 17.97, "event": "odom", "value": [1897.942919393, 9.125527088096636, 0.6927841819882643, 163.1359843403026]}
+{"elapsed_s": 17.988, "event": "command", "value": [1897.96095721, 0.22822371681247317, -0.11150049886528182]}
+{"elapsed_s": 18.002, "event": "odom", "value": [1897.974690131, 9.125527088096636, 0.6927841819882643, 163.1359843403026]}
+{"elapsed_s": 18.035, "event": "odom", "value": [1898.007132857, 9.144545296771465, 0.6841448207061394, 162.93669981181063]}
+{"elapsed_s": 18.036, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 18.069, "event": "odom", "value": [1898.041617979, 9.144545296771465, 0.6841448207061394, 162.93669981181063]}
+{"elapsed_s": 18.095, "event": "command", "value": [1898.067310072, 0.22822371681247314, -0.1081437034153729]}
+{"elapsed_s": 18.105, "event": "odom", "value": [1898.077347075, 9.144545296771465, 0.6841448207061394, 162.93669981181063]}
+{"elapsed_s": 18.128, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 18.135, "event": "odom", "value": [1898.107762893, 9.163067373773089, 0.6766707362813693, 162.79515475507623]}
+{"elapsed_s": 18.169, "event": "odom", "value": [1898.142032809, 9.163067373773089, 0.6766707362813693, 162.79515475507623]}
+{"elapsed_s": 18.187, "event": "command", "value": [1898.159288746, 0.22822371681247314, -0.10579637800311947]}
+{"elapsed_s": 18.204, "event": "odom", "value": [1898.176577645, 9.172997937764462, 0.6716558811540914, 162.6828615783486]}
+{"elapsed_s": 18.229, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 18.236, "event": "odom", "value": [1898.208968753, 9.172997937764462, 0.6716558811540914, 162.6828615783486]}
+{"elapsed_s": 18.269, "event": "odom", "value": [1898.241368406, 9.188906414049335, 0.6642451106951158, 162.59217946618972]}
+{"elapsed_s": 18.291, "event": "command", "value": [1898.263887412, 0.22822371681247314, -0.10485017517133542]}
+{"elapsed_s": 18.311, "event": "odom", "value": [1898.283924777, 9.188906414049335, 0.6642451106951158, 162.59217946618972]}
+{"elapsed_s": 18.339, "event": "odom", "value": [1898.311148787, 9.188906414049335, 0.6642451106951158, 162.59217946618972]}
+{"elapsed_s": 18.348, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 18.37, "event": "odom", "value": [1898.342578363, 9.188906414049335, 0.6642451106951158, 162.59217946618972]}
+{"elapsed_s": 18.387, "event": "command", "value": [1898.359560468, 0.22822371681247314, -0.10485017517133542]}
+{"elapsed_s": 18.404, "event": "odom", "value": [1898.377006908, 9.188906414049335, 0.6642451106951158, 162.59217946618972]}
+{"elapsed_s": 18.416, "event": "actuator", "value": {"mode": "auto", "left_pwm": "1650", "right_pwm": "1571", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.228", "angular_cmd": "-0.105", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 18.436, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 18.439, "event": "odom", "value": [1898.411914475, 9.188906414049335, 0.6642451106951158, 162.59217946618972]}
+{"elapsed_s": 18.468, "event": "odom", "value": [1898.440988044, 9.204068346537227, 0.6586369711636546, 162.48218221384593]}
+{"elapsed_s": 18.49, "event": "command", "value": [1898.462132738, 0.22822371681247317, -0.10288669403498253]}
+{"elapsed_s": 18.504, "event": "odom", "value": [1898.476825655, 9.204068346537227, 0.6586369711636546, 162.48218221384593]}
+{"elapsed_s": 18.536, "event": "odom", "value": [1898.508441636, 9.230502941569739, 0.6509224818704434, 162.25351107208934]}
+{"elapsed_s": 18.541, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 18.57, "event": "odom", "value": [1898.542685312, 9.230502941569739, 0.6509224818704434, 162.25351107208934]}
+{"elapsed_s": 18.587, "event": "command", "value": [1898.559354288, 0.22822371681247314, -0.09411227499713251]}
+{"elapsed_s": 18.601, "event": "odom", "value": [1898.57380227, 9.240758069563604, 0.6477831356088269, 162.1753561269728]}
+{"elapsed_s": 18.629, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 18.638, "event": "odom", "value": [1898.610482882, 9.252641449978734, 0.6430971791225876, 162.1649968417942]}
+{"elapsed_s": 18.669, "event": "odom", "value": [1898.641557151, 9.252641449978734, 0.6430971791225876, 162.1649968417942]}
+{"elapsed_s": 18.69, "event": "command", "value": [1898.662876666, 0.22822371681247314, -0.0922259701947836]}
+{"elapsed_s": 18.702, "event": "odom", "value": [1898.674327502, 9.252641449978734, 0.6430971791225876, 162.1649968417942]}
+{"elapsed_s": 18.735, "event": "odom", "value": [1898.708059706, 9.263150820043727, 0.6384312515398829, 162.21953818795672]}
+{"elapsed_s": 18.769, "event": "odom", "value": [1898.741635874, 9.263150820043727, 0.6384312515398829, 162.21953818795672]}
+{"elapsed_s": 18.781, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 18.793, "event": "command", "value": [1898.765967126, 0.22822371681247314, -0.0922259701947836]}
+{"elapsed_s": 18.807, "event": "odom", "value": [1898.779520265, 9.270926590114279, 0.6362718919050139, 162.3249487112509]}
+{"elapsed_s": 18.835, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 18.837, "event": "odom", "value": [1898.809145723, 9.270926590114279, 0.6362718919050139, 162.3249487112509]}
+{"elapsed_s": 18.869, "event": "odom", "value": [1898.841542687, 9.276822084180697, 0.6347188447201131, 162.44219524994958]}
+{"elapsed_s": 18.887, "event": "command", "value": [1898.860040998, 0.22822371681247314, -0.1025546773806129]}
+{"elapsed_s": 18.903, "event": "odom", "value": [1898.875284459, 9.276822084180697, 0.6347188447201131, 162.44219524994958]}
+{"elapsed_s": 18.928, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 18.935, "event": "odom", "value": [1898.907411367, 9.280327862473236, 0.6353240304541135, 162.52941706718067]}
+{"elapsed_s": 18.975, "event": "odom", "value": [1898.947214696, 9.280327862473236, 0.6353240304541135, 162.52941706718067]}
+{"elapsed_s": 18.989, "event": "command", "value": [1898.961889309, 0.22822371681247314, -0.10328933735482472]}
+{"elapsed_s": 19.004, "event": "odom", "value": [1898.976331595, 9.27958357118355, 0.6411470732449893, 162.56346931395913]}
+{"elapsed_s": 19.035, "event": "odom", "value": [1899.007400807, 9.27958357118355, 0.6411470732449893, 162.56346931395913]}
+{"elapsed_s": 19.05, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 19.069, "event": "odom", "value": [1899.041423356, 9.27770972944275, 0.6466366757857847, 162.57836186300568]}
+{"elapsed_s": 19.087, "event": "command", "value": [1899.059600345, 0.22822371681247317, -0.09397436285052518]}
+{"elapsed_s": 19.113, "event": "odom", "value": [1899.085343127, 9.27770972944275, 0.6466366757857847, 162.57836186300568]}
+{"elapsed_s": 19.129, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 19.138, "event": "odom", "value": [1899.110347423, 9.276774373307838, 0.6524035595208776, 162.59204893374007]}
+{"elapsed_s": 19.169, "event": "odom", "value": [1899.141624002, 9.276774373307838, 0.6524035595208776, 162.59204893374007]}
+{"elapsed_s": 19.187, "event": "command", "value": [1899.159759582, 0.22822371681247314, -0.0887669445088713]}
+{"elapsed_s": 19.201, "event": "odom", "value": [1899.173631899, 9.276774373307838, 0.6524035595208776, 162.59204893374007]}
+{"elapsed_s": 19.228, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 19.238, "event": "odom", "value": [1899.210832078, 9.275511631374453, 0.6575657142492338, 162.6319415677047]}
+{"elapsed_s": 19.269, "event": "odom", "value": [1899.24120159, 9.275511631374453, 0.6575657142492338, 162.6319415677047]}
+{"elapsed_s": 19.288, "event": "command", "value": [1899.260659353, 0.22822371681247314, -0.08516749223887018]}
+{"elapsed_s": 19.305, "event": "odom", "value": [1899.277786935, 9.27447270255311, 0.6638993162618433, 162.67861995727813]}
+{"elapsed_s": 19.335, "event": "odom", "value": [1899.307628783, 9.27447270255311, 0.6638993162618433, 162.67861995727813]}
+{"elapsed_s": 19.339, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 19.37, "event": "odom", "value": [1899.342258069, 9.274053827134537, 0.6705154632190293, 162.73715274041797]}
+{"elapsed_s": 19.387, "event": "command", "value": [1899.359419444, 0.22822371681247317, -0.07604323478988632]}
+{"elapsed_s": 19.407, "event": "odom", "value": [1899.379208865, 9.274053827134537, 0.6705154632190293, 162.73715274041797]}
+{"elapsed_s": 19.419, "event": "actuator", "value": {"mode": "auto", "left_pwm": "1639", "right_pwm": "1582", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.228", "angular_cmd": "-0.076", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 19.435, "event": "odom", "value": [1899.407405896, 9.273206262391632, 0.6804882827536038, 162.792170986651]}
+{"elapsed_s": 19.438, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 19.469, "event": "odom", "value": [1899.441622307, 9.273206262391632, 0.6804882827536038, 162.792170986651]}
+{"elapsed_s": 19.488, "event": "command", "value": [1899.460989091, 0.22822371681247314, -0.06818288323401867]}
+{"elapsed_s": 19.509, "event": "odom", "value": [1899.482027189, 9.273206262391632, 0.6804882827536038, 162.792170986651]}
+{"elapsed_s": 19.529, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 19.536, "event": "odom", "value": [1899.509019993, 9.273206262391632, 0.6804882827536038, 162.792170986651]}
+{"elapsed_s": 19.572, "event": "odom", "value": [1899.544227024, 9.273206262391632, 0.6804882827536038, 162.792170986651]}
+{"elapsed_s": 19.587, "event": "command", "value": [1899.559286833, 0.22822371681247314, -0.06818288323401867]}
+{"elapsed_s": 19.607, "event": "odom", "value": [1899.579463497, 9.273206262391632, 0.6804882827536038, 162.792170986651]}
+{"elapsed_s": 19.636, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 19.644, "event": "odom", "value": [1899.616347859, 9.273206262391632, 0.6804882827536038, 162.792170986651]}
+{"elapsed_s": 19.671, "event": "odom", "value": [1899.64332383, 9.273206262391632, 0.6804882827536038, 162.792170986651]}
+{"elapsed_s": 19.691, "event": "command", "value": [1899.663271911, 0.22822371681247314, -0.06818288323401867]}
+{"elapsed_s": 19.71, "event": "odom", "value": [1899.682886383, 9.273206262391632, 0.6804882827536038, 162.792170986651]}
+{"elapsed_s": 19.736, "event": "odom", "value": [1899.708720592, 9.273206262391632, 0.6804882827536038, 162.792170986651]}
+{"elapsed_s": 19.737, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 19.769, "event": "odom", "value": [1899.742064336, 9.273206262391632, 0.6804882827536038, 162.792170986651]}
+{"elapsed_s": 19.794, "event": "command", "value": [1899.766767951, 0.22822371681247314, -0.14564487143754623]}
+{"elapsed_s": 19.802, "event": "odom", "value": [1899.774143946, 9.273206262391632, 0.6804882827536038, 162.792170986651]}
+{"elapsed_s": 19.835, "event": "odom", "value": [1899.807937784, 9.273206262391632, 0.6804882827536038, 162.792170986651]}
+{"elapsed_s": 19.851, "event": "status", "value": "FOLLOW: backstop_regen"}
+{"elapsed_s": 19.869, "event": "odom", "value": [1899.84175175, 9.273206262391632, 0.6804882827536038, 162.792170986651]}
+{"elapsed_s": 19.885, "event": "command", "value": [1899.85801905, 0.22822371681247314, -0.14564487143754623]}
+{"elapsed_s": 19.905, "event": "odom", "value": [1899.877545519, 9.273206262391632, 0.6804882827536038, 162.792170986651]}
+{"elapsed_s": 19.929, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 19.935, "event": "odom", "value": [1899.907616238, 9.273206262391632, 0.6804882827536038, 162.792170986651]}
+{"elapsed_s": 19.969, "event": "odom", "value": [1899.941754598, 9.273206262391632, 0.6804882827536038, 162.792170986651]}
+{"elapsed_s": 19.99, "event": "command", "value": [1899.962727926, 0.22822371681247314, -0.14564487143754623]}
+{"elapsed_s": 20.011, "event": "odom", "value": [1899.983899244, 9.273206262391632, 0.6804882827536038, 162.792170986651]}
+{"elapsed_s": 20.035, "event": "odom", "value": [1900.00789135, 9.273206262391632, 0.6804882827536038, 162.792170986651]}
+{"elapsed_s": 20.038, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 20.071, "event": "odom", "value": [1900.043352149, 9.273206262391632, 0.6804882827536038, 162.792170986651]}
+{"elapsed_s": 20.091, "event": "command", "value": [1900.063856567, 0.22822371681247314, -0.14564487143754623]}
+{"elapsed_s": 20.114, "event": "odom", "value": [1900.086594587, 9.273206262391632, 0.6804882827536038, 162.792170986651]}
+{"elapsed_s": 20.14, "event": "odom", "value": [1900.112468285, 9.273206262391632, 0.6804882827536038, 162.792170986651]}
+{"elapsed_s": 20.142, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 20.17, "event": "odom", "value": [1900.143004874, 9.273206262391632, 0.6804882827536038, 162.792170986651]}
+{"elapsed_s": 20.19, "event": "command", "value": [1900.162545775, 0.22822371681247314, -0.14564487143754623]}
+{"elapsed_s": 20.204, "event": "odom", "value": [1900.176633939, 9.273206262391632, 0.6804882827536038, 162.792170986651]}
+{"elapsed_s": 20.236, "event": "odom", "value": [1900.209034039, 9.273206262391632, 0.6804882827536038, 162.792170986651]}
+{"elapsed_s": 20.24, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 20.269, "event": "odom", "value": [1900.242044589, 9.273206262391632, 0.6804882827536038, 162.792170986651]}
+{"elapsed_s": 20.27, "event": "progress", "value": {"armed": true, "status": "FOLLOW: following", "xy": [9.273206262391632, 0.6804882827536038], "entry": [2.1041441071677087, 4.197787180565281], "pwm": ["1639", "1582"]}}
+{"elapsed_s": 20.292, "event": "command", "value": [1900.264312804, 0.22822371681247314, -0.14564487143754623]}
+{"elapsed_s": 20.31, "event": "odom", "value": [1900.282270202, 9.273206262391632, 0.6804882827536038, 162.792170986651]}
+{"elapsed_s": 20.335, "event": "odom", "value": [1900.30729293, 9.273206262391632, 0.6804882827536038, 162.792170986651]}
+{"elapsed_s": 20.338, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 20.37, "event": "odom", "value": [1900.342522875, 9.273206262391632, 0.6804882827536038, 162.792170986651]}
+{"elapsed_s": 20.392, "event": "command", "value": [1900.36495551, 0.22822371681247314, -0.14564487143754623]}
+{"elapsed_s": 20.411, "event": "odom", "value": [1900.383737925, 9.273206262391632, 0.6804882827536038, 162.792170986651]}
+{"elapsed_s": 20.416, "event": "actuator", "value": {"mode": "auto", "left_pwm": "1665", "right_pwm": "1556", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.228", "angular_cmd": "-0.146", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 20.476, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 20.491, "event": "command", "value": [1900.463984761, 0.22822371681247314, -0.14564487143754623]}
+{"elapsed_s": 20.534, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 20.597, "event": "command", "value": [1900.569642337, 0.22822371681247314, -0.12216968945707729]}
+{"elapsed_s": 20.64, "event": "status", "value": "FOLLOW: violation_regen"}
+{"elapsed_s": 20.697, "event": "command", "value": [1900.669350647, 0.22822371681247314, -0.12216968945707729]}
+{"elapsed_s": 20.739, "event": "status", "value": "FOLLOW: violation_regen"}
+{"elapsed_s": 20.742, "event": "odom", "value": [1900.714400372, 9.37151409635442, 0.6321460770323881, 166.2232655319092]}
+{"elapsed_s": 20.77, "event": "odom", "value": [1900.742965541, 9.37151409635442, 0.6321460770323881, 166.2232655319092]}
+{"elapsed_s": 20.795, "event": "command", "value": [1900.76767786, 0.22822371681247314, -0.13674280622112184]}
+{"elapsed_s": 20.815, "event": "odom", "value": [1900.787242282, 9.37151409635442, 0.6321460770323881, 166.2232655319092]}
+{"elapsed_s": 20.836, "event": "odom", "value": [1900.808766251, 9.37151409635442, 0.6321460770323881, 166.2232655319092]}
+{"elapsed_s": 20.837, "event": "status", "value": "FOLLOW: violation_regen"}
+{"elapsed_s": 20.869, "event": "odom", "value": [1900.841606204, 9.37151409635442, 0.6321460770323881, 166.2232655319092]}
+{"elapsed_s": 20.898, "event": "command", "value": [1900.870343603, 0.22822371681247314, -0.13674280622112184]}
+{"elapsed_s": 20.903, "event": "odom", "value": [1900.875278885, 9.372761285130634, 0.6281587624471195, 165.43913922130795]}
+{"elapsed_s": 20.94, "event": "odom", "value": [1900.912210448, 9.372761285130634, 0.6281587624471195, 165.43913922130795]}
+{"elapsed_s": 20.943, "event": "status", "value": "FOLLOW: violation_regen"}
+{"elapsed_s": 20.972, "event": "odom", "value": [1900.944516081, 9.374505137478696, 0.6235589809911485, 164.93657298585532]}
+{"elapsed_s": 20.998, "event": "command", "value": [1900.970699356, 0.22822371681247317, -0.12687866244901405]}
+{"elapsed_s": 21.003, "event": "odom", "value": [1900.975694993, 9.374505137478696, 0.6235589809911485, 164.93657298585532]}
+{"elapsed_s": 21.036, "event": "odom", "value": [1901.008262905, 9.376459538610558, 0.6200173783671754, 164.49464620353177]}
+{"elapsed_s": 21.05, "event": "status", "value": "FOLLOW: violation_regen"}
+{"elapsed_s": 21.069, "event": "odom", "value": [1901.041590169, 9.376459538610558, 0.6200173783671754, 164.49464620353177]}
+{"elapsed_s": 21.102, "event": "odom", "value": [1901.074098816, 9.377374115016277, 0.6182923136994054, 164.09973857597214]}
+{"elapsed_s": 21.108, "event": "command", "value": [1901.08069482, 0.22822371681247314, -0.12251795299711693]}
+{"elapsed_s": 21.139, "event": "odom", "value": [1901.111786145, 9.377374115016277, 0.6182923136994054, 164.09973857597214]}
+{"elapsed_s": 21.148, "event": "status", "value": "FOLLOW: violation_regen"}
+{"elapsed_s": 21.173, "event": "odom", "value": [1901.146011611, 9.37864453520599, 0.6158436756297962, 163.7799176862355]}
+{"elapsed_s": 21.204, "event": "odom", "value": [1901.176605705, 9.37864453520599, 0.6158436756297962, 163.7799176862355]}
+{"elapsed_s": 21.208, "event": "command", "value": [1901.180553791, 0.22822371681247314, -0.09119769563843926]}
+{"elapsed_s": 21.237, "event": "odom", "value": [1901.209111952, 9.37864453520599, 0.6158436756297962, 163.7799176862355]}
+{"elapsed_s": 21.252, "event": "status", "value": "FOLLOW: violation_regen"}
+{"elapsed_s": 21.27, "event": "odom", "value": [1901.242949631, 9.379690767785931, 0.613037399323509, 163.48170268562126]}
+{"elapsed_s": 21.295, "event": "command", "value": [1901.267737248, 0.22822371681247317, -0.0904233328626255]}
+{"elapsed_s": 21.314, "event": "odom", "value": [1901.286668276, 9.379690767785931, 0.613037399323509, 163.48170268562126]}
+{"elapsed_s": 21.335, "event": "odom", "value": [1901.307519456, 9.38018926042975, 0.6113783930109762, 163.1951272386619]}
+{"elapsed_s": 21.335, "event": "status", "value": "FOLLOW: violation_regen"}
+{"elapsed_s": 21.369, "event": "odom", "value": [1901.341406064, 9.38018926042975, 0.6113783930109762, 163.1951272386619]}
+{"elapsed_s": 21.396, "event": "command", "value": [1901.368400019, 0.22822371681247317, -0.08727720419168257]}
+{"elapsed_s": 21.408, "event": "odom", "value": [1901.381082316, 9.38018926042975, 0.6113783930109762, 163.1951272386619]}
+{"elapsed_s": 21.415, "event": "actuator", "value": {"mode": "auto", "left_pwm": "1643", "right_pwm": "1578", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.228", "angular_cmd": "-0.087", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 21.433, "event": "status", "value": "FOLLOW: violation_regen"}
+{"elapsed_s": 21.436, "event": "odom", "value": [1901.408221332, 9.38018926042975, 0.6113783930109762, 163.1951272386619]}
+{"elapsed_s": 21.469, "event": "odom", "value": [1901.4418639, 9.38018926042975, 0.6113783930109762, 163.1951272386619]}
+{"elapsed_s": 21.496, "event": "command", "value": [1901.46906727, 0.22822371681247317, -0.08727720419168257]}
+{"elapsed_s": 21.503, "event": "odom", "value": [1901.475188796, 9.383301334519544, 0.6044811039827092, 162.70148633347182]}
+{"elapsed_s": 21.535, "event": "odom", "value": [1901.507386938, 9.384676859200535, 0.6024826583744062, 162.52930720139685]}
+{"elapsed_s": 21.542, "event": "status", "value": "FOLLOW: violation_regen"}
+{"elapsed_s": 21.571, "event": "odom", "value": [1901.543609455, 9.384676859200535, 0.6024826583744062, 162.52930720139685]}
+{"elapsed_s": 21.602, "event": "odom", "value": [1901.574600073, 9.386023035243426, 0.6006172358392039, 162.43911155518893]}
+{"elapsed_s": 21.603, "event": "command", "value": [1901.575132249, 0.22822371681247305, 0.03901125274237646]}
+{"elapsed_s": 21.637, "event": "odom", "value": [1901.609593722, 9.386023035243426, 0.6006172358392039, 162.43911155518893]}
+{"elapsed_s": 21.648, "event": "status", "value": "FOLLOW: violation_regen"}
+{"elapsed_s": 21.669, "event": "odom", "value": [1901.641836313, 9.386023035243426, 0.6006172358392039, 162.43911155518893]}
+{"elapsed_s": 21.695, "event": "command", "value": [1901.66780771, 0.22822371681247314, 0.00038054210127339005]}
+{"elapsed_s": 21.711, "event": "odom", "value": [1901.683208584, 9.3875952956461, 0.5995299041064082, 162.40502257763814]}
+{"elapsed_s": 21.733, "event": "status", "value": "FOLLOW: violation_regen"}
+{"elapsed_s": 21.735, "event": "odom", "value": [1901.707994761, 9.3875952956461, 0.5995299041064082, 162.40502257763814]}
+{"elapsed_s": 21.77, "event": "odom", "value": [1901.742155809, 9.389712971560177, 0.5971951869523384, 162.36616244312512]}
+{"elapsed_s": 21.797, "event": "command", "value": [1901.769861433, 0.22822371681247317, -0.0469417557393707]}
+{"elapsed_s": 21.813, "event": "odom", "value": [1901.78537191, 9.389712971560177, 0.5971951869523384, 162.36616244312512]}
+{"elapsed_s": 21.838, "event": "odom", "value": [1901.811011009, 9.391543002746277, 0.5947773450752996, 162.32449469536058]}
+{"elapsed_s": 21.84, "event": "status", "value": "FOLLOW: violation_regen"}
+{"elapsed_s": 21.872, "event": "odom", "value": [1901.844994996, 9.391543002746277, 0.5947773450752996, 162.32449469536058]}
+{"elapsed_s": 21.904, "event": "odom", "value": [1901.876183027, 9.392007021098841, 0.5954896101693146, 162.277432791902]}
+{"elapsed_s": 21.906, "event": "command", "value": [1901.87821736, 0.22822371681247314, -0.10718193715392604]}
+{"elapsed_s": 21.936, "event": "odom", "value": [1901.909049733, 9.392007021098841, 0.5954896101693146, 162.277432791902]}
+{"elapsed_s": 21.948, "event": "status", "value": "FOLLOW: violation_regen"}
+{"elapsed_s": 21.973, "event": "odom", "value": [1901.945220408, 9.395134509102945, 0.5927363040837123, 162.23629733671456]}
+{"elapsed_s": 21.995, "event": "command", "value": [1901.9678022, 0.22822371681247305, -0.12273059290066093]}
+{"elapsed_s": 22.008, "event": "odom", "value": [1901.981005249, 9.395134509102945, 0.5927363040837123, 162.23629733671456]}
+{"elapsed_s": 22.035, "event": "odom", "value": [1902.007388209, 9.396965037143305, 0.5921256634526596, 162.15361778419202]}
+{"elapsed_s": 22.045, "event": "status", "value": "FOLLOW: violation_regen"}
+{"elapsed_s": 22.069, "event": "odom", "value": [1902.041363652, 9.396965037143305, 0.5921256634526596, 162.15361778419202]}
+{"elapsed_s": 22.103, "event": "odom", "value": [1902.075108943, 9.396965037143305, 0.5921256634526596, 162.15361778419202]}
+{"elapsed_s": 22.104, "event": "command", "value": [1902.076588859, 0.22822371681247314, -0.1262290721242275]}
+{"elapsed_s": 22.137, "event": "odom", "value": [1902.109580529, 9.396965037143305, 0.5921256634526596, 162.15361778419202]}
+{"elapsed_s": 22.164, "event": "status", "value": "FOLLOW: violation_regen"}
+{"elapsed_s": 22.17, "event": "odom", "value": [1902.142652456, 9.397590506640746, 0.5929851286936394, 161.98125463460408]}
+{"elapsed_s": 22.198, "event": "command", "value": [1902.171023828, 0.22822371681247314, -0.1262290721242275]}
+{"elapsed_s": 22.202, "event": "odom", "value": [1902.174635648, 9.398993110144003, 0.5925440258937617, 161.829052490138]}
+{"elapsed_s": 22.239, "event": "odom", "value": [1902.211303202, 9.398993110144003, 0.5925440258937617, 161.829052490138]}
+{"elapsed_s": 22.241, "event": "status", "value": "FOLLOW: violation_regen"}
+{"elapsed_s": 22.27, "event": "odom", "value": [1902.242168376, 9.399305894293551, 0.5923150882134289, 161.7431731951783]}
+{"elapsed_s": 22.303, "event": "command", "value": [1902.275592058, 0.22822371681247317, -0.12512974335717134]}
+{"elapsed_s": 22.306, "event": "odom", "value": [1902.278393517, 9.399305894293551, 0.5923150882134289, 161.7431731951783]}
+{"elapsed_s": 22.337, "event": "odom", "value": [1902.309458089, 9.399305894293551, 0.5923150882134289, 161.7431731951783]}
+{"elapsed_s": 22.371, "event": "odom", "value": [1902.343797735, 9.399827283224104, 0.5922125495421015, 161.74117577147015]}
+{"elapsed_s": 22.382, "event": "status", "value": "FOLLOW: violation_regen"}
+{"elapsed_s": 22.401, "event": "odom", "value": [1902.373985897, 9.39772543914436, 0.5948484367947766, 161.76518358283585]}
+{"elapsed_s": 22.403, "event": "command", "value": [1902.375438868, 0.22822371681247317, -0.12512974335717134]}
+{"elapsed_s": 22.417, "event": "actuator", "value": {"mode": "auto", "left_pwm": "1658", "right_pwm": "1564", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.228", "angular_cmd": "-0.125", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 22.437, "event": "odom", "value": [1902.409920501, 9.39772543914436, 0.5948484367947766, 161.76518358283585]}
+{"elapsed_s": 22.439, "event": "status", "value": "FOLLOW: violation_regen"}
+{"elapsed_s": 22.471, "event": "odom", "value": [1902.443433626, 9.39772543914436, 0.5948484367947766, 161.76518358283585]}
+{"elapsed_s": 22.5, "event": "command", "value": [1902.472759074, 0.22822371681247314, -0.13131472151475895]}
+{"elapsed_s": 22.503, "event": "odom", "value": [1902.47464697, 9.398402756088256, 0.5942789567537723, 161.8823625178325]}
+{"elapsed_s": 22.539, "event": "odom", "value": [1902.512034482, 9.398402756088256, 0.5942789567537723, 161.8823625178325]}
+{"elapsed_s": 22.546, "event": "status", "value": "FOLLOW: violation_regen"}
+{"elapsed_s": 22.57, "event": "odom", "value": [1902.542189043, 9.393602459362384, 0.5973438548876867, 162.00192500724418]}
+{"elapsed_s": 22.594, "event": "command", "value": [1902.566987893, 0.22822371681247314, -0.13858715658294107]}
+{"elapsed_s": 22.608, "event": "odom", "value": [1902.58053668, 9.393602459362384, 0.5973438548876867, 162.00192500724418]}
+{"elapsed_s": 22.635, "event": "status", "value": "FOLLOW: violation_regen"}
+{"elapsed_s": 22.636, "event": "odom", "value": [1902.608911284, 9.391482077249595, 0.5974176272256774, 162.02057411231112]}
+{"elapsed_s": 22.671, "event": "odom", "value": [1902.643365108, 9.391482077249595, 0.5974176272256774, 162.02057411231112]}
+{"elapsed_s": 22.703, "event": "odom", "value": [1902.67508746, 9.391516162011976, 0.5961832859951242, 161.85304049242606]}
+{"elapsed_s": 22.703, "event": "command", "value": [1902.675615251, 0.22822371681247314, -0.16229419644553605]}
+{"elapsed_s": 22.737, "event": "odom", "value": [1902.709602598, 9.391516162011976, 0.5961832859951242, 161.85304049242606]}
+{"elapsed_s": 22.746, "event": "status", "value": "FOLLOW: violation_regen"}
+{"elapsed_s": 22.771, "event": "odom", "value": [1902.743762846, 9.38605574352637, 0.5975379706239303, 161.3214008928884]}
+{"elapsed_s": 22.795, "event": "command", "value": [1902.767176758, 0.22822371681247314, -0.14793792285991306]}
+{"elapsed_s": 22.817, "event": "odom", "value": [1902.789785974, 9.38605574352637, 0.5975379706239303, 161.3214008928884]}
+{"elapsed_s": 22.834, "event": "status", "value": "FOLLOW: violation_regen"}
+{"elapsed_s": 22.84, "event": "odom", "value": [1902.812824739, 9.38605574352637, 0.5975379706239303, 161.3214008928884]}
+{"elapsed_s": 22.869, "event": "odom", "value": [1902.841780416, 9.37967631242784, 0.5985798298540896, 160.5668216183405]}
+{"elapsed_s": 22.899, "event": "command", "value": [1902.871540469, 0.22822371681247314, -0.1130172814134136]}
+{"elapsed_s": 22.905, "event": "odom", "value": [1902.877116059, 9.37967631242784, 0.5985798298540896, 160.5668216183405]}
+{"elapsed_s": 22.936, "event": "odom", "value": [1902.908899756, 9.37967631242784, 0.5985798298540896, 160.5668216183405]}
+{"elapsed_s": 22.956, "event": "status", "value": "FOLLOW: violation_regen"}
+{"elapsed_s": 22.979, "event": "odom", "value": [1902.951394364, 9.37541862970603, 0.5945835188190799, 159.50674699073608]}
+{"elapsed_s": 22.991, "event": "command", "value": [1902.96370721, 0.22822371681247314, -0.09291419462673411]}
+{"elapsed_s": 23.006, "event": "odom", "value": [1902.978712872, 9.367445998118457, 0.5931765573745637, 158.21961168846667]}
+{"elapsed_s": 23.037, "event": "odom", "value": [1903.009236115, 9.367445998118457, 0.5931765573745637, 158.21961168846667]}
+{"elapsed_s": 23.044, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 23.069, "event": "odom", "value": [1903.041949568, 9.367445998118457, 0.5931765573745637, 158.21961168846667]}
+{"elapsed_s": 23.086, "event": "command", "value": [1903.058728883, 0.22822371681247314, -0.028435471526601516]}
+{"elapsed_s": 23.113, "event": "odom", "value": [1903.085231399, 9.367445998118457, 0.5931765573745637, 158.21961168846667]}
+{"elapsed_s": 23.132, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 23.134, "event": "odom", "value": [1903.106930988, 9.339002532978995, 0.5923021654841492, 155.28590070499038]}
+{"elapsed_s": 23.17, "event": "odom", "value": [1903.143011965, 9.339002532978995, 0.5923021654841492, 155.28590070499038]}
+{"elapsed_s": 23.191, "event": "command", "value": [1903.163222102, 0.22822371681247317, 0.053625107319548386]}
+{"elapsed_s": 23.218, "event": "odom", "value": [1903.187522121, 9.339002532978995, 0.5923021654841492, 155.28590070499038]}
+{"elapsed_s": 23.236, "event": "odom", "value": [1903.208377749, 9.317683505619103, 0.5945155021547223, 153.83721598362996]}
+{"elapsed_s": 23.243, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 23.271, "event": "odom", "value": [1903.243373157, 9.317683505619103, 0.5945155021547223, 153.83721598362996]}
+{"elapsed_s": 23.286, "event": "command", "value": [1903.258425541, 0.22822371681247314, 0.05282128227404704]}
+{"elapsed_s": 23.305, "event": "odom", "value": [1903.277321079, 9.261098384843505, 0.6137506304043798, 152.16618597083038]}
+{"elapsed_s": 23.325, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 23.336, "event": "odom", "value": [1903.308595193, 9.261098384843505, 0.6137506304043798, 152.16618597083038]}
+{"elapsed_s": 23.372, "event": "odom", "value": [1903.344577255, 9.215975703316737, 0.6258883440724772, 150.41905251391395]}
+{"elapsed_s": 23.387, "event": "command", "value": [1903.359300668, 0.22822371681247314, 0.08505928723978545]}
+{"elapsed_s": 23.405, "event": "odom", "value": [1903.377408471, 9.215975703316737, 0.6258883440724772, 150.41905251391395]}
+{"elapsed_s": 23.416, "event": "actuator", "value": {"mode": "auto", "left_pwm": "1579", "right_pwm": "1642", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.228", "angular_cmd": "0.085", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 23.433, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 23.44, "event": "odom", "value": [1903.411702195, 9.215975703316737, 0.6258883440724772, 150.41905251391395]}
+{"elapsed_s": 23.47, "event": "odom", "value": [1903.442614186, 9.17422823410907, 0.6393289466091239, 148.61383560524428]}
+{"elapsed_s": 23.486, "event": "command", "value": [1903.458877773, 0.22822371681247314, 0.11139571004729541]}
+{"elapsed_s": 23.504, "event": "odom", "value": [1903.476538299, 9.13832004225922, 0.650779300779718, 146.80004649915696]}
+{"elapsed_s": 23.535, "event": "odom", "value": [1903.507420657, 9.13832004225922, 0.650779300779718, 146.80004649915696]}
+{"elapsed_s": 23.54, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 23.571, "event": "odom", "value": [1903.543208985, 9.13832004225922, 0.650779300779718, 146.80004649915696]}
+{"elapsed_s": 23.588, "event": "command", "value": [1903.561055244, 0.22822371681247314, 0.15849855599501525]}
+{"elapsed_s": 23.603, "event": "odom", "value": [1903.575562331, 9.114446494725463, 0.6557294825745945, 145.08255855480834]}
+{"elapsed_s": 23.632, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 23.636, "event": "odom", "value": [1903.608977597, 9.114446494725463, 0.6557294825745945, 145.08255855480834]}
+{"elapsed_s": 23.669, "event": "odom", "value": [1903.641469955, 9.096585758914008, 0.6598879452760775, 143.55308629979575]}
+{"elapsed_s": 23.686, "event": "command", "value": [1903.65866685, 0.22822371681247314, 0.19445726031468485]}
+{"elapsed_s": 23.701, "event": "odom", "value": [1903.674007722, 9.081170326085473, 0.6635206301237141, 141.94597934839143]}
+{"elapsed_s": 23.728, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 23.736, "event": "odom", "value": [1903.708669328, 9.081170326085473, 0.6635206301237141, 141.94597934839143]}
+{"elapsed_s": 23.773, "event": "odom", "value": [1903.745356275, 9.081170326085473, 0.6635206301237141, 141.94597934839143]}
+{"elapsed_s": 23.786, "event": "command", "value": [1903.759041898, 0.22822371681247314, 0.22936877449311532]}
+{"elapsed_s": 23.801, "event": "odom", "value": [1903.773758143, 9.081170326085473, 0.6635206301237141, 141.94597934839143]}
+{"elapsed_s": 23.828, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 23.84, "event": "odom", "value": [1903.812407836, 9.036578399783174, 0.6855160228415993, 140.4906375601953]}
+{"elapsed_s": 23.87, "event": "odom", "value": [1903.842642591, 9.036578399783174, 0.6855160228415993, 140.4906375601953]}
+{"elapsed_s": 23.888, "event": "command", "value": [1903.860420368, 0.22822371681247314, 0.24376024430468035]}
+{"elapsed_s": 23.91, "event": "odom", "value": [1903.882183383, 9.009953527994014, 0.6993973869708197, 139.20197470580337]}
+{"elapsed_s": 23.932, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 23.937, "event": "odom", "value": [1903.909443969, 8.968928917390006, 0.7287882205445111, 138.05356078576]}
+{"elapsed_s": 23.969, "event": "odom", "value": [1903.94122629, 8.968928917390006, 0.7287882205445111, 138.05356078576]}
+{"elapsed_s": 23.987, "event": "command", "value": [1903.959623221, 0.22822371681247314, 0.3059926738137121]}
+{"elapsed_s": 24.002, "event": "odom", "value": [1903.975015038, 8.968928917390006, 0.7287882205445111, 138.05356078576]}
+{"elapsed_s": 24.038, "event": "odom", "value": [1904.010632641, 8.935802203909184, 0.7527851420846241, 137.01122974971295]}
+{"elapsed_s": 24.069, "event": "odom", "value": [1904.041963493, 8.935802203909184, 0.7527851420846241, 137.01122974971295]}
+{"elapsed_s": 24.071, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 24.086, "event": "command", "value": [1904.058860347, 0.22822371681247314, 0.31]}
+{"elapsed_s": 24.102, "event": "odom", "value": [1904.075046652, 8.935802203909184, 0.7527851420846241, 137.01122974971295]}
+{"elapsed_s": 24.125, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 24.135, "event": "odom", "value": [1904.107676902, 8.915423826368997, 0.7665458865722783, 136.1260259209335]}
+{"elapsed_s": 24.17, "event": "odom", "value": [1904.142206441, 8.902385045121077, 0.7718955359070879, 135.23773513632577]}
+{"elapsed_s": 24.189, "event": "command", "value": [1904.162084408, 0.22822371681247314, 0.31]}
+{"elapsed_s": 24.206, "event": "odom", "value": [1904.178564001, 8.902385045121077, 0.7718955359070879, 135.23773513632577]}
+{"elapsed_s": 24.236, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 24.239, "event": "odom", "value": [1904.211936258, 8.902385045121077, 0.7718955359070879, 135.23773513632577]}
+{"elapsed_s": 24.27, "event": "odom", "value": [1904.242371786, 8.890223152859338, 0.7789988684863669, 134.42029078675753]}
+{"elapsed_s": 24.287, "event": "command", "value": [1904.25943847, 0.22822371681247314, 0.31]}
+{"elapsed_s": 24.302, "event": "odom", "value": [1904.274178556, 8.890223152859338, 0.7789988684863669, 134.42029078675753]}
+{"elapsed_s": 24.332, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 24.335, "event": "odom", "value": [1904.307327669, 8.890223152859338, 0.7789988684863669, 134.42029078675753]}
+{"elapsed_s": 24.371, "event": "odom", "value": [1904.343496425, 8.890223152859338, 0.7789988684863669, 134.42029078675753]}
+{"elapsed_s": 24.389, "event": "command", "value": [1904.361557089, 0.22822371681247314, 0.31]}
+{"elapsed_s": 24.403, "event": "odom", "value": [1904.375493472, 8.890223152859338, 0.7789988684863669, 134.42029078675753]}
+{"elapsed_s": 24.416, "event": "actuator", "value": {"mode": "auto", "left_pwm": "1444", "right_pwm": "1727", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.228", "angular_cmd": "0.310", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 24.432, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 24.438, "event": "odom", "value": [1904.41068303, 8.85160275491652, 0.8104395753601099, 133.69532011860684]}
+{"elapsed_s": 24.469, "event": "odom", "value": [1904.441845428, 8.85160275491652, 0.8104395753601099, 133.69532011860684]}
+{"elapsed_s": 24.488, "event": "command", "value": [1904.46075527, 0.22822371681247314, 0.31]}
+{"elapsed_s": 24.503, "event": "odom", "value": [1904.475090417, 8.796946139473823, 0.8569289234845993, 132.28647154203534]}
+{"elapsed_s": 24.536, "event": "odom", "value": [1904.508544691, 8.796946139473823, 0.8569289234845993, 132.28647154203534]}
+{"elapsed_s": 24.538, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 24.573, "event": "odom", "value": [1904.545207605, 8.796946139473823, 0.8569289234845993, 132.28647154203534]}
+{"elapsed_s": 24.588, "event": "command", "value": [1904.561098413, 0.22822371681247314, 0.31]}
+{"elapsed_s": 24.601, "event": "odom", "value": [1904.574057679, 8.779843603135642, 0.8716903486198602, 132.15339175072629]}
+{"elapsed_s": 24.627, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 24.638, "event": "odom", "value": [1904.610214274, 8.779843603135642, 0.8716903486198602, 132.15339175072629]}
+{"elapsed_s": 24.669, "event": "odom", "value": [1904.641634184, 8.741374753825454, 0.9100552640966573, 132.2791400609097]}
+{"elapsed_s": 24.69, "event": "command", "value": [1904.662324975, 0.22822371681247314, 0.31]}
+{"elapsed_s": 24.702, "event": "odom", "value": [1904.674434583, 8.741374753825454, 0.9100552640966573, 132.2791400609097]}
+{"elapsed_s": 24.736, "event": "odom", "value": [1904.708994106, 8.715328365617404, 0.9368335535933061, 132.6380742918725]}
+{"elapsed_s": 24.742, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 24.771, "event": "odom", "value": [1904.743682529, 8.715328365617404, 0.9368335535933061, 132.6380742918725]}
+{"elapsed_s": 24.791, "event": "command", "value": [1904.763409739, 0.22822371681247314, 0.1821894338704991]}
+{"elapsed_s": 24.808, "event": "odom", "value": [1904.780449221, 8.696141737231605, 0.9556302492712997, 133.1985482165277]}
+{"elapsed_s": 24.837, "event": "odom", "value": [1904.809870032, 8.696141737231605, 0.9556302492712997, 133.1985482165277]}
+{"elapsed_s": 24.844, "event": "status", "value": "FOLLOW: trigger_a_regen"}
+{"elapsed_s": 24.869, "event": "odom", "value": [1904.841611615, 8.65288187124186, 0.9993628839206639, 133.85559421812576]}
+{"elapsed_s": 24.887, "event": "command", "value": [1904.859267084, 0.22822371681247314, 0.17300008015608906]}
+{"elapsed_s": 24.903, "event": "odom", "value": [1904.875427884, 8.65288187124186, 0.9993628839206639, 133.85559421812576]}
+{"elapsed_s": 24.935, "event": "odom", "value": [1904.907746701, 8.65288187124186, 0.9993628839206639, 133.85559421812576]}
+{"elapsed_s": 24.937, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 24.974, "event": "odom", "value": [1904.946460459, 8.629791615783, 1.0249298292098543, 134.68717733913144]}
+{"elapsed_s": 24.988, "event": "command", "value": [1904.960297575, 0.22822371681247314, 0.15736845973405506]}
+{"elapsed_s": 25.005, "event": "odom", "value": [1904.978017333, 8.591008523903046, 1.0642372794918078, 135.59264480125967]}
+{"elapsed_s": 25.035, "event": "odom", "value": [1905.007676519, 8.591008523903046, 1.0642372794918078, 135.59264480125967]}
+{"elapsed_s": 25.041, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 25.069, "event": "odom", "value": [1905.041901728, 8.591008523903046, 1.0642372794918078, 135.59264480125967]}
+{"elapsed_s": 25.089, "event": "command", "value": [1905.061703981, 0.22822371681247314, 0.1614934768187492]}
+{"elapsed_s": 25.105, "event": "odom", "value": [1905.077865869, 8.570629065772817, 1.0859761806440331, 136.56322603843387]}
+{"elapsed_s": 25.135, "event": "odom", "value": [1905.107434972, 8.570629065772817, 1.0859761806440331, 136.56322603843387]}
+{"elapsed_s": 25.14, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 25.171, "event": "odom", "value": [1905.14351966, 8.533623196597965, 1.1236115407798792, 137.71790397710666]}
+{"elapsed_s": 25.186, "event": "command", "value": [1905.158715856, 0.22822371681247314, 0.1483600953278427]}
+{"elapsed_s": 25.202, "event": "odom", "value": [1905.174882736, 8.533623196597965, 1.1236115407798792, 137.71790397710666]}
+{"elapsed_s": 25.24, "event": "odom", "value": [1905.212465645, 8.501328381800079, 1.1566407950792978, 139.1336844044049]}
+{"elapsed_s": 25.241, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 25.268, "event": "odom", "value": [1905.240895898, 8.501328381800079, 1.1566407950792978, 139.1336844044049]}
+{"elapsed_s": 25.287, "event": "command", "value": [1905.259774379, 0.22822371681247314, 0.11895666547394322]}
+{"elapsed_s": 25.287, "event": "progress", "value": {"armed": true, "status": "FOLLOW: following", "xy": [8.501328381800079, 1.1566407950792978], "entry": [2.1041441071677087, 4.197787180565281], "pwm": ["1444", "1727"]}}
+{"elapsed_s": 25.307, "event": "odom", "value": [1905.27910337, 8.501328381800079, 1.1566407950792978, 139.1336844044049]}
+{"elapsed_s": 25.331, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 25.339, "event": "odom", "value": [1905.311593744, 8.486794413917725, 1.1723604151782248, 140.6011543895329]}
+{"elapsed_s": 25.371, "event": "odom", "value": [1905.343381952, 8.486794413917725, 1.1723604151782248, 140.6011543895329]}
+{"elapsed_s": 25.388, "event": "command", "value": [1905.360930058, 0.22822371681247314, 0.09014535193608808]}
+{"elapsed_s": 25.405, "event": "odom", "value": [1905.377889186, 8.473285505649827, 1.189256924740977, 142.3474461450033]}
+{"elapsed_s": 25.416, "event": "actuator", "value": {"mode": "auto", "left_pwm": "1577", "right_pwm": "1644", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.228", "angular_cmd": "0.090", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 25.434, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 25.439, "event": "odom", "value": [1905.411593868, 8.473285505649827, 1.189256924740977, 142.3474461450033]}
+{"elapsed_s": 25.469, "event": "odom", "value": [1905.441665194, 8.456713382035316, 1.2084512708345645, 144.17647170272508]}
+{"elapsed_s": 25.489, "event": "command", "value": [1905.461944676, 0.22822371681247305, 0.027738270653198033]}
+{"elapsed_s": 25.512, "event": "odom", "value": [1905.4846914, 8.456713382035316, 1.2084512708345645, 144.17647170272508]}
+{"elapsed_s": 25.535, "event": "odom", "value": [1905.507510158, 8.451987656565464, 1.2203662161902074, 146.020182061354]}
+{"elapsed_s": 25.54, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 25.569, "event": "odom", "value": [1905.541128566, 8.451987656565464, 1.2203662161902074, 146.020182061354]}
+{"elapsed_s": 25.586, "event": "command", "value": [1905.558710304, 0.22822371681247314, -0.0075778953275157865]}
+{"elapsed_s": 25.603, "event": "odom", "value": [1905.575359727, 8.451987656565464, 1.2203662161902074, 146.020182061354]}
+{"elapsed_s": 25.636, "event": "odom", "value": [1905.608807377, 8.445620075938232, 1.2320751046430065, 147.79798335138597]}
+{"elapsed_s": 25.669, "event": "odom", "value": [1905.641922089, 8.445791246712432, 1.2394294919607467, 149.30952409145425]}
+{"elapsed_s": 25.671, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 25.687, "event": "command", "value": [1905.659167434, 0.22822371681247314, -0.08192656730249083]}
+{"elapsed_s": 25.705, "event": "odom", "value": [1905.67807798, 8.445791246712432, 1.2394294919607467, 149.30952409145425]}
+{"elapsed_s": 25.728, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 25.739, "event": "odom", "value": [1905.711948138, 8.447360747274665, 1.2433000698023542, 150.8396393952747]}
+{"elapsed_s": 25.77, "event": "odom", "value": [1905.74222203, 8.447360747274665, 1.2433000698023542, 150.8396393952747]}
+{"elapsed_s": 25.788, "event": "command", "value": [1905.761056669, 0.22822371681247314, -0.1068054290208301]}
+{"elapsed_s": 25.802, "event": "odom", "value": [1905.774677714, 8.45070815087716, 1.2480007905546668, 152.2261338561466]}
+{"elapsed_s": 25.828, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 25.838, "event": "odom", "value": [1905.810146, 8.45070815087716, 1.2480007905546668, 152.2261338561466]}
+{"elapsed_s": 25.87, "event": "odom", "value": [1905.842150407, 8.45070815087716, 1.2480007905546668, 152.2261338561466]}
+{"elapsed_s": 25.887, "event": "command", "value": [1905.859117663, 0.22822371681247314, -0.12363047702827085]}
+{"elapsed_s": 25.91, "event": "odom", "value": [1905.882453141, 8.45070815087716, 1.2480007905546668, 152.2261338561466]}
+{"elapsed_s": 25.93, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 25.937, "event": "odom", "value": [1905.908399224, 8.455536727165168, 1.2495739452672814, 153.5015457277759]}
+{"elapsed_s": 25.97, "event": "odom", "value": [1905.942349, 8.460443674029566, 1.2533424008446015, 154.6785828682054]}
+{"elapsed_s": 25.989, "event": "command", "value": [1905.96110511, 0.22822371681247314, -0.15718283052073195]}
+{"elapsed_s": 26.006, "event": "odom", "value": [1905.978691456, 8.460443674029566, 1.2533424008446015, 154.6785828682054]}
+{"elapsed_s": 26.033, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 26.037, "event": "odom", "value": [1906.010060228, 8.467533642590697, 1.2554281942167442, 155.78650863683896]}
+{"elapsed_s": 26.07, "event": "odom", "value": [1906.042321923, 8.467533642590697, 1.2554281942167442, 155.78650863683896]}
+{"elapsed_s": 26.089, "event": "command", "value": [1906.061198836, 0.22822371681247314, -0.17600405720798404]}
+{"elapsed_s": 26.11, "event": "odom", "value": [1906.082265798, 8.456283526933275, 1.2665107760964571, 156.7361678022882]}
+{"elapsed_s": 26.138, "event": "odom", "value": [1906.110515949, 8.456283526933275, 1.2665107760964571, 156.7361678022882]}
+{"elapsed_s": 26.146, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 26.173, "event": "odom", "value": [1906.145930602, 8.456283526933275, 1.2665107760964571, 156.7361678022882]}
+{"elapsed_s": 26.186, "event": "command", "value": [1906.158890187, 0.22822371681247305, -0.18499828284930872]}
+{"elapsed_s": 26.205, "event": "odom", "value": [1906.177528373, 8.457188070247136, 1.2724251424144377, 157.69267777440572]}
+{"elapsed_s": 26.229, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 26.238, "event": "odom", "value": [1906.210673262, 8.457188070247136, 1.2724251424144377, 157.69267777440572]}
+{"elapsed_s": 26.271, "event": "odom", "value": [1906.243233205, 8.458820943087488, 1.2753321471333616, 158.63038523428386]}
+{"elapsed_s": 26.291, "event": "command", "value": [1906.263798328, 0.22822371681247314, -0.2077629635044592]}
+{"elapsed_s": 26.312, "event": "odom", "value": [1906.284675332, 8.458820943087488, 1.2753321471333616, 158.63038523428386]}
+{"elapsed_s": 26.336, "event": "odom", "value": [1906.308060763, 8.468443222780193, 1.2762709639768182, 159.59079245554864]}
+{"elapsed_s": 26.341, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 26.374, "event": "odom", "value": [1906.346819931, 8.468443222780193, 1.2762709639768182, 159.59079245554864]}
+{"elapsed_s": 26.392, "event": "command", "value": [1906.364568618, 0.22822371681247314, -0.21983257098550352]}
+{"elapsed_s": 26.403, "event": "odom", "value": [1906.375180678, 8.468443222780193, 1.2762709639768182, 159.59079245554864]}
+{"elapsed_s": 26.418, "event": "actuator", "value": {"mode": "auto", "left_pwm": "1693", "right_pwm": "1528", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.228", "angular_cmd": "-0.220", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 26.432, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 26.438, "event": "odom", "value": [1906.410758919, 8.47404896702804, 1.197309810282055, 160.94230992747728]}
+{"elapsed_s": 26.469, "event": "odom", "value": [1906.441820866, 8.47404896702804, 1.197309810282055, 160.94230992747728]}
+{"elapsed_s": 26.488, "event": "command", "value": [1906.460842615, 0.22822371681247317, -0.31]}
+{"elapsed_s": 26.512, "event": "odom", "value": [1906.484349906, 8.478642224124101, 1.2366550826999463, 162.1687932490582]}
+{"elapsed_s": 26.528, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 26.536, "event": "odom", "value": [1906.50857789, 8.478642224124101, 1.2366550826999463, 162.1687932490582]}
+{"elapsed_s": 26.571, "event": "odom", "value": [1906.543265192, 8.484766746180064, 1.2592689028582238, 163.4490613660793]}
+{"elapsed_s": 26.586, "event": "command", "value": [1906.558862264, 0.22822371681247314, -0.31]}
+{"elapsed_s": 26.604, "event": "odom", "value": [1906.576222844, 8.484766746180064, 1.2592689028582238, 163.4490613660793]}
+{"elapsed_s": 26.636, "event": "odom", "value": [1906.6085319, 8.484766746180064, 1.2592689028582238, 163.4490613660793]}
+{"elapsed_s": 26.644, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 26.668, "event": "odom", "value": [1906.641002401, 8.484766746180064, 1.2592689028582238, 163.4490613660793]}
+{"elapsed_s": 26.688, "event": "command", "value": [1906.660191675, 0.22822371681247314, -0.31]}
+{"elapsed_s": 26.707, "event": "odom", "value": [1906.679127533, 8.485788083111487, 1.2757126576593456, 164.95353192099597]}
+{"elapsed_s": 26.731, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 26.737, "event": "odom", "value": [1906.70998109, 8.49307669510764, 1.2818750606136657, 166.5464408849014]}
+{"elapsed_s": 26.769, "event": "odom", "value": [1906.741155168, 8.49307669510764, 1.2818750606136657, 166.5464408849014]}
+{"elapsed_s": 26.788, "event": "command", "value": [1906.76035689, 0.22822371681247317, -0.31]}
+{"elapsed_s": 26.802, "event": "odom", "value": [1906.774953388, 8.487629557464764, 1.2896964601175878, 168.0990670800474]}
+{"elapsed_s": 26.838, "event": "odom", "value": [1906.810171074, 8.487629557464764, 1.2896964601175878, 168.0990670800474]}
+{"elapsed_s": 26.84, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 26.869, "event": "odom", "value": [1906.841970419, 8.487629557464764, 1.2896964601175878, 168.0990670800474]}
+{"elapsed_s": 26.888, "event": "command", "value": [1906.860286035, 0.22822371681247305, -0.31]}
+{"elapsed_s": 26.911, "event": "odom", "value": [1906.883355136, 8.487629557464764, 1.2896964601175878, 168.0990670800474]}
+{"elapsed_s": 26.929, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 26.936, "event": "odom", "value": [1906.90858155, 8.487629557464764, 1.2896964601175878, 168.0990670800474]}
+{"elapsed_s": 26.972, "event": "odom", "value": [1906.944086221, 8.487629557464764, 1.2896964601175878, 168.0990670800474]}
+{"elapsed_s": 26.994, "event": "command", "value": [1906.966769742, 0.22822371681247305, -0.31]}
+{"elapsed_s": 27.001, "event": "odom", "value": [1906.9735702, 8.472218172748844, 1.2994703996725776, 170.9756819001263]}
+{"elapsed_s": 27.035, "event": "odom", "value": [1907.00749716, 8.469980627193324, 1.3050475779514583, 172.16494599623402]}
+{"elapsed_s": 27.049, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 27.069, "event": "odom", "value": [1907.041874502, 8.469980627193324, 1.3050475779514583, 172.16494599623402]}
+{"elapsed_s": 27.087, "event": "command", "value": [1907.059183368, 0.22822371681247314, -0.31]}
+{"elapsed_s": 27.103, "event": "odom", "value": [1907.075468172, 8.459932129174911, 1.3093146693542266, 173.45593694112685]}
+{"elapsed_s": 27.135, "event": "odom", "value": [1907.107727338, 8.459932129174911, 1.3093146693542266, 173.45593694112685]}
+{"elapsed_s": 27.17, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 27.182, "event": "odom", "value": [1907.154396372, 8.448919680761296, 1.3100651945170576, 174.72508692350132]}
+{"elapsed_s": 27.188, "event": "command", "value": [1907.160352517, 0.22822371681247314, -0.31]}
+{"elapsed_s": 27.202, "event": "odom", "value": [1907.17431722, 8.448919680761296, 1.3100651945170576, 174.72508692350132]}
+{"elapsed_s": 27.229, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 27.237, "event": "odom", "value": [1907.209540891, 8.448919680761296, 1.3100651945170576, 174.72508692350132]}
+{"elapsed_s": 27.27, "event": "odom", "value": [1907.242124195, 8.435794950799881, 1.3148807061319436, 175.925583621735]}
+{"elapsed_s": 27.288, "event": "command", "value": [1907.260656265, 0.22822371681247317, -0.31]}
+{"elapsed_s": 27.305, "event": "odom", "value": [1907.277300152, 8.435794950799881, 1.3148807061319436, 175.925583621735]}
+{"elapsed_s": 27.332, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 27.335, "event": "odom", "value": [1907.307715807, 8.433327899346171, 1.3156683485376808, 177.0716575540505]}
+{"elapsed_s": 27.369, "event": "odom", "value": [1907.341993017, 8.433327899346171, 1.3156683485376808, 177.0716575540505]}
+{"elapsed_s": 27.387, "event": "command", "value": [1907.359281787, 0.22822371681247314, -0.31]}
+{"elapsed_s": 27.409, "event": "odom", "value": [1907.381843833, 8.433327899346171, 1.3156683485376808, 177.0716575540505]}
+{"elapsed_s": 27.417, "event": "actuator", "value": {"mode": "auto", "left_pwm": "1727", "right_pwm": "1444", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.228", "angular_cmd": "-0.310", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 27.428, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 27.437, "event": "odom", "value": [1907.40948075, 8.433327899346171, 1.3156683485376808, 177.0716575540505]}
+{"elapsed_s": 27.469, "event": "odom", "value": [1907.441875377, 8.44281257406886, 1.3169550528424372, 179.0866254742317]}
+{"elapsed_s": 27.488, "event": "command", "value": [1907.460409559, 0.22822371681247314, -0.31]}
+{"elapsed_s": 27.505, "event": "odom", "value": [1907.477522452, 8.44281257406886, 1.3169550528424372, 179.0866254742317]}
+{"elapsed_s": 27.533, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 27.536, "event": "odom", "value": [1907.508805813, 8.44281257406886, 1.3169550528424372, 179.0866254742317]}
+{"elapsed_s": 27.57, "event": "odom", "value": [1907.542869737, 8.44281257406886, 1.3169550528424372, 179.0866254742317]}
+{"elapsed_s": 27.589, "event": "command", "value": [1907.562038147, 0.22822371681247314, -0.31]}
+{"elapsed_s": 27.608, "event": "odom", "value": [1907.580772111, 8.427112413766427, 1.3172643135821431, -179.9555552256481]}
+{"elapsed_s": 27.64, "event": "odom", "value": [1907.612226966, 8.420074967037946, 1.3173154497438782, -179.02213172055184]}
+{"elapsed_s": 27.64, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 27.669, "event": "odom", "value": [1907.641520668, 8.420074967037946, 1.3173154497438782, -179.02213172055184]}
+{"elapsed_s": 27.696, "event": "command", "value": [1907.668770757, 0.22822371681247314, -0.31]}
+{"elapsed_s": 27.702, "event": "odom", "value": [1907.674241928, 8.417709489545313, 1.318265374510529, -178.1016390682014]}
+{"elapsed_s": 27.737, "event": "odom", "value": [1907.709683908, 8.417709489545313, 1.318265374510529, -178.1016390682014]}
+{"elapsed_s": 27.759, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 27.77, "event": "odom", "value": [1907.742625495, 8.40123219052833, 1.3256554429701992, -177.2185184127228]}
+{"elapsed_s": 27.797, "event": "command", "value": [1907.769338384, 0.22822371681247305, -0.31]}
+{"elapsed_s": 27.808, "event": "odom", "value": [1907.781024651, 8.40123219052833, 1.3256554429701992, -177.2185184127228]}
+{"elapsed_s": 27.837, "event": "odom", "value": [1907.809246065, 8.40105741471958, 1.3247412823668985, -176.33873846384586]}
+{"elapsed_s": 27.845, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 27.87, "event": "odom", "value": [1907.842509325, 8.40105741471958, 1.3247412823668985, -176.33873846384586]}
+{"elapsed_s": 27.899, "event": "command", "value": [1907.871617678, 0.14829522692170446, -0.31]}
+{"elapsed_s": 27.918, "event": "odom", "value": [1907.890255736, 8.40105741471958, 1.3247412823668985, -176.33873846384586]}
+{"elapsed_s": 27.937, "event": "odom", "value": [1907.909253644, 8.401245582749244, 1.3244774300570676, -175.88025893961128]}
+{"elapsed_s": 27.949, "event": "status", "value": "FOLLOW: backstop_regen"}
+{"elapsed_s": 27.969, "event": "odom", "value": [1907.941987704, 8.401245582749244, 1.3244774300570676, -175.88025893961128]}
+{"elapsed_s": 27.987, "event": "command", "value": [1907.959336155, 0.14829522692170446, -0.31]}
+{"elapsed_s": 28.002, "event": "odom", "value": [1907.974535935, 8.408770435859616, 1.3284669038312433, -175.79427647587562]}
+{"elapsed_s": 28.028, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 28.038, "event": "odom", "value": [1908.011079132, 8.408770435859616, 1.3284669038312433, -175.79427647587562]}
+{"elapsed_s": 28.071, "event": "odom", "value": [1908.043912011, 8.46680920583981, 1.327824842094564, -176.0389019310006]}
+{"elapsed_s": 28.087, "event": "command", "value": [1908.059105999, 0.14829522692170446, -0.29389406078611724]}
+{"elapsed_s": 28.107, "event": "odom", "value": [1908.079127649, 8.46680920583981, 1.327824842094564, -176.0389019310006]}
+{"elapsed_s": 28.138, "event": "odom", "value": [1908.110688171, 8.46680920583981, 1.327824842094564, -176.0389019310006]}
+{"elapsed_s": 28.139, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 28.173, "event": "odom", "value": [1908.145591863, 8.500562502258607, 1.3330473546607013, -176.57469419612784]}
+{"elapsed_s": 28.192, "event": "command", "value": [1908.164470152, 0.14829522692170444, -0.24880205600780314]}
+{"elapsed_s": 28.205, "event": "odom", "value": [1908.178038555, 8.560357604417614, 1.3355137084619506, -177.29283335323433]}
+{"elapsed_s": 28.235, "event": "odom", "value": [1908.207849936, 8.560357604417614, 1.3355137084619506, -177.29283335323433]}
+{"elapsed_s": 28.237, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 28.269, "event": "odom", "value": [1908.241508664, 8.560357604417614, 1.3355137084619506, -177.29283335323433]}
+{"elapsed_s": 28.286, "event": "command", "value": [1908.25900544, 0.14829522692170446, -0.19666283194938547]}
+{"elapsed_s": 28.305, "event": "odom", "value": [1908.277622729, 8.604101155468236, 1.342478181995587, -178.16022779475028]}
+{"elapsed_s": 28.329, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 28.336, "event": "odom", "value": [1908.30849363, 8.604101155468236, 1.342478181995587, -178.16022779475028]}
+{"elapsed_s": 28.369, "event": "odom", "value": [1908.341856765, 8.604101155468236, 1.342478181995587, -178.16022779475028]}
+{"elapsed_s": 28.388, "event": "command", "value": [1908.360444517, 0.14829522692170446, -0.14919641754556395]}
+{"elapsed_s": 28.404, "event": "odom", "value": [1908.376578692, 8.66669102712651, 1.347360448589477, -178.91142597351478]}
+{"elapsed_s": 28.418, "event": "actuator", "value": {"mode": "auto", "left_pwm": "1637", "right_pwm": "1475", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.148", "angular_cmd": "-0.149", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"elapsed_s": 28.438, "event": "odom", "value": [1908.410846718, 8.717550551512874, 1.3505748240811577, -179.62245434111946]}
+{"elapsed_s": 28.44, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 28.469, "event": "odom", "value": [1908.441786485, 8.717550551512874, 1.3505748240811577, -179.62245434111946]}
+{"elapsed_s": 28.488, "event": "command", "value": [1908.460605284, 0.14829522692170446, -0.07865739715760994]}
+{"elapsed_s": 28.503, "event": "odom", "value": [1908.475699844, 8.761932272360443, 1.3547894540271275, 179.69397215070776]}
+{"elapsed_s": 28.535, "event": "odom", "value": [1908.507926753, 8.761932272360443, 1.3547894540271275, 179.69397215070776]}
+{"elapsed_s": 28.537, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 28.569, "event": "odom", "value": [1908.542021398, 8.761932272360443, 1.3547894540271275, 179.69397215070776]}
+{"elapsed_s": 28.586, "event": "command", "value": [1908.559052368, 0.14829522692170446, -0.05167588506242293]}
+{"elapsed_s": 28.601, "event": "odom", "value": [1908.573990731, 8.81257917568014, 1.35476695081827, 179.05015755592635]}
+{"elapsed_s": 28.625, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 28.636, "event": "odom", "value": [1908.608193699, 8.81257917568014, 1.35476695081827, 179.05015755592635]}
+{"elapsed_s": 28.67, "event": "odom", "value": [1908.642462173, 8.847297268905635, 1.3585517282031254, 178.37315238218363]}
+{"elapsed_s": 28.69, "event": "command", "value": [1908.662990399, 0.14829522692170446, -0.00760750154420416]}
+{"elapsed_s": 28.71, "event": "odom", "value": [1908.682778634, 8.847297268905635, 1.3585517282031254, 178.37315238218363]}
+{"elapsed_s": 28.739, "event": "odom", "value": [1908.711952844, 8.847297268905635, 1.3585517282031254, 178.37315238218363]}
+{"elapsed_s": 28.777, "event": "odom", "value": [1908.749998806, 8.884062690842846, 1.3569988375745439, 177.62720421307358]}
+{"elapsed_s": 28.781, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 28.797, "event": "command", "value": [1908.769965479, 0.14829522692170446, -0.00760750154420416]}
+{"elapsed_s": 28.804, "event": "odom", "value": [1908.776396582, 8.884062690842846, 1.3569988375745439, 177.62720421307358]}
+{"elapsed_s": 28.838, "event": "odom", "value": [1908.810144464, 8.905217091120608, 1.3566355656430287, 176.81137940029558]}
+{"elapsed_s": 28.851, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 28.872, "event": "odom", "value": [1908.844369, 8.905217091120608, 1.3566355656430287, 176.81137940029558]}
+{"elapsed_s": 28.891, "event": "command", "value": [1908.863985199, 0.14829522692170444, 0.03489601010141441]}
+{"elapsed_s": 28.906, "event": "odom", "value": [1908.878132339, 8.932500844966615, 1.3576266782739599, 176.10212527532227]}
+{"elapsed_s": 28.931, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 28.938, "event": "odom", "value": [1908.910907328, 8.932500844966615, 1.3576266782739599, 176.10212527532227]}
+{"elapsed_s": 28.972, "event": "odom", "value": [1908.944145403, 8.959587715876104, 1.355711515672136, 175.4610952467938]}
+{"elapsed_s": 28.991, "event": "command", "value": [1908.963323285, 0.14829522692170446, 0.06911143624125006]}
+{"elapsed_s": 29.005, "event": "odom", "value": [1908.977317204, 8.959587715876104, 1.355711515672136, 175.4610952467938]}
+{"elapsed_s": 29.036, "event": "odom", "value": [1909.008917279, 8.959587715876104, 1.355711515672136, 175.4610952467938]}
+{"elapsed_s": 29.037, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 29.069, "event": "odom", "value": [1909.041608265, 8.989083262086327, 1.353100939915499, 174.89041020470904]}
+{"elapsed_s": 29.088, "event": "command", "value": [1909.060660799, 0.14829522692170444, 0.08032240102470967]}
+{"elapsed_s": 29.115, "event": "odom", "value": [1909.087100784, 9.01369015405343, 1.3525486280654486, 174.397861456698]}
+{"elapsed_s": 29.136, "event": "odom", "value": [1909.108688209, 9.01369015405343, 1.3525486280654486, 174.397861456698]}
+{"elapsed_s": 29.141, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 29.169, "event": "odom", "value": [1909.141222679, 9.039185467849379, 1.352889976117714, 174.00392074469994]}
+{"elapsed_s": 29.188, "event": "command", "value": [1909.160872511, 0.14829522692170446, 0.10373421303703417]}
+{"elapsed_s": 29.201, "event": "odom", "value": [1909.173845568, 9.069233551904333, 1.3507461097393247, 173.6650455036956]}
+{"elapsed_s": 29.235, "event": "odom", "value": [1909.207888595, 9.122386733057871, 1.3483612146898418, 173.35473239424337]}
+{"elapsed_s": 29.241, "event": "status", "value": "FOLLOW: following"}
+{"elapsed_s": 29.269, "event": "odom", "value": [1909.241649085, 9.122386733057871, 1.3483612146898418, 173.35473239424337]}
+{"elapsed_s": 29.287, "event": "command", "value": [1909.25971631, 0.0, 0.0]}
+{"elapsed_s": 29.302, "event": "odom", "value": [1909.274095105, 9.164544951377309, 1.3455007564566106, 173.0699174284254]}
+{"elapsed_s": 29.333, "event": "status", "value": "STOP: cross-track limit"}
+{"elapsed_s": 29.338, "event": "odom", "value": [1909.310594461, 9.164544951377309, 1.3455007564566106, 173.0699174284254]}
+{"elapsed_s": 29.341, "event": "command", "value": [1909.31339896, 0.0, 0.0]}
+{"elapsed_s": 29.341, "event": "status", "value": "STOP: dock stop requested"}
+{"elapsed_s": 29.342, "event": "stop", "value": "dock_ctrl stopped"}
+{"elapsed_s": 29.372, "event": "odom", "value": [1909.344902904, 9.187001985640185, 1.3432967435889704, 172.80315101119896]}
+{"elapsed_s": 29.377, "event": "command", "value": [1909.349724103, 0.0, 0.0]}
+{"elapsed_s": 29.401, "event": "odom", "value": [1909.373944182, 9.187001985640185, 1.3432967435889704, 172.80315101119896]}
+{"elapsed_s": 29.416, "event": "actuator", "value": {"mode": "auto", "left_pwm": "1500", "right_pwm": "1500", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.000", "angular_cmd": "0.000", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}}
+{"summary": {"outcome": "STOP: cross-track limit", "armed": true, "entry_xy": [2.1041441071677087, 4.197787180565281], "initial_xy": [8.758975800882983, 0.8101628510818496], "final_xy": [9.187001985640185, 1.3432967435889704], "nonzero_commands": 125, "max_linear_cmd": 0.22822371681247317, "max_angular_cmd": 0.31, "final_distance_m": 7.636425301240681, "actuator": {"mode": "auto", "left_pwm": "1500", "right_pwm": "1500", "backend_open": "True", "last_send_ok": "True", "send_fail_count": "0", "linear_cmd": "0.000", "angular_cmd": "0.000", "teleop_enabled": "False", "teleop_levels": "(0, 0)", "esp_mode": "computer_control_mode"}, "last_status": "STOP: dock stop requested", "log": "/tmp/kaboat_dock_trials/20261108_005207_existing.jsonl"}}
