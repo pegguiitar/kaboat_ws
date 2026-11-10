@@ -58,6 +58,13 @@ alias cal_imu="ros2 run kaboat_hardware calibrate_indoor_imu"
 # 모터 제어기 실행 (아두이노 CH340: /dev/ttyCH341USB0)
 alias run_gq7_outdoor="ros2 launch kaboat_hardware real_sensors.launch.py outdoor:=true"
 alias run_geo="ros2 launch kaboat_hardware geo_origin.launch.py"
+
+# 미션 지점 기록 (지금 /odom 위치 → ~/kaboat_mission_points.json)
+alias run_points="ros2 run kaboat_hardware point_recorder"
+alias list_points="ros2 service call /mission_points/list std_srvs/srv/Trigger '{}'"
+rec_point() {
+    ros2 service call /mission_points/record kaboat_msgs/srv/RecordPoint "{name: '${1:-}'}"
+}
 alias run_motor="ros2 launch kaboat_hardware thrusters.launch.py hardware_type:=serial port:=/dev/ttyCH341USB0 allow_port_scan:=false"
 
 # 노트북 원격 모니터링 통신 (Zenoh 브리지)
@@ -79,6 +86,9 @@ echo "🤖 [KABOAT Jetson] 환경 세팅 완료 (DOMAIN: $ROS_DOMAIN_ID | WS: ${
 echo "   - run_boat_lidar: 선체 TG-50 포함 센서/오도메트리 가동 (cal_imu 불필요, 즉시 /odom 생성)"
 echo "   - run_gq7_outdoor : 야외 GQ7 (/odom 원점 = ~/kaboat_geo_origin.yaml)"
 echo "   - run_geo       : GPS 원점 설정·위도경도→x/y 변환 (geo_origin)"
+echo "   - run_points    : 미션 지점 기록기 (~/kaboat_mission_points.json)"
+echo "   - rec_point 이름 : 지금 위치(x, y, 선수각) 기록 (이름 생략 시 p1, p2 …)"
+echo "   - list_points   : 기록한 지점 보기"
 echo "   - run_motor     : 모터 제어기 가동"
 echo "   - cal_imu       : [선택] IMU 정지 수동 보정 (수조 라이다 Truth 모드에서는 생략 가능)"
 echo "   - test_bspline  : B-Spline 곡선 자율주행 (출력 30%, 즉시 시작)"

@@ -1,0 +1,9 @@
+# 배의 현재 위치(/odom)를 이름 붙여 미션 지점 파일에 저장 (point_recorder)
+string name        # 지점 이름 (영문·숫자·한글·_·-). 비우면 p1, p2 … 자동
+---
+bool success
+string message
+string name        # 실제로 저장된 이름 (자동 이름일 때 확인용)
+float64 x          # /odom x [m]
+float64 y          # /odom y [m]
+float64 yaw_deg    # 선수각 [deg], 0 = +x, 반시계 +

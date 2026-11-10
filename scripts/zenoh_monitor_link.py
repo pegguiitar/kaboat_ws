@@ -70,6 +70,7 @@ MONITOR_TOPICS = (
     '/geo/target_markers',
     '/geo/origin',
     '/geo/status',
+    '/mission_points/markers',
 )
 
 LAPTOP_TO_JETSON_TOPICS = (
