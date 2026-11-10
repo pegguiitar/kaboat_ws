@@ -6,7 +6,8 @@ import os
 import pytest
 
 from kaboat_mission.mission_points import (
-    MissionPoint, PointStore, auto_name, check_name, origin_distance_m, same_origin)
+    MissionPoint, PointStore, auto_name, check_name, mission_slot, mission_targets,
+    origin_distance_m, read_origin_file, same_origin)
 
 ORIGIN = (35.1234567, 129.0456789, 12.5)
 
@@ -83,3 +84,45 @@ def test_unknown_name_lists_known_ones():
     store, _ = PointStore().with_point('a', MissionPoint(0.0, 0.0, 0.0), None)
     with pytest.raises(KeyError, match='저장된 지점: a'):
         store.get('b')
+
+
+def test_read_origin_file(tmp_path):
+    assert read_origin_file(str(tmp_path / 'none.yaml')) is None
+    f = tmp_path / 'origin.yaml'
+    f.write_text('origin_lat: 35.1234567\norigin_lon: 129.0456789\norigin_alt: 12.5\n')
+    assert read_origin_file(str(f)) == pytest.approx(ORIGIN)
+    for bad in ('origin_lat: 95.0\norigin_lon: 129.0\n', 'origin_lon: 129.0\n', '{broken'):
+        f.write_text(bad)
+        with pytest.raises(ValueError):
+            read_origin_file(str(f))
+
+
+def test_mission_slot_names():
+    assert mission_slot('gate_entry') == ('gate', 'entry')
+    assert mission_slot('search_end') == ('search', 'end')
+    for other in ('p1', 'start', 'gate', 'gates_end', 'dock_entry2', 'Gate_entry'):
+        assert mission_slot(other) is None
+
+
+def _store(**points):
+    store = PointStore()
+    for name, pose in points.items():
+        store, _ = store.with_point(name, MissionPoint(*pose), ORIGIN)
+    return store
+
+
+def test_mission_targets_pairs_entry_and_end():
+    store = _store(gate_entry=(1.0, 2.0, 90.0), gate_end=(20.0, 2.5, 0.0),
+                   dock_end=(5.0, 5.0, 45.0), dock_entry=(4.0, 1.0, 180.0), p1=(0, 0, 0))
+    targets = mission_targets(store)
+    assert list(targets) == ['gate', 'dock']                         # 미션 순서, p1 은 안 씀
+    assert targets['gate'] == {'entry': [1.0, 2.0, 90.0], 'end': [20.0, 2.5]}
+    assert targets['dock']['entry'] == [4.0, 1.0, 180.0]
+    assert mission_targets(PointStore()) == {}
+
+
+def test_mission_targets_refuses_half_pair():
+    with pytest.raises(ValueError, match='gate_end'):
+        mission_targets(_store(gate_entry=(1.0, 2.0, 90.0)))
+    with pytest.raises(ValueError, match='station_entry'):
+        mission_targets(_store(station_end=(1.0, 2.0, 0.0)))

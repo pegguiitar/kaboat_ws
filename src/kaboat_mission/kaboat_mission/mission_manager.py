@@ -23,6 +23,14 @@
 (entry_waypoints.<state>, entry_ready.<state>)는 파라미터로 주입한다
 — kaboat_bringup/config/mission_params.yaml 참고.
 
+현장 기록 지점 (rec): points_file(기본 ~/kaboat_mission_points.json)이 있으면
+  <미션>_entry → entry_waypoints.<미션> + entry_ready.<미션>=true
+  <미션>_end   → waypoints.<미션>
+으로 mission_params 값을 덮어쓴다(kaboat_mission/mission_points.py). 시작 거부(노드 종료):
+  - 파일이 깨졌거나, 기록 당시 원점이 지금 원점 파일(origin_file)과 다를 때
+  - 한 미션의 _entry 와 _end 중 하나만 있을 때
+파일이 없으면 mission_params 값 그대로. points_file 이 '' 또는 none 이면 읽지 않는다(수조 런치).
+
 단일 미션 테스트:
   전체를 순서대로 안 돌리고 특정 미션 하나만 켜서 그 behavior 를 반복
   개발/디버깅하고 싶을 때는 start_state 파라미터를 쓴다.
@@ -34,6 +42,7 @@
   이때도 entry_waypoints.<state>와 entry_ready.<state>=true가 필요하다.
 """
 import math
+import os
 
 import rclpy
 from rclpy.node import Node
@@ -43,7 +52,11 @@ from std_msgs.msg import String, Bool
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Odometry
 
-MISSION_ORDER = ['gate', 'station', 'dock', 'search', 'avoid']
+from kaboat_mission.mission_points import (
+    DEFAULT_ORIGIN_FILE, DEFAULT_POINTS_FILE, MISSION_STATES, PointStore,
+    mission_slot, mission_targets, read_origin_file)
+
+MISSION_ORDER = list(MISSION_STATES)
 
 # 파라미터 미지정 시의 스모크 테스트용 기본 웨이포인트 (odom 좌표 [m]).
 # 실제 경기장 좌표는 mission_params.yaml 에서 덮어쓴다.
@@ -57,14 +70,17 @@ DEFAULT_WAYPOINTS = {
 
 
 class MissionManager(Node):
-    def __init__(self):
-        super().__init__('mission_manager')
+    def __init__(self, **node_kwargs):
+        super().__init__('mission_manager', **node_kwargs)
 
         self.declare_parameter('transition_radius', 5.0)   # 전환 판정 반경 [m]
         self.declare_parameter('auto_start', True)          # 켜지면 바로 첫 미션 시작
         self.declare_parameter('start_state', '')            # 단일 미션 테스트용 시작 지점
         self.declare_parameter('single_mission', False)      # true 면 start_state 하나만 하고 done
         self.declare_parameter('entry_required', True)      # 단독 미션 preview 전용 우회
+        # 현장 기록 지점(rec) — 있으면 아래 waypoints/entry_* 를 덮어씀. '' 또는 none 이면 안 읽음
+        self.declare_parameter('points_file', DEFAULT_POINTS_FILE)
+        self.declare_parameter('origin_file', DEFAULT_ORIGIN_FILE)
         for name in MISSION_ORDER:
             self.declare_parameter(f'waypoints.{name}', DEFAULT_WAYPOINTS[name])
             self.declare_parameter(f'entry_waypoints.{name}', [0.0, 0.0, 0.0])
@@ -84,6 +100,8 @@ class MissionManager(Node):
             for name in MISSION_ORDER
         }
         self.entry_required = bool(self.get_parameter('entry_required').value)
+        self.apply_recorded_points(str(self.get_parameter('points_file').value),
+                                   str(self.get_parameter('origin_file').value))
         for name in MISSION_ORDER:
             pose = self.entry_waypoints[name]
             if len(pose) != 3 or not all(math.isfinite(v) for v in pose):
@@ -125,6 +143,46 @@ class MissionManager(Node):
 
         if bool(self.get_parameter('auto_start').value):
             self.advance()
+
+    # ── 현장 기록 지점 ─────────────────────────────────
+    def apply_recorded_points(self, points_file: str, origin_file: str):
+        """rec 로 기록한 <미션>_entry / <미션>_end 로 미션 좌표를 덮어쓴다.
+
+        원점이 다르거나 파일이 잘못됐으면 ValueError — 엉뚱한 자리로 가지 않도록 시작을 막는다.
+        """
+        if points_file.strip().lower() in ('', 'none'):
+            self.get_logger().info('points_file 비활성 — mission_params 좌표만 사용')
+            return
+        path = os.path.expanduser(points_file)
+        if not os.path.exists(path):
+            self.get_logger().info(f'기록 지점 파일 없음 ({path}) — mission_params 좌표 사용')
+            return
+        store = PointStore.load(path)
+        try:
+            store.check_origin(read_origin_file(origin_file))
+        except ValueError as exc:
+            raise ValueError(
+                f'{path}: {exc} — 원점을 다시 잡았으면 지점을 다시 기록하거나 '
+                'points_file 을 바꾼다') from exc
+        targets = mission_targets(store, MISSION_ORDER)
+        for state in MISSION_ORDER:
+            if state not in targets:
+                continue
+            entry, end = targets[state]['entry'], targets[state]['end']
+            self.entry_waypoints[state] = list(entry)
+            self.entry_ready[state] = True
+            self.waypoints[state] = list(end)
+            self.get_logger().info(
+                f'[기록 지점] {state}: 시작 ({entry[0]:+.2f}, {entry[1]:+.2f}, '
+                f'{entry[2]:+.1f}°) → 끝 ({end[0]:+.2f}, {end[1]:+.2f})')
+        missing = [s for s in MISSION_ORDER if s not in targets]
+        if missing:
+            self.get_logger().warning(
+                f'기록 지점이 없는 미션 {missing} — mission_params 값 사용 '
+                '(entry_ready=false 면 그 미션에서 멈춤)')
+        unused = [n for n in store.points if mission_slot(n, MISSION_ORDER) is None]
+        if unused:
+            self.get_logger().info(f'미션 이름 규칙이 아닌 지점(안 씀): {unused}')
 
     # ── state 전이 ────────────────────────────────────
     def advance(self):
@@ -247,7 +305,13 @@ class MissionManager(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = MissionManager()
+    try:
+        node = MissionManager()
+    except ValueError as exc:
+        # 기록 지점·원점이 맞지 않으면 엉뚱한 자리로 가지 않도록 시작하지 않는다
+        rclpy.logging.get_logger('mission_manager').fatal(f'시작 거부: {exc}')
+        rclpy.shutdown()
+        raise SystemExit(1) from None
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:

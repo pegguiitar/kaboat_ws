@@ -19,6 +19,8 @@
   결과를 못 받았을 때 같은 id 로 재전송해도 두 번 기록되지 않는다.
 
 - 같은 이름으로 다시 기록하면 덮어쓴다(이전 값은 결과 메시지에). 기록할 때마다 파일에 저장.
+- mission_manager 는 <미션>_entry(시작 자세, 선수각 포함) / <미션>_end(끝 지점) 이름만 읽는다
+  (미션 = gate, station, dock, search, avoid). 예) rec gate_entry → rec gate_end
 - 저장 파일: ~/kaboat_mission_points.json (points_file 파라미터).
 - RViz: /mission_points/markers (MarkerArray, latched, frame odom) — 화살표 = 선수각.
 
@@ -50,7 +52,7 @@ from kaboat_behaviors.behavior_base import yaw_from_quaternion
 from kaboat_hardware.geo_local import LocalFrame
 from kaboat_hardware.gq7_origin import load_origin_file
 from kaboat_mission.mission_points import (
-    DEFAULT_POINTS_FILE, FRAME_ID, MissionPoint, PointStore, auto_name)
+    DEFAULT_POINTS_FILE, FRAME_ID, MissionPoint, PointStore, auto_name, mission_slot)
 
 REQUEST_TOPIC = '/mission_points/request'
 RESULT_TOPIC = '/mission_points/result'
@@ -183,6 +185,9 @@ class PointRecorder(Node):
         if previous is not None:
             message += (f' (덮어씀 — 이전 x={previous.x:+.2f}, y={previous.y:+.2f}, '
                         f'{previous.yaw_deg:+.1f}°)')
+        if mission_slot(name) is None:
+            message += (' (미션 이름 규칙 아님 — mission_manager 는 gate_entry·gate_end 처럼 '
+                        '<미션>_entry/_end 만 읽음)')
         if origin is None:
             message += ' ⚠ 원점 파일 없음 — GQ7 원점이 켤 때마다 바뀌어 다음 실행에서는 다른 자리다'
         self.get_logger().info(message)

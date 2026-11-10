@@ -22,10 +22,17 @@ point_recorder(kaboat_hardware)가 쓰고, mission_manager 가 읽어서 entry_w
 - lat, lon: 원점이 있을 때 x/y 를 위도·경도로 되돌린 값. 원점을 다시 잡아도
   새 원점 기준 x/y 를 다시 계산할 수 있게 보관한다.
 
-사용 예 (mission_manager):
+미션 이름 규칙 (mission_manager 가 자동으로 읽는 이름):
+    <미션>_entry   미션 시작 자세 [x, y, 선수각] → entry_waypoints.<미션>, entry_ready=true
+    <미션>_end     미션 끝 지점 [x, y]          → waypoints.<미션>
+    <미션> = gate, station, dock, search, avoid.  예) gate_entry, gate_end
+    한 미션은 _entry 와 _end 를 둘 다 기록해야 한다(하나만 있으면 mission_manager 가 시작 거부).
+    이 규칙이 아닌 이름(p1, start 등)은 저장만 되고 미션에는 안 쓰인다.
+
+사용 예:
     store = PointStore.load('~/kaboat_mission_points.json')
-    store.check_origin(current_origin)        # 원점이 바뀌었으면 ValueError
-    entry = store.get('gate_entry').pose()    # [x, y, yaw_deg]
+    store.check_origin(read_origin_file('~/kaboat_geo_origin.yaml'))   # 원점이 바뀌었으면 ValueError
+    targets = mission_targets(store)          # {'gate': {'entry': [x, y, deg], 'end': [x, y]}, …}
 """
 
 from dataclasses import dataclass
@@ -35,7 +42,14 @@ import os
 import re
 import tempfile
 
+import yaml
+
 DEFAULT_POINTS_FILE = '~/kaboat_mission_points.json'
+DEFAULT_ORIGIN_FILE = '~/kaboat_geo_origin.yaml'   # geo_origin /geo/set_origin 이 저장
+# 종합임무 순서. mission_manager.MISSION_ORDER 가 이 값을 쓴다.
+MISSION_STATES = ('gate', 'station', 'dock', 'search', 'avoid')
+ENTRY_SUFFIX = '_entry'
+END_SUFFIX = '_end'
 FORMAT_VERSION = 1
 FRAME_ID = 'odom'
 # 같은 원점으로 볼 거리 [m]. 원점 파일은 GNSS 평균이라 다시 잡으면 이보다 크게 바뀐다.
@@ -75,6 +89,64 @@ def auto_name(existing) -> str:
     while f'p{n}' in existing:
         n += 1
     return f'p{n}'
+
+
+def read_origin_file(path: str = DEFAULT_ORIGIN_FILE):
+    """geo_origin 이 저장한 원점 파일 → (위도, 경도, 고도). 파일이 없으면 None, 잘못됐으면 ValueError."""
+    path = os.path.expanduser(path)
+    if not os.path.exists(path):
+        return None
+    with open(path, encoding='utf-8') as f:
+        try:
+            data = yaml.safe_load(f) or {}
+        except yaml.YAMLError as exc:
+            raise ValueError(f'원점 YAML 이 깨짐: {exc}') from exc
+    try:
+        lat, lon = float(data['origin_lat']), float(data['origin_lon'])
+        alt = float(data.get('origin_alt', 0.0))
+    except (KeyError, TypeError, AttributeError) as exc:
+        raise ValueError(f'원점 파일 형식이 잘못됨: {exc!r}') from exc
+    if not (math.isfinite(lat) and -90.0 <= lat <= 90.0):
+        raise ValueError('latitude must be finite and between -90 and 90 degrees')
+    if not (math.isfinite(lon) and -180.0 <= lon <= 180.0):
+        raise ValueError('longitude must be finite and between -180 and 180 degrees')
+    if not math.isfinite(alt):
+        raise ValueError('origin_alt must be finite')
+    return lat, lon, alt
+
+
+def mission_slot(name: str, states=MISSION_STATES):
+    """지점 이름 → (미션, 'entry' | 'end'). 미션 이름 규칙이 아니면 None."""
+    for kind, suffix in (('entry', ENTRY_SUFFIX), ('end', END_SUFFIX)):
+        if name.endswith(suffix) and name[:-len(suffix)] in states:
+            return name[:-len(suffix)], kind
+    return None
+
+
+def mission_targets(store: 'PointStore', states=MISSION_STATES) -> dict:
+    """<미션>_entry / <미션>_end 지점 → {미션: {'entry': [x, y, deg], 'end': [x, y]}}.
+
+    기록이 없는 미션은 결과에 없다. 한쪽만 기록된 미션이 있으면 ValueError — 끝 지점이
+    없으면 mission_params 의 다른 좌표(sim 값 등)로 달려갈 수 있어서 시작 자체를 막는다.
+    """
+    found = {}
+    for name, point in store.points.items():
+        slot = mission_slot(name, states)
+        if slot is not None:
+            found.setdefault(slot[0], {})[slot[1]] = point
+    targets = {}
+    for state in states:
+        pair = found.get(state)
+        if pair is None:
+            continue
+        for kind, suffix in (('entry', ENTRY_SUFFIX), ('end', END_SUFFIX)):
+            if kind not in pair:
+                have = [state + (ENTRY_SUFFIX if k == 'entry' else END_SUFFIX) for k in pair]
+                raise ValueError(
+                    f'{state}{suffix} 이 없음 ({", ".join(have)} 만 있음) — '
+                    f'{state} 는 {state}{ENTRY_SUFFIX} 와 {state}{END_SUFFIX} 를 둘 다 기록해야 함')
+        targets[state] = {'entry': pair['entry'].pose(), 'end': pair['end'].xy()}
+    return targets
 
 
 def origin_distance_m(a, b) -> float:

@@ -87,7 +87,8 @@ def _nodes(context):
                   'single_mission': True, 'auto_start': True,
                   'entry_waypoints.dock': [*staging, staging_heading],
                   'entry_ready.dock': True,
-                  'waypoints.dock': staging},
+                  'waypoints.dock': staging,
+                  'points_file': ''},       # 수조 좌표 — 야외 rec 기록 지점 안 읽음
              ]),
     ]
 

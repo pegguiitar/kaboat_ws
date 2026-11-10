@@ -15,6 +15,11 @@
 #
 # 아래는 실제 경기장 좌표다 (예전 원점 근처 스모크테스트 사각 경로에서 교체함).
 
+# ⚠️ 야외: 현장에서 rec 로 기록한 ~/kaboat_mission_points.json 의 <미션>_entry /
+# <미션>_end 지점이 있으면 mission_manager 가 아래 entry_waypoints·entry_ready·waypoints 를
+# 그 값으로 덮어쓴다(기록 당시 원점이 지금 원점과 다르면 시작 거부). 기록이 없는 미션만
+# 아래 값을 쓴다. autonomy.launch.py mission_points_file:=none 이면 이 파일 값만 쓴다.
+
 mission_manager:
   ros__parameters:
     transition_radius: 5.0   # [m] behavior 완료 신호 + 목표점 이내 진입 시 전환

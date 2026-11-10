@@ -12,31 +12,23 @@ GQ7 의 /ekf/odometry_map 은 위도·경도가 아니라 '상대 위치 원점'
 한 번 쓰이므로, 원점을 바꾸면 센서 런치를 다시 켜야 한다.
 """
 
-import math
 import os
 import tempfile
 
 import yaml
 
-from kaboat_hardware.geo_local import check_lat_lon
+from kaboat_mission.mission_points import read_origin_file
 
 # 원점을 합친 GQ7 설정 파일 이름 (임시 디렉터리에 매번 덮어씀)
 GENERATED_FILE = 'kaboat_gq7_origin.yaml'
 
 
 def load_origin_file(path: str):
-    """geo_origin 이 저장한 원점 파일 → (위도, 경도, 고도). 파일이 없으면 None."""
-    path = os.path.expanduser(path)
-    if not os.path.exists(path):
-        return None
-    with open(path, encoding='utf-8') as f:
-        data = yaml.safe_load(f) or {}
-    lat, lon = float(data['origin_lat']), float(data['origin_lon'])
-    alt = float(data.get('origin_alt', 0.0))
-    check_lat_lon(lat, lon)
-    if not math.isfinite(alt):
-        raise ValueError('origin_alt must be finite')
-    return lat, lon, alt
+    """geo_origin 이 저장한 원점 파일 → (위도, 경도, 고도). 파일이 없으면 None.
+
+    mission_manager 도 같은 파일을 읽으므로 구현은 kaboat_mission.mission_points 한 곳에 둔다.
+    """
+    return read_origin_file(path)
 
 
 def origin_params(lat: float, lon: float, alt: float) -> dict:

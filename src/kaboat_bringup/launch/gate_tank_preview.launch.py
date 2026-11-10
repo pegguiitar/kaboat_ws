@@ -39,6 +39,7 @@ def _nodes(context):
                 # Read-only gate preview has no measured entry pose or actuator.
                 'entry_required': False,
                 'waypoints.gate': [goal_x, goal_y],
+                'points_file': '',          # 수조 좌표 — 야외 rec 기록 지점 안 읽음
                 'use_sim_time': False,
             }],
         ),

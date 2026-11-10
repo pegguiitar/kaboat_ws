@@ -42,8 +42,23 @@ source ~/.zshrc
 | 5 | 젯슨 터미널 4 | `run_motor` | 모터 드라이버 + GPS CSV 기록기 |
 | 6 | 젯슨 터미널 5 | `run_points` | 미션 지점 기록기 |
 | 7 | 노트북 | `rviz2 -d ~/Projects/KABOAT/kaboat_ws/scripts/remote_monitor.rviz` | Fixed Frame `odom` |
-| 8 | 노트북 | 배를 옮겨 가며 `rec 이름` | `✓ 이름: x=… y=… 선수각 …` |
-| 9 | 젯슨 터미널 6 | `ros2 launch kaboat_bringup autonomy.launch.py` | 자율주행 스택 |
+| 8 | 노트북 | 배를 옮겨 가며 `rec 이름` (아래 이름 규칙) | `✓ 이름: x=… y=… 선수각 …` |
+| 9 | 젯슨 터미널 6 | `ros2 launch kaboat_bringup autonomy.launch.py` | 자율주행 스택. 로그에 `[기록 지점] gate: 시작 … → 끝 …` |
+
+**웨이포인트 이름 규칙** — `mission_manager`가 `~/kaboat_mission_points.json`에서 이 이름만
+자동으로 읽어 `mission_params.yaml` 좌표를 덮어씁니다.
+
+| 이름 | 쓰이는 곳 | 기록할 때 |
+|---|---|---|
+| `<미션>_entry` | 미션 시작 자세 `[x, y, 선수각]` (`entry_waypoints`, `entry_ready=true`) | 배를 **출발할 방향으로** 세우고 기록 |
+| `<미션>_end` | 미션 끝 지점 `[x, y]` (`waypoints`, 전환 반경 5 m 판정) | 위치만 쓰임 |
+
+`<미션>` = `gate`, `station`, `dock`, `search`, `avoid`. 예) `rec gate_entry` → `rec gate_end`.
+
+- 한 미션은 `_entry`와 `_end`를 **둘 다** 기록합니다. 하나만 있으면 `mission_manager`가 시작을 거부합니다.
+- 기록이 없는 미션은 `mission_params.yaml` 값을 씁니다. 지금은 `entry_ready: false`라서 그 미션에 이르면 멈춥니다.
+- 다른 이름(`p1`, `start` 등)은 저장만 되고 미션에는 안 쓰입니다. `rec` 결과에 표시됩니다.
+- 기록 당시 원점이 지금 `~/kaboat_geo_origin.yaml`과 다르면 `mission_manager`가 `시작 거부: … 원점이 다름`으로 종료합니다.
 
 **원점을 처음 잡는 날** (경기장마다 한 번) 3번 전에:
 
@@ -144,6 +159,7 @@ ros2 launch kaboat_bringup autonomy.launch.py \
 ```
 
 `dock_weights:=<.pt 절대경로>`, `dock_device:=0`(젯슨 CUDA), `mission_params_file:=<yaml>`로 바꿉니다.
+기록 지점 파일은 `mission_points_file:=<json>`으로 바꾸고, `mission_points_file:=none`이면 읽지 않습니다.
 
 **원점·위치 확인**
 
@@ -182,5 +198,7 @@ cat ~/kaboat_mission_points.json
 | `rec` → `/odom 을 아직 못 받음` / `안 옴` | `run_gq7_outdoor` 켜짐, GNSS Full Nav 수렴 (`ros2 topic echo /ekf/status`) |
 | `rec` → `원점이 다름` | 원점을 새로 잡았음. 지점 파일을 옮기고(`mv ~/kaboat_mission_points.json …`) 다시 기록 |
 | `/odom` 원점이 켤 때마다 바뀜 | `~/kaboat_geo_origin.yaml` 없음 → 2절 원점 잡기 |
+| `mission_manager` → `시작 거부: … 원점이 다름` | 지점을 기록한 뒤 원점을 다시 잡았음. 지점을 다시 기록하거나 원점 파일을 되돌림 |
+| `mission_manager` → `시작 거부: gate_end 이 없음` | 그 미션의 `_entry`/`_end` 중 하나만 기록됨. 나머지를 `rec`로 기록 |
 | behavior 가 안 움직임 | `/odom` `frame_id`가 `odom`인지, `autonomy.launch.py`의 `*_motion_enabled` |
 | 노트북에 토픽이 안 보임 | 브리지 허용 목록([`zenoh_monitor_link.py`](scripts/zenoh_monitor_link.py)), 양쪽 브리지 재시작 |

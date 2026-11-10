@@ -80,7 +80,9 @@ def generate_launch_description():
     mission = [
         Node(package='kaboat_mission', executable='mission_manager',
              name='mission_manager', output='screen',
-             parameters=[LaunchConfiguration('mission_params_file'), common_params]),
+             parameters=[LaunchConfiguration('mission_params_file'), common_params,
+                         {'points_file': ParameterValue(
+                             LaunchConfiguration('mission_points_file'), value_type=str)}]),
     ]
 
     return LaunchDescription([
@@ -93,6 +95,9 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'mission_params_file', default_value=mission_params,
             description='미션 목표 좌표 YAML; 수조 시험에서는 실측 좌표 파일 지정'),
+        DeclareLaunchArgument(
+            'mission_points_file', default_value='~/kaboat_mission_points.json',
+            description='현장 rec 기록 지점 JSON — <미션>_entry/_end 가 YAML 좌표를 덮어씀. none 이면 안 읽음'),
         DeclareLaunchArgument(
             'gate_params_file', default_value=gate_params,
             description='게이트 쌍 수와 라이다/DRI 임계값 YAML'),
