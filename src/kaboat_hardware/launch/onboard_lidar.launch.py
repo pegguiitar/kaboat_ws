@@ -38,11 +38,11 @@ def generate_launch_description():
             'tilt_threshold_deg', default_value='3.0',
             description='Boat tilt threshold fallback [deg] (default: 3.0)'),
         DeclareLaunchArgument(
-            'pitch_min_deg', default_value='-1.2',
-            description='Boat pitch lower bound for scan filtering [deg] (default: -1.2)'),
+            'pitch_min_deg', default_value='-4.0',
+            description='Boat pitch lower bound for scan filtering [deg] (default: -4.0)'),
         DeclareLaunchArgument(
-            'pitch_max_deg', default_value='4.0',
-            description='Boat pitch upper bound for scan filtering [deg] (default: 4.0)'),
+            'pitch_max_deg', default_value='2.0',
+            description='Boat pitch upper bound for scan filtering [deg] (default: 2.0)'),
         DeclareLaunchArgument(
             'roll_min_deg', default_value='-3.0',
             description='Boat roll lower bound for scan filtering [deg] (default: -3.0)'),

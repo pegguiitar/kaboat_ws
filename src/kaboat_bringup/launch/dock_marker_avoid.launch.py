@@ -36,7 +36,7 @@ def generate_launch_description():
              respawn=True, respawn_delay=2.0, output='screen', condition=IfCondition(LaunchConfiguration('start_occupancy_grid')),
              parameters=[{'use_sim_time': False, 'resolution': 0.2, 'size': 15.0,
                           'publish_rate': 10.0, 'enable_tilt_gate': True,
-                          'pitch_min_deg': -1.2, 'pitch_max_deg': 4.0,
+                          'pitch_min_deg': -4.0, 'pitch_max_deg': 2.0,
                           'roll_min_deg': -3.0, 'roll_max_deg': 3.0,
                           'lidar_offset_x': 0.73, 'lidar_offset_y': 0.0}]),
         Node(package='kaboat_hardware', executable='dock_lidar_markers', name='dock_lidar_markers',

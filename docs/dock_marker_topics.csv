@@ -3,7 +3,7 @@ topic,message_type,frame,meaning
 /camera/depth/image_raw,sensor_msgs/msg/Image,camera_color_optical_frame,Aligned depth; 640x480; native stereo 1280x720
 /camera/camera_info,sensor_msgs/msg/CameraInfo,camera_color_optical_frame,Camera intrinsics
 /scan/raw,sensor_msgs/msg/LaserScan,onboard_laser_frame,Raw onboard LiDAR
-/scan,sensor_msgs/msg/LaserScan,onboard_laser_frame,Filtered LiDAR; pitch -1.2..4 degrees
+/scan,sensor_msgs/msg/LaserScan,onboard_laser_frame,Filtered LiDAR; pitch -4..2 degrees
 /imu/data,sensor_msgs/msg/Imu,imu_link,IMU
 /odom,nav_msgs/msg/Odometry,odom,Boat pose
 /tf,tf2_msgs/msg/TFMessage,mixed,Dynamic transforms
