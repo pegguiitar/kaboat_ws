@@ -1,13 +1,21 @@
-"""Mask boat-structure returns and filter tilted scans using IMU in onboard TG-50.
+"""선체 TG-50 스캔: 선체 구조물 가림 + 기울기에 따라 두 토픽으로 나눠 발행.
 
-Angles are measured in the published LaserScan frame, counterclockwise from
-its +X axis. The default 120..240 degree sector equals +120..+180 and -180..-120
-degrees (rear/stern sector) in a scan whose angle range is -180..180 degrees.
+  /scan/raw ──▶ 선체 구조물 섹터 가림 ──┬──▶ /scan        항상 발행
+                                          └──▶ /scan/level  배가 수평일 때만
 
-IMU tilt filter rejects scans when boat pitch or roll falls outside allowed limits
-(default: pitch between -4.0° and +2.0°, roll between -3.0° and +3.0°;
-same range as occupancy_grid enable_tilt_gate),
-preventing surface reflections or sky points from corrupting downstream occupancy and DRI maps.
+- /scan: 기울기와 상관없이 매 스캔 발행한다. "라이다가 살아 있나"를 보는 신선도 검사
+  (real_obstacle_avoid_test·sensor_health_monitor)와, 기울기를 스스로 거르는
+  occupancy_grid(enable_tilt_gate, 같은 범위)가 쓴다. 파도로 기울었다고 스캔이 끊기면
+  신선도 검사가 센서 고장으로 보고 배를 세우기 때문에 여기서는 거르지 않는다.
+- /scan/level: IMU 롤/피치가 범위 안일 때만 발행한다(기본 pitch -4°~+2°, roll ±3°,
+  occupancy_grid 와 같은 범위). 스캔 점을 기하적으로 바로 쓰는 노드(gate_follower 부표 쌍,
+  buoy_detector 교차확인, dock_lidar_markers 벽선, docking_ctrl 입구)가 쓴다 — 기운 스캔은
+  수면·하늘을 훑어 엉뚱한 점을 준다. 기울면 tilt_action=drop(기본)은 건너뛰고,
+  invalidate 는 모든 거리를 inf 로 바꿔 발행한다. IMU 가 없거나 지연되면 판정할 수 없어
+  /scan/level 도 그대로 발행한다(경고).
+
+섹터 각도는 발행 LaserScan 좌표계 +X 기준 반시계. 기본 120..240° = +120..+180° 와
+-180..-120°(선미 쪽).
 """
 
 import copy
@@ -86,8 +94,8 @@ def invalidate_all_ranges(scan: LaserScan) -> LaserScan:
 
 
 class OnboardScanFilter(Node):
-    def __init__(self):
-        super().__init__('onboard_scan_filter')
+    def __init__(self, **node_kwargs):
+        super().__init__('onboard_scan_filter', **node_kwargs)
 
         # Sector mask parameters
         self.declare_parameter('enable_sector_mask', True)
@@ -147,6 +155,8 @@ class OnboardScanFilter(Node):
 
         self.publisher = self.create_publisher(
             LaserScan, '/scan', qos_profile_sensor_data)
+        self.level_publisher = self.create_publisher(
+            LaserScan, '/scan/level', qos_profile_sensor_data)
         self.create_subscription(
             LaserScan, '/scan/raw', self._on_scan, qos_profile_sensor_data)
 
@@ -175,37 +185,47 @@ class OnboardScanFilter(Node):
         self.latest_imu = msg
         self.latest_imu_time = time.monotonic()
 
-    def _on_scan(self, scan: LaserScan):
-        # 1. IMU tilt filter
-        if self.enable_imu_filter:
-            now = time.monotonic()
-            if self.latest_imu_time is None:
-                self.get_logger().warn(
-                    'IMU 데이터 수신 대기 중 — 스캔 필터 통과 유지',
-                    throttle_duration_sec=3.0)
-            elif (now - self.latest_imu_time) > self.imu_timeout_sec:
-                self.get_logger().warn(
-                    f'IMU 데이터 지연 ({now - self.latest_imu_time:.2f}s > {self.imu_timeout_sec}s)',
-                    throttle_duration_sec=3.0)
-            elif self.tilted:
-                r_deg = math.degrees(self.roll)
-                p_deg = math.degrees(self.pitch)
-                self.get_logger().warn(
-                    f'배 기울기 임계 초과로 스캔 차단: roll={r_deg:.2f}° (허용 [{self.roll_min_deg:.1f}°, {self.roll_max_deg:.1f}°]), '
-                    f'pitch={p_deg:.2f}° (허용 [{self.pitch_min_deg:.1f}°, {self.pitch_max_deg:.1f}°])',
-                    throttle_duration_sec=1.0)
-                if self.tilt_action == 'drop':
-                    return
-                elif self.tilt_action == 'invalidate':
-                    self.publisher.publish(invalidate_all_ranges(scan))
-                    return
+    def _tilted_now(self) -> bool:
+        """지금 배가 기울어 /scan/level 을 막아야 하면 True. IMU 를 못 믿으면 False(통과)."""
+        if not self.enable_imu_filter:
+            return False
+        now = time.monotonic()
+        if self.latest_imu_time is None:
+            self.get_logger().warn(
+                'IMU 데이터 수신 대기 중 — /scan/level 통과 유지',
+                throttle_duration_sec=3.0)
+            return False
+        if (now - self.latest_imu_time) > self.imu_timeout_sec:
+            self.get_logger().warn(
+                f'IMU 데이터 지연 ({now - self.latest_imu_time:.2f}s > {self.imu_timeout_sec}s)'
+                ' — /scan/level 통과 유지',
+                throttle_duration_sec=3.0)
+            return False
+        if self.tilted:
+            self.get_logger().warn(
+                f'배 기울기 임계 초과로 /scan/level 차단 (/scan 은 계속 발행): '
+                f'roll={math.degrees(self.roll):.2f}° '
+                f'(허용 [{self.roll_min_deg:.1f}°, {self.roll_max_deg:.1f}°]), '
+                f'pitch={math.degrees(self.pitch):.2f}° '
+                f'(허용 [{self.pitch_min_deg:.1f}°, {self.pitch_max_deg:.1f}°])',
+                throttle_duration_sec=1.0)
+            return True
+        return False
 
-        # 2. Sector mask
+    def _on_scan(self, scan: LaserScan):
         out_scan = scan
         if self.enable_sector_mask:
             out_scan = mask_sector(scan, self.start_deg, self.end_deg)
 
+        # /scan — 기울기와 상관없이 항상 (신선도 검사·occupancy_grid 자체 게이트용)
         self.publisher.publish(out_scan)
+
+        # /scan/level — 수평일 때만 (스캔 점을 기하적으로 쓰는 노드용)
+        if self._tilted_now():
+            if self.tilt_action == 'invalidate':
+                self.level_publisher.publish(invalidate_all_ranges(out_scan))
+            return
+        self.level_publisher.publish(out_scan)
 
 
 def main(args=None):

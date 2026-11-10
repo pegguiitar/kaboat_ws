@@ -111,3 +111,100 @@ class TestOnboardScanFilter(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+# ── 노드: /scan 은 항상, /scan/level 은 수평일 때만 ─────────────────────
+import pytest  # noqa: E402
+
+rclpy = pytest.importorskip('rclpy')
+from rclpy.parameter import Parameter  # noqa: E402
+from sensor_msgs.msg import Imu  # noqa: E402
+
+from kaboat_hardware.onboard_scan_filter import OnboardScanFilter  # noqa: E402
+
+
+def _imu(pitch_deg=0.0, roll_deg=0.0):
+    """roll·pitch 만 있는 IMU (yaw 0)."""
+    msg = Imu()
+    r, p = math.radians(roll_deg) / 2.0, math.radians(pitch_deg) / 2.0
+    msg.orientation.w = math.cos(r) * math.cos(p)
+    msg.orientation.x = math.sin(r) * math.cos(p)
+    msg.orientation.y = math.cos(r) * math.sin(p)
+    msg.orientation.z = -math.sin(r) * math.sin(p)
+    return msg
+
+
+def _scan():
+    scan = LaserScan()
+    scan.angle_min, scan.angle_increment = -math.pi, math.radians(90.0)
+    scan.range_min, scan.range_max = 0.1, 50.0
+    scan.ranges = [5.0, 5.0, 5.0, 5.0]
+    return scan
+
+
+@pytest.fixture
+def scan_filter():
+    rclpy.init()
+    node = None
+
+    def make(**params):
+        nonlocal node
+        node = OnboardScanFilter(parameter_overrides=[
+            Parameter(k, value=v) for k, v in params.items()])
+        node.sent = {'scan': [], 'level': []}
+        node.publisher.publish = node.sent['scan'].append
+        node.level_publisher.publish = node.sent['level'].append
+        return node
+    yield make
+    if node is not None:
+        node.destroy_node()
+    rclpy.shutdown()
+
+
+def test_scan_always_level_only_when_level(scan_filter):
+    node = scan_filter()
+    node._on_imu(_imu(pitch_deg=1.0))                     # 범위 안 (-4°~+2°)
+    node._on_scan(_scan())
+    assert (len(node.sent['scan']), len(node.sent['level'])) == (1, 1)
+    for pitch in (3.0, -5.0):                             # 범위 밖 → /scan 만
+        node._on_imu(_imu(pitch_deg=pitch))
+        node._on_scan(_scan())
+    node._on_imu(_imu(roll_deg=4.0))
+    node._on_scan(_scan())
+    assert (len(node.sent['scan']), len(node.sent['level'])) == (4, 1)
+    node._on_imu(_imu())                                  # 다시 수평 → 둘 다
+    node._on_scan(_scan())
+    assert (len(node.sent['scan']), len(node.sent['level'])) == (5, 2)
+
+
+def test_both_topics_get_the_sector_mask(scan_filter):
+    node = scan_filter()
+    node._on_imu(_imu())
+    node._on_scan(_scan())                                # 각도 -180, -90, 0, 90
+    for out in (node.sent['scan'][-1], node.sent['level'][-1]):
+        assert math.isinf(out.ranges[0]) and out.ranges[2] == 5.0   # 선미(-180°) 가림
+
+
+def test_invalidate_mode_sends_empty_level_scan(scan_filter):
+    node = scan_filter(tilt_action='invalidate')
+    node._on_imu(_imu(pitch_deg=5.0))
+    node._on_scan(_scan())
+    assert node.sent['scan'][-1].ranges[2] == 5.0         # /scan 은 그대로
+    assert all(math.isinf(r) for r in node.sent['level'][-1].ranges)
+
+
+def test_no_imu_or_stale_imu_passes_level(scan_filter):
+    node = scan_filter()                                  # IMU 아직 없음 → 판정 불가, 통과
+    node._on_scan(_scan())
+    assert len(node.sent['level']) == 1
+    node._on_imu(_imu(pitch_deg=10.0))
+    node.latest_imu_time -= 5.0                           # IMU 지연 → 통과 (경고)
+    node._on_scan(_scan())
+    assert len(node.sent['level']) == 2
+
+
+def test_filter_off_passes_level_even_when_tilted(scan_filter):
+    node = scan_filter(enable_imu_filter=False)
+    node._on_imu(_imu(pitch_deg=10.0))
+    node._on_scan(_scan())
+    assert (len(node.sent['scan']), len(node.sent['level'])) == (1, 1)

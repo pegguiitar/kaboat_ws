@@ -12,8 +12,10 @@
   gz_type_name: "gz.msgs.Clock"
   direction: GZ_TO_ROS
 
-# ── 2D LiDAR (실물: TG 50) → /scan ───────────────────
-- ros_topic_name: "/scan"
+# ── 2D LiDAR (실물: TG 50) → /scan/raw ───────────────
+# 실물처럼 onboard_scan_filter(simulation.launch.py)가 /scan/raw 를 받아
+# /scan(항상)과 /scan/level(배가 수평일 때만)으로 나눠 발행한다.
+- ros_topic_name: "/scan/raw"
   gz_topic_name: "/lidar/scan"
   ros_type_name: "sensor_msgs/msg/LaserScan"
   gz_type_name: "gz.msgs.LaserScan"

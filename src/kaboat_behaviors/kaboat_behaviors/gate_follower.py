@@ -98,7 +98,8 @@ class GateFollower(BehaviorBase):
         self.pair_pub = self.create_publisher(MarkerArray, '/gate/pairs', 1)
         self.status_pub = self.create_publisher(String, '/gate/status', 10)
         self.preview_pub = self.create_publisher(Twist, '/gate/cmd_preview', 10)
-        self.create_subscription(LaserScan, '/scan', self._on_scan,
+        # 부표 쌍 찾기는 스캔 점을 바로 쓰므로 배가 수평일 때만 오는 /scan/level 을 받는다
+        self.create_subscription(LaserScan, '/scan/level', self._on_scan,
                                  qos_profile_sensor_data)
         self.get_logger().info(
             f'gate LiDAR/DRI: required_pairs={self.gate_params.required_pairs}, '

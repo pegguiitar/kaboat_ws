@@ -92,7 +92,8 @@ class DockLidarMarkers(Node):
                                 ('normal_base',Vector3Stamped),('wall_point',PointStamped),
                                 ('marker_ground',PointStamped),('normal',Vector3Stamped)]:
                 self.pubs[c,suffix]=self.create_publisher(kind,f'/dock/lidar/{c}/{suffix}',qos)
-        self.create_subscription(LaserScan,'/scan',self._on_scan,qos)
+        # 벽선 RANSAC — 배가 수평일 때만 오는 스캔 (기운 스캔은 수면을 훑어 벽을 잘못 잡음)
+        self.create_subscription(LaserScan,'/scan/level',self._on_scan,qos)
         self.status_pub=self.create_publisher(String,'/dock/lidar/status',10)
         self.viz_pub=self.create_publisher(MarkerArray,'/dock/lidar/markers',qos)
         self.create_timer(.1,self._tick)

@@ -88,7 +88,8 @@
   GQ7 ─/imu/data─▶ indoor_lidar_odom ◀─────────────────────────── /boat_pose
                      │  (기본: /boat_pose yaw 직접 사용, 1s 끊기면 발행 중단)
                      ▼ /odom 30Hz + TF odom→base_link
-  선체 TG-50 ─/scan/raw─▶ onboard_scan_filter (후방 가림·기울기 차단) ─/scan─▶ occupancy_grid
+  선체 TG-50 ─/scan/raw─▶ onboard_scan_filter (후방 가림) ─┬─/scan (항상)─▶ occupancy_grid(자체 기울기 게이트)
+                                                            └─/scan/level (수평일 때만)─▶ gate·buoy·dock 기하 계산
                      │
        ┌─────────────┼──────────────────────────────┐
        ▼             ▼                              ▼
@@ -126,7 +127,7 @@ sim 은 Gazebo 센서 → `kaboat_sim/config/bridge_config.yaml` 로 아래 **�
 
 | 센서 | 실물 기종 | sim 소스 | 표준 토픽 | 타입 |
 |---|---|---|---|---|
-| 2D LiDAR | TG 50 | gz `gpu_lidar` | `/scan` | `LaserScan` |
+| 2D LiDAR | TG 50 | gz `gpu_lidar` → `/scan/raw` → `onboard_scan_filter` | `/scan` (항상) · `/scan/level` (배가 수평일 때만) | `LaserScan` |
 | Depth Cam (RGB) | Intel D455 | gz `rgbd_camera` | `/camera/color/image_raw` | `Image` |
 | Depth Cam (Depth image) | Intel D455 | gz `rgbd_camera` | `/camera/depth/image_raw` | `Image` |
 | Depth Cam (PointCloud) | Intel D455 | gz `rgbd_camera` | `/camera/depth/points` | `PointCloud2` |

@@ -48,7 +48,8 @@ def _nodes(context):
         nodes.append(Node(
             package='kaboat_perception', executable='occupancy_grid',
             name='occupancy_grid', output='screen',
-            parameters=[{'enable_tilt_gate': False, 'use_sim_time': False}],
+            # /scan 은 이제 기울어도 발행되므로(/scan/level 만 차단) 지도 쪽 게이트를 켠다
+            parameters=[{'enable_tilt_gate': True, 'use_sim_time': False}],
         ))
     return nodes
 

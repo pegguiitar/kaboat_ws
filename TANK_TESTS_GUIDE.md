@@ -208,7 +208,7 @@ python3 scripts/view_roll_pitch.py                           # view_pitch, 스�
   `use_lidar_yaw_truth: false`로 바꾼 경우에만 선수를 -X(180°)로 두고 정지한 채 `cal_imu`를 실행합니다.
 - `/boat_pose`가 1초 넘게 끊기면 `/odom`이 멈춥니다.
 - 실내에서 `real_sensors.launch.py`를 함께 실행하지 않습니다(`/odom` 발행자 중복).
-- 선체 `/scan`은 후방 120°~240°를 가리고, Pitch [-4°, +2°]·Roll ±3°를 벗어나면 차단됩니다(`occupancy_grid`도 같은 범위). 원본은 `/scan/raw`.
+- 선체 `/scan`은 후방 120°~240°를 가리고 **항상** 발행됩니다(신선도 검사·`occupancy_grid`용, `occupancy_grid`는 Pitch [-4°, +2°]·Roll ±3° 밖이면 스스로 버림). 같은 범위 안일 때만 나오는 `/scan/level`은 스캔 점을 직접 쓰는 gate·buoy·dock 노드가 받습니다. 원본은 `/scan/raw`.
 
 ## 4. 젯슨 모터 드라이버
 

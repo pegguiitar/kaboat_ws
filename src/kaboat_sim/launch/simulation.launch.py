@@ -261,6 +261,18 @@ def generate_launch_description():
         }],
     )
 
+    # 9. 선체 라이다 필터 — 실물과 같은 표준 토픽을 낸다:
+    #    /scan/raw(gz 브리지) → /scan(항상) + /scan/level(배가 수평일 때만).
+    #    sim 라이다에는 선체 구조물 반사가 없어 섹터 가림은 끈다. 기울기 범위는 노드
+    #    기본값(occupancy_grid 와 같은 pitch -4°~+2°, roll ±3°).
+    onboard_scan_filter = Node(
+        package='kaboat_hardware',
+        executable='onboard_scan_filter',
+        name='onboard_scan_filter',
+        output='screen',
+        parameters=[{'use_sim_time': True, 'enable_sector_mask': False}],
+    )
+
     return LaunchDescription([
         headless_arg,
         *spawn_args,
@@ -272,6 +284,7 @@ def generate_launch_description():
         robot_state_publisher,
         spawn_robot,
         ros_gz_bridge,
+        onboard_scan_filter,
         rviz_interactive_marker,
         odom_gps_noise,
     ])

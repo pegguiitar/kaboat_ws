@@ -1,10 +1,10 @@
 """docking_ctrl — 세 도킹 목표점을 순서대로 추종.
 
 YOLO+depth 는 어느 슬롯인지와 표식의 대략 위치(/dock/marker_base)만 준다.
-슬롯 축과 입구는 /scan 의 뒷벽 직선에서 구한다(slot_axis.py; depth 법선은 쓰지
+슬롯 축과 입구는 /scan/level(배가 수평일 때만 오는 스캔)의 뒷벽 직선에서 구한다(slot_axis.py; depth 법선은 쓰지
 않는다). 표식 주변 라이다 점들에 직선을 맞추고, 표식을 그 직선에 투영한 점에서
 법선 방향으로 wall_to_mouth 만큼 떨어진 곳을 입구로 삼아 입구 바깥·입구·접안점
-목표점을 계산한다. 직선이 안 잡히거나 /scan 이 끊기면 대체 추정 없이 계획을
+목표점을 계산한다. 직선이 안 잡히거나 /scan/level 이 끊기면(기울어 있을 때 포함) 대체 추정 없이 계획을
 만들지 않는다. 기본 motion_enabled=false: 카메라 TF·입구 오프셋·현장 안전 검증 후
 명시적으로 켜야 추력이 나온다.
 
@@ -144,7 +144,7 @@ class DockingCtrl(BehaviorBase):
         self.scan = None
         self._scan_received_at = None
         self.create_subscription(
-            LaserScan, '/scan', self._on_scan, qos_profile_sensor_data)
+            LaserScan, '/scan/level', self._on_scan, qos_profile_sensor_data)
         self.waypoints_pub = self.create_publisher(Path, '/dock/waypoints', 10)
         # 모니터링용: 라이다 뒷벽에서 계산한 입구(base_link, z=0). 제어 입력이 아니다.
         self.entrance_pub = self.create_publisher(
@@ -210,7 +210,8 @@ class DockingCtrl(BehaviorBase):
         if (self.scan is None or self._scan_received_at is None
                 or now - self._scan_received_at > self.scan_max_age):
             self.get_logger().warning(
-                '/scan 이 없거나 지연 — 도킹 계획 보류', throttle_duration_sec=5.0)
+                '/scan/level 이 없거나 지연(배 기울어짐 포함) — 도킹 계획 보류',
+                throttle_duration_sec=5.0)
             return None
         scan = self.scan
         points = scan_points(scan.ranges, scan.angle_min, scan.angle_increment,

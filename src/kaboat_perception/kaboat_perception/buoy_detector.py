@@ -3,7 +3,8 @@
 입력   /camera/color/image_raw (sensor_msgs/Image)   — RGB 원본, 블롭 검출용
        /camera/depth/image_raw (sensor_msgs/Image)    — 거리 채움 (RGB와 픽셀 정렬됨)
        /camera/camera_info (sensor_msgs/CameraInfo)    — fx·cx 로 방위각 정밀화
-       /scan (sensor_msgs/LaserScan)                  — ⑤ 오검출 제거용 (LiDAR 교차확인)
+       /scan/level (sensor_msgs/LaserScan)            — ⑤ 오검출 제거용 (LiDAR 교차확인,
+                                                        배가 수평일 때만 오는 스캔)
        /imu/data (sensor_msgs/Imu)                    — ③ 수평선 보정용 pitch
        /odom (nav_msgs/Odometry)                      — ⑥ 전역 투영 · ⑦ 추적 시간축
 출력   /detections/buoys (kaboat_msgs/BuoyArray, frame_id="odom")
@@ -178,6 +179,10 @@ class BuoyDetector(Node):
         # 각도·높이에 맞춰 재캘리브(§7).
         self.declare_parameter('horizon_frac', 0.30)
         self.horizon_frac = float(self.get_parameter('horizon_frac').value)
+        # ⑤ 교차확인에 쓸 스캔의 최대 나이 [s]. /scan/level 은 배가 기울면 끊기므로,
+        # 그동안 오래된 스캔(배가 그새 돌았을 수 있음)으로 확인하지 않고 건너뛴다.
+        self.declare_parameter('lidar_max_age_sec', 0.3)
+        self.lidar_max_age = float(self.get_parameter('lidar_max_age_sec').value)
 
         # ⑦ 트래커 파라미터 (ROS param 로 노출 — 부표밭 실측 튜닝용)
         self.declare_parameter('gate_radius', 1.5)
@@ -201,7 +206,8 @@ class BuoyDetector(Node):
 
         self.bridge = CvBridge()
         self.depth = None         # 최신 depth 프레임 (numpy, meters)
-        self.scan = None          # ⑤ 교차확인용 최신 LiDAR
+        self.scan = None          # ⑤ 교차확인용 최신 LiDAR (/scan/level)
+        self.scan_at = None       # 그 스캔을 받은 시각 (노드 시계 — sim 시간 대응)
         self.odom = None          # ⑥⑦ 전역 투영·시간축용 최신 odom
         self.fx = None            # camera_info 초점거리 px (방위각 정밀화)
         self.ppx = None           # camera_info 주점 x px
@@ -216,7 +222,7 @@ class BuoyDetector(Node):
         self.create_subscription(
             CameraInfo, '/camera/camera_info', self._on_info, qos_profile_sensor_data)
         self.create_subscription(
-            LaserScan, '/scan', self._on_scan, qos_profile_sensor_data)
+            LaserScan, '/scan/level', self._on_scan, qos_profile_sensor_data)
         self.create_subscription(
             Imu, '/imu/data', self._on_imu, qos_profile_sensor_data)
         self.create_subscription(Odometry, '/odom', self._on_odom, 10)
@@ -240,6 +246,7 @@ class BuoyDetector(Node):
 
     def _on_scan(self, msg: LaserScan):
         self.scan = msg
+        self.scan_at = self.get_clock().now()
 
     def _on_imu(self, msg: Imu):
         q = msg.orientation
@@ -306,7 +313,12 @@ class BuoyDetector(Node):
         return base
 
     def _lidar_ok(self, bearing: float, distance: float) -> bool:
-        if self.scan is None:
+        # 스캔이 없거나 오래됐으면(배가 기울어 /scan/level 이 끊김) 확인을 건너뛰고 통과 —
+        # 트래커의 N-of-M 확정이 일시적 오검출을 거른다.
+        if self.scan is None or self.scan_at is None:
+            return True
+        age = (self.get_clock().now() - self.scan_at).nanoseconds * 1e-9
+        if age > self.lidar_max_age:
             return True
         return lidar_confirms(self.scan.ranges, self.scan.angle_min,
                               self.scan.angle_increment, bearing, distance)

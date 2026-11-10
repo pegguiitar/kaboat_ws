@@ -14,6 +14,7 @@
   
   <exec_depend>ros_gz_sim</exec_depend>
   <exec_depend>ros_gz_bridge</exec_depend>
+  <exec_depend>kaboat_hardware</exec_depend>   <!-- onboard_scan_filter: /scan/raw → /scan, /scan/level -->
   <exec_depend>interactive_markers</exec_depend>
   <exec_depend>visualization_msgs</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
