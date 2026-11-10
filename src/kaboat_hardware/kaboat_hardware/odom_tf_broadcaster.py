@@ -1,9 +1,9 @@
 """실물용 최소 TF 브로드캐스터 — RViz 시각화를 위한 odom→base_link→센서 체인.
 
 왜 필요한가:
-  자율주행 스택 자체는 TF를 안 쓴다. occupancy_grid 는 /odom 메시지에서
-  직접 배 위치를 읽고, lidar_link 를 base_link 와 동일하다고 가정한다
-  (occupancy_grid.py docstring 참고). 그래서 sim 에서는 Gazebo 가 TF 를
+  자율주행 스택 자체는 TF를 거의 안 쓴다. occupancy_grid 는 /odom 메시지에서
+  직접 배 위치를 읽고, 선체 라이다 위치는 lidar_offset_x 파라미터로 옮긴다
+  (occupancy_grid.py 참고). 그래서 sim 에서는 Gazebo 가 TF 를
   발행해 RViz 가 그려졌을 뿐, 실물에는 TF 발행자가 하나도 없다
   (gq7.yaml 의 tf_mode: 0, robot_state_publisher 미실행).
 
@@ -13,13 +13,20 @@
 
 발행:
   odom → base_link   (동적) — /odom 메시지의 pose 를 그대로 TF 로 중계
-  base_link → <lidar_frame>  (정적) — 기본 identity
-  base_link → <camera_frame> (정적) — 기본 identity
+  base_link → <lidar_frame>  (정적) — 기본 onboard_laser_frame, 선수 0.4 m
+  base_link → <camera_frame> (정적) — 기본 끔 (camera_frame 이 빈 문자열)
 
-  ⚠️ lidar 오프셋 기본값이 0 인 것은 occupancy_grid 의 "lidar == base_link"
-  가정과 **일부러 일치시킨 것**이다. 실측 오프셋을 여기에만 넣으면 RViz 의
-  스캔 위치와 격자가 어긋나 보인다 — 실물 장착 오프셋을 반영할 때는
-  occupancy_grid 의 좌표 변환도 함께 고쳐야 한다.
+  ⚠️ lidar 오프셋 기본값(선체 중심보다 선수 0.4 m, 2026-11-11 실측)은
+  occupancy_grid·gate_follower 의 lidar_offset_x 와 **같아야 한다**. 한쪽만
+  바꾸면 RViz 의 스캔 위치와 격자가 어긋나 보인다.
+
+  ⚠️ 카메라 TF 를 기본으로 끈 이유 (2026-11-11): RealSense 드라이버(publish_tf)가
+  camera_link → … → camera_color_optical_frame 을, dock_yolo.launch 가
+  onboard_laser_frame → camera_link 를 이미 낸다. 여기서 base_link →
+  camera_color_optical_frame 을 또 내면 그 frame 의 부모가 둘이 되고, static TF 는
+  나중에 받은 쪽이 이겨 실행 순서에 따라 카메라 위치가 바뀐다(identity 는 광학 z 축이
+  위를 보게 돼 도킹 표식 위치가 틀어짐). D455 없이 카메라 frame 이 필요할 때만
+  camera_frame·camera_xyz·camera_rpy 를 직접 준다. frame 이름이 비면 그 TF 는 안 낸다.
 """
 import math
 
@@ -57,10 +64,10 @@ class OdomTfBroadcaster(Node):
 
         self.declare_parameter('odom_frame', 'odom')
         self.declare_parameter('base_frame', 'base_link')
-        self.declare_parameter('lidar_frame', 'laser_link')
-        self.declare_parameter('camera_frame', 'camera_color_optical_frame')
-        # 기본 identity — occupancy_grid 의 lidar==base_link 가정과 일치 (docstring)
-        self.declare_parameter('lidar_xyz', [0.0, 0.0, 0.0])
+        self.declare_parameter('lidar_frame', 'onboard_laser_frame')   # tg50_onboard.yaml frame_id
+        self.declare_parameter('camera_frame', '')   # 기본 끔 — docstring 참고
+        # occupancy_grid 의 lidar_offset_x 와 같은 값 (docstring)
+        self.declare_parameter('lidar_xyz', [0.4, 0.0, 0.0])
         self.declare_parameter('lidar_rpy', [0.0, 0.0, 0.0])
         self.declare_parameter('camera_xyz', [0.0, 0.0, 0.0])
         self.declare_parameter('camera_rpy', [0.0, 0.0, 0.0])
@@ -78,16 +85,15 @@ class OdomTfBroadcaster(Node):
 
         stamp = self.get_clock().now().to_msg()
         statics = [
-            _static_tf(self.base_frame,
-                       str(self.get_parameter('lidar_frame').value),
-                       self.get_parameter('lidar_xyz').value,
-                       self.get_parameter('lidar_rpy').value, stamp),
-            _static_tf(self.base_frame,
-                       str(self.get_parameter('camera_frame').value),
-                       self.get_parameter('camera_xyz').value,
-                       self.get_parameter('camera_rpy').value, stamp),
+            _static_tf(self.base_frame, child,
+                       self.get_parameter(f'{sensor}_xyz').value,
+                       self.get_parameter(f'{sensor}_rpy').value, stamp)
+            for sensor in ('lidar', 'camera')
+            # frame 이름이 비면 그 정적 TF 는 내지 않는다 (다른 노드가 소유)
+            if (child := str(self.get_parameter(f'{sensor}_frame').value).strip())
         ]
-        self.static_broadcaster.sendTransform(statics)
+        if statics:
+            self.static_broadcaster.sendTransform(statics)
 
         self.odom_seen = False
         self.create_subscription(Odometry, '/odom', self._on_odom, 10)
@@ -95,7 +101,7 @@ class OdomTfBroadcaster(Node):
 
         self.get_logger().info(
             f'odom_tf_broadcaster 시작 — {self.odom_frame} → {self.base_frame} '
-            f'(정적: {statics[0].child_frame_id}, {statics[1].child_frame_id})')
+            f'(정적: {", ".join(t.child_frame_id for t in statics) or "없음"})')
 
     def _on_odom(self, msg: Odometry):
         if not self.odom_seen:

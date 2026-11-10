@@ -276,14 +276,14 @@ python3 scripts/teleop_laptop.py
 | `A` / `D` (누르고 있는 동안) | 좌 / 우 회전. 좌우 추진기에 선회 폭(기본 150µs)만큼 차이 — 예) 전진 3단계(1650) + `A` → 좌 1500, 우 1800. 떼면 다시 같은 출력으로 직진 |
 | 중립에서 `A` / `D` | 제자리 좌회전(좌 1350 후진, 우 1650 전진) / 제자리 우회전 |
 | `X` | 즉시 0단계(중립) |
-| `Space` | 그 시점 시각과 GPS 위도·경도를 젯슨 CSV에 한 줄 기록 |
+| `Space` | 그 시점 시각, GPS 위도·경도, 우리 원점 기준 x·y를 젯슨 CSV에 한 줄 기록 |
 | `P` / `O` | ESP에 `computer_control_mode` / `rc_control_mode` 전송 (컴퓨터 조종 / RC 수신기 조종) |
 | `Q`·`Esc` 또는 창 닫기 | 노트북 조종 종료, 젯슨 텔레옵 모드 유지하며 중립 |
 | `R` | 노트북 조종 종료 후 자율주행 명령으로 명시적 복귀 |
 
 - **단계 → PWM**: 1~4단계는 중립 1500µs에서 ±50/100/150/200µs입니다(전진 1550~1700, 후진 1450~1300). A/D 선회 폭은 `teleop_turn_pwm_offset`(기본 150µs)입니다. 둘 다 [`thrusters.yaml`](src/kaboat_hardware/config/thrusters.yaml)에서 바꾸고, `max_output_ratio` 상한은 그대로 적용됩니다.
 - **ESP 시리얼**: 출력은 기존과 같은 8자리 `LLLLRRRR\n`(앞 4자리 좌, 뒤 4자리 우 PWM)이고, `P`/`O`는 문자열 한 줄(`computer_control_mode\n` / `rc_control_mode\n`)입니다.
-- **GPS 기록**: `run_motor`가 시작될 때 젯슨 `~/kaboat_gps_logs/gps_log_날짜_시간.csv`를 만들고 첫 줄에 `timestamp,latitude,longitude`를 씁니다. `Space`마다 한 줄씩 추가하고 곧바로 디스크에 반영하므로 비정상 종료돼도 그 전 기록은 남습니다. GPS가 없거나 2초 넘게 갱신되지 않으면 기록하지 않고 조종 창에 실패 이유를 표시합니다. 폴더는 `run_motor gps_log_dir:=...`로 바꿉니다.
+- **GPS 기록**: `run_motor`가 시작될 때 젯슨 `~/kaboat_gps_logs/gps_log_날짜_시간.csv`를 만들고 첫 줄에 `timestamp,latitude,longitude,x,y`를 씁니다. x·y는 `~/kaboat_geo_origin.yaml` 원점 기준 [m](x = 동, y = 북 — `/odom`·`rec`와 같은 좌표계, GNSS 1 안테나 위치)이고, 원점 파일이 없으면 비워 둡니다. `Space`마다 한 줄씩 추가하고 곧바로 디스크에 반영하므로 비정상 종료돼도 그 전 기록은 남습니다. GPS가 없거나 2초 넘게 갱신되지 않으면 기록하지 않고 조종 창에 실패 이유를 표시합니다. 폴더는 `run_motor gps_log_dir:=...`로 바꿉니다.
 - **안전**: 창이 포커스를 잃거나 젯슨 상태가 끊기면 즉시 0단계로 돌아갑니다(다시 포커스를 줘도 이전 속도로 출발하지 않음). 통신이 끊기면 젯슨이 0.5초 후 PWM 중립으로 전환하며 **자율주행으로 자동 복귀하지 않습니다**.
 - `R`로 복귀하기 전에 자율주행 노드가 실행 중이고 현재 목표가 유효한지 확인합니다.
 - 젯슨에서 `ros2 topic echo /teleop/status`로 `TELEOP`, `TELEOP_TIMEOUT`, `AUTO`, `RC_OVERRIDE`, `ESTOP`, `BACKEND_ERROR`를 확인합니다.

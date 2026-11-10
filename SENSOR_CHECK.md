@@ -286,9 +286,11 @@ ros2 topic hz /scan
 
 - **2D 라 높이 정보가 없다.** 라이다 장착 높이의 수평면 하나만 훑는다.
   그 위/아래 물체는 배열에 아예 안 나타난다.
-- **장착 오프셋 미보정** — `occupancy_grid` 는 TF 를 안 쓰고
-  `lidar_link == base_link` 로 가정한다. 실물 오프셋을 반영하려면 코드를
-  같이 고쳐야 한다.
+- **장착 오프셋** — base_link 는 선체 중심이고, TG-50 은 그보다 선수 쪽 0.4 m
+  (2026-11-11 실측). `occupancy_grid` 는 TF 를 안 쓰고 `lidar_offset_x` 파라미터로
+  빔 원점을 옮긴다. 장착 위치가 바뀌면 `occupancy_grid`·`gate_follower` 의
+  `lidar_offset_x`, `odom_tf_broadcaster` 의 `lidar_xyz`, launch 의
+  `base_link → onboard_laser_frame` 정적 TF 를 함께 고친다.
 - **FastDDS 버퍼 오버플로우 (`sequence size exceeds remaining buffer`)** — TG-50의
   한 스캔(약 2030 포인트) 패킷 크기가 Linux 기본 UDP 수신 버퍼(208KB)를 넘으면
   역직렬화 실패가 발생합니다. 다음 명령으로 소켓 버퍼를 8MB로 확대하세요:

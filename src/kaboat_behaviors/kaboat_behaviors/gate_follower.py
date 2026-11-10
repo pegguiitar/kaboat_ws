@@ -40,8 +40,9 @@ class GateFollower(BehaviorBase):
         self.declare_parameter('gate.los_thrust_ratio', LOS_FORWARD_RATIO)
         self.declare_parameter('gate.los_turn_ratio', LOS_TURN_RATIO)
         self.declare_parameter('gate.motion_enabled', False)
-        # 선체 라이다 장착 위치(occupancy_grid 의 lidar_offset_x/y 와 같은 값, 실측 선수 0.5 m)
-        self.declare_parameter('lidar_offset_x', 0.5)
+        # 선체 라이다 장착 위치(occupancy_grid 의 lidar_offset_x/y 와 같은 값,
+        # 실측 선체 중심보다 선수 0.4 m)
+        self.declare_parameter('lidar_offset_x', 0.4)
         self.declare_parameter('lidar_offset_y', 0.0)
         self.declare_parameter('gate.scan_timeout_sec', 0.7)
         self.declare_parameter('gate.grid_timeout_sec', 0.7)

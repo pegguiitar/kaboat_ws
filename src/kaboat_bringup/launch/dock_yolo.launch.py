@@ -1,7 +1,8 @@
 """D455 + live dock detection, without mission or motor control nodes.
 
-Base origin: lidar at (+0.73, 0, 0) m; camera_link at (0, 0, +0.63) m.
-Camera relative to lidar: (-0.73, 0, +0.63) m.
+Base origin (hull center): lidar at (+0.4, 0, 0) m (measured 2026-11-11);
+camera_link at (-0.33, 0, +0.63) m.
+Camera relative to lidar: (-0.73, 0, +0.63) m (sensor-to-sensor, unchanged).
 Mount rotation is assumed parallel to the lidar; optical TF comes from D455.
 """
 
@@ -28,7 +29,7 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('start_camera', default_value='true'),
         DeclareLaunchArgument('publish_lidar_mount_tf', default_value='true',
-                              description='base_link to onboard lidar (+0.73m X); disable if another node owns this TF'),
+                              description='base_link to onboard lidar (+0.4m X); disable if another node owns this TF'),
         DeclareLaunchArgument('camera_parent_frame', default_value='onboard_laser_frame'),
         DeclareLaunchArgument('dock_weights', default_value=weights),
         DeclareLaunchArgument('dock_device', default_value='0'),
@@ -53,7 +54,7 @@ def generate_launch_description():
             package='tf2_ros', executable='static_transform_publisher',
             name='lidar_mount_tf', output='screen',
             condition=IfCondition(LaunchConfiguration('publish_lidar_mount_tf')),
-            arguments=['--x', '0.73', '--y', '0', '--z', '0',
+            arguments=['--x', '0.4', '--y', '0', '--z', '0',   # TG-50: 선체 중심보다 선수 0.4 m
                        '--roll', '0', '--pitch', '0', '--yaw', '0',
                        '--frame-id', 'base_link',
                        '--child-frame-id', LaunchConfiguration('camera_parent_frame')]),

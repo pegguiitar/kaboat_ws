@@ -58,7 +58,7 @@ def generate_launch_description():
         DeclareLaunchArgument('roll_max_deg', default_value='3.0',
                               description='Roll upper bound for tilt gate [deg] (default: 3.0)'),
         DeclareLaunchArgument('publish_scan_tf', default_value='true',
-                              description='Publish identity base_link -> onboard_laser_frame for RViz'),
+                              description='Publish base_link -> onboard_laser_frame for RViz (TG-50 0.4 m ahead of hull center)'),
         DeclareLaunchArgument('enable_rviz', default_value='false',
                               description='Open RViz on this computer (usually use the shore PC instead)'),
         LogInfo(msg='[RealAvoidTest] Preview path first; motors require drive_enabled:=true and start service.'),
@@ -103,12 +103,12 @@ def generate_launch_description():
                 'use_sim_time': False,
             }],
         ),
-        # The onboard TG-50 sits 0.5 m ahead of base_link (shore-tracker panel
-        # midpoint); occupancy_grid uses the same lidar_offset_x for its rays.
+        # The onboard TG-50 sits 0.4 m ahead of base_link (hull center);
+        # occupancy_grid uses the same lidar_offset_x for its rays.
         Node(
             package='tf2_ros', executable='static_transform_publisher',
             name='real_avoid_onboard_laser_tf', output='screen',
-            arguments=['--x', '0.5', '--y', '0', '--z', '0',   # TG-50: 판 중점보다 선수 0.5 m
+            arguments=['--x', '0.4', '--y', '0', '--z', '0',   # TG-50: 선체 중심보다 선수 0.4 m
                        '--roll', '0', '--pitch', '0', '--yaw', '0',
                        '--frame-id', 'base_link',
                        '--child-frame-id', 'onboard_laser_frame'],

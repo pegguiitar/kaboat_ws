@@ -118,7 +118,8 @@ def test_lookahead_safety_checks_the_goal_when_follower_targets_it():
 
 
 def test_scan_hits_use_the_onboard_lidar_mount_offset():
-    """TG-50 은 판 중점(base_link)보다 선수 쪽 0.5 m. 앞 벽은 그만큼 더 멀리 찍혀야 한다."""
+    """선체 라이다가 base_link 보다 선수 쪽에 있으면 앞 벽은 그만큼 더 멀리 찍혀야 한다
+    (계산 검증용 0.5 m — 실물 장착값과 무관)."""
     import math
     from types import SimpleNamespace
     from kaboat_behaviors.gate_corridor import scan_hits_world

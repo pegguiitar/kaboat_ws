@@ -37,6 +37,11 @@ microstrain_inertial_driver:
     gnss2_antenna_offset_source: 1
     gnss2_antenna_offset: [0.0, 0.4, 0.0]     # GNSS 2: 우현
 
+    # /ekf/odometry_map(/odom) 이 내는 위치의 기준점 = base_link(선체 중심).
+    #   GQ7 → 기준점 벡터, 차량 좌표계(FRD) [m]. GQ7 이 선체 중심에 있어 0 (실측 2026-11-11).
+    #   GQ7 을 옮기면 여기만 고친다 (선체 라이다 오프셋 0.4 m 등은 선체 중심 기준).
+    filter_lever_arm_offset: [0.0, 0.0, 0.0]
+
     filter_enable_gnss_pos_vel_aiding: true
     filter_enable_gnss_heading_aiding: true
     filter_init_condition_src: 0

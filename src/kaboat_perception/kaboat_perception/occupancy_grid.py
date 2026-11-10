@@ -121,10 +121,11 @@ class OccupancyGridNode(Node):
         self.declare_parameter('pitch_max_deg', 2.0)       # [deg] 피치 상한 (1.0 → 2.0, 2026-11-06)
         self.declare_parameter('roll_min_deg', -3.0)       # [deg] 롤 하한
         self.declare_parameter('roll_max_deg', 3.0)        # [deg] 롤 상한
-        # 선체 라이다(TG-50) 장착 위치 — base_link(외벽 추적기의 판 중점) 기준 [m].
-        # 실측: 판보다 선수 쪽 0.5 m, 좌우 0 (2026-11-04). 0 이면 base_link 와 같다고 가정.
+        # 선체 라이다(TG-50) 장착 위치 — base_link(선체 중심) 기준 [m].
+        # 실측: 선체 중심보다 선수 쪽 0.4 m, 좌우 0 (2026-11-11. 예전 0.5 m 는 수조 외벽
+        # 추적기 판 중점 기준). 0 이면 base_link 와 같다고 가정.
         # gate_follower 의 lidar_offset_x/y, launch 의 base_link→onboard_laser_frame TF 와 같은 값.
-        self.declare_parameter('lidar_offset_x', 0.5)
+        self.declare_parameter('lidar_offset_x', 0.4)
         self.declare_parameter('lidar_offset_y', 0.0)
         self.declare_parameter('hit_dedup', True)    # 히트를 스캔당 셀당 1회로 캡
         # 같은 스캔의 이웃 빔은 독립 관측이 아니므로 중복 누적하면 증거 과대계상 —

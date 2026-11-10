@@ -105,7 +105,7 @@ def _clusters(grid, p: GateParams):
 def scan_hits_world(scan, boat_xy, yaw, lidar_offset=(0.0, 0.0)):
     """Use the same scan geometry as occupancy_grid.py.
 
-    lidar_offset 은 base_link(판 중점) 기준 선체 라이다 위치 (선수, 좌현) [m].
+    lidar_offset 은 base_link(선체 중심) 기준 선체 라이다 위치 (선수, 좌현) [m].
     """
     c, s = math.cos(yaw), math.sin(yaw)
     ox, oy = float(lidar_offset[0]), float(lidar_offset[1])

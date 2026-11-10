@@ -185,7 +185,7 @@ cat ~/kaboat_mission_points.json
 |---|---|---|
 | `~/kaboat_geo_origin.yaml` | 고정 원점 위도·경도·고도 | `/geo/set_origin` |
 | `~/kaboat_mission_points.json` | 미션 지점 x, y, 선수각 (+원점, 위도·경도) | `rec` |
-| `~/kaboat_gps_logs/gps_log_*.csv` | 노트북 Space로 찍은 GPS 위치 | `gps_mark_logger` (`run_motor`) |
+| `~/kaboat_gps_logs/gps_log_*.csv` | 노트북 Space로 찍은 GPS 위치 (위도·경도 + 원점 기준 x·y) | `gps_mark_logger` (`run_motor`) |
 | `src/kaboat_hardware/config/gq7_outdoor.yaml` | GQ7 야외 설정 (안테나 오프셋 ±0.4 m, `map_frame_id: odom`) | — |
 
 ---

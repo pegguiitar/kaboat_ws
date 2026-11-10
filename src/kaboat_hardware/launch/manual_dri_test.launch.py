@@ -26,7 +26,7 @@ def generate_launch_description():
         DeclareLaunchArgument('enable_tilt_gate', default_value='true',
                               description='Reject scans at large IMU roll/pitch'),
         DeclareLaunchArgument('publish_scan_tf', default_value='true',
-                              description='Publish identity base_link to onboard_laser_frame TF'),
+                              description='Publish base_link -> onboard_laser_frame TF (TG-50 0.4 m ahead of hull center)'),
         DeclareLaunchArgument('params_file', default_value=config,
                               description='DRI visualization and input timeout parameters'),
         LogInfo(msg='Manual DRI test: sensors and risk map only; no motor command source.'),
@@ -52,7 +52,7 @@ def generate_launch_description():
         Node(
             package='tf2_ros', executable='static_transform_publisher',
             name='manual_dri_onboard_laser_tf', output='screen',
-            arguments=['--x', '0.5', '--y', '0', '--z', '0',   # TG-50: 판 중점보다 선수 0.5 m
+            arguments=['--x', '0.4', '--y', '0', '--z', '0',   # TG-50: 선체 중심보다 선수 0.4 m
                        '--roll', '0', '--pitch', '0', '--yaw', '0',
                        '--frame-id', 'base_link',
                        '--child-frame-id', 'onboard_laser_frame'],
