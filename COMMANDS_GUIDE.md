@@ -3,7 +3,8 @@
 **노트북 호스트**, **노트북 도커 컨테이너**, **선체 젯슨** 3개 환경의 설정,
 단축어, 젯슨↔노트북 원격 연결(Tailscale + Zenoh), 노트북 키보드 조종을 정리한
 문서입니다. 수조 시험 절차는 [TANK_TESTS_GUIDE.md](TANK_TESTS_GUIDE.md), 센서
-bringup과 점검은 [SENSOR_CHECK.md](SENSOR_CHECK.md)를 봅니다.
+bringup과 점검은 [SENSOR_CHECK.md](SENSOR_CHECK.md)를 봅니다. 야외 운용 때 치는
+단축어·명령만 빠르게 보려면 [operation.md](operation.md)를 봅니다.
 
 ## 목차
 
