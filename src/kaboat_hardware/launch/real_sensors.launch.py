@@ -9,6 +9,7 @@ from launch.actions import (
     GroupAction,
     IncludeLaunchDescription,
     LogInfo,
+    OpaqueFunction,
 )
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
@@ -18,6 +19,10 @@ from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
 
+# geo_origin 의 기본 원점 파일 (config/geo_origin.yaml 의 origin_file 과 같게)
+DEFAULT_ORIGIN_FILE = '~/kaboat_geo_origin.yaml'
+
+
 def generate_launch_description():
     hardware_share = get_package_share_directory('kaboat_hardware')
     bringup_share = get_package_share_directory('kaboat_bringup')
@@ -25,9 +30,7 @@ def generate_launch_description():
     default_gq7_config = os.path.join(hardware_share, 'config', 'gq7.yaml')
 
     enable_d455 = LaunchConfiguration('enable_d455')
-    enable_gq7 = LaunchConfiguration('enable_gq7')
     config_file = LaunchConfiguration('config_file')
-    gq7_config_file = LaunchConfiguration('gq7_config_file')
 
     d455 = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -36,10 +39,43 @@ def generate_launch_description():
         condition=IfCondition(enable_d455),
     )
 
+    # GQ7 은 원점 파일을 읽어 설정을 합쳐야 해서 실행 시점에 만든다
+    gq7 = OpaqueFunction(function=_gq7_actions)
+
+    return _launch(d455, gq7, enable_d455, config_file, default_config,
+                   default_gq7_config)
+
+
+def _gq7_actions(context):
+    """GQ7 드라이버 실행. gq7_origin_file 이 있으면 그 원점을 설정에 합쳐 넘긴다."""
+    enabled = context.perform_substitution(LaunchConfiguration('enable_gq7'))
+    if enabled.strip().lower() not in ('true', '1', 'yes'):
+        return []
+    params_file = context.perform_substitution(LaunchConfiguration('gq7_config_file'))
+    origin_file = context.perform_substitution(LaunchConfiguration('gq7_origin_file'))
+    outdoor = context.perform_substitution(LaunchConfiguration('outdoor'))
+    if outdoor.strip().lower() in ('true', '1', 'yes'):
+        config_dir = os.path.join(get_package_share_directory('kaboat_hardware'), 'config')
+        if os.path.basename(params_file) == 'gq7.yaml':
+            params_file = os.path.join(config_dir, 'gq7_outdoor.yaml')
+        origin_file = origin_file or DEFAULT_ORIGIN_FILE
+    notes = []
+    if origin_file:
+        from kaboat_hardware.gq7_origin import load_origin_file, write_params_with_origin
+        origin = load_origin_file(origin_file)
+        if origin is None:
+            notes.append(LogInfo(msg=(
+                f'[GQ7] 원점 파일 없음 ({origin_file}) — 설정 기본 원점(처음 Full Nav '
+                '위치, 매번 바뀜)으로 시작. geo_origin 으로 /geo/set_origin 후 다시 켜면 고정됨')))
+        else:
+            params_file = write_params_with_origin(params_file, origin)
+            notes.append(LogInfo(msg=(
+                f'[GQ7] /ekf/odometry_map(/odom) 원점 = ({origin[0]:.8f}, {origin[1]:.8f}, '
+                f'{origin[2]:.2f} m) ← {origin_file}')))
+
     # 공식 MicroStrain launch를 사용하되, 나머지 자율주행 코드가 기대하는
     # KABOAT 표준 토픽으로 이름만 변환한다.
-    gq7 = GroupAction(
-        condition=IfCondition(enable_gq7),
+    return notes + [GroupAction(
         actions=[
             SetRemap(src='/gnss_1/llh_position', dst='/gps/fix'),
             SetRemap(src='/gnss_2/llh_position', dst='/gps/fix_secondary'),
@@ -58,12 +94,14 @@ def generate_launch_description():
                 launch_arguments={
                     'namespace': '/',
                     'node_name': 'microstrain_inertial_driver',
-                    'params_file': gq7_config_file,
+                    'params_file': params_file,
                 }.items(),
             ),
         ],
-    )
+    )]
 
+
+def _launch(d455, gq7, enable_d455, config_file, default_config, default_gq7_config):
     return LaunchDescription([
         DeclareLaunchArgument(
             'enable_d455', default_value='false',
@@ -85,7 +123,14 @@ def generate_launch_description():
             description='GNSS /gps/fix 진단 활성화 여부'),
         DeclareLaunchArgument(
             'gq7_config_file', default_value=default_gq7_config,
-            description='GQ7 드라이버 override 설정'),
+            description='GQ7 드라이버 override 설정 (야외: config/gq7_outdoor.yaml)'),
+        DeclareLaunchArgument(
+            'outdoor', default_value='false',
+            description='true: 야외 — gq7_outdoor.yaml + 저장된 원점(~/kaboat_geo_origin.yaml)'),
+        DeclareLaunchArgument(
+            'gq7_origin_file', default_value='',
+            description='geo_origin 이 저장한 원점 파일. 주면 GQ7 /ekf/odometry_map 원점을 '
+                        '그 위도·경도로 고정 (gq7_config_file 은 device_setup: true 여야 함)'),
         DeclareLaunchArgument(
             'enable_odom_remap', default_value='true',
             description='GQ7 EKF → /odom remap. 실내 수조(indoor_lidar_odom)에서는 false'),
@@ -97,7 +142,7 @@ def generate_launch_description():
             condition=UnlessCondition(enable_d455)),
         LogInfo(
             msg='GQ7 driver disabled. enable_gq7:=true 로 실행하세요.',
-            condition=UnlessCondition(enable_gq7)),
+            condition=UnlessCondition(LaunchConfiguration('enable_gq7'))),
         d455,
         gq7,
         Node(

@@ -1,0 +1,51 @@
+# 야외용 GQ7 설정 — ../sensor_check/gq7_bench.yaml (벤치에서 /ekf/odometry_map 발행 확인)
+# 을 바탕으로 KABOAT 주행 코드에 맞춘 것.
+#
+# ⚠ device_setup: true — 드라이버가 시작할 때 아래 값을 장치에 쓴다(save_settings: false
+#   라 장치 시작 설정으로 저장하지는 않음). 안테나 위치가 틀리면 헤딩이 틀어진다.
+#
+# 원점: real_sensors.launch.py 에 gq7_origin_file 을 주면(run_gq7_outdoor 단축어)
+#   geo_origin 이 저장한 고정 원점을 filter_relative_position_* 로 덮어쓴다.
+#   원점 파일이 없으면 아래 기본값(source 2 = 처음 Full Nav 위치, 매번 바뀜)을 쓴다.
+microstrain_inertial_driver:
+  ros__parameters:
+    port: /dev/microstrain_main
+    baudrate: 115200
+    poll_port: true
+    poll_rate_hz: 1.0
+    poll_max_tries: -1
+    reconnect_attempts: 10
+    configure_after_reconnect: true
+
+    device_setup: true
+    save_settings: false
+
+    use_enu_frame: true            # x = 동쪽, y = 북쪽, 각도 0 = 동쪽(반시계 +)
+    frame_id: imu_link
+    mount_frame_id: base_link
+    target_frame_id: base_link
+    # /ekf/odometry_map 의 header.frame_id. 주행 코드는 'odom' 이 아니면 움직이지 않는다.
+    map_frame_id: odom
+    publish_mount_to_frame_id_transform: false
+    tf_mode: 0                     # TF 는 odom_tf_broadcaster 가 /odom 으로 발행
+
+    # ⚠ TODO 배 위 실측값으로 바꿀 것. 지금 값은 벤치 시험판(0.70 m 간격) 값이다.
+    #   GQ7 차량 좌표계(FRD): +X 선수, +Y 우현, +Z 아래, 센서 원점 → 안테나 위상 중심 [m]
+    gnss1_antenna_offset_source: 1
+    gnss1_antenna_offset: [0.0, -0.35, 0.0]   # GNSS 1: 좌현
+    gnss2_antenna_offset_source: 1
+    gnss2_antenna_offset: [0.0, 0.35, 0.0]    # GNSS 2: 우현
+
+    filter_enable_gnss_pos_vel_aiding: true
+    filter_enable_gnss_heading_aiding: true
+    filter_init_condition_src: 0
+    filter_auto_heading_alignment_selector: 1  # 듀얼 안테나 헤딩
+    filter_auto_init: true
+
+    # 상대 위치 원점 (원점 파일이 있으면 런치가 source 1 + 고정 위도·경도로 덮어씀)
+    filter_relative_position_config: true
+    filter_relative_position_frame: 2
+    filter_relative_position_source: 2
+
+    ntrip_interface_enable: false
+    raw_file_enable: false

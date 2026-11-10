@@ -1,0 +1,29 @@
+# geo_origin: GQ7 위도·경도 → 고정 원점 기준 x/y [m]
+geo_origin:
+  ros__parameters:
+    gps_topic: /gps/fix
+    frame_id: geo_local          # /odom(GQ7 원점)과 섞지 않도록 별도 이름
+
+    # 원점. 둘 다 .nan 이면 origin_file 값을 쓰고, 그것도 없으면 /geo/set_origin 으로 정한다.
+    # 현장에서 측정한 원점을 고정하려면 숫자를 넣는다 (예: 37.12345678, 127.12345678).
+    origin_lat: .nan
+    origin_lon: .nan
+    origin_alt: 0.0
+    origin_file: ~/kaboat_geo_origin.yaml   # /geo/set_origin 결과가 저장되는 곳
+
+    # 로컬 x 축 방향: 동쪽에서 반시계 [deg]. 0 이면 x=동쪽, y=북쪽.
+    # 경기장 긴 방향을 x 로 쓰고 싶으면 그 방향의 각도를 넣는다.
+    # ⚠ GQ7 /odom 은 항상 x=동쪽, y=북쪽이다. 0 이 아니면 /geo/* 의 x/y 가 /odom 과
+    #   어긋나므로, /geo/targets 를 주행 목표(/odom 좌표)로 쓸 때는 0 으로 둔다.
+    axis_yaw_deg: 0.0
+
+    origin_samples: 20           # /geo/set_origin 이 평균하는 GNSS 개수 (GQ7 2 Hz → 약 10초)
+    origin_window_sec: 30.0
+    origin_max_spread_m: 2.0     # 평균 GNSS 가 이보다 흩어져 있으면 거부 (배 이동 중·GNSS 불안정)
+    max_fix_age_sec: 2.0
+    max_horizontal_std_m: 0.0    # 0 이면 GNSS 공분산 검사 안 함
+
+    # 원점 기준 x/y 로 바꿔 /geo/targets 로 발행할 지점: '이름,위도,경도'
+    # 경기 규정상 구성물(게이트·부표·도크) 좌표는 공개되지 않는다. 출발 위치·경기장 경계
+    # 꼭짓점·대략 구역 등 현장에서 직접 잰 지점을 넣는다.
+    targets: ['']

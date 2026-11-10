@@ -65,6 +65,11 @@ MONITOR_TOPICS = (
     '/ekf/odometry_map',
     '/teleop/status',
     '/teleop/event',
+    '/geo/position',
+    '/geo/targets',
+    '/geo/target_markers',
+    '/geo/origin',
+    '/geo/status',
 )
 
 LAPTOP_TO_JETSON_TOPICS = (
