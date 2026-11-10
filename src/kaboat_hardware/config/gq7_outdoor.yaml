@@ -29,12 +29,13 @@ microstrain_inertial_driver:
     publish_mount_to_frame_id_transform: false
     tf_mode: 0                     # TF 는 odom_tf_broadcaster 가 /odom 으로 발행
 
-    # ⚠ TODO 배 위 실측값으로 바꿀 것. 지금 값은 벤치 시험판(0.70 m 간격) 값이다.
+    # 배 위 실측 (2026-11-10): 좌우 안테나가 GQ7 에서 각각 0.4 m (간격 0.8 m).
+    #   선수·상하 방향 차이는 0 으로 둠.
     #   GQ7 차량 좌표계(FRD): +X 선수, +Y 우현, +Z 아래, 센서 원점 → 안테나 위상 중심 [m]
     gnss1_antenna_offset_source: 1
-    gnss1_antenna_offset: [0.0, -0.35, 0.0]   # GNSS 1: 좌현
+    gnss1_antenna_offset: [0.0, -0.4, 0.0]    # GNSS 1: 좌현
     gnss2_antenna_offset_source: 1
-    gnss2_antenna_offset: [0.0, 0.35, 0.0]    # GNSS 2: 우현
+    gnss2_antenna_offset: [0.0, 0.4, 0.0]     # GNSS 2: 우현
 
     filter_enable_gnss_pos_vel_aiding: true
     filter_enable_gnss_heading_aiding: true
