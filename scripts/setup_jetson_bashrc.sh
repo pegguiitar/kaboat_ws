@@ -61,7 +61,7 @@ alias run_geo="ros2 launch kaboat_hardware geo_origin.launch.py"
 
 # 미션 지점 기록 (지금 /odom 위치 → ~/kaboat_mission_points.json)
 alias run_points="ros2 run kaboat_hardware point_recorder"
-alias rec_point='python3 "$KABOAT_WS/scripts/rec_point.py"'
+alias rec='python3 "$KABOAT_WS/scripts/rec_point.py"'
 alias list_points='python3 "$KABOAT_WS/scripts/rec_point.py" --list'
 alias run_motor="ros2 launch kaboat_hardware thrusters.launch.py hardware_type:=serial port:=/dev/ttyCH341USB0 allow_port_scan:=false"
 
@@ -85,7 +85,7 @@ echo "   - run_boat_lidar: 선체 TG-50 포함 센서/오도메트리 가동 (ca
 echo "   - run_gq7_outdoor : 야외 GQ7 (/odom 원점 = ~/kaboat_geo_origin.yaml)"
 echo "   - run_geo       : GPS 원점 설정·위도경도→x/y 변환 (geo_origin)"
 echo "   - run_points    : 미션 지점 기록기 (~/kaboat_mission_points.json)"
-echo "   - rec_point 이름 : 지금 위치(x, y, 선수각) 기록 (이름 생략 시 p1, p2 …)"
+echo "   - rec 이름      : 지금 위치(x, y, 선수각) 기록 (이름 생략 시 p1, p2 …)"
 echo "   - list_points   : 기록한 지점 보기"
 echo "   - run_motor     : 모터 제어기 가동"
 echo "   - cal_imu       : [선택] IMU 정지 수동 보정 (수조 라이다 Truth 모드에서는 생략 가능)"

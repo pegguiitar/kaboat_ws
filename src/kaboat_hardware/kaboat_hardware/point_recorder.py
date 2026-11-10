@@ -4,10 +4,10 @@
 시작·목표 지점으로 쓴다.
 
   젯슨:   ros2 run kaboat_hardware point_recorder          # 단축어 run_points
-  노트북: python3 scripts/rec_point.py gate_entry          # 지금 위치를 gate_entry 로 기록
+  노트북: rec gate_entry  (= python3 scripts/rec_point.py gate_entry)  # 지금 위치 기록
           python3 scripts/rec_point.py                     # 이름 생략 → p1, p2 …
           python3 scripts/rec_point.py --list              # 저장된 지점 보기
-  (젯슨에서도 같은 스크립트가 된다 — 단축어 rec_point / list_points)
+  (젯슨에서도 같은 스크립트가 된다 — 단축어 rec / list_points)
 
 서비스는 Zenoh 브리지로 안 넘어가서 짧은 String 토픽 두 개로 주고받는다(둘 다 브리지 허용 목록에 있음).
   /mission_points/request (String, 노트북 → 젯슨)
@@ -106,7 +106,7 @@ class PointRecorder(Node):
         if self.load_error is None:
             self.get_logger().info(
                 f'지점 {len(self.store.points)}개 불러옴 ({self.points_file}) — '
-                'rec_point <이름> 으로 지금 위치 기록')
+                '노트북·젯슨에서 rec <이름> 으로 지금 위치 기록')
 
     def _on_odom(self, msg: Odometry):
         self.odom = msg

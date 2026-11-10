@@ -6,7 +6,7 @@
   python3 scripts/rec_point.py --list         # 저장된 지점 보기
 
 노트북(set_kaboat, DOMAIN 43)에서 Zenoh 브리지가 켜져 있으면 젯슨으로 간다. 젯슨에서
-직접 실행해도 된다(DOMAIN 42, 단축어 rec_point / list_points). 워크스페이스 빌드 없이
+직접 실행해도 된다(DOMAIN 42, 단축어 rec / list_points). 워크스페이스 빌드 없이
 rclpy·std_msgs 만 쓴다.
 
 요청은 /mission_points/request 로 한 번 보내고 /mission_points/result 를 기다린다.

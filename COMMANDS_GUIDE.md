@@ -121,6 +121,7 @@ RViz 프로세스는 라이다와 같은 Humble 컨테이너에서 실행됩니�
 | **`rviz_remote`** | 선체 `/scan`을 `onboard_laser_frame` 기준으로 표시 |
 | **`view_pitch`** | 롤/피치 각도와 Pitch [-4.0°, +2.0°], Roll ±3.0° 스캔 차단 상태 출력 |
 | **`python3 scripts/teleop_laptop.py`** | 노트북 키보드 조종 창 (7절) |
+| **`rec [이름]`** / **`rec --list`** | 젯슨에 지금 위치 기록 요청 / 기록한 지점 보기 (`python3 scripts/rec_point.py`, 7-1절) |
 
 전체 지도·경로 모니터링 화면은 다음으로 엽니다(Fixed Frame `odom`).
 
@@ -166,7 +167,7 @@ docker compose up -d
 | **`run_boat_lidar`** | `ros2 launch kaboat_hardware indoor_tank.launch.py enable_thrusters:=false enable_onboard_lidar:=true onboard_lidar_port:=/dev/ttyUSB0` | GQ7·실내 `/odom`·선체 TG-50을 한 번에 실행. 외벽 라이다와 모터는 별도 |
 | **`run_motor`** | `ros2 launch kaboat_hardware thrusters.launch.py hardware_type:=serial port:=/dev/ttyCH341USB0 allow_port_scan:=false` | 아두이노(CH340) 모터 드라이버 |
 | **`run_points`** | `ros2 run kaboat_hardware point_recorder` | 미션 지점 기록기 (7-1절) |
-| **`rec_point [이름]`** / **`list_points`** | `python3 scripts/rec_point.py [이름]` / `--list` | 지금 위치 기록 / 기록한 지점 보기 |
+| **`rec [이름]`** / **`list_points`** | `python3 scripts/rec_point.py [이름]` / `--list` | 지금 위치 기록 / 기록한 지점 보기 |
 | **`cal_imu`** | `ros2 run kaboat_hardware calibrate_indoor_imu` | **[선택]** IMU 정지 보정. 기본 설정(외벽 라이다 yaw 직접 사용)에서는 불필요 |
 | **`view_pitch`** | `python3 scripts/view_roll_pitch.py` | 실시간 롤/피치 모니터링 |
 | **`test_bspline`** | `bspline_track_test.launch.py wait_for_start:=false` | B-Spline 곡선 주행 즉시 시작 |
@@ -303,11 +304,14 @@ run_points            # 다른 터미널
 
 ```zsh
 # 노트북: set_kaboat 로 브리지가 켜진 상태에서
-cd ~/Projects/KABOAT/kaboat_ws
-python3 scripts/rec_point.py gate_entry   # ✓ gate_entry: x=+5.50 m, y=-2.25 m, 선수각 +90.0°
-python3 scripts/rec_point.py              # 이름 생략 → p1, p2 …
-python3 scripts/rec_point.py --list       # 저장된 지점 보기
+rec gate_entry        # ✓ gate_entry: x=+5.50 m, y=-2.25 m, 선수각 +90.0°
+rec                   # 이름 생략 → p1, p2 …
+rec --list            # 저장된 지점 보기
 ```
+
+`rec`는 `python3 ~/Projects/KABOAT/kaboat_ws/scripts/rec_point.py`의 단축어입니다. 노트북은
+개인 `~/.zshrc`에 `alias rec="python3 <레포 경로>/scripts/rec_point.py"`를 추가하고, 젯슨은
+`setup_jetson_bashrc.sh`가 같은 이름으로 만듭니다(젯슨에서도 `rec 이름`).
 
 - 같은 이름으로 다시 보내면 덮어쓰고, 결과에 이전 값을 함께 보여 줍니다. 이름은 영문·숫자·한글·`_`·`-`만 씁니다.
 - 결과가 안 오면 같은 요청 id로 1.5초마다 다시 보냅니다. 젯슨은 같은 id를 두 번 기록하지 않습니다.
