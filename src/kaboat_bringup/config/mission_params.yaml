@@ -17,7 +17,7 @@
 
 mission_manager:
   ros__parameters:
-    transition_radius: 4.0   # [m] behavior 완료 신호 + 목표점 이내 진입 시 전환
+    transition_radius: 5.0   # [m] behavior 완료 신호 + 목표점 이내 진입 시 전환
     auto_start: true
 
     # 각 미션 시작 자세 [odom x(m), y(m), 선수각(deg)]. 값이 미정이라

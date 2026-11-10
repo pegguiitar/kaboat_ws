@@ -2,7 +2,7 @@
 
 skeleton:
   goal 을 향한 P 제어로 접근/유지하고, 5m 이내 체류 시간을 로그로 출력.
-  5m/5s 유지 달성 시 완료 신호를 보내고, mission_manager 가 목표점 4m
+  5m/5s 유지 달성 시 완료 신호를 보내고, mission_manager 가 목표점 5m
   이내 조건까지 확인한 뒤 다음 미션으로 전환한다.
 
 TODO(팀): 바람/파도 드리프트 보상 (heading 유지 포함 station keeping)

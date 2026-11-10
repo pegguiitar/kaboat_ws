@@ -19,7 +19,7 @@ TO_MOUTH→TO_BERTH 전환 시 양쪽 벽이 보이고 벽-벽 폭이 slot_width
 APPROACH는 mission waypoint까지 공통 위치/헤딩 제어를 사용한다. 표식을
 획득·정렬한 뒤 슬롯 안으로 저속 진입하고, 잠시 정지한 다음 같은 선수각으로
 후진한다. REVERSE가 waypoint 반경 안에 도달해야 COMPLETE가 되므로
-mission_manager의 별도 4m 전환 조건과 모순되지 않는다.
+mission_manager의 별도 5m 전환 조건과 모순되지 않는다.
 """
 from dataclasses import dataclass
 from enum import Enum

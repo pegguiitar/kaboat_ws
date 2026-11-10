@@ -15,7 +15,7 @@ from .los_controller import LOS_FORWARD_RATIO, LOS_TURN_RATIO, circle_path
 from .obstacle_avoidance_utils import apply_repulsion
 
 # 탐색은 목표점 0.8m 이내에서 시작한다. 따라서 완료 신호가 발생할 때
-# mission_manager 의 별도 4m 웨이포인트 조건도 함께 만족한다.
+# mission_manager 의 별도 5m 웨이포인트 조건도 함께 만족한다.
 ARRIVE_RADIUS = 0.8
 SEARCH_TIME = 5.0
 SEARCH_CIRCLE_RADIUS = 1.2

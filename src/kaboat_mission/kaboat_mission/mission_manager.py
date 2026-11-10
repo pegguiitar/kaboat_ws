@@ -9,7 +9,7 @@
 
 전환 규칙 (팀 합의):
   1) 현재 미션 behavior 가 /mission/complete 로 자기 state 이름을 발행하고
-  2) |현재위치(/odom) − 현재 미션 목표좌표| ≤ transition_radius(기본 4.0m)
+  2) |현재위치(/odom) − 현재 미션 목표좌표| ≤ transition_radius(기본 5.0m)
   두 조건을 모두 만족하면 다음 state 로 전이한다.
 
 발행   /mission/state (String, latched)  — cmd_mux 와 모든 behavior 가 구독
@@ -29,7 +29,7 @@
     ros2 run kaboat_mission mission_manager --ros-args \
         -p start_state:=dock -p single_mission:=true
   start_state 의 접근 단계부터 시작하고, single_mission:=true 면 그
-  완료 신호와 목표 4m 조건 달성 후 다음으로 안 넘어가고 바로 'done'(정지)으로 간다 —
+  완료 신호와 목표 5m 조건 달성 후 다음으로 안 넘어가고 바로 'done'(정지)으로 간다 —
   cmd_mux 가 멈추니 배가 목표 근처에서 안전하게 정지한 채로 결과를 볼 수 있다.
   이때도 entry_waypoints.<state>와 entry_ready.<state>=true가 필요하다.
 """
@@ -60,7 +60,7 @@ class MissionManager(Node):
     def __init__(self):
         super().__init__('mission_manager')
 
-        self.declare_parameter('transition_radius', 4.0)   # 전환 판정 반경 [m]
+        self.declare_parameter('transition_radius', 5.0)   # 전환 판정 반경 [m]
         self.declare_parameter('auto_start', True)          # 켜지면 바로 첫 미션 시작
         self.declare_parameter('start_state', '')            # 단일 미션 테스트용 시작 지점
         self.declare_parameter('single_mission', False)      # true 면 start_state 하나만 하고 done
