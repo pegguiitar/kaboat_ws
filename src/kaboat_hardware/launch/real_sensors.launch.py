@@ -1,6 +1,7 @@
 """모터 출력을 전혀 실행하지 않는 실물 센서 배선 확인 launch."""
 
 import os
+import tempfile
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
@@ -21,6 +22,35 @@ from launch_ros.substitutions import FindPackageShare
 
 # geo_origin 의 기본 원점 파일 (config/geo_origin.yaml 의 origin_file 과 같게)
 DEFAULT_ORIGIN_FILE = '~/kaboat_geo_origin.yaml'
+
+# RTK(rtk:=true) 때 GQ7 설정에 NTRIP 입력을 켠 사본 (임시 디렉터리에 매번 덮어씀)
+RTK_PARAMS_FILE = 'kaboat_gq7_rtk.yaml'
+
+
+def gq7_params_with_ntrip(base_path: str, aux_port: str, directory: str | None = None) -> str:
+    """GQ7 설정에 NTRIP(RTCM) 입력을 켠 사본을 쓰고 그 경로를 돌려준다.
+
+    GQ7 은 RTCM 보정을 AUX 포트로만 받는다. USB 하나로 연결해도 main·aux 두 포트가 잡히고
+    드라이버 udev 규칙이 /dev/microstrain_aux 를 만든다. 드라이버는 ntrip_interface_enable 이면
+    /rtcm(rtcm_msgs/Message) 를 AUX 로 넣고, AUX 의 NMEA 를 /nmea 로 낸다.
+    """
+    import yaml
+    with open(os.path.expanduser(base_path), encoding='utf-8') as f:
+        data = yaml.safe_load(f) or {}
+    found = False
+    for section in data.values():
+        params = (section or {}).get('ros__parameters')
+        if isinstance(params, dict):
+            params.update({'ntrip_interface_enable': True, 'aux_port': aux_port})
+            found = True
+    if not found:
+        raise ValueError(f'{base_path}: ros__parameters 가 없다')
+    path = os.path.join(directory or tempfile.gettempdir(), RTK_PARAMS_FILE)
+    tmp = path + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f:
+        yaml.safe_dump(data, f, allow_unicode=True, sort_keys=False)
+    os.replace(tmp, path)
+    return path
 
 
 def generate_launch_description():
@@ -84,6 +114,10 @@ def _gq7_actions(context):
                              'use_sim_time': False}],
             ),
         ]
+        if _truthy(context, 'rtk'):
+            actions += _rtk_actions(context)
+            aux_port = context.perform_substitution(LaunchConfiguration('gq7_aux_port'))
+            params_file = gq7_params_with_ntrip(params_file, aux_port)
     remap_odom = not outdoor and _truthy(context, 'enable_odom_remap')
 
     # 공식 MicroStrain launch를 사용하되, 나머지 자율주행 코드가 기대하는
@@ -114,6 +148,41 @@ def _gq7_actions(context):
             ),
         ],
     )]
+
+
+def _rtk_actions(context):
+    """NTRIP 클라이언트(ntrip_client) — 인터넷의 RTK 보정(RTCM)을 /rtcm 으로 낸다.
+
+    기본 캐스터는 해양수산부 국립해양측위정보원 NTRIP(ntrip.ndgps.go.kr:2101). 계정은
+    서비스에서 발급받은 것을 ntrip_username / ntrip_password 로 넘긴다(레포에 넣지 않음).
+    기준국은 대회장(창원, 35.18N 128.57E)에서 가장 가까운 RTCM 3 RTK 기준국
+    SEOI_RTCM32(약 47 km, 공개 소스 테이블 기준). 단일 기준국 RTK 는 거리가 멀수록
+    Fixed 가 늦거나 Float 에 머물 수 있다.
+    """
+    g = lambda name: context.perform_substitution(LaunchConfiguration(name))  # noqa: E731
+    host, mount = g('ntrip_host'), g('ntrip_mountpoint')
+    if not g('ntrip_username') or not g('ntrip_password'):
+        raise RuntimeError(
+            'rtk:=true 에는 NTRIP 계정이 필요하다 — '
+            'ntrip_username:=<아이디> ntrip_password:=<비밀번호> 를 같이 넘긴다')
+    return [
+        LogInfo(msg=f'[GQ7] RTK: NTRIP {host}:{g("ntrip_port")}/{mount} → /rtcm → GQ7 AUX '
+                    f'({g("gq7_aux_port")})'),
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                PathJoinSubstitution([
+                    FindPackageShare('ntrip_client'), 'launch', 'ntrip_client_launch.py'])),
+            launch_arguments={
+                'host': host,
+                'port': g('ntrip_port'),
+                'mountpoint': mount,
+                'authenticate': 'True',
+                'username': g('ntrip_username'),
+                'password': g('ntrip_password'),
+                'rtcm_message_package': 'rtcm_msgs',   # GQ7 드라이버가 받는 형식
+            }.items(),
+        ),
+    ]
 
 
 def _launch(d455, gq7, enable_d455, config_file, default_config, default_gq7_config):
@@ -150,6 +219,22 @@ def _launch(d455, gq7, enable_d455, config_file, default_config, default_gq7_con
             'odom_position_source', default_value='gnss',
             description="야외 /odom 위치 출처: gnss(GNSS1 원시 + GQ7 선수각, 기본) 또는 "
                         "filter(GQ7 필터 위치 — 필터가 GNSS 를 못 따라가던 2026-11-11 문제 해결 후)"),
+        DeclareLaunchArgument(
+            'rtk', default_value='false',
+            description='true: 야외에서 NTRIP RTK 보정 받기 (ntrip_client 실행 + GQ7 AUX 로 RTCM). '
+                        '젯슨 인터넷 필요, sudo apt install ros-humble-ntrip-client'),
+        DeclareLaunchArgument('ntrip_host', default_value='ntrip.ndgps.go.kr',
+                              description='NTRIP 캐스터 (국립해양측위정보원)'),
+        DeclareLaunchArgument('ntrip_port', default_value='2101'),
+        DeclareLaunchArgument('ntrip_mountpoint', default_value='SEOI_RTCM32',
+                              description='기준국. 대회장 근처 RTCM3: SEOI_RTCM32(47 km), '
+                                          'YNDO_RTCM32(48 km)'),
+        DeclareLaunchArgument('ntrip_username', default_value='',
+                              description='NTRIP 계정 아이디 (서비스에서 발급, rtk:=true 때 필수)'),
+        DeclareLaunchArgument('ntrip_password', default_value='',
+                              description='NTRIP 계정 비밀번호 (rtk:=true 때 필수)'),
+        DeclareLaunchArgument('gq7_aux_port', default_value='/dev/microstrain_aux',
+                              description='GQ7 AUX 포트 (RTCM 입력)'),
         DeclareLaunchArgument(
             'enable_odom_remap', default_value='true',
             description='GQ7 /ekf/odometry_map → /odom remap (outdoor:=false 일 때만). '

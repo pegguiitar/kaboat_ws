@@ -86,6 +86,21 @@ GNSS 20개(약 10초)를 평균해 `~/kaboat_geo_origin.yaml`에 저장합니다
 필터가 GNSS 보정을 실제로 쓰는지는 `ros2 topic echo /mip/ekf/aiding_measurement_summary`
 (보정원별 `used`, `residual_high`, `sample_time_warning`)로 확인합니다.
 
+**RTK 보정 (선택)** — 위치 정확도 ±1~2 m(SBAS) → 수 cm. 젯슨 인터넷과 NTRIP 계정이 필요합니다.
+
+```bash
+sudo apt install ros-humble-ntrip-client          # 젯슨에 한 번
+ls -l /dev/microstrain_aux                        # GQ7 AUX 포트(RTCM 입력)가 보이는지
+ros2 launch kaboat_hardware real_sensors.launch.py outdoor:=true rtk:=true \
+    ntrip_username:=<아이디> ntrip_password:=<비밀번호>
+```
+
+- 기본 캐스터 `ntrip.ndgps.go.kr:2101`(국립해양측위정보원), 기준국 `SEOI_RTCM32`(대회장에서 약 47 km).
+  바꾸려면 `ntrip_mountpoint:=YNDO_RTCM32` 등. 계정은 서비스에서 발급받은 것을 씁니다(레포에 넣지 않음).
+- 확인: `ros2 topic echo /ekf/status --once --field gnss_state` 가 `RTK Float` → `RTK Fixed`,
+  `ros2 topic echo /gps/fix --once --field status` 의 `status: 2`. 기준국이 멀어 Fixed 까지 오래 걸리거나
+  Float 에 머물 수 있습니다.
+
 ⚠️ 실내 수조 런치(`run_boat_lidar`)와 `run_gq7_outdoor`를 같이 켜면 `/odom` 발행자가
 둘이 됩니다. 하나만 켭니다.
 
