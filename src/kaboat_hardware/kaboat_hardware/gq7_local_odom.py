@@ -10,9 +10,9 @@
 (2026-11-11 현장). 드라이버 자동 원점(처음 Full Nav 위치)은 켤 때마다 바뀐다. 그래서
 드라이버의 원점 기능은 쓰지 않고, 이미 시험된 geo_local 변환으로 여기서 계산한다.
 
-위치 출처 (position_source):
-  filter — GQ7 필터 위치(odometry_earth). 매끄럽고 25 Hz 지만, 2026-11-11 현장에서 필터가
-           GNSS 를 못 따라가 멈춘 배 위치가 20초에 수 m·높이가 수십 m 흘렀다.
+위치 출처 (position_source, real_sensors 야외 기본 filter):
+  filter — GQ7 필터 위치(odometry_earth). 매끄럽고 25 Hz. 2026-11-11 현장: 드라이버 4.9.0·SBAS
+           에서는 멈춘 배 위치가 수 m 흘렀지만, 4.10.0 + RTK Fixed 에서는 cm 단위로 안정.
   gnss   — GNSS1 원시 위치(/gps/fix, 2 Hz, SBAS ±1~2 m)를 안테나 오프셋만큼 선체 중심으로
            옮겨 쓴다. 선수각·회전속도는 GQ7 필터(듀얼 안테나 헤딩), 선속도는 GNSS 속도
            (/gnss_1/velocity, ENU)를 선체 기준으로 돌려 쓴다. GNSS 가 max_fix_age_sec 넘게

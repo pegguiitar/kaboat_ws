@@ -57,6 +57,13 @@ alias cal_imu="ros2 run kaboat_hardware calibrate_indoor_imu"
 
 # 모터 제어기 실행 (아두이노 CH340: /dev/ttyCH341USB0)
 alias run_gq7_outdoor="ros2 launch kaboat_hardware real_sensors.launch.py outdoor:=true"
+# 야외 GQ7 + RTK. NTRIP 계정은 젯슨에만 둔다 (~/.ntrip_account 에 export NTRIP_USER=… NTRIP_PASS=…)
+[ -f ~/.ntrip_account ] && source ~/.ntrip_account
+run_gq7_rtk() {
+    ros2 launch kaboat_hardware real_sensors.launch.py outdoor:=true rtk:=true \
+        ntrip_username:="${NTRIP_USER:?~/.ntrip_account 에 NTRIP_USER 가 없음}" \
+        ntrip_password:="${NTRIP_PASS:?~/.ntrip_account 에 NTRIP_PASS 가 없음}" "$@"
+}
 alias run_geo="ros2 launch kaboat_hardware geo_origin.launch.py"
 
 # 미션 지점 기록 (지금 /odom 위치 → ~/kaboat_mission_points.json)
@@ -82,7 +89,8 @@ alias test_avoid="ros2 launch kaboat_hardware real_obstacle_avoid_test.launch.py
 
 echo "🤖 [KABOAT Jetson] 환경 세팅 완료 (DOMAIN: $ROS_DOMAIN_ID | WS: ${KABOAT_WS:-미탐색})"
 echo "   - run_boat_lidar: 선체 TG-50 포함 센서/오도메트리 가동 (cal_imu 불필요, 즉시 /odom 생성)"
-echo "   - run_gq7_outdoor : 야외 GQ7 (/odom 원점 = ~/kaboat_geo_origin.yaml)"
+echo "   - run_gq7_outdoor : 야외 GQ7 (/odom 원점 = ~/kaboat_geo_origin.yaml, 필터 위치)"
+echo "   - run_gq7_rtk   : 야외 GQ7 + RTK 보정 (계정 ~/.ntrip_account)"
 echo "   - run_geo       : GPS 원점 설정·위도경도→x/y 변환 (geo_origin)"
 echo "   - run_points    : 미션 지점 기록기 (~/kaboat_mission_points.json)"
 echo "   - rec 이름      : 지금 위치(x, y, 선수각) 기록 (이름 생략 시 p1, p2 …)"

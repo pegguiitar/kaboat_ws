@@ -228,9 +228,9 @@ def _launch(d455, gq7, enable_d455, config_file, default_config, default_gq7_con
             'gq7_origin_file', default_value='',
             description="야외 /odom 원점 파일 (geo_origin 이 저장). '' 이면 ~/kaboat_geo_origin.yaml"),
         DeclareLaunchArgument(
-            'odom_position_source', default_value='gnss',
-            description="야외 /odom 위치 출처: gnss(GNSS1 원시 + GQ7 선수각, 기본) 또는 "
-                        "filter(GQ7 필터 위치 — 필터가 GNSS 를 못 따라가던 2026-11-11 문제 해결 후)"),
+            'odom_position_source', default_value='filter',
+            description="야외 /odom 위치 출처: filter(GQ7 필터 융합 위치 25 Hz, 기본 — RTK 와 함께 쓰면 "
+                        "cm 수준) 또는 gnss(GNSS1 원시 + GQ7 선수각, 2 Hz — 필터가 흔들릴 때 대안)"),
         DeclareLaunchArgument(
             'rtk', default_value='false',
             description='true: 야외에서 NTRIP RTK 보정 받기 (ntrip_client 실행 + GQ7 AUX 로 RTCM). '
