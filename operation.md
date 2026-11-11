@@ -119,6 +119,7 @@ ros2 launch kaboat_hardware real_sensors.launch.py outdoor:=true rtk:=true \
 | `run_points` | `ros2 run kaboat_hardware point_recorder` | 미션 지점 기록기 |
 | `rec [이름]` | `python3 scripts/rec_point.py [이름]` | 지금 위치(x, y, 선수각) 기록. 이름 생략 시 `p1`, `p2` … |
 | `list_points` | `python3 scripts/rec_point.py --list` | 기록한 지점 보기 |
+| `goto 지점` / `goto x y [각도]` | `ros2 launch kaboat_hardware outdoor_waypoint.launch.py point:=지점` (또는 `x:= y:= angle:=`) | 야외 웨이포인트 1개 주행, **실행 즉시 출발**(추력 20%). 5절 참고 |
 | `run_motor` | `ros2 launch kaboat_hardware thrusters.launch.py hardware_type:=serial port:=/dev/ttyCH341USB0 allow_port_scan:=false` | 아두이노(CH340) 모터 드라이버 + `gps_mark_logger` |
 | `view_pitch` | `python3 scripts/view_roll_pitch.py` | 롤/피치와 스캔 차단 상태 |
 | `view_position` | `python3 scripts/view_position.py` | `/odom` x·y·선수각(동쪽 0°)·나침반 방위·속도·GNSS 상태(RTK Fixed 등) 실시간 한 줄 |
@@ -200,6 +201,25 @@ ros2 launch kaboat_bringup autonomy.launch.py \
 `dock_weights:=<.pt 절대경로>`, `dock_device:=0`(젯슨 CUDA), `mission_params_file:=<yaml>`로 바꿉니다.
 기록 지점 파일은 `mission_points_file:=<json>`으로 바꾸고, `mission_points_file:=none`이면 읽지 않습니다.
 
+**웨이포인트 1개 시험** (`goto`, 미션 스택 없이 `waypoint()` 제어기만)
+
+준비: `run_gq7_rtk`(RTK Fixed), `run_motor`, ESP 컴퓨터 모드. 다른 `/cmd_vel` 노드
+(`test_*`, 회피 미리보기 `real_obstacle_avoid_test`, `autonomy.launch.py`)는 끕니다.
+
+```bash
+goto gate_entry motion_enabled:=false   # 미리보기: 로그의 출력 [전진 %, 회전 %] 방향이 맞는지
+goto gate_entry                         # 기록 지점으로 가서 기록 선수각까지 맞춤
+goto gate_end heading:=false            # 위치만
+goto 10.0 -5.0 90                       # /odom 좌표 (x 동쪽, y 북쪽, 선수각 동쪽 0° 반시계 +)
+goto gate_entry thrust_ratio:=0.3 position_tolerance:=1.5
+```
+
+- 로그 1초마다 `[단계] 현재: (x, y) | 목표거리 | 선수각(오차) | 출력`. 도착하면 상태 `REACHED`, 이후 정지 명령만 냅니다. Ctrl+C로 끕니다.
+- 상태는 `ros2 topic echo /waypoint/status`, 목표는 `/waypoint/goal`(RViz).
+- 노트북 `teleop`으로 수동 모드를 켜면 언제든 넘겨받습니다(수동을 끄면 아직 도착 전이면 다시 이어서 감). 비상 정지는 아래 안전 명령.
+- 목표가 `max_goal_distance`(기본 50 m)보다 멀면 `GOAL_TOO_FAR`로 멈춥니다(원점·좌표 실수 방지). 먼 지점이면 `max_goal_distance:=100`.
+- 기록 지점은 기록 당시 원점과 지금 원점이 다르면 시작을 거부합니다(`mission_manager`와 같은 규칙).
+
 **원점·위치 확인**
 
 ```bash
@@ -239,5 +259,8 @@ cat ~/kaboat_mission_points.json
 | `/odom` 원점이 켤 때마다 바뀜 | `~/kaboat_geo_origin.yaml` 없음 → 2절 원점 잡기 |
 | `mission_manager` → `시작 거부: … 원점이 다름` | 지점을 기록한 뒤 원점을 다시 잡았음. 지점을 다시 기록하거나 원점 파일을 되돌림 |
 | `mission_manager` → `시작 거부: gate_end 이 없음` | 그 미션의 `_entry`/`_end` 중 하나만 기록됨. 나머지를 `rec`로 기록 |
+| `goto` → `CMD_VEL_PUBLISHER_CONFLICT` | 다른 `/cmd_vel` 노드가 켜져 있음 (`ros2 topic info /cmd_vel -v`). 끄고 다시 |
+| `goto` → `ODOM_PUBLISHER_COUNT_NOT_ONE` / `ODOM_TIMEOUT` | `/odom` 발행자가 0개 또는 2개 이상 (`ros2 topic info /odom -v`), GQ7 켜짐 확인 |
+| `goto` → `GOAL_TOO_FAR` | 목표 좌표·원점 확인, 정말 멀면 `max_goal_distance:=…` |
 | behavior 가 안 움직임 | `/odom` `frame_id`가 `odom`인지, `autonomy.launch.py`의 `*_motion_enabled` |
 | 노트북에 토픽이 안 보임 | 브리지 허용 목록([`zenoh_monitor_link.py`](scripts/zenoh_monitor_link.py)), 양쪽 브리지 재시작 |

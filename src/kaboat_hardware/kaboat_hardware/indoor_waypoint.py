@@ -1,8 +1,13 @@
-"""Sensor-gated indoor tank waypoint trial using the shared controller.
+"""Sensor-gated single-waypoint trial using the shared controller (tank or outdoor).
 
 The goal is fixed at startup.  Preview mode is the default and never
-publishes /cmd_vel.  Motion mode requires one fresh tank-frame /odom publisher
+publishes /cmd_vel.  Motion mode requires one fresh odom-frame /odom publisher
 and exclusive ownership of /cmd_vel; no motor driver is launched here.
+
+Tank (default): goal and /odom must lie inside the measured tank bounds.
+Outdoor (outdoor:=true): no tank bounds; instead the boat halts with GOAL_TOO_FAR
+while the goal is more than max_goal_distance away (wrong origin, typo).
+The goal can also be a point recorded with `rec` (point:=gate_entry).
 """
 
 import math
@@ -17,11 +22,28 @@ from std_msgs.msg import Bool, String
 
 from kaboat_behaviors.waypoint_controller import (
     WaypointController, WaypointParams, waypoint)
+from kaboat_mission.mission_points import (
+    DEFAULT_ORIGIN_FILE, DEFAULT_POINTS_FILE, PointStore, read_origin_file)
 
 
 def _yaw(q) -> float:
     return math.atan2(2.0 * (q.w*q.z + q.x*q.y),
                       1.0 - 2.0 * (q.y*q.y + q.z*q.z))
+
+
+def recorded_target(name, points_file=DEFAULT_POINTS_FILE,
+                    origin_file=DEFAULT_ORIGIN_FILE, use_heading=True):
+    """rec 로 기록한 지점 → (x, y, 선수각 deg | None).
+
+    지점이 없거나, 파일이 깨졌거나, 기록 당시 원점과 지금 원점이 다르면 ValueError.
+    """
+    store = PointStore.load(points_file)
+    try:
+        point = store.get(name)
+    except KeyError as exc:
+        raise ValueError(exc.args[0]) from None
+    store.check_origin(read_origin_file(origin_file))
+    return point.x, point.y, (point.yaw_deg if use_heading else None)
 
 
 class IndoorWaypoint(Node):
@@ -36,6 +58,14 @@ class IndoorWaypoint(Node):
             'tank_size_x': 10.0, 'tank_size_y': 5.0,
             'tank_margin': 0.25,
             'odom_timeout_sec': 0.5,
+            # 야외: 수조 범위 대신 목표 거리 상한
+            'outdoor': False,
+            'max_goal_distance': 50.0,
+            # 비어 있지 않으면 target_x/y/angle 대신 rec 기록 지점을 목표로
+            'point': '',
+            'align_heading': True,     # false = 위치만 (선수각 맞추지 않음)
+            'points_file': DEFAULT_POINTS_FILE,
+            'origin_file': DEFAULT_ORIGIN_FILE,
         }
         for name, value in defaults.items():
             self.declare_parameter(name, value)
@@ -45,18 +75,31 @@ class IndoorWaypoint(Node):
                 self.declare_parameter(name, getattr(tuning, name))
         p = lambda name: self.get_parameter(name).value
 
-        self.target = waypoint(p('target_x'), p('target_y'),
-                               p('target_angle_deg'), p('thrust_ratio'))
+        self.point_name = str(p('point')).strip()
+        align = bool(p('align_heading'))
+        if self.point_name:
+            tx, ty, angle = recorded_target(
+                self.point_name, str(p('points_file')), str(p('origin_file')), align)
+        else:
+            tx, ty = p('target_x'), p('target_y')
+            angle = p('target_angle_deg') if align else None
+        self.target = waypoint(tx, ty, angle, p('thrust_ratio'))
         self.motion_enabled = bool(p('motion_enabled'))
+        self.outdoor = bool(p('outdoor'))
+        self.max_goal_distance = float(p('max_goal_distance'))
         self.size_x = float(p('tank_size_x'))
         self.size_y = float(p('tank_size_y'))
         self.margin = float(p('tank_margin'))
         self.odom_timeout = float(p('odom_timeout_sec'))
-        if (not all(math.isfinite(v) for v in
-                    (self.size_x, self.size_y, self.margin,
-                     self.odom_timeout))
+        if (not math.isfinite(self.odom_timeout) or self.odom_timeout <= 0):
+            raise ValueError('odom_timeout_sec must be positive')
+        if self.outdoor:
+            if not (math.isfinite(self.max_goal_distance)
+                    and self.max_goal_distance > 0):
+                raise ValueError('max_goal_distance must be positive')
+        elif (not all(math.isfinite(v) for v in
+                      (self.size_x, self.size_y, self.margin))
                 or not 0 <= self.margin < min(self.size_x, self.size_y) / 2
-                or self.odom_timeout <= 0
                 or not self.margin <= self.target.x <= self.size_x - self.margin
                 or not self.margin <= self.target.y <= self.size_y - self.margin):
             raise ValueError('waypoint must lie inside the measured tank bounds')
@@ -86,10 +129,14 @@ class IndoorWaypoint(Node):
         self.create_timer(0.05, self._tick)
         self._publish_goal()
         self._status('WAIT_ODOM')
+        heading = ('선수각 맞추지 않음' if self.target.angle_deg is None
+                   else f'{self.target.angle_deg:.1f}')
+        source = f'기록 지점 {self.point_name!r}' if self.point_name else '좌표 입력'
+        area = (f'야외(목표 거리 최대 {self.max_goal_distance:.0f} m)'
+                if self.outdoor else '수조')
         self.get_logger().info(
-            f'waypoint({self.target.x:.2f}, {self.target.y:.2f}, '
-            f'{self.target.angle_deg:.1f}, {self.target.thrust_ratio:.2f}) '
-            'in odom; '
+            f'waypoint({self.target.x:.2f}, {self.target.y:.2f}, {heading}, '
+            f'{self.target.thrust_ratio:.2f}) in odom ({source}); {area}; '
             f'motion_enabled={self.motion_enabled}')
 
     def _publish_goal(self):
@@ -98,8 +145,9 @@ class IndoorWaypoint(Node):
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.pose.position.x = self.target.x
         msg.pose.position.y = self.target.y
-        msg.pose.orientation.z = math.sin(self.target.yaw / 2.0)
-        msg.pose.orientation.w = math.cos(self.target.yaw / 2.0)
+        yaw = self.target.yaw or 0.0          # 선수각 없음 → 표시만 +X
+        msg.pose.orientation.z = math.sin(yaw / 2.0)
+        msg.pose.orientation.w = math.cos(yaw / 2.0)
         self.goal_pub.publish(msg)
 
     def _status(self, value):
@@ -133,10 +181,10 @@ class IndoorWaypoint(Node):
         values = (pose.position.x, pose.position.y, q.x, q.y, q.z, q.w,
                   self.odom.twist.twist.angular.z)
         norm = q.x*q.x + q.y*q.y + q.z*q.z + q.w*q.w
-        return (all(math.isfinite(v) for v in values)
-                and abs(norm - 1.0) <= 0.1
-                and 0 <= pose.position.x <= self.size_x
-                and 0 <= pose.position.y <= self.size_y)
+        if not (all(math.isfinite(v) for v in values) and abs(norm - 1.0) <= 0.1):
+            return False
+        return self.outdoor or (0 <= pose.position.x <= self.size_x
+                                and 0 <= pose.position.y <= self.size_y)
 
     def _tick(self):
         if self.completed:
@@ -160,6 +208,16 @@ class IndoorWaypoint(Node):
             return
 
         pose = self.odom.pose.pose
+        if self.outdoor:
+            distance = math.hypot(self.target.x - pose.position.x,
+                                  self.target.y - pose.position.y)
+            if distance > self.max_goal_distance:
+                self._halt('GOAL_TOO_FAR')
+                self.get_logger().warn(
+                    f'목표까지 {distance:.1f} m > max_goal_distance '
+                    f'{self.max_goal_distance:.0f} m — 정지. 원점·좌표를 확인하거나 '
+                    'max_goal_distance 를 올리세요', throttle_duration_sec=2.0)
+                return
         step = self.controller.step(
             pose.position.x, pose.position.y, _yaw(pose.orientation),
             self.odom.twist.twist.angular.z, time.monotonic())

@@ -72,6 +72,25 @@ alias run_geo="ros2 launch kaboat_hardware geo_origin.launch.py"
 alias run_points="ros2 run kaboat_hardware point_recorder"
 alias rec='python3 "$KABOAT_WS/scripts/rec_point.py"'
 alias list_points='python3 "$KABOAT_WS/scripts/rec_point.py" --list'
+# 야외 웨이포인트 1개 주행 (실행 즉시 출발, 추력 20%):
+#   goto gate_entry          rec 기록 지점 (위치 + 기록 선수각)
+#   goto 12.0 -3.5 [90]      /odom x y [선수각, 생략 = 위치만]
+#   뒤에 motion_enabled:=false (미리보기)·thrust_ratio:=0.3·heading:=false 등을 붙일 수 있다
+goto() {
+    local num='^-?[0-9]*[.]?[0-9]+$'
+    if [ $# -eq 0 ]; then
+        echo "사용: goto 지점이름 [옵션…]  또는  goto x y [선수각] [옵션…]"; return 1
+    fi
+    if [[ "$1" =~ $num ]]; then
+        if ! [[ "$2" =~ $num ]]; then echo "y 좌표가 숫자가 아님: '$2'"; return 1; fi
+        local target=(x:="$1" y:="$2"); shift 2
+        if [[ "$1" =~ $num ]]; then target+=(angle:="$1"); shift; fi
+        ros2 launch kaboat_hardware outdoor_waypoint.launch.py "${target[@]}" "$@"
+    else
+        local name="$1"; shift
+        ros2 launch kaboat_hardware outdoor_waypoint.launch.py point:="$name" "$@"
+    fi
+}
 alias run_motor="ros2 launch kaboat_hardware thrusters.launch.py hardware_type:=serial port:=/dev/ttyCH341USB0 allow_port_scan:=false"
 
 # 노트북 원격 모니터링 통신 (Zenoh 브리지)
@@ -100,6 +119,7 @@ echo "   - run_geo       : GPS 원점 설정·위도경도→x/y 변환 (geo_ori
 echo "   - run_points    : 미션 지점 기록기 (~/kaboat_mission_points.json)"
 echo "   - rec 이름      : 지금 위치(x, y, 선수각) 기록 (이름 생략 시 p1, p2 …)"
 echo "   - list_points   : 기록한 지점 보기"
+echo "   - goto 지점|x y [각도] : 야외 웨이포인트 1개 주행 (즉시 출발 20%, motion_enabled:=false 면 미리보기)"
 echo "   - run_motor     : 모터 제어기 가동"
 echo "   - cal_imu       : [선택] IMU 정지 수동 보정 (수조 라이다 Truth 모드에서는 생략 가능)"
 echo "   - test_bspline  : B-Spline 곡선 자율주행 (출력 30%, 즉시 시작)"
