@@ -12,8 +12,11 @@
 """
 
 import math
+import re
+import shutil
 import sys
 import time
+import unicodedata
 
 STALE_SEC = 1.0
 RED, YELLOW, GREEN, RESET = '\033[91m', '\033[93m', '\033[92m', '\033[0m'
@@ -39,14 +42,30 @@ def gnss_color(state: str) -> str:
 
 
 def format_line(x, y, heading, speed, age, gnss_state=None) -> str:
-    """표시할 한 줄. age = 마지막 /odom 이후 초."""
-    text = (f'x {x:+8.2f} m  y {y:+8.2f} m  |  선수각 {heading:+7.1f}°  '
-            f'나침반 {compass_deg(heading):5.1f}°  |  속도 {speed:4.2f} m/s')
+    """표시할 한 줄 (좁은 터미널에서도 한 줄에 들어가게 짧게). age = 마지막 /odom 이후 초."""
+    text = (f'x {x:+7.2f} y {y:+7.2f} m | 선수 {heading:+6.1f}° '
+            f'(나침반 {compass_deg(heading):5.1f}°) | {speed:4.2f} m/s')
     if gnss_state is not None:
-        text += f'  |  GNSS {gnss_color(gnss_state)}{gnss_state}{RESET}'
+        text += f' | {gnss_color(gnss_state)}{gnss_state}{RESET}'
     if age > STALE_SEC:
         text = f'{RED}[/odom {age:.1f}초 끊김]{RESET} ' + text
     return text
+
+
+def fit_width(text: str, width: int) -> str:
+    """색 코드를 빼고 화면 폭(한글 2칸)이 width 를 넘지 않게 자른다 — 넘치면 \r 덮어쓰기가 깨진다."""
+    out, used = [], 0
+    for part in re.split(r'(\033\[[0-9;]*m)', text):
+        if part.startswith('\033['):
+            out.append(part)
+            continue
+        for ch in part:
+            w = 2 if unicodedata.east_asian_width(ch) in ('W', 'F') else 1
+            if used + w > width:
+                return ''.join(out) + RESET
+            out.append(ch)
+            used += w
+    return ''.join(out)
 
 
 def main(args=None):
@@ -88,7 +107,8 @@ def main(args=None):
             line = format_line(p.x, p.y, heading_deg((o.x, o.y, o.z, o.w)),
                                math.hypot(v.x, v.y), time.monotonic() - self.odom_at,
                                self.gnss_state)
-            sys.stdout.write('\r\033[K' + line)
+            width = shutil.get_terminal_size((100, 20)).columns - 1
+            sys.stdout.write('\r\033[K' + fit_width(line, width))
             sys.stdout.flush()
 
     rclpy.init(args=args)

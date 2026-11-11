@@ -30,3 +30,13 @@ def test_line_shows_values_gnss_and_stale_warning():
     assert 'GNSS' not in vp.format_line(0, 0, 0, 0, 0.0)  # 상태 메시지 없는 환경
     assert '2.5초 끊김' in vp.format_line(0, 0, 0, 0, 2.5)
     assert vp.gnss_color('SBAS') == vp.RED and vp.gnss_color('RTK Float') == vp.YELLOW
+
+
+def test_fit_width_counts_korean_as_two_and_keeps_colors():
+    line = vp.format_line(-0.38, -0.07, -63.5, 0.02, 0.0, 'RTK Fixed')
+    assert vp.fit_width(line, 300) == line                      # 넉넉하면 그대로
+    cut = vp.fit_width(line, 20)
+    visible = vp.re.sub(r'\033\[[0-9;]*m', '', cut)
+    width = sum(2 if vp.unicodedata.east_asian_width(c) in ('W', 'F') else 1 for c in visible)
+    assert width <= 20 and cut.endswith(vp.RESET)
+    assert vp.fit_width('선수각', 4) == '선수' + vp.RESET            # 한글 2칸
