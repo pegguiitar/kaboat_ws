@@ -7,7 +7,8 @@ import pytest
 
 from kaboat_hardware.geo_local import LocalFrame, _ecef
 from kaboat_hardware.gq7_local_odom import (
-    earth_to_local, matrix_to_quat, quat_mul, rotate_covariance6)
+    antenna_to_center, earth_to_local, enu_velocity_to_body, matrix_to_quat, quat_mul,
+    rotate_covariance6)
 
 ORIGIN = (35.18487138, 128.56510758, 33.43)       # 2026-11-11 현장 원점
 
@@ -74,6 +75,19 @@ def test_covariance_is_rotated_into_enu():
         assert out[7 * k] == pytest.approx(v)                   # 위치 대각
         assert out[7 * (k + 3)] == pytest.approx(v)             # 회전 대각
     assert out[1] == pytest.approx(0.0, abs=1e-9) and out[6] == pytest.approx(0.0, abs=1e-9)
+
+
+def test_antenna_offset_moves_gnss_to_hull_center():
+    # 좌현 0.4 m 안테나. 동쪽(0°)을 보면 안테나는 중심의 북쪽 0.4 m
+    assert antenna_to_center((10.0, 5.4, 1.0), 0.0, (0.0, 0.4)) == pytest.approx((10.0, 5.0, 1.0))
+    # 북쪽(90°)을 보면 좌현 = 서쪽 → 안테나는 중심의 서쪽 0.4 m
+    assert antenna_to_center((9.6, 5.0, 0.0), math.pi / 2, (0.0, 0.4)) == pytest.approx(
+        (10.0, 5.0, 0.0))
+
+
+def test_enu_velocity_into_body_frame():
+    assert enu_velocity_to_body((0.0, 1.0, 0.0), math.pi / 2) == pytest.approx((1.0, 0.0, 0.0))
+    assert enu_velocity_to_body((1.0, 0.0, 0.2), math.pi / 2) == pytest.approx((0.0, -1.0, 0.2))
 
 
 # ── 노드 ─────────────────────────────────────────────
@@ -168,6 +182,47 @@ def test_ignores_empty_filter_position(ros, tmp_path):
     node = _node(tmp_path)
     try:
         node._on_earth(Odometry())                            # 위치 0,0,0 = 아직 못 냄
+        assert node.sent == []
+    finally:
+        node.destroy_node()
+
+
+def _fix(frame, x, y, up=0.0):
+    from sensor_msgs.msg import NavSatFix, NavSatStatus
+    lat, lon, h = frame.to_llh(x, y, up)
+    m = NavSatFix()
+    m.status.status = NavSatStatus.STATUS_SBAS_FIX
+    m.latitude, m.longitude, m.altitude = lat, lon, h
+    m.position_covariance_type = NavSatFix.COVARIANCE_TYPE_DIAGONAL_KNOWN
+    m.position_covariance = [1.2, 0.0, 0.0, 0.0, 1.3, 0.0, 0.0, 0.0, 4.0]
+    return m
+
+
+def test_gnss_mode_uses_gnss_position_filter_heading_and_gnss_velocity(ros, tmp_path):
+    from geometry_msgs.msg import TwistWithCovarianceStamped
+    _write_origin(tmp_path / 'origin.yaml', ORIGIN)
+    node = _node(tmp_path, position_source='gnss')
+    try:
+        frame = LocalFrame(*ORIGIN)
+        node._on_earth(_earth_msg(frame, 25.0, -10.0, 90.0))
+        assert node.sent == []                                # GNSS 아직 없음 → 안 냄
+        # 필터는 (25, -10) 이라고 흘러 있어도, GNSS 안테나(좌현 0.4 m)는 (0 - 0.4, 3)
+        node._on_fix(_fix(frame, -0.4, 3.0))
+        vel = TwistWithCovarianceStamped()
+        vel.twist.twist.linear.y = 1.5                        # 북쪽 1.5 m/s
+        node._on_gnss_vel(vel)
+        node._on_earth(_earth_msg(frame, 25.0, -10.0, 90.0))  # 선수 북쪽
+        out = node.sent[-1]
+        p = out.pose.pose.position
+        assert (p.x, p.y) == pytest.approx((0.0, 3.0), abs=1e-3)   # 선체 중심
+        o = out.pose.pose.orientation
+        assert _yaw((o.x, o.y, o.z, o.w)) == pytest.approx(90.0, abs=0.02)
+        assert out.twist.twist.linear.x == pytest.approx(1.5)       # 선수 방향 1.5 m/s
+        assert out.twist.twist.angular.z == 0.05                    # 회전속도는 필터
+        assert out.pose.covariance[0] == pytest.approx(1.2) and out.pose.covariance[14] == 4.0
+        node.fix = (node.fix[0] - 5.0, node.fix[1])                 # GNSS 끊김
+        node.sent.clear()
+        node._on_earth(_earth_msg(frame, 25.0, -10.0, 90.0))
         assert node.sent == []
     finally:
         node.destroy_node()

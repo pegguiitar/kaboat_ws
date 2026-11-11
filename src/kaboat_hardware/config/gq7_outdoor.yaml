@@ -62,5 +62,12 @@ microstrain_inertial_driver:
     mip_filter_gnss_dual_antenna_status_data_rate: 1
     filter_dual_antenna_heading_data_rate: 1
 
+    # 필터가 GNSS 보정을 실제로 쓰는지 진단 (1 Hz) — 2026-11-11 필터 위치가 GNSS 를 못 따라감
+    #   /mip/ekf/aiding_measurement_summary — 보정원별 enabled / used / residual_high /
+    #                                         sample_time_warning / configuration_error
+    #   /mip/ekf/gnss_aiding_status           — 수신기별 fix·위성 사용 상태
+    mip_filter_aiding_measurement_summary_data_rate: 1
+    mip_filter_gnss_position_aiding_status_data_rate: 1
+
     ntrip_interface_enable: false
     raw_file_enable: false

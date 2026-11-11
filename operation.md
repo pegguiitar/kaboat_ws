@@ -76,6 +76,16 @@ GNSS 20개(약 10초)를 평균해 `~/kaboat_geo_origin.yaml`에 저장합니다
 `/ekf/odometry_earth`를 원점 파일 기준으로 바꿔 만듭니다. 젯슨 드라이버의 원점 기능은 원점을
 맞게 받고도 수백 km 떨어진 값을 냈습니다(2026-11-11).
 
+**`/odom` 위치 출처** (`run_gq7_outdoor odom_position_source:=…`)
+
+| 값 | 위치 | 선수각·회전속도 | 선속도 | 비고 |
+|---|---|---|---|---|
+| `gnss` (기본) | GNSS1 원시 `/gps/fix` (2 Hz, ±1~2 m), 안테나 좌현 0.4 m 보정 | GQ7 필터 (듀얼 안테나) | GNSS 속도 | GNSS 1초 끊기면 `/odom` 멈춤. 위치가 0.5초마다 계단처럼 바뀜 |
+| `filter` | GQ7 필터 (25 Hz, 매끄러움) | GQ7 필터 | GQ7 필터 | 2026-11-11 현장에서 필터 위치가 GNSS 를 못 따라가 흘러감 — 원인 해결 후 사용 |
+
+필터가 GNSS 보정을 실제로 쓰는지는 `ros2 topic echo /mip/ekf/aiding_measurement_summary`
+(보정원별 `used`, `residual_high`, `sample_time_warning`)로 확인합니다.
+
 ⚠️ 실내 수조 런치(`run_boat_lidar`)와 `run_gq7_outdoor`를 같이 켜면 `/odom` 발행자가
 둘이 됩니다. 하나만 켭니다.
 

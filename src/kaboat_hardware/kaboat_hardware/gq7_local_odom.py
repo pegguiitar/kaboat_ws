@@ -10,6 +10,15 @@
 (2026-11-11 현장). 드라이버 자동 원점(처음 Full Nav 위치)은 켤 때마다 바뀐다. 그래서
 드라이버의 원점 기능은 쓰지 않고, 이미 시험된 geo_local 변환으로 여기서 계산한다.
 
+위치 출처 (position_source):
+  filter — GQ7 필터 위치(odometry_earth). 매끄럽고 25 Hz 지만, 2026-11-11 현장에서 필터가
+           GNSS 를 못 따라가 멈춘 배 위치가 20초에 수 m·높이가 수십 m 흘렀다.
+  gnss   — GNSS1 원시 위치(/gps/fix, 2 Hz, SBAS ±1~2 m)를 안테나 오프셋만큼 선체 중심으로
+           옮겨 쓴다. 선수각·회전속도는 GQ7 필터(듀얼 안테나 헤딩), 선속도는 GNSS 속도
+           (/gnss_1/velocity, ENU)를 선체 기준으로 돌려 쓴다. GNSS 가 max_fix_age_sec 넘게
+           끊기면 /odom 을 내지 않는다(behavior 들이 odom 타임아웃으로 멈추게).
+           위치는 다음 GNSS 가 올 때까지(0.5 s) 그대로라 계단처럼 움직인다.
+
 - 원점 파일이 바뀌면(mtime) 1초 안에 다시 읽어 바로 반영 — /geo/set_origin 뒤 GQ7 을
   재시작할 필요가 없다(재시작하면 필터가 다시 수렴하느라 몇 분 걸린다).
 - 원점 파일이 없으면 auto_origin=true(기본) 일 때 처음 받은 위치를 원점으로 쓰고 경고한다
@@ -20,12 +29,15 @@
 
 import math
 import os
+import time
 
+from geometry_msgs.msg import TwistWithCovarianceStamped
 from nav_msgs.msg import Odometry
 import rclpy
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
+from sensor_msgs.msg import NavSatFix, NavSatStatus
 
 from kaboat_hardware.geo_local import LocalFrame, ecef_to_llh
 from kaboat_mission.mission_points import DEFAULT_ORIGIN_FILE, read_origin_file
@@ -89,6 +101,27 @@ def earth_to_local(frame: LocalFrame, position_ecef, quat_ecef, covariance=None)
     return enu, quat, cov
 
 
+def yaw_of(quat) -> float:
+    """쿼터니언 (x, y, z, w) → ENU 선수각 [rad]."""
+    x, y, z, w = quat
+    return math.atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z))
+
+
+def antenna_to_center(antenna_enu, yaw: float, offset_flu):
+    """안테나 ENU 위치 → 선체 중심. offset_flu = 선체 중심 → 안테나 (선수, 좌현) [m]."""
+    c, s = math.cos(yaw), math.sin(yaw)
+    ox, oy = offset_flu
+    return (antenna_enu[0] - (c * ox - s * oy),
+            antenna_enu[1] - (s * ox + c * oy),
+            antenna_enu[2])
+
+
+def enu_velocity_to_body(v_enu, yaw: float):
+    """ENU 속도 → 선체 기준 (선수, 좌현, 위) 속도. 롤·피치는 작다고 보고 선수각만 돌린다."""
+    c, s = math.cos(yaw), math.sin(yaw)
+    return (c * v_enu[0] + s * v_enu[1], -s * v_enu[0] + c * v_enu[1], v_enu[2])
+
+
 # ── 노드 ─────────────────────────────────────────────
 class Gq7LocalOdom(Node):
     def __init__(self, **node_kwargs):
@@ -100,11 +133,28 @@ class Gq7LocalOdom(Node):
         self.declare_parameter('child_frame_id', 'base_link')
         # 원점 파일이 없을 때 처음 받은 위치를 원점으로 쓸지 (켤 때마다 바뀜)
         self.declare_parameter('auto_origin', True)
+        # 위치 출처: 'filter'(GQ7 필터) 또는 'gnss'(GNSS1 원시 + 필터 선수각) — 모듈 설명 참고
+        self.declare_parameter('position_source', 'filter')
+        self.declare_parameter('gnss_topic', '/gps/fix')
+        self.declare_parameter('gnss_velocity_topic', '/gnss_1/velocity')
+        # 선체 중심(base_link) → GNSS1 안테나 (선수, 좌현) [m]. gq7_outdoor.yaml 의
+        # gnss1_antenna_offset [0, -0.4, 0](FRD: 우현 +) 과 같은 위치 = 좌현 0.4 m.
+        self.declare_parameter('gnss_antenna_offset', [0.0, 0.4])
+        self.declare_parameter('max_fix_age_sec', 1.0)
         g = lambda name: self.get_parameter(name).value  # noqa: E731
         self.origin_file = os.path.expanduser(str(g('origin_file')))
         self.frame_id = str(g('frame_id'))
         self.child_frame_id = str(g('child_frame_id'))
         self.auto_origin = bool(g('auto_origin'))
+        self.position_source = str(g('position_source')).strip().lower()
+        if self.position_source not in ('filter', 'gnss'):
+            raise ValueError("position_source must be 'filter' or 'gnss'")
+        self.antenna_offset = tuple(float(v) for v in g('gnss_antenna_offset'))
+        self.max_fix_age = float(g('max_fix_age_sec'))
+        if len(self.antenna_offset) != 2 or not self.max_fix_age > 0:
+            raise ValueError('gnss_antenna_offset must be [forward, left], max_fix_age_sec > 0')
+        self.fix = None            # (monotonic, NavSatFix)
+        self.gnss_vel = None       # (monotonic, (ve, vn, vu))
 
         self.frame: LocalFrame | None = None
         self.origin_source = ''
@@ -114,6 +164,16 @@ class Gq7LocalOdom(Node):
         self.pub = self.create_publisher(Odometry, str(g('output_topic')), 10)
         self.create_subscription(Odometry, str(g('input_topic')), self._on_earth,
                                  qos_profile_sensor_data)
+        if self.position_source == 'gnss':
+            self.create_subscription(NavSatFix, str(g('gnss_topic')), self._on_fix,
+                                     qos_profile_sensor_data)
+            self.create_subscription(TwistWithCovarianceStamped, str(g('gnss_velocity_topic')),
+                                     self._on_gnss_vel, qos_profile_sensor_data)
+        self.get_logger().info(
+            f'/odom 위치 출처 = {self.position_source}'
+            + (' (GNSS1 원시 위치 + GQ7 선수각, 안테나 오프셋 '
+               f'{self.antenna_offset} m 보정)' if self.position_source == 'gnss'
+               else ' (GQ7 필터 위치)'))
         self.create_timer(1.0, self._check_origin_file)
         self._check_origin_file()
         if self.frame is None:
@@ -150,6 +210,34 @@ class Gq7LocalOdom(Node):
         if origin is not None:
             self._set_origin(origin, f'file {self.origin_file}')
 
+    def _on_fix(self, msg: NavSatFix):
+        if (msg.status.status >= NavSatStatus.STATUS_FIX
+                and all(math.isfinite(v) for v in (msg.latitude, msg.longitude, msg.altitude))):
+            self.fix = (time.monotonic(), msg)
+
+    def _on_gnss_vel(self, msg: TwistWithCovarianceStamped):
+        v = msg.twist.twist.linear
+        if all(math.isfinite(c) for c in (v.x, v.y, v.z)):
+            self.gnss_vel = (time.monotonic(), (v.x, v.y, v.z))
+
+    def _gnss_pose(self, quat, filter_cov):
+        """GNSS1 위치를 선체 중심으로 옮긴 (enu, cov). GNSS 가 오래됐으면 None."""
+        now = time.monotonic()
+        if self.fix is None or now - self.fix[0] > self.max_fix_age:
+            self.get_logger().warn(
+                f'GNSS({self.max_fix_age:.1f} s 이내) 없음 — /odom 발행 멈춤',
+                throttle_duration_sec=2.0)
+            return None
+        fix = self.fix[1]
+        antenna = self.frame.to_enu(fix.latitude, fix.longitude, fix.altitude)
+        enu = antenna_to_center(antenna, yaw_of(quat), self.antenna_offset)
+        cov = list(filter_cov)
+        if fix.position_covariance_type != NavSatFix.COVARIANCE_TYPE_UNKNOWN:
+            for i in range(3):
+                for j in range(3):
+                    cov[6 * i + j] = fix.position_covariance[3 * i + j]
+        return enu, cov
+
     def _on_earth(self, msg: Odometry):
         if msg.header.frame_id not in ('earth', '') and not self._warned_frame:
             self._warned_frame = True
@@ -166,6 +254,15 @@ class Gq7LocalOdom(Node):
         q = msg.pose.pose.orientation
         enu, quat, cov = earth_to_local(
             self.frame, (p.x, p.y, p.z), (q.x, q.y, q.z, q.w), list(msg.pose.covariance))
+        twist = msg.twist                  # GQ7 은 선체 기준 속도
+        if self.position_source == 'gnss':
+            pose = self._gnss_pose(quat, cov)
+            if pose is None:
+                return
+            enu, cov = pose
+            if self.gnss_vel is not None and time.monotonic() - self.gnss_vel[0] <= self.max_fix_age:
+                twist.twist.linear.x, twist.twist.linear.y, twist.twist.linear.z = (
+                    enu_velocity_to_body(self.gnss_vel[1], yaw_of(quat)))
         out = Odometry()
         out.header.stamp = msg.header.stamp
         out.header.frame_id = self.frame_id
@@ -174,7 +271,7 @@ class Gq7LocalOdom(Node):
         (out.pose.pose.orientation.x, out.pose.pose.orientation.y,
          out.pose.pose.orientation.z, out.pose.pose.orientation.w) = quat
         out.pose.covariance = cov
-        out.twist = msg.twist           # GQ7 은 선체 기준 속도 — 그대로
+        out.twist = twist
         self.pub.publish(out)
 
 

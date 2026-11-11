@@ -71,15 +71,17 @@ def _gq7_actions(context):
             params_file = os.path.join(config_dir, 'gq7_outdoor.yaml')
         origin_file = (context.perform_substitution(LaunchConfiguration('gq7_origin_file'))
                        or DEFAULT_ORIGIN_FILE)
+        source = context.perform_substitution(LaunchConfiguration('odom_position_source'))
         actions += [
-            LogInfo(msg=(f'[GQ7] 야외: /odom = gq7_local_odom (/ekf/odometry_earth → 원점 '
-                         f'{origin_file} 기준). 원점 파일이 바뀌면 GQ7 재시작 없이 바로 반영')),
+            LogInfo(msg=(f'[GQ7] 야외: /odom = gq7_local_odom (위치 출처 {source}, 원점 '
+                         f'{origin_file}). 원점 파일이 바뀌면 GQ7 재시작 없이 바로 반영')),
             Node(
                 package='kaboat_hardware',
                 executable='gq7_local_odom',
                 name='gq7_local_odom',
                 output='screen',
-                parameters=[{'origin_file': origin_file, 'use_sim_time': False}],
+                parameters=[{'origin_file': origin_file, 'position_source': source,
+                             'use_sim_time': False}],
             ),
         ]
     remap_odom = not outdoor and _truthy(context, 'enable_odom_remap')
@@ -144,6 +146,10 @@ def _launch(d455, gq7, enable_d455, config_file, default_config, default_gq7_con
         DeclareLaunchArgument(
             'gq7_origin_file', default_value='',
             description="야외 /odom 원점 파일 (geo_origin 이 저장). '' 이면 ~/kaboat_geo_origin.yaml"),
+        DeclareLaunchArgument(
+            'odom_position_source', default_value='gnss',
+            description="야외 /odom 위치 출처: gnss(GNSS1 원시 + GQ7 선수각, 기본) 또는 "
+                        "filter(GQ7 필터 위치 — 필터가 GNSS 를 못 따라가던 2026-11-11 문제 해결 후)"),
         DeclareLaunchArgument(
             'enable_odom_remap', default_value='true',
             description='GQ7 /ekf/odometry_map → /odom remap (outdoor:=false 일 때만). '
