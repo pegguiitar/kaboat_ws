@@ -226,3 +226,19 @@ def test_gnss_mode_uses_gnss_position_filter_heading_and_gnss_velocity(ros, tmp_
         assert node.sent == []
     finally:
         node.destroy_node()
+
+
+def test_warns_when_another_node_publishes_odom(ros, tmp_path):
+    node = _node(tmp_path)
+    other = rclpy.create_node('old_gq7_local_odom')
+    try:
+        other.create_publisher(Odometry, '/odom', 10)
+        for _ in range(50):                              # 그래프 발견 대기
+            if node.count_publishers('/odom') >= 2:
+                break
+            rclpy.spin_once(node, timeout_sec=0.05)
+        node._check_duplicate_publishers()
+        assert node.other_publishers == 1
+    finally:
+        other.destroy_node()
+        node.destroy_node()

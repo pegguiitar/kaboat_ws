@@ -161,7 +161,9 @@ class Gq7LocalOdom(Node):
         self._origin_mtime = None
         self._warned_frame = False
 
-        self.pub = self.create_publisher(Odometry, str(g('output_topic')), 10)
+        self.output_topic = str(g('output_topic'))
+        self.pub = self.create_publisher(Odometry, self.output_topic, 10)
+        self.other_publishers = 0
         self.create_subscription(Odometry, str(g('input_topic')), self._on_earth,
                                  qos_profile_sensor_data)
         if self.position_source == 'gnss':
@@ -175,6 +177,7 @@ class Gq7LocalOdom(Node):
                f'{self.antenna_offset} m 보정)' if self.position_source == 'gnss'
                else ' (GQ7 필터 위치)'))
         self.create_timer(1.0, self._check_origin_file)
+        self.create_timer(2.0, self._check_duplicate_publishers)
         self._check_origin_file()
         if self.frame is None:
             self.get_logger().warn(
@@ -192,6 +195,22 @@ class Gq7LocalOdom(Node):
             self.get_logger().warn('원점이 바뀜 — ' + msg)
         else:
             self.get_logger().info(msg)
+
+    def _check_duplicate_publishers(self):
+        """/odom 을 내는 다른 노드가 있으면 계속 경고한다.
+
+        2026-11-11 현장: 실패한 런치에서 살아남은 gq7_local_odom 이 GNSS 방식으로 /odom 을
+        계속 내서, 새로 켠 필터 방식 /odom 과 번갈아 섞였다(위치가 7 cm 사이를 오감).
+        """
+        others = self.count_publishers(self.output_topic) - 1
+        if others > 0:
+            self.get_logger().error(
+                f'{self.output_topic} 발행자가 나 말고 {others}개 더 있음 — 위치가 섞인다. '
+                '`pgrep -af gq7_local_odom` 으로 남은 노드를 찾아 끈다',
+                throttle_duration_sec=5.0)
+        elif self.other_publishers > 0:
+            self.get_logger().info(f'{self.output_topic} 발행자 중복 해소')
+        self.other_publishers = others
 
     def _check_origin_file(self):
         """원점 파일이 새로 생기거나 바뀌었으면 다시 읽는다."""
