@@ -13,7 +13,7 @@ real_obstacle_avoid_test:
     fixed_start_xy: [0.0, 0.0]           # launch 가 덮어씀
     start_tolerance: 3.0
     start_heading_tolerance_deg: 45.0
-    goal_tolerance: 2.0                  # 목표점 이 거리 안이면 FINISHED (미션 전환 반경은 5 m)
+    goal_tolerance: 2.0                  # 목표점 이 거리 안이면 FINISHED (미션 전환 반경도 2 m)
     # 수조는 시험 차선 위 장애물을 확인하고서만 출발했다. 야외 출발점에서는 장애물이
     # 지도(15 m) 밖일 수 있어 끈다.
     require_front_obstacle: false

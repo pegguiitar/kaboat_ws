@@ -51,7 +51,7 @@ source ~/.zshrc
 | 이름 | 쓰이는 곳 | 기록할 때 |
 |---|---|---|
 | `<미션>_entry` | 미션 시작 자세 `[x, y, 선수각]` (`entry_waypoints`, `entry_ready=true`) | 배를 **출발할 방향으로** 세우고 기록 |
-| `<미션>_end` | 미션 끝 지점 `[x, y]` (`waypoints`, 전환 반경 5 m 판정) | 위치만 쓰임 |
+| `<미션>_end` | 미션 끝 지점 `[x, y]` (`waypoints`, 전환 반경 **2 m** 판정) | 위치만 쓰임. 미션이 실제로 끝나는 자리에 (도킹은 정박 위치, 게이트는 마지막 게이트 2~3 m 뒤) |
 
 `<미션>` = `gate`, `station`, `dock`, `search`, `avoid`. 예) `rec gate_entry` → `rec gate_end`.
 
