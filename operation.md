@@ -142,7 +142,7 @@ IP만 맞춥니다(지금 설정은 `/home/jiwoo/Projects/KABOAT/kaboat_ws`, 젯
 | `rec [이름]` / `rec --list` | 젯슨에 지금 위치 기록 요청 / 기록한 지점 보기 (`set_kaboat` 후) |
 | `teleop` | 노트북 키보드 조종 창 (`scripts/teleop_laptop.py`, 도메인 43). `set_kaboat` 후, 젯슨 `run_motor` 필요 |
 | `view_position` | `/odom` x·y·선수각·나침반 방위·속도 실시간 한 줄 (`set_kaboat` 후) |
-| `view_lidar` | 야외 모니터링 RViz (`remote_monitor.rviz`, Fixed Frame `odom`: 장애물 지도·`/scan`·`/odom`·경로). `set_kaboat` 후 |
+| `view_lidar` | 야외 모니터링 RViz (`remote_monitor.rviz`, Fixed Frame `odom`: 장애물 지도·스캔·배 위치·경로). `set_kaboat` 후. 스캔·배 위치는 `scripts/flat_scan_view.py`가 바닥면에 납작하게 다시 그린 `/scan/flat`·`/odom/flat` (GNSS 고도·롤·피치 때문에 원본 `/scan`이 허공에 비스듬히 뜸). 원본·TF는 RViz 패널에서 체크하면 보임 |
 | `rviz_tank [시험]` / `clear_traj` | 수조 추적 RViz / 궤적 지우기 |
 | `rviz_remote` | 선체 `/scan`을 라이다 좌표계로 표시 |
 | `view_pitch` | 롤/피치 모니터 |
@@ -167,7 +167,15 @@ stop_kaboat() { pkill -f zenoh_monitor_link.py; pkill -f zenoh-bridge-ros2dds; }
 set_default() { source /opt/ros/jazzy/setup.zsh; export ROS_DOMAIN_ID=0 ROS_LOCALHOST_ONLY=0; }
 
 alias rec="python3 $KABOAT_WS/scripts/rec_point.py"
-view_lidar() { ROS_DOMAIN_ID=43 rviz2 -d $KABOAT_WS/scripts/remote_monitor.rviz "$@"; }
+view_lidar() {    # 스캔·배 위치를 바닥면에 납작하게 그리는 flat_scan_view.py 를 같이 켜고 끔
+    local flat_pid=
+    if ! pgrep -f "python3 .*scripts/flat_scan_view[.]py" > /dev/null; then
+        ROS_DOMAIN_ID=43 python3 $KABOAT_WS/scripts/flat_scan_view.py > /tmp/flat_scan_view.log 2>&1 &!
+        flat_pid=$!
+    fi
+    { ROS_DOMAIN_ID=43 rviz2 -d $KABOAT_WS/scripts/remote_monitor.rviz "$@"; } \
+        always { [ -n "$flat_pid" ] && kill $flat_pid 2>/dev/null; }
+}
 teleop() { ROS_DOMAIN_ID=43 python3 $KABOAT_WS/scripts/teleop_laptop.py "$@"; }
 view_position() { ROS_DOMAIN_ID=43 python3 $KABOAT_WS/scripts/view_position.py "$@"; }
 alias rviz_tank="$KABOAT_WS/scripts/rviz_tank.sh"
