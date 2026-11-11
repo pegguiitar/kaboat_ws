@@ -121,6 +121,7 @@ ros2 launch kaboat_hardware real_sensors.launch.py outdoor:=true rtk:=true \
 | `list_points` | `python3 scripts/rec_point.py --list` | 기록한 지점 보기 |
 | `run_motor` | `ros2 launch kaboat_hardware thrusters.launch.py hardware_type:=serial port:=/dev/ttyCH341USB0 allow_port_scan:=false` | 아두이노(CH340) 모터 드라이버 + `gps_mark_logger` |
 | `view_pitch` | `python3 scripts/view_roll_pitch.py` | 롤/피치와 스캔 차단 상태 |
+| `view_position` | `python3 scripts/view_position.py` | `/odom` x·y·선수각(동쪽 0°)·나침반 방위·속도·GNSS 상태(RTK Fixed 등) 실시간 한 줄 |
 | `run_boat_lidar` | `ros2 launch kaboat_hardware indoor_tank.launch.py enable_thrusters:=false enable_onboard_lidar:=true onboard_lidar_port:=/dev/ttyUSB0` | **실내 수조 전용** (야외에서 쓰지 않음) |
 | `cal_imu` | `ros2 run kaboat_hardware calibrate_indoor_imu` | 실내 수조 IMU 정지 보정 |
 | `test_straight` / `test_circle` / `test_bspline` / `test_station` / `test_waypoint` / `test_los` / `test_avoid` | 각 `*_test.launch.py … wait_for_start:=false` | 단독 주행 시험, **실행 즉시 출발** ([TANK_TESTS_GUIDE.md](TANK_TESTS_GUIDE.md)) |
@@ -139,6 +140,7 @@ IP만 맞춥니다(지금 설정은 `/home/jiwoo/Projects/KABOAT/kaboat_ws`, 젯
 | `set_default` | Jazzy 로드, 도메인 0으로 복귀 |
 | `rec [이름]` / `rec --list` | 젯슨에 지금 위치 기록 요청 / 기록한 지점 보기 (`set_kaboat` 후) |
 | `teleop` | 노트북 키보드 조종 창 (`scripts/teleop_laptop.py`, 도메인 43). `set_kaboat` 후, 젯슨 `run_motor` 필요 |
+| `view_position` | `/odom` x·y·선수각·나침반 방위·속도 실시간 한 줄 (`set_kaboat` 후) |
 | `view_lidar` | 야외 모니터링 RViz (`remote_monitor.rviz`, Fixed Frame `odom`: 장애물 지도·`/scan`·`/odom`·경로). `set_kaboat` 후 |
 | `rviz_tank [시험]` / `clear_traj` | 수조 추적 RViz / 궤적 지우기 |
 | `rviz_remote` | 선체 `/scan`을 라이다 좌표계로 표시 |
@@ -166,6 +168,7 @@ set_default() { source /opt/ros/jazzy/setup.zsh; export ROS_DOMAIN_ID=0 ROS_LOCA
 alias rec="python3 $KABOAT_WS/scripts/rec_point.py"
 view_lidar() { ROS_DOMAIN_ID=43 rviz2 -d $KABOAT_WS/scripts/remote_monitor.rviz "$@"; }
 teleop() { ROS_DOMAIN_ID=43 python3 $KABOAT_WS/scripts/teleop_laptop.py "$@"; }
+view_position() { ROS_DOMAIN_ID=43 python3 $KABOAT_WS/scripts/view_position.py "$@"; }
 alias rviz_tank="$KABOAT_WS/scripts/rviz_tank.sh"
 alias rviz_remote="$KABOAT_WS/scripts/rviz_remote.sh"
 alias clear_traj="$KABOAT_WS/scripts/clear_tank_trajectory.sh"

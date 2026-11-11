@@ -79,6 +79,8 @@ alias run_zenoh="python3 scripts/zenoh_monitor_link.py jetson"
 
 # 롤/피치 자세 각도 모니터링
 alias view_pitch="python3 scripts/view_roll_pitch.py"
+# /odom x·y·선수각·나침반 방위·속도·GNSS(RTK) 상태 한 줄 표시
+alias view_position='python3 "$KABOAT_WS/scripts/view_position.py"'
 
 # 주행 테스트 실행 (노트북 시작 신호 없이 30% 기본 출력으로 즉시 시작)
 alias test_bspline="ros2 launch kaboat_hardware bspline_track_test.launch.py wait_for_start:=false"
@@ -107,6 +109,7 @@ echo "   - test_station  : 정점 유지 DP 테스트 (출력 30%, 즉시 시작
 echo "   - test_waypoint : 5개 웨이포인트 순차 주행 (출력 30%, 즉시 시작)"
 echo "   - test_los      : LOS 경로 추종 테스트 (SOTA 직진 0.25·회전 0.31, 즉시 시작)"
 echo "   - test_avoid    : 실시간 장애물 회피 주행 (즉시 시작)"
+echo "   - view_position : /odom x·y·선수각·나침반 방위·GNSS 상태 실시간 표시"
 echo "   - run_zenoh     : 노트북 모니터링 브리지 가동"
 echo "   - cb / sb       : 빌드 / 환경 리로드"
 # <<< KABOAT JETSON ENVIRONMENT <<<
