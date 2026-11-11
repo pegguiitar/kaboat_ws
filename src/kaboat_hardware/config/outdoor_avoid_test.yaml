@@ -1,0 +1,31 @@
+# 야외 장애물 회피 시험 (수조 real_obstacle_avoid_test.yaml 의 야외판).
+# outdoor_avoid_test.launch.py 가 rec 기록 지점으로 fixed_start_xy(<시작점>)와
+# fixed_goal_xy(<목표점>)를 채운다. 제어 상한·게인은 수조에서 맞춘 값 그대로.
+real_obstacle_avoid_test:
+  ros__parameters:
+    drive_enabled: false
+    allow_escape: true                   # 경로를 못 만들면 후진 탈출(ESCAPE). false 면 정지
+
+    # 출발 조건: 배가 시작점 start_tolerance 안 + 선수가 목표 방향에서
+    # start_heading_tolerance_deg 이내 (goto <시작점> 으로 세운 뒤 켜면 바로 출발)
+    fixed_goal_enabled: true
+    fixed_goal_xy: [0.0, 0.0]            # launch 가 덮어씀
+    fixed_start_xy: [0.0, 0.0]           # launch 가 덮어씀
+    start_tolerance: 3.0
+    start_heading_tolerance_deg: 45.0
+    goal_tolerance: 2.0                  # 목표점 이 거리 안이면 FINISHED (미션 전환 반경은 5 m)
+    # 수조는 시험 차선 위 장애물을 확인하고서만 출발했다. 야외 출발점에서는 장애물이
+    # 지도(15 m) 밖일 수 있어 끈다.
+    require_front_obstacle: false
+    front_corridor_half_width: 1.0
+    max_cross_track_error: 1.5           # 수조 0.7 — 바람·물살로 경로에서 밀리는 것을 감안
+    max_linear_cmd: 0.25                 # 전진 상한 = fsm.cmd_full 0.25 (수조 실물 튜닝)
+    max_angular_cmd: 0.31                # 회전 상한 (2026-11-06 실물 튜닝)
+    odom_timeout_sec: 0.5
+    scan_timeout_sec: 0.5
+    grid_timeout_sec: 0.5
+    viz_dri_scale: 4.0
+
+    # 야외에는 수조 벽이 없다
+    tank_bounds: [0.0, 0.0, 0.0, 0.0]
+    exclude_tank_walls: false

@@ -23,7 +23,7 @@ from std_msgs.msg import Bool, String
 from kaboat_behaviors.waypoint_controller import (
     WaypointController, WaypointParams, waypoint)
 from kaboat_mission.mission_points import (
-    DEFAULT_ORIGIN_FILE, DEFAULT_POINTS_FILE, PointStore, read_origin_file)
+    DEFAULT_ORIGIN_FILE, DEFAULT_POINTS_FILE, recorded_point)
 
 
 def _yaw(q) -> float:
@@ -37,12 +37,7 @@ def recorded_target(name, points_file=DEFAULT_POINTS_FILE,
 
     지점이 없거나, 파일이 깨졌거나, 기록 당시 원점과 지금 원점이 다르면 ValueError.
     """
-    store = PointStore.load(points_file)
-    try:
-        point = store.get(name)
-    except KeyError as exc:
-        raise ValueError(exc.args[0]) from None
-    store.check_origin(read_origin_file(origin_file))
+    point = recorded_point(name, points_file, origin_file)
     return point.x, point.y, (point.yaw_deg if use_heading else None)
 
 

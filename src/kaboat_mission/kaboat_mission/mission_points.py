@@ -115,6 +115,21 @@ def read_origin_file(path: str = DEFAULT_ORIGIN_FILE):
     return lat, lon, alt
 
 
+def recorded_point(name: str, points_file: str = DEFAULT_POINTS_FILE,
+                   origin_file: str = DEFAULT_ORIGIN_FILE) -> 'MissionPoint':
+    """rec 로 기록한 지점 하나. 기록 당시 원점이 지금 원점 파일과 다르면 ValueError.
+
+    지점이 없거나 파일이 깨졌어도 ValueError (메시지에 저장된 지점 목록).
+    """
+    store = PointStore.load(points_file)
+    try:
+        point = store.get(name)
+    except KeyError as exc:
+        raise ValueError(exc.args[0]) from None
+    store.check_origin(read_origin_file(origin_file))
+    return point
+
+
 def mission_slot(name: str, states=MISSION_STATES):
     """지점 이름 → (미션, 'entry' | 'end'). 미션 이름 규칙이 아니면 None."""
     for kind, suffix in (('entry', ENTRY_SUFFIX), ('end', END_SUFFIX)):

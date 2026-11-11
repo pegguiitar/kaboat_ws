@@ -125,6 +125,7 @@ ros2 launch kaboat_hardware real_sensors.launch.py outdoor:=true rtk:=true \
 | `view_position` | `python3 scripts/view_position.py` | `/odom` x·y·선수각(동쪽 0°)·나침반 방위·속도·GNSS 상태(RTK Fixed 등) 실시간 한 줄 |
 | `run_boat_lidar` | `ros2 launch kaboat_hardware indoor_tank.launch.py enable_thrusters:=false enable_onboard_lidar:=true onboard_lidar_port:=$(_tg50_port)` | **실내 수조 전용** (야외에서 쓰지 않음) |
 | `cal_imu` | `ros2 run kaboat_hardware calibrate_indoor_imu` | 실내 수조 IMU 정지 보정 |
+| `test_avoid_outdoor` | `ros2 launch kaboat_hardware outdoor_avoid_test.launch.py` | 야외 회피 시험 `avoid_entry` → `avoid_end`, **조건이 맞으면 즉시 출발**. 5절 참고 |
 | `test_straight` / `test_circle` / `test_bspline` / `test_station` / `test_waypoint` / `test_los` / `test_avoid` | 각 `*_test.launch.py … wait_for_start:=false` | 단독 주행 시험, **실행 즉시 출발** ([TANK_TESTS_GUIDE.md](TANK_TESTS_GUIDE.md)) |
 
 ---
@@ -227,6 +228,25 @@ goto gate_entry thrust_ratio:=0.3 position_tolerance:=1.5
 - 노트북 `teleop`으로 수동 모드를 켜면 언제든 넘겨받습니다(수동을 끄면 아직 도착 전이면 다시 이어서 감). 비상 정지는 아래 안전 명령.
 - 목표가 `max_goal_distance`(기본 50 m)보다 멀면 `GOAL_TOO_FAR`로 멈춥니다(원점·좌표 실수 방지). 먼 지점이면 `max_goal_distance:=100`.
 - 기록 지점은 기록 당시 원점과 지금 원점이 다르면 시작을 거부합니다(`mission_manager`와 같은 규칙).
+
+**야외 회피 시험** (`test_avoid_outdoor`, 수조 `test_avoid`와 같은 DRI·B-spline·FSM)
+
+준비는 `goto`와 같고 `run_lidar`도 필요합니다. 지도(`occupancy_grid`)는 이 런치가 켭니다 —
+따로 켜 둔 것이 있으면 끄거나 `start_occupancy_grid:=false`.
+
+```bash
+goto avoid_entry max_goal_distance:=200          # 1) 시작점에 기록 선수각으로 세움 → REACHED 후 Ctrl+C
+test_avoid_outdoor drive_enabled:=false          # 2) 미리보기: RViz /real_avoid_test/path 에 경로
+test_avoid_outdoor                               # 3) 실제 주행: 출발 조건이 맞으면 바로 출발
+test_avoid_outdoor start_point:=gate_entry goal_point:=gate_end   # 다른 지점 쌍
+```
+
+- 출발 조건: 시작점에서 3 m(`start_tolerance`) 안, 선수가 목표 방향에서 45° 안. 안 맞으면
+  `ros2 topic echo /real_avoid_test/status`에 `start_blocked=…` 이유가 나옵니다.
+- 목표 2 m(`goal_tolerance`) 안이면 `FINISHED`로 정지. 경로에서 1.5 m(`max_cross_track_error`) 넘게
+  벗어나면 정지, 경로가 5초 넘게 없으면 후진 탈출(`allow_escape:=false`면 정지).
+- 계획은 지도(15 m) 안에서 목표 쪽으로 짧게 이어 가므로 목표가 멀어도 됩니다.
+- 기록 당시 원점과 지금 원점이 다르면 시작을 거부합니다.
 
 **원점·위치 확인**
 

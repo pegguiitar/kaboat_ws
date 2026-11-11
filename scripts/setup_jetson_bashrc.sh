@@ -115,6 +115,8 @@ alias test_station="ros2 launch kaboat_hardware station_keeping_test.launch.py w
 alias test_waypoint="ros2 launch kaboat_hardware waypoint_sequence_test.launch.py motion_enabled:=true thrust_ratio:=0.3 wait_for_start:=false"
 alias test_los="ros2 launch kaboat_hardware los_path_test.launch.py path_kind:=bspline motion_enabled:=true wait_for_start:=false"
 alias test_avoid="ros2 launch kaboat_hardware real_obstacle_avoid_test.launch.py drive_enabled:=true wait_for_start:=false"
+# 야외 회피 시험: rec 기록 avoid_entry → avoid_end (goto avoid_entry 로 세운 뒤. drive_enabled:=false 면 미리보기)
+alias test_avoid_outdoor="ros2 launch kaboat_hardware outdoor_avoid_test.launch.py"
 
 echo "🤖 [KABOAT Jetson] 환경 세팅 완료 (DOMAIN: $ROS_DOMAIN_ID | WS: ${KABOAT_WS:-미탐색})"
 echo "   - run_boat_lidar: 선체 TG-50 포함 센서/오도메트리 가동 (cal_imu 불필요, 즉시 /odom 생성)"
@@ -135,6 +137,7 @@ echo "   - test_station  : 정점 유지 DP 테스트 (출력 30%, 즉시 시작
 echo "   - test_waypoint : 5개 웨이포인트 순차 주행 (출력 30%, 즉시 시작)"
 echo "   - test_los      : LOS 경로 추종 테스트 (SOTA 직진 0.25·회전 0.31, 즉시 시작)"
 echo "   - test_avoid    : 실시간 장애물 회피 주행 (즉시 시작)"
+echo "   - test_avoid_outdoor : 야외 회피 avoid_entry → avoid_end (시작점 3 m·목표 방향 45° 안이면 즉시 출발)"
 echo "   - view_position : /odom x·y·선수각·나침반 방위·GNSS 상태 실시간 표시"
 echo "   - run_zenoh     : 노트북 모니터링 브리지 가동"
 echo "   - cb / sb       : 빌드 / 환경 리로드"
