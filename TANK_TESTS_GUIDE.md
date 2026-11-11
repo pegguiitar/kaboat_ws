@@ -34,7 +34,7 @@
 |---|---|---|
 | `cb` / `sb` | 빌드 / 환경 리로드 | 3 |
 | `run_zenoh` | Zenoh 브리지 (젯슨 쪽) | 3 |
-| `run_boat_lidar` | GQ7 + 실내 `/odom` + 선체 TG-50 (**포트 `/dev/ttyUSB0` 고정**) | 3 |
+| `run_boat_lidar` | GQ7 + 실내 `/odom` + 선체 TG-50 (포트 = CP2102 고정 경로, 없으면 `/dev/ttyUSB0`) | 3 |
 | `run_motor` | 모터 드라이버 (`/dev/ttyCH341USB0`, `allow_port_scan:=false`) | 4 |
 | `view_pitch` | 롤/피치 모니터링 | 3 |
 | `cal_imu` | IMU 정지 보정 (`use_lidar_yaw_truth: false`일 때만 필요) | 3 |

@@ -165,7 +165,7 @@ docker compose up -d
 |---|---|---|
 | **`cb`** / **`sb`** | `colcon build --symlink-install` / `source install/setup.bash` | 빌드 / 환경 리로드 |
 | **`run_zenoh`** | `python3 scripts/zenoh_monitor_link.py jetson` | 노트북 모니터링 브리지 |
-| **`run_boat_lidar`** | `ros2 launch kaboat_hardware indoor_tank.launch.py enable_thrusters:=false enable_onboard_lidar:=true onboard_lidar_port:=/dev/ttyUSB0` | GQ7·실내 `/odom`·선체 TG-50을 한 번에 실행. 외벽 라이다와 모터는 별도 |
+| **`run_boat_lidar`** | `ros2 launch kaboat_hardware indoor_tank.launch.py enable_thrusters:=false enable_onboard_lidar:=true onboard_lidar_port:=$(_tg50_port)` | GQ7·실내 `/odom`·선체 TG-50을 한 번에 실행. 외벽 라이다와 모터는 별도 |
 | **`run_motor`** | `ros2 launch kaboat_hardware thrusters.launch.py hardware_type:=serial port:=/dev/ttyCH341USB0 allow_port_scan:=false` | 아두이노(CH340) 모터 드라이버 |
 | **`run_points`** | `ros2 run kaboat_hardware point_recorder` | 미션 지점 기록기 (7-1절) |
 | **`rec [이름]`** / **`list_points`** | `python3 scripts/rec_point.py [이름]` / `--list` | 지금 위치 기록 / 기록한 지점 보기 |
@@ -181,8 +181,8 @@ docker compose up -d
 
 > `test_*` 단축어는 외부 시작 신호(`/start_mission`) 없이 **실행 즉시 출발**합니다. 출발 명령을 기다리게 하려면 `wait_for_start:=true`를 덧붙입니다.
 
-`run_boat_lidar`의 TG-50 포트는 `/dev/ttyUSB0`으로 고정돼 있으므로 젯슨에서 실제
-포트를 확인한 뒤 사용합니다. 선체 라이다 없이 시험할 때는
+`run_boat_lidar`·`run_lidar`의 TG-50 포트는 CP2102 고정 경로
+`/dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0`이고, 그 경로가 없으면 `/dev/ttyUSB0`을 씁니다. 선체 라이다 없이 시험할 때는
 `ros2 launch kaboat_hardware indoor_tank.launch.py enable_thrusters:=false`를 직접
 실행합니다. 센서 런처를 중복 실행하면 `/odom` 발행자가 둘이 되므로 한 번만 실행하세요.
 

@@ -38,7 +38,7 @@ source ~/.zshrc
 | 1 | 젯슨 터미널 1 | `run_zenoh` | 노트북과 연결 |
 | 2 | 노트북 | `set_kaboat` | `🚀 [Zenoh] … 연결 시도 중` |
 | 3 | 젯슨 터미널 2 | `run_gq7_outdoor` | `[gq7_local_odom] /odom 원점 = (…) [file …]` 로그 |
-| 4 | 젯슨 터미널 3 | `run_lidar` (= `ros2 launch kaboat_hardware onboard_lidar.launch.py port:=/dev/ttyUSB0`) | `/scan` (선체 TG-50, 실제 포트 확인) |
+| 4 | 젯슨 터미널 3 | `run_lidar` (= `ros2 launch kaboat_hardware onboard_lidar.launch.py port:=<CP2102 고정 경로>`) | `/scan` (선체 TG-50) |
 | 5 | 젯슨 터미널 4 | `run_motor` | 모터 드라이버 + GPS CSV 기록기 |
 | 6 | 젯슨 터미널 5 | `run_points` | 미션 지점 기록기 |
 | 7 | 노트북 | `view_lidar` (= `rviz2 -d …/scripts/remote_monitor.rviz`) | Fixed Frame `odom`, 장애물 지도·`/scan`·배 위치 |
@@ -114,7 +114,7 @@ ros2 launch kaboat_hardware real_sensors.launch.py outdoor:=true rtk:=true \
 | `run_zenoh` | `python3 scripts/zenoh_monitor_link.py jetson` | 노트북 모니터링 브리지 |
 | `run_gq7_outdoor` | `ros2 launch kaboat_hardware real_sensors.launch.py outdoor:=true` | 야외 GQ7. `gq7_outdoor.yaml` + `gq7_local_odom`(`/ekf/odometry_earth` → 원점 파일 기준 `/odom`) |
 | `run_gq7_rtk` | `real_sensors.launch.py outdoor:=true rtk:=true ntrip_username:=… ntrip_password:=…` | 야외 GQ7 + RTK 보정 + 필터 위치. 계정은 `~/.ntrip_account` |
-| `run_lidar` | `ros2 launch kaboat_hardware onboard_lidar.launch.py port:=/dev/ttyUSB0` | 야외 선체 TG-50 (`/scan`, `/scan/level`). GQ7 먼저 |
+| `run_lidar` | `ros2 launch kaboat_hardware onboard_lidar.launch.py port:=$(_tg50_port)` | 야외 선체 TG-50 (`/scan`, `/scan/level`). GQ7 먼저. 포트는 `/dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0`(없으면 `/dev/ttyUSB0`) |
 | `run_geo` | `ros2 launch kaboat_hardware geo_origin.launch.py` | GPS 원점 설정, 위도·경도 → x/y (`/geo/*`) |
 | `run_points` | `ros2 run kaboat_hardware point_recorder` | 미션 지점 기록기 |
 | `rec [이름]` | `python3 scripts/rec_point.py [이름]` | 지금 위치(x, y, 선수각) 기록. 이름 생략 시 `p1`, `p2` … |
@@ -123,7 +123,7 @@ ros2 launch kaboat_hardware real_sensors.launch.py outdoor:=true rtk:=true \
 | `run_motor` | `ros2 launch kaboat_hardware thrusters.launch.py hardware_type:=serial port:=/dev/ttyCH341USB0 allow_port_scan:=false` | 아두이노(CH340) 모터 드라이버 + `gps_mark_logger` |
 | `view_pitch` | `python3 scripts/view_roll_pitch.py` | 롤/피치와 스캔 차단 상태 |
 | `view_position` | `python3 scripts/view_position.py` | `/odom` x·y·선수각(동쪽 0°)·나침반 방위·속도·GNSS 상태(RTK Fixed 등) 실시간 한 줄 |
-| `run_boat_lidar` | `ros2 launch kaboat_hardware indoor_tank.launch.py enable_thrusters:=false enable_onboard_lidar:=true onboard_lidar_port:=/dev/ttyUSB0` | **실내 수조 전용** (야외에서 쓰지 않음) |
+| `run_boat_lidar` | `ros2 launch kaboat_hardware indoor_tank.launch.py enable_thrusters:=false enable_onboard_lidar:=true onboard_lidar_port:=$(_tg50_port)` | **실내 수조 전용** (야외에서 쓰지 않음) |
 | `cal_imu` | `ros2 run kaboat_hardware calibrate_indoor_imu` | 실내 수조 IMU 정지 보정 |
 | `test_straight` / `test_circle` / `test_bspline` / `test_station` / `test_waypoint` / `test_los` / `test_avoid` | 각 `*_test.launch.py … wait_for_start:=false` | 단독 주행 시험, **실행 즉시 출발** ([TANK_TESTS_GUIDE.md](TANK_TESTS_GUIDE.md)) |
 

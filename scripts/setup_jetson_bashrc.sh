@@ -49,8 +49,14 @@ export ROS_LOCALHOST_ONLY=0
 alias cb="colcon build --symlink-install"
 alias sb="[ -n \"$KABOAT_WS\" ] && source \"$KABOAT_WS/install/setup.bash\" && echo '🔄 install 환경 리로드 완료'"
 
+# 선체 TG-50 포트: CP2102 고정 경로 (다시 꽂아 ttyUSB 번호가 바뀌어도 그대로). 없으면 /dev/ttyUSB0
+_tg50_port() {
+    local p=/dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0
+    if [ -e "$p" ]; then echo "$p"; else echo /dev/ttyUSB0; fi
+}
+
 # 센서 / 오도메트리 실행
-alias run_boat_lidar="ros2 launch kaboat_hardware indoor_tank.launch.py enable_thrusters:=false enable_onboard_lidar:=true onboard_lidar_port:=/dev/ttyUSB0"
+alias run_boat_lidar='ros2 launch kaboat_hardware indoor_tank.launch.py enable_thrusters:=false enable_onboard_lidar:=true onboard_lidar_port:=$(_tg50_port)'
 
 # IMU 정지 보정
 alias cal_imu="ros2 run kaboat_hardware calibrate_indoor_imu"
@@ -58,7 +64,7 @@ alias cal_imu="ros2 run kaboat_hardware calibrate_indoor_imu"
 # 모터 제어기 실행 (아두이노 CH340: /dev/ttyCH341USB0)
 alias run_gq7_outdoor="ros2 launch kaboat_hardware real_sensors.launch.py outdoor:=true"
 # 야외 선체 TG-50 (/scan 항상, /scan/level 수평일 때만). GQ7 을 먼저 켤 것 (기울기 판단에 IMU 사용)
-alias run_lidar="ros2 launch kaboat_hardware onboard_lidar.launch.py port:=/dev/ttyUSB0"
+alias run_lidar='ros2 launch kaboat_hardware onboard_lidar.launch.py port:=$(_tg50_port)'
 # 야외 GQ7 + RTK. NTRIP 계정은 젯슨에만 둔다 (~/.ntrip_account 에 export NTRIP_USER=… NTRIP_PASS=…)
 [ -f ~/.ntrip_account ] && source ~/.ntrip_account
 run_gq7_rtk() {
@@ -114,7 +120,7 @@ echo "🤖 [KABOAT Jetson] 환경 세팅 완료 (DOMAIN: $ROS_DOMAIN_ID | WS: ${
 echo "   - run_boat_lidar: 선체 TG-50 포함 센서/오도메트리 가동 (cal_imu 불필요, 즉시 /odom 생성)"
 echo "   - run_gq7_outdoor : 야외 GQ7 (/odom 원점 = ~/kaboat_geo_origin.yaml, 필터 위치)"
 echo "   - run_gq7_rtk   : 야외 GQ7 + RTK 보정 (계정 ~/.ntrip_account)"
-echo "   - run_lidar     : 야외 선체 TG-50 라이다 (/dev/ttyUSB0, GQ7 먼저)"
+echo "   - run_lidar     : 야외 선체 TG-50 라이다 (CP2102 고정 경로, GQ7 먼저)"
 echo "   - run_geo       : GPS 원점 설정·위도경도→x/y 변환 (geo_origin)"
 echo "   - run_points    : 미션 지점 기록기 (~/kaboat_mission_points.json)"
 echo "   - rec 이름      : 지금 위치(x, y, 선수각) 기록 (이름 생략 시 p1, p2 …)"
