@@ -35,6 +35,10 @@ ARGS = [
     ('max_cross_track_error', '1.5', '경로에서 이보다 벗어나면 정지 [m]'),
     ('start_occupancy_grid', 'true', 'false = 이미 켠 occupancy_grid 를 씀'),
     ('grid_size', '15.0', '장애물 지도 한 변 [m]'),
+    ('cam_enabled', 'false', '카메라 층 (주황 붐 등 낮은 색 장애물) — d455.launch.py 필요'),
+    ('cam_height', '1.0', '흘수선에서 카메라 렌즈까지 [m] (실측값)'),
+    ('cam_mount_pitch_deg', '0.0', '카메라 숙임 [deg] (+ = 아래)'),
+    ('cam_white', 'false', '흰색(부표)도 카메라로 — 수면 반짝임 오탐 주의'),
     ('points_file', DEFAULT_POINTS_FILE, 'rec 기록 파일'),
     ('origin_file', DEFAULT_ORIGIN_FILE, 'GPS 원점 파일 (기록 당시 원점과 비교)'),
 ]
@@ -92,7 +96,12 @@ def _actions(context):
             name='occupancy_grid', output='screen',
             parameters=[{'resolution': 0.2,
                          'size': _float(get('grid_size'), 'grid_size'),
-                         'publish_rate': 10.0, 'use_sim_time': False}]))
+                         'publish_rate': 10.0, 'use_sim_time': False,
+                         'cam_enabled': _bool(get('cam_enabled'), 'cam_enabled'),
+                         'cam_height': _float(get('cam_height'), 'cam_height'),
+                         'cam_mount_pitch_deg': _float(get('cam_mount_pitch_deg'),
+                                                       'cam_mount_pitch_deg'),
+                         'cam_white': _bool(get('cam_white'), 'cam_white')}]))
     actions.append(Node(
         package='kaboat_hardware', executable='real_obstacle_avoid_test',
         name='real_obstacle_avoid_test', output='screen',

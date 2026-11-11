@@ -29,6 +29,7 @@ MONITOR_TOPICS = (
     '/tf',
     '/tf_static',
     '/occupancy_grid',
+    '/occupancy_grid/cam_points',   # 카메라 층이 고른 색 장애물 점 (cam_enabled, 작음)
     '/avoid/plan',
     '/avoid/cps',
     '/avoid/dri',

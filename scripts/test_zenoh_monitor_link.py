@@ -27,7 +27,8 @@ def test_gate_and_mission_monitoring_topics_reach_the_laptop():
     for topic in ('/gate/path', '/gate/pairs', '/gate/status',
                   '/gate/cmd_preview', '/avoid/plan', '/avoid/cps',
                   '/avoid/dri', '/tank_mission/status', '/mission/state',
-                  '/mission/goal', '/mission/entry_goal', '/occupancy_grid'):
+                  '/mission/goal', '/mission/entry_goal', '/occupancy_grid',
+                  '/occupancy_grid/cam_points'):
         assert topic in jetson_pub and topic in laptop_sub
 
 

@@ -248,6 +248,29 @@ test_avoid_outdoor start_point:=gate_entry goal_point:=gate_end   # 다른 지�
 - 계획은 지도(15 m) 안에서 목표 쪽으로 짧게 이어 가므로 목표가 멀어도 됩니다.
 - 기록 당시 원점과 지금 원점이 다르면 시작을 거부합니다.
 
+**카메라 층 — 라이다가 놓치는 낮은 색 장애물** (주황 붐 등, `occupancy_grid` 의 `cam_enabled`, 기본 끔)
+
+라이다 수평 한 면은 수면에 누운 주황 붐 위로 지나갑니다. 카메라 층은 컬러 영상에서
+주황·빨강 픽셀을 고르고 정렬 뎁스로 위치를 재(0.6~5 m), IMU 롤·피치로 수평 보정한 뒤
+수면 위(반사상 제외) 점만 지도에 따로 쌓습니다. 라이다가 지우지 못하고, 카메라가 그
+자리를 다시 보는데 없을 때만 사라집니다. 같은 칸이 4프레임(약 0.8초) 이어져야 회피
+대상(95)이 됩니다. 흰색은 수면 반짝임 오탐이 많아 기본 끔(`cam_white:=true`).
+
+```bash
+ros2 launch kaboat_bringup d455.launch.py                          # 젯슨: D455 (컬러 + 정렬 뎁스)
+ros2 run kaboat_perception occupancy_grid --ros-args \
+    -p cam_enabled:=true -p cam_height:=1.05                       # 흘수선→렌즈 실측값 (소수점 필수)
+test_avoid_outdoor cam_enabled:=true cam_height:=1.05             # 회피 시험에서 같이 켜기
+```
+
+- `cam_height` = 배가 물에 뜬 상태에서 흘수선부터 카메라 렌즈 중심까지 [m]. 숙여 달았으면
+  `cam_mount_pitch_deg`(+ = 아래). 선체 중심 기준 위치(뒤 0.33 m)는 도킹 실측값이 기본.
+- 노트북 `view_lidar`의 주황 점(`/occupancy_grid/cam_points`)이 카메라가 고른 점입니다. 붐 위에
+  모이는지, 수면에 점이 흩어지지 않는지 봅니다.
+- 색 기준·높이 하한은 `cam_orange_*`, `cam_white_*`, `cam_range_*` 파라미터.
+- 튜닝용 녹화 (영상이 커서 30초 안팎으로): `ros2 bag record -o boom_$(date +%H%M%S)
+  /camera/color/image_raw /camera/depth/image_raw /camera/camera_info /imu/data /odom /scan`
+
 **원점·위치 확인**
 
 ```bash

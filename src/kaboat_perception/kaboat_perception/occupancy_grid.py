@@ -1,7 +1,8 @@
 """occupancy_grid — 장애물 격자 지도 (상시 가동, ① 레이어)
 
 입력   /scan (sensor_msgs/LaserScan)                  — 주 소스
-       /camera/depth/points (sensor_msgs/PointCloud2) — 보조 융합 (z-band 필터)
+       /camera/color/image_raw + /camera/depth/image_raw (정렬 뎁스) + /camera/camera_info
+                                                      — 카메라 층 (cam_enabled, 색 장애물)
        /imu/data (sensor_msgs/Imu)                    — 기울기 게이팅
        /odom (nav_msgs/Odometry)                      — rolling window 중심
 출력   /occupancy_grid (nav_msgs/OccupancyGrid)
@@ -43,17 +44,14 @@ behavior 의 회피가 공유하는 지도를 만든다. v5 설계상 장애물 
   통째로 버린다(배가 기울면 2D LiDAR 가 수면/하늘을 훑을 수 있기 때문).
   실내 수조처럼 평형을 가정하는 시험은 이 게이트를 끌 수 있다.
 
-  뎁스캠(/camera/depth/points)은 LiDAR 를 대체하는 게 아니라 사각지대
-  보완용 — LiDAR 수평 한 평면이 놓치는 물체를 z-band(수면 위 cam_z_min~
-  cam_z_max) + 거리(CAM_RANGE_MIN~MAX) 필터로 걸러 같은 격자에
-  L_OCC_CAM 만큼 더한다. 자유공간 레이캐스팅은 안 함(점유 증거만 추가).
-  두 센서가 같은 셀을 같이 보면 log-odds 가 더 누적돼 더 확신 있는(짙은)
-  셀이 되는 식으로 자연히 "융합"된다 — 별도 융합 로직 없이 같은 누적
-  장부를 공유할 뿐. 프레임당 90만+ 포인트라 cam_stride 로 다운샘플한다.
-  거리 필터가 중요한 이유: sim 의 depth clip 이 0.1~100m 라 그 안은 전부
-  "유효값"으로 나오지만, 실물 D455 는 ≈0.6~6m 밖에서 부정확 — 안 거르면
-  카메라 근접 노이즈(배 자신의 구조물 포함)나 원거리 배경이 장애물로
-  오인된다 (wamv_kaboat.xacro 의 depth_camera 센서 주석 참고).
+  카메라 층(cam_enabled, 기본 끔): 라이다 수평 한 면이 놓치는 수면 위 낮은 물체
+  (주황 붐 등)를 컬러로 고르고 정렬 뎁스로 위치를 재 별도 배열 cam_grid 에 쌓는다
+  (camera_obstacles.py). 라이다 배열에 그냥 더하면 붐 위를 지나는 라이다 빔이 매
+  스캔 그 칸을 free 로 깎아 지워 버리므로 층을 나눴다. cam_grid 는 카메라가 지금
+  볼 수 있는 칸(시야·거리 안)에서만 색 점이 없을 때 감쇠하고, 시야 밖 칸은 그대로
+  둔다(옆으로 지나간 붐을 잊지 않게). 발행 확률 = max(라이다, 카메라).
+  한 프레임 오탐은 0.8(≈69) 이라 DRI 문턱 95 에 못 미치고, 같은 칸이 4프레임
+  (5 Hz 에서 0.8 s) 이어져야 장애물이 된다.
 
 TODO(팀):
   1) decay(노후 셀 확률의 점진적 감쇠) — 현재는 window 밖으로 나갈 때만
@@ -63,27 +61,28 @@ TODO(팀):
      가까울수록 더 신뢰해야 함). 정확도보단 단순함을 택한 skeleton 근사.
      -> 일단 실물 테스트에서 log odds ratio는 상수로 하고 정확도가 안나오면 다른 알고리즘 모색
 """
+import dataclasses
 import math
+import time
 
 import cv2
 import numpy as np
 import rclpy
+from message_filters import ApproximateTimeSynchronizer, Subscriber
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
-from sensor_msgs.msg import LaserScan, PointCloud2, Imu
+from sensor_msgs.msg import CameraInfo, Image, LaserScan, PointCloud2, Imu
 from nav_msgs.msg import Odometry, OccupancyGrid
+from std_msgs.msg import Header
 import sensor_msgs_py.point_cloud2 as pc2
+
+from kaboat_perception.camera_obstacles import (
+    CameraObstacleParams, color_image_rgb, depth_image_m, detect_points, visible_mask)
 
 L_OCC = 0.80              # 히트 셀 log-odds 증가량 (≈ logit(0.7))
 L_FREE = -0.6             # 경로(자유공간) 셀 log-odds 감소량 (≈ logit(0.4))
 # 둘 다 거리/빔각도 무관 고정값 — 진짜 inverse sensor model 이면 거리·빔중심
 # 이탈각의 함수여야 하는데, 그러면 복잡해지니 skeleton 은 상수로 근사 (TODO 2)
-L_OCC_CAM = 0.0            # 뎁스캠 히트 log-odds 증가량 — 실외 IR 뎁스는 LiDAR
-                           # 보다 신뢰도가 낮다고 보고 L_OCC(0.85)보다 약하게 잡음
-CAM_RANGE_MIN, CAM_RANGE_MAX = 0.6, 6.0  # 실물 D455 유효 뎁스 범위 [m]
-# sim 의 clip(0.1~100m)은 그 밖도 "유효값"으로 내보내지만(wamv_kaboat.xacro
-# 주석 참고) 실물은 그 범위 밖에서 부정확 — 여기서 걸러야 함 (안 그러면
-# 카메라 근접 노이즈/배 자신의 구조물, 원거리 오탐이 전부 장애물로 잡힘)
 L_MIN, L_MAX = -4.5, 4.35  # log-odds 클램프. 상한 4.35(≈5히트)면 포화 확률 ≈99 —
 # DRI 문턱 95 위로 free ~3.5스캔의 여유가 생겨 부표가 경계(95~97)에서 안 깜빡인다.
 # 상한을 올려도 유령엔 영향 없다: 3히트 해수면 유령(93)은 애초에 상한 근처에 못 가
@@ -104,6 +103,29 @@ def _roll_pitch(q):
     sinp = max(-1.0, min(1.0, 2.0 * (q.w * q.y - q.z * q.x)))
     pitch = math.asin(sinp)
     return roll, pitch
+
+
+def _shift(arr, dx: int, dy: int, fill):
+    """rolling window 를 (dx, dy) 셀 민다 — 새로 노출된 가장자리는 fill(unknown).
+
+    한 번에 window 를 통째로 벗어나면(텔레포트/리셋) 전체를 fill 로 초기화.
+    roll 은 정수 복사라 값 손실/보간 오차가 없다.
+    """
+    n_y, n_x = arr.shape
+    if abs(dx) >= n_x or abs(dy) >= n_y:
+        out = np.empty_like(arr)
+        out.fill(fill)
+        return out
+    out = np.roll(arr, (-dy, -dx), axis=(0, 1))
+    if dx > 0:
+        out[:, -dx:] = fill
+    elif dx < 0:
+        out[:, :-dx] = fill
+    if dy > 0:
+        out[-dy:, :] = fill
+    elif dy < 0:
+        out[:-dy, :] = fill
+    return out
 
 
 class OccupancyGridNode(Node):
@@ -133,10 +155,17 @@ class OccupancyGridNode(Node):
         # A/B 실측(파도 gain0.5, 45s): 노이즈 피크≥90 비율 78→14%, 수명 0.97→0.52s,
         # 부표 가시성 손실 없음. 성능도 최악조건 0.97→0.74ms/스캔으로 오히려 빨라짐
         # (np.add.at 산발 누적 → unique+인덱싱). False 로 두면 예전 중복 누적 방식.
-        self.declare_parameter('cam_stride', 1000)   # 뎁스 포인트 다운샘플 간격
-        self.declare_parameter('cam_height', 0.5)    # 카메라 장착 높이(수면 기준) [m]
-        self.declare_parameter('cam_z_min', 0.1)     # z-band 하한 — 수면 근처 제외 [m]
-        self.declare_parameter('cam_z_max', 2.0)     # z-band 상한 — 상부구조물/하늘 제외 [m]
+        # 카메라 층 (camera_obstacles.py) — 기본 끔. 켜려면 d455.launch.py 와 cam_height 실측.
+        self.declare_parameter('cam_enabled', False)
+        self.declare_parameter('cam_rate_hz', 5.0)       # 처리 상한 (카메라 15 fps 중 일부만)
+        self.declare_parameter('cam_min_points', 3)      # 한 프레임에 칸당 이만큼 색 점이 있어야 히트
+        self.declare_parameter('cam_l_occ', 0.8)         # 히트 log-odds (라이다 L_OCC 와 같게)
+        self.declare_parameter('cam_l_free', -0.4)       # 보이는데 색 점 없는 칸 감쇠
+        self.declare_parameter('cam_color_topic', '/camera/color/image_raw')
+        self.declare_parameter('cam_depth_topic', '/camera/depth/image_raw')
+        self.declare_parameter('cam_info_topic', '/camera/camera_info')
+        for field in dataclasses.fields(CameraObstacleParams):
+            self.declare_parameter(f'cam_{field.name}', field.default)
 
         self.resolution = float(self.get_parameter('resolution').value)
         self.size = float(self.get_parameter('size').value)
@@ -159,30 +188,48 @@ class OccupancyGridNode(Node):
         self.roll_min_rad = math.radians(self.roll_min_deg)
         self.roll_max_rad = math.radians(self.roll_max_deg)
         self.tilt_max = math.radians(self.tilt_threshold_deg)
-        self.cam_stride = int(self.get_parameter('cam_stride').value)
-        self.cam_height = float(self.get_parameter('cam_height').value)
-        self.cam_z_min = float(self.get_parameter('cam_z_min').value)
-        self.cam_z_max = float(self.get_parameter('cam_z_max').value)
+        self.cam_enabled = bool(self.get_parameter('cam_enabled').value)
+        self.cam_params = CameraObstacleParams(**{
+            f.name: type(f.default)(self.get_parameter(f'cam_{f.name}').value)
+            for f in dataclasses.fields(CameraObstacleParams)})
+        self.cam_period = 1.0 / float(self.get_parameter('cam_rate_hz').value)
+        self.cam_min_points = int(self.get_parameter('cam_min_points').value)
+        self.cam_l_occ = float(self.get_parameter('cam_l_occ').value)
+        self.cam_l_free = float(self.get_parameter('cam_l_free').value)
 
         self.odom = None
         self.tilted = False
+        self.roll_pitch = None          # 최근 IMU 롤·피치 [rad] — 카메라 수평 보정
+        self.cam_K = None               # (fx, fy, cx, cy)
+        self.cam_width = None
+        self.cam_last = 0.0
         # rolling grid — [iy, ix] 순서 (OccupancyGrid row-major 와 동일).
         # anchor = 배열 (0,0) 셀의 global 격자 인덱스 (ax, ay).
         self.anchor = None
         self.grid = np.zeros((self.cells, self.cells), dtype=np.float32)  # log-odds
         self.observed = np.zeros((self.cells, self.cells), dtype=bool)    # 관측 여부
+        self.cam_grid = np.zeros((self.cells, self.cells), dtype=np.float32)  # 카메라 층 log-odds ≥ 0
 
         self.create_subscription(
             LaserScan, '/scan', self._on_scan, qos_profile_sensor_data)
         self.create_subscription(Odometry, '/odom', self._on_odom, 10)
-        if self.enable_tilt_gate:
+        if self.enable_tilt_gate or self.cam_enabled:
             self.create_subscription(
                 Imu, '/imu/data', self._on_imu, qos_profile_sensor_data)
-        self.create_subscription(
-            PointCloud2, '/camera/depth/points', self._on_points,
-            qos_profile_sensor_data)
 
         self.pub = self.create_publisher(OccupancyGrid, '/occupancy_grid', 1)
+        self.cam_points_pub = None
+        if self.cam_enabled:
+            g = lambda n: str(self.get_parameter(n).value)
+            self.create_subscription(CameraInfo, g('cam_info_topic'), self._on_cam_info, 1)
+            self._cam_subs = (
+                Subscriber(self, Image, g('cam_color_topic'), qos_profile=qos_profile_sensor_data),
+                Subscriber(self, Image, g('cam_depth_topic'), qos_profile=qos_profile_sensor_data))
+            self._cam_sync = ApproximateTimeSynchronizer(self._cam_subs, 5, 0.05)
+            self._cam_sync.registerCallback(self._on_camera)
+            # 디버그: 카메라가 고른 색 장애물 점 (odom, z = 수면 위 높이). 구독자 있을 때만
+            self.cam_points_pub = self.create_publisher(
+                PointCloud2, '/occupancy_grid/cam_points', 1)
         self.create_timer(1.0 / rate, self._publish)
 
         self.get_logger().info(
@@ -190,12 +237,21 @@ class OccupancyGridNode(Node):
             f'→ /occupancy_grid (기울기 차단: {self.enable_tilt_gate}, '
             f'pitch=[{self.pitch_min_deg:.1f}°, {self.pitch_max_deg:.1f}°], '
             f'roll=[{self.roll_min_deg:.1f}°, {self.roll_max_deg:.1f}°])')
+        if self.cam_enabled:
+            c = self.cam_params
+            colors = [n for n in ('orange', 'white') if getattr(c, n)]
+            self.get_logger().info(
+                f'카메라 층 켜짐 — 색 {colors}, 카메라 수면 위 {c.height:.2f} m, '
+                f'선체 중심 기준 ({c.offset_x:+.2f}, {c.offset_y:+.2f}) m, 숙임 '
+                f'{c.mount_pitch_deg:.1f}°, 거리 {c.range_min:.1f}~{c.range_max:.1f} m, '
+                f'{1.0 / self.cam_period:.0f} Hz')
 
     def _on_odom(self, msg: Odometry):
         self.odom = msg
 
     def _on_imu(self, msg: Imu):
         roll, pitch = _roll_pitch(msg.orientation)
+        self.roll_pitch = (roll, pitch)
         self.tilted = not (self.pitch_min_rad <= pitch <= self.pitch_max_rad) or \
                       not (self.roll_min_rad <= roll <= self.roll_max_rad)
 
@@ -221,26 +277,9 @@ class OccupancyGridNode(Node):
         dy = ay - self.anchor[1]
         if dx == 0 and dy == 0:
             return
-        if abs(dx) >= self.cells or abs(dy) >= self.cells:
-            # 한 번에 window 를 통째로 벗어남 (텔레포트/리셋) — 전체 초기화
-            self.grid.fill(0.0)
-            self.observed.fill(False)
-        else:
-            self.grid = np.roll(self.grid, (-dy, -dx), axis=(0, 1))
-            self.observed = np.roll(self.observed, (-dy, -dx), axis=(0, 1))
-            # roll 은 반대편으로 감아 돌므로, 새로 노출된 가장자리를 unknown 으로
-            if dx > 0:
-                self.grid[:, -dx:] = 0.0
-                self.observed[:, -dx:] = False
-            elif dx < 0:
-                self.grid[:, :-dx] = 0.0
-                self.observed[:, :-dx] = False
-            if dy > 0:
-                self.grid[-dy:, :] = 0.0
-                self.observed[-dy:, :] = False
-            elif dy < 0:
-                self.grid[:-dy, :] = 0.0
-                self.observed[:-dy, :] = False
+        self.grid = _shift(self.grid, dx, dy, 0.0)
+        self.observed = _shift(self.observed, dx, dy, False)
+        self.cam_grid = _shift(self.cam_grid, dx, dy, 0.0)
         self.anchor = (ax, ay)
 
     def _on_scan(self, msg: LaserScan):
@@ -305,46 +344,59 @@ class OccupancyGridNode(Node):
         self.observed[hy, hx] = True
     # log odds 갱신을 위해 log likelihood ratio를 one-step마다 더해서 갱신
 
-    def _on_points(self, msg: PointCloud2):
-        """뎁스캠으로 LiDAR 사각지대 보완 — 점유 증거만 더함(자유공간 갱신 없음)."""
-        if self.odom is None or (self.enable_tilt_gate and self.tilted):
+    def _on_cam_info(self, msg: CameraInfo):
+        k = msg.k
+        if k[0] > 0.0 and k[4] > 0.0:
+            self.cam_K = (float(k[0]), float(k[4]), float(k[2]), float(k[5]))
+            self.cam_width = int(msg.width)
+
+    def _on_camera(self, color: Image, depth: Image):
+        """컬러 + 정렬 뎁스 → 색 장애물 칸을 카메라 층에 (camera_obstacles.py)."""
+        now = time.monotonic()
+        if now - self.cam_last < self.cam_period:
             return
-
-        pts = pc2.read_points_numpy(msg, field_names=('x', 'y', 'z'), skip_nans=True)
-        if pts.shape[0] == 0:
+        if (self.odom is None or self.cam_K is None or self.roll_pitch is None
+                or (self.enable_tilt_gate and self.tilted)):
             return
-        pts = pts[::self.cam_stride]  # 프레임당 90만+ 포인트 — 다운샘플 필수
-
-        # 카메라 광학 프레임(REP103: X우측,Y아래,Z전방) → 보트 로컬(전방,좌측,높이)
-        # 카메라도 base_link 와 동일 위치/자세로 가정(TF 미사용, LiDAR 쪽과 동일 단순화)
-        lx, ly, up = pts[:, 2], -pts[:, 0], -pts[:, 1]
-
-        # sim 의 clip(0.1~100m)은 실물 유효범위 밖도 유효값으로 내보내므로
-        # 거리(CAM_RANGE)와 z-band 를 여기서 같이 걸러야 함 — 안 그러면 배
-        # 자신의 구조물(근접)이나 원거리 배경(오탐)이 장애물로 잡힘
-        in_range = (lx > CAM_RANGE_MIN) & (lx < CAM_RANGE_MAX)
-        world_z = self.cam_height + up
-        band = in_range & (world_z > self.cam_z_min) & (world_z < self.cam_z_max)
-        lx, ly = lx[band], ly[band]
-        if lx.shape[0] == 0:
+        self.cam_last = now
+        try:
+            pts, _ = detect_points(color_image_rgb(color), depth_image_m(depth), self.cam_K,
+                                   self.cam_params, *self.roll_pitch)
+        except ValueError as exc:
+            self.get_logger().warn(f'카메라 프레임 건너뜀: {exc}', throttle_duration_sec=5.0)
             return
+        self._add_camera_points(pts)
 
+    def _add_camera_points(self, pts):
+        """수평 프레임 점(앞, 왼, 높이) → 월드 칸. 칸당 cam_min_points 이상이면 히트,
+        카메라가 볼 수 있는데 히트가 없는 칸은 감쇠한다."""
         self._recenter()
-        bx = self.odom.pose.pose.position.x
-        by = self.odom.pose.pose.position.y
-        yaw = _yaw(self.odom.pose.pose.orientation)
-        cos_y, sin_y = math.cos(yaw), math.sin(yaw)
-        wx = bx + lx * cos_y - ly * sin_y
-        wy = by + lx * sin_y + ly * cos_y
-
-        gx = np.floor(wx / self.resolution).astype(np.int64) - self.anchor[0]
-        gy = np.floor(wy / self.resolution).astype(np.int64) - self.anchor[1]
-        m = (gx >= 0) & (gx < self.cells) & (gy >= 0) & (gy < self.cells)
-        if not m.any():
-            return
-        np.add.at(self.grid, (gy[m], gx[m]), L_OCC_CAM)  # 중복 셀도 누적
-        np.clip(self.grid, L_MIN, L_MAX, out=self.grid)
-        self.observed[gy[m], gx[m]] = True
+        pose = self.odom.pose.pose
+        bx, by = pose.position.x, pose.position.y
+        yaw = _yaw(pose.orientation)
+        c, s = math.cos(yaw), math.sin(yaw)
+        wx = bx + pts[:, 0] * c - pts[:, 1] * s
+        wy = by + pts[:, 0] * s + pts[:, 1] * c
+        ax, ay = self.anchor
+        n = self.cells
+        gx = np.floor(wx / self.resolution).astype(np.int64) - ax
+        gy = np.floor(wy / self.resolution).astype(np.int64) - ay
+        inside = (gx >= 0) & (gx < n) & (gy >= 0) & (gy < n)
+        hit = np.zeros((n, n), dtype=bool)
+        if inside.any():
+            flat, counts = np.unique(gy[inside] * n + gx[inside], return_counts=True)
+            flat = flat[counts >= self.cam_min_points]
+            hit[flat // n, flat % n] = True
+        centers = (np.arange(n) + ax + 0.5) * self.resolution, (np.arange(n) + ay + 0.5) * self.resolution
+        cx_w, cy_w = np.meshgrid(centers[0], centers[1])     # [iy, ix]
+        seen = visible_mask(cx_w, cy_w, bx, by, yaw, self.cam_K, self.cam_width, self.cam_params)
+        self.cam_grid[seen & ~hit] += self.cam_l_free
+        self.cam_grid[hit] += self.cam_l_occ
+        np.clip(self.cam_grid, 0.0, L_MAX, out=self.cam_grid)
+        if self.cam_points_pub is not None and self.cam_points_pub.get_subscription_count() > 0:
+            cloud = np.stack([wx, wy, pts[:, 2]], axis=1).astype(np.float32)[:3000]
+            header = Header(stamp=self.odom.header.stamp, frame_id='odom')
+            self.cam_points_pub.publish(pc2.create_cloud_xyz32(header, cloud))
 
     def _publish(self):
         grid = OccupancyGrid()
@@ -367,7 +419,12 @@ class OccupancyGridNode(Node):
         grid.info.origin.position.y = self.anchor[1] * self.resolution
 
         p = 1.0 / (1.0 + np.exp(-self.grid))
-        data = np.where(self.observed, np.rint(p * 100.0), -1.0)
+        observed = self.observed
+        if self.cam_enabled:
+            cam = self.cam_grid > 0.0
+            p = np.where(cam, np.maximum(p, 1.0 / (1.0 + np.exp(-self.cam_grid))), p)
+            observed = observed | cam
+        data = np.where(observed, np.rint(p * 100.0), -1.0)
 
         grid.data = data.astype(np.int8).ravel().tolist()
         self.pub.publish(grid)

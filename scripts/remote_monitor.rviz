@@ -34,6 +34,24 @@ Visualization Manager:
         Value: /occupancy_grid
       Value: true
     - Class: rviz_default_plugins/PointCloud2
+      Name: "카메라 색 장애물 /occupancy_grid/cam_points"
+      Enabled: true
+      Alpha: 1.0
+      Color: 255; 170; 0
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Position Transformer: XYZ
+      Size (Pixels): 6
+      Style: Points
+      Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /occupancy_grid/cam_points
+      Use Fixed Frame: true
+      Value: true
+    - Class: rviz_default_plugins/PointCloud2
       Name: "선체 라이다 바닥면 /scan/flat"
       Enabled: true
       Alpha: 0.9
