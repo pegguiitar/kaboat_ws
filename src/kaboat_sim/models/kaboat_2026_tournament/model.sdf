@@ -1,0 +1,1174 @@
+<?xml version="1.0" ?>
+<sdf version="1.7">
+  <model name="kaboat_2026_tournament">
+    <static>true</static>
+
+    <!-- =====================================================================
+         ⚠ 이 파일은 scripts/gen_tournament_course.py 가 찍어낸다.
+           손으로 고치지 말고 스크립트의 치수/BOOMS 를 고쳐 다시 돌릴 것.
+
+         현장 사진 기준 토너먼트 경기장.
+         경계 사각형 20.0 × 15.0 m, 모델 원점 = 좌하단 꼭짓점,
+         +x = 긴 방향, +y = 짧은 방향.
+         진입 0.0, 7.5 → 목적지 18.8, 11.0 (모델 좌표).
+         world 좌표로 쓰려면 perception_task.sdf 의 include pose 를 더할 것.
+
+         구성: 빨간 기둥 4개 / 노란 경계 구슬 84개 (visual 전용)
+                 붐 세그먼트 7벌 / 홀로 뜬 흰 부표 4개
+    ===================================================================== -->
+
+    <link name="corner_posts">
+      <collision name="post_sw_collision">
+        <pose>0.0 0.0 0.100 0 0 0</pose>
+        <geometry><box><size>0.35 0.35 1.2</size></box></geometry>
+      </collision>
+      <visual name="post_sw_visual">
+        <pose>0.0 0.0 0.100 0 0 0</pose>
+        <geometry><box><size>0.35 0.35 1.2</size></box></geometry>
+        <material>
+          <ambient>0.9 0.1 0.1 1.0</ambient>
+          <diffuse>0.9 0.1 0.1 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <collision name="post_se_collision">
+        <pose>20.0 0.0 0.100 0 0 0</pose>
+        <geometry><box><size>0.35 0.35 1.2</size></box></geometry>
+      </collision>
+      <visual name="post_se_visual">
+        <pose>20.0 0.0 0.100 0 0 0</pose>
+        <geometry><box><size>0.35 0.35 1.2</size></box></geometry>
+        <material>
+          <ambient>0.9 0.1 0.1 1.0</ambient>
+          <diffuse>0.9 0.1 0.1 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <collision name="post_ne_collision">
+        <pose>20.0 15.0 0.100 0 0 0</pose>
+        <geometry><box><size>0.35 0.35 1.2</size></box></geometry>
+      </collision>
+      <visual name="post_ne_visual">
+        <pose>20.0 15.0 0.100 0 0 0</pose>
+        <geometry><box><size>0.35 0.35 1.2</size></box></geometry>
+        <material>
+          <ambient>0.9 0.1 0.1 1.0</ambient>
+          <diffuse>0.9 0.1 0.1 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <collision name="post_nw_collision">
+        <pose>0.0 15.0 0.100 0 0 0</pose>
+        <geometry><box><size>0.35 0.35 1.2</size></box></geometry>
+      </collision>
+      <visual name="post_nw_visual">
+        <pose>0.0 15.0 0.100 0 0 0</pose>
+        <geometry><box><size>0.35 0.35 1.2</size></box></geometry>
+        <material>
+          <ambient>0.9 0.1 0.1 1.0</ambient>
+          <diffuse>0.9 0.1 0.1 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+    </link>
+
+    <link name="boundary_rope">
+      <visual name="bead_0_visual">
+        <pose>0.800 0.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_1_visual">
+        <pose>1.600 0.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_2_visual">
+        <pose>2.400 0.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_3_visual">
+        <pose>3.200 0.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_4_visual">
+        <pose>4.000 0.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_5_visual">
+        <pose>4.800 0.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_6_visual">
+        <pose>5.600 0.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_7_visual">
+        <pose>6.400 0.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_8_visual">
+        <pose>7.200 0.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_9_visual">
+        <pose>8.000 0.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_10_visual">
+        <pose>8.800 0.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_11_visual">
+        <pose>9.600 0.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_12_visual">
+        <pose>10.400 0.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_13_visual">
+        <pose>11.200 0.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_14_visual">
+        <pose>12.000 0.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_15_visual">
+        <pose>12.800 0.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_16_visual">
+        <pose>13.600 0.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_17_visual">
+        <pose>14.400 0.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_18_visual">
+        <pose>15.200 0.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_19_visual">
+        <pose>16.000 0.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_20_visual">
+        <pose>16.800 0.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_21_visual">
+        <pose>17.600 0.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_22_visual">
+        <pose>18.400 0.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_23_visual">
+        <pose>19.200 0.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_24_visual">
+        <pose>20.000 0.789 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_25_visual">
+        <pose>20.000 1.579 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_26_visual">
+        <pose>20.000 2.368 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_27_visual">
+        <pose>20.000 3.158 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_28_visual">
+        <pose>20.000 3.947 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_29_visual">
+        <pose>20.000 4.737 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_30_visual">
+        <pose>20.000 5.526 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_31_visual">
+        <pose>20.000 6.316 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_32_visual">
+        <pose>20.000 7.105 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_33_visual">
+        <pose>20.000 7.895 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_34_visual">
+        <pose>20.000 8.684 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_35_visual">
+        <pose>20.000 9.474 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_36_visual">
+        <pose>20.000 10.263 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_37_visual">
+        <pose>20.000 11.053 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_38_visual">
+        <pose>20.000 11.842 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_39_visual">
+        <pose>20.000 12.632 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_40_visual">
+        <pose>20.000 13.421 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_41_visual">
+        <pose>20.000 14.211 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_42_visual">
+        <pose>19.200 15.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_43_visual">
+        <pose>18.400 15.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_44_visual">
+        <pose>17.600 15.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_45_visual">
+        <pose>16.800 15.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_46_visual">
+        <pose>16.000 15.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_47_visual">
+        <pose>15.200 15.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_48_visual">
+        <pose>14.400 15.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_49_visual">
+        <pose>13.600 15.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_50_visual">
+        <pose>12.800 15.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_51_visual">
+        <pose>12.000 15.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_52_visual">
+        <pose>11.200 15.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_53_visual">
+        <pose>10.400 15.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_54_visual">
+        <pose>9.600 15.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_55_visual">
+        <pose>8.800 15.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_56_visual">
+        <pose>8.000 15.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_57_visual">
+        <pose>7.200 15.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_58_visual">
+        <pose>6.400 15.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_59_visual">
+        <pose>5.600 15.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_60_visual">
+        <pose>4.800 15.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_61_visual">
+        <pose>4.000 15.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_62_visual">
+        <pose>3.200 15.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_63_visual">
+        <pose>2.400 15.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_64_visual">
+        <pose>1.600 15.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_65_visual">
+        <pose>0.800 15.000 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_66_visual">
+        <pose>0.000 14.211 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_67_visual">
+        <pose>0.000 13.421 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_68_visual">
+        <pose>0.000 12.632 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_69_visual">
+        <pose>0.000 11.842 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_70_visual">
+        <pose>0.000 11.053 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_71_visual">
+        <pose>0.000 10.263 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_72_visual">
+        <pose>0.000 9.474 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_73_visual">
+        <pose>0.000 8.684 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_74_visual">
+        <pose>0.000 7.895 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_75_visual">
+        <pose>0.000 7.105 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_76_visual">
+        <pose>0.000 6.316 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_77_visual">
+        <pose>0.000 5.526 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_78_visual">
+        <pose>0.000 4.737 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_79_visual">
+        <pose>0.000 3.947 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_80_visual">
+        <pose>0.000 3.158 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_81_visual">
+        <pose>0.000 2.368 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_82_visual">
+        <pose>0.000 1.579 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <visual name="bead_83_visual">
+        <pose>0.000 0.789 0.02 0 0 0</pose>
+        <geometry><sphere><radius>0.09</radius></sphere></geometry>
+        <material>
+          <ambient>0.95 0.75 0.15 1.0</ambient>
+          <diffuse>0.95 0.75 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+    </link>
+
+    <link name="booms">
+      <collision name="boom0_bar_collision">
+        <pose>4.000 10.000 0.13 0 1.570796 0.000000</pose>
+        <geometry><cylinder><radius>0.14</radius><length>2.5</length></cylinder></geometry>
+      </collision>
+      <visual name="boom0_bar_visual">
+        <pose>4.000 10.000 0.13 0 1.570796 0.000000</pose>
+        <geometry><cylinder><radius>0.14</radius><length>2.5</length></cylinder></geometry>
+        <material>
+          <ambient>1.0 0.3 0.05 1.0</ambient>
+          <diffuse>1.0 0.3 0.05 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <collision name="boom0_float_a_collision">
+        <pose>2.295 10.000 0.1 0 1.570796 0.000000</pose>
+        <geometry><capsule><radius>0.4</radius><length>0.55</length></capsule></geometry>
+      </collision>
+      <visual name="boom0_float_a_visual">
+        <pose>2.295 10.000 0.1 0 1.570796 0.000000</pose>
+        <geometry><capsule><radius>0.4</radius><length>0.55</length></capsule></geometry>
+        <material>
+          <ambient>0.95 0.95 0.95 1.0</ambient>
+          <diffuse>0.95 0.95 0.95 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <collision name="boom0_float_b_collision">
+        <pose>5.705 10.000 0.1 0 1.570796 0.000000</pose>
+        <geometry><capsule><radius>0.4</radius><length>0.55</length></capsule></geometry>
+      </collision>
+      <visual name="boom0_float_b_visual">
+        <pose>5.705 10.000 0.1 0 1.570796 0.000000</pose>
+        <geometry><capsule><radius>0.4</radius><length>0.55</length></capsule></geometry>
+        <material>
+          <ambient>0.95 0.95 0.95 1.0</ambient>
+          <diffuse>0.95 0.95 0.95 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <collision name="boom1_bar_collision">
+        <pose>4.500 4.500 0.13 0 1.570796 0.000000</pose>
+        <geometry><cylinder><radius>0.14</radius><length>2.5</length></cylinder></geometry>
+      </collision>
+      <visual name="boom1_bar_visual">
+        <pose>4.500 4.500 0.13 0 1.570796 0.000000</pose>
+        <geometry><cylinder><radius>0.14</radius><length>2.5</length></cylinder></geometry>
+        <material>
+          <ambient>1.0 0.3 0.05 1.0</ambient>
+          <diffuse>1.0 0.3 0.05 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <collision name="boom1_float_a_collision">
+        <pose>2.795 4.500 0.1 0 1.570796 0.000000</pose>
+        <geometry><capsule><radius>0.4</radius><length>0.55</length></capsule></geometry>
+      </collision>
+      <visual name="boom1_float_a_visual">
+        <pose>2.795 4.500 0.1 0 1.570796 0.000000</pose>
+        <geometry><capsule><radius>0.4</radius><length>0.55</length></capsule></geometry>
+        <material>
+          <ambient>0.95 0.95 0.95 1.0</ambient>
+          <diffuse>0.95 0.95 0.95 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <collision name="boom1_float_b_collision">
+        <pose>6.205 4.500 0.1 0 1.570796 0.000000</pose>
+        <geometry><capsule><radius>0.4</radius><length>0.55</length></capsule></geometry>
+      </collision>
+      <visual name="boom1_float_b_visual">
+        <pose>6.205 4.500 0.1 0 1.570796 0.000000</pose>
+        <geometry><capsule><radius>0.4</radius><length>0.55</length></capsule></geometry>
+        <material>
+          <ambient>0.95 0.95 0.95 1.0</ambient>
+          <diffuse>0.95 0.95 0.95 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <collision name="boom2_bar_collision">
+        <pose>8.500 7.500 0.13 0 1.570796 0.000000</pose>
+        <geometry><cylinder><radius>0.14</radius><length>2.5</length></cylinder></geometry>
+      </collision>
+      <visual name="boom2_bar_visual">
+        <pose>8.500 7.500 0.13 0 1.570796 0.000000</pose>
+        <geometry><cylinder><radius>0.14</radius><length>2.5</length></cylinder></geometry>
+        <material>
+          <ambient>1.0 0.3 0.05 1.0</ambient>
+          <diffuse>1.0 0.3 0.05 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <collision name="boom2_float_a_collision">
+        <pose>6.795 7.500 0.1 0 1.570796 0.000000</pose>
+        <geometry><capsule><radius>0.4</radius><length>0.55</length></capsule></geometry>
+      </collision>
+      <visual name="boom2_float_a_visual">
+        <pose>6.795 7.500 0.1 0 1.570796 0.000000</pose>
+        <geometry><capsule><radius>0.4</radius><length>0.55</length></capsule></geometry>
+        <material>
+          <ambient>0.95 0.95 0.95 1.0</ambient>
+          <diffuse>0.95 0.95 0.95 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <collision name="boom2_float_b_collision">
+        <pose>10.205 7.500 0.1 0 1.570796 0.000000</pose>
+        <geometry><capsule><radius>0.4</radius><length>0.55</length></capsule></geometry>
+      </collision>
+      <visual name="boom2_float_b_visual">
+        <pose>10.205 7.500 0.1 0 1.570796 0.000000</pose>
+        <geometry><capsule><radius>0.4</radius><length>0.55</length></capsule></geometry>
+        <material>
+          <ambient>0.95 0.95 0.95 1.0</ambient>
+          <diffuse>0.95 0.95 0.95 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <collision name="boom3_bar_collision">
+        <pose>9.000 12.500 0.13 0 1.570796 0.000000</pose>
+        <geometry><cylinder><radius>0.14</radius><length>2.0</length></cylinder></geometry>
+      </collision>
+      <visual name="boom3_bar_visual">
+        <pose>9.000 12.500 0.13 0 1.570796 0.000000</pose>
+        <geometry><cylinder><radius>0.14</radius><length>2.0</length></cylinder></geometry>
+        <material>
+          <ambient>1.0 0.3 0.05 1.0</ambient>
+          <diffuse>1.0 0.3 0.05 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <collision name="boom3_float_a_collision">
+        <pose>7.545 12.500 0.1 0 1.570796 0.000000</pose>
+        <geometry><capsule><radius>0.4</radius><length>0.55</length></capsule></geometry>
+      </collision>
+      <visual name="boom3_float_a_visual">
+        <pose>7.545 12.500 0.1 0 1.570796 0.000000</pose>
+        <geometry><capsule><radius>0.4</radius><length>0.55</length></capsule></geometry>
+        <material>
+          <ambient>0.95 0.95 0.95 1.0</ambient>
+          <diffuse>0.95 0.95 0.95 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <collision name="boom3_float_b_collision">
+        <pose>10.455 12.500 0.1 0 1.570796 0.000000</pose>
+        <geometry><capsule><radius>0.4</radius><length>0.55</length></capsule></geometry>
+      </collision>
+      <visual name="boom3_float_b_visual">
+        <pose>10.455 12.500 0.1 0 1.570796 0.000000</pose>
+        <geometry><capsule><radius>0.4</radius><length>0.55</length></capsule></geometry>
+        <material>
+          <ambient>0.95 0.95 0.95 1.0</ambient>
+          <diffuse>0.95 0.95 0.95 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <collision name="boom4_bar_collision">
+        <pose>13.000 4.000 0.13 0 1.570796 0.000000</pose>
+        <geometry><cylinder><radius>0.14</radius><length>2.5</length></cylinder></geometry>
+      </collision>
+      <visual name="boom4_bar_visual">
+        <pose>13.000 4.000 0.13 0 1.570796 0.000000</pose>
+        <geometry><cylinder><radius>0.14</radius><length>2.5</length></cylinder></geometry>
+        <material>
+          <ambient>1.0 0.3 0.05 1.0</ambient>
+          <diffuse>1.0 0.3 0.05 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <collision name="boom4_float_a_collision">
+        <pose>11.295 4.000 0.1 0 1.570796 0.000000</pose>
+        <geometry><capsule><radius>0.4</radius><length>0.55</length></capsule></geometry>
+      </collision>
+      <visual name="boom4_float_a_visual">
+        <pose>11.295 4.000 0.1 0 1.570796 0.000000</pose>
+        <geometry><capsule><radius>0.4</radius><length>0.55</length></capsule></geometry>
+        <material>
+          <ambient>0.95 0.95 0.95 1.0</ambient>
+          <diffuse>0.95 0.95 0.95 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <collision name="boom4_float_b_collision">
+        <pose>14.705 4.000 0.1 0 1.570796 0.000000</pose>
+        <geometry><capsule><radius>0.4</radius><length>0.55</length></capsule></geometry>
+      </collision>
+      <visual name="boom4_float_b_visual">
+        <pose>14.705 4.000 0.1 0 1.570796 0.000000</pose>
+        <geometry><capsule><radius>0.4</radius><length>0.55</length></capsule></geometry>
+        <material>
+          <ambient>0.95 0.95 0.95 1.0</ambient>
+          <diffuse>0.95 0.95 0.95 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <collision name="boom5_bar_collision">
+        <pose>13.500 10.500 0.13 0 1.570796 0.000000</pose>
+        <geometry><cylinder><radius>0.14</radius><length>2.5</length></cylinder></geometry>
+      </collision>
+      <visual name="boom5_bar_visual">
+        <pose>13.500 10.500 0.13 0 1.570796 0.000000</pose>
+        <geometry><cylinder><radius>0.14</radius><length>2.5</length></cylinder></geometry>
+        <material>
+          <ambient>1.0 0.3 0.05 1.0</ambient>
+          <diffuse>1.0 0.3 0.05 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <collision name="boom5_float_a_collision">
+        <pose>11.795 10.500 0.1 0 1.570796 0.000000</pose>
+        <geometry><capsule><radius>0.4</radius><length>0.55</length></capsule></geometry>
+      </collision>
+      <visual name="boom5_float_a_visual">
+        <pose>11.795 10.500 0.1 0 1.570796 0.000000</pose>
+        <geometry><capsule><radius>0.4</radius><length>0.55</length></capsule></geometry>
+        <material>
+          <ambient>0.95 0.95 0.95 1.0</ambient>
+          <diffuse>0.95 0.95 0.95 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <collision name="boom5_float_b_collision">
+        <pose>15.205 10.500 0.1 0 1.570796 0.000000</pose>
+        <geometry><capsule><radius>0.4</radius><length>0.55</length></capsule></geometry>
+      </collision>
+      <visual name="boom5_float_b_visual">
+        <pose>15.205 10.500 0.1 0 1.570796 0.000000</pose>
+        <geometry><capsule><radius>0.4</radius><length>0.55</length></capsule></geometry>
+        <material>
+          <ambient>0.95 0.95 0.95 1.0</ambient>
+          <diffuse>0.95 0.95 0.95 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <collision name="boom6_bar_collision">
+        <pose>17.000 7.000 0.13 0 1.570796 0.000000</pose>
+        <geometry><cylinder><radius>0.14</radius><length>2.0</length></cylinder></geometry>
+      </collision>
+      <visual name="boom6_bar_visual">
+        <pose>17.000 7.000 0.13 0 1.570796 0.000000</pose>
+        <geometry><cylinder><radius>0.14</radius><length>2.0</length></cylinder></geometry>
+        <material>
+          <ambient>1.0 0.3 0.05 1.0</ambient>
+          <diffuse>1.0 0.3 0.05 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <collision name="boom6_float_a_collision">
+        <pose>15.545 7.000 0.1 0 1.570796 0.000000</pose>
+        <geometry><capsule><radius>0.4</radius><length>0.55</length></capsule></geometry>
+      </collision>
+      <visual name="boom6_float_a_visual">
+        <pose>15.545 7.000 0.1 0 1.570796 0.000000</pose>
+        <geometry><capsule><radius>0.4</radius><length>0.55</length></capsule></geometry>
+        <material>
+          <ambient>0.95 0.95 0.95 1.0</ambient>
+          <diffuse>0.95 0.95 0.95 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <collision name="boom6_float_b_collision">
+        <pose>18.455 7.000 0.1 0 1.570796 0.000000</pose>
+        <geometry><capsule><radius>0.4</radius><length>0.55</length></capsule></geometry>
+      </collision>
+      <visual name="boom6_float_b_visual">
+        <pose>18.455 7.000 0.1 0 1.570796 0.000000</pose>
+        <geometry><capsule><radius>0.4</radius><length>0.55</length></capsule></geometry>
+        <material>
+          <ambient>0.95 0.95 0.95 1.0</ambient>
+          <diffuse>0.95 0.95 0.95 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <collision name="loose_float0_collision">
+        <pose>6.800 12.800 0.1 0 0 0</pose>
+        <geometry><capsule><radius>0.4</radius><length>0.55</length></capsule></geometry>
+      </collision>
+      <visual name="loose_float0_visual">
+        <pose>6.800 12.800 0.1 0 0 0</pose>
+        <geometry><capsule><radius>0.4</radius><length>0.55</length></capsule></geometry>
+        <material>
+          <ambient>0.95 0.95 0.95 1.0</ambient>
+          <diffuse>0.95 0.95 0.95 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <collision name="loose_float1_collision">
+        <pose>11.000 1.800 0.1 0 0 0</pose>
+        <geometry><capsule><radius>0.4</radius><length>0.55</length></capsule></geometry>
+      </collision>
+      <visual name="loose_float1_visual">
+        <pose>11.000 1.800 0.1 0 0 0</pose>
+        <geometry><capsule><radius>0.4</radius><length>0.55</length></capsule></geometry>
+        <material>
+          <ambient>0.95 0.95 0.95 1.0</ambient>
+          <diffuse>0.95 0.95 0.95 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <collision name="loose_float2_collision">
+        <pose>15.500 13.200 0.1 0 0 0</pose>
+        <geometry><capsule><radius>0.4</radius><length>0.55</length></capsule></geometry>
+      </collision>
+      <visual name="loose_float2_visual">
+        <pose>15.500 13.200 0.1 0 0 0</pose>
+        <geometry><capsule><radius>0.4</radius><length>0.55</length></capsule></geometry>
+        <material>
+          <ambient>0.95 0.95 0.95 1.0</ambient>
+          <diffuse>0.95 0.95 0.95 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+      <collision name="loose_float3_collision">
+        <pose>18.300 2.500 0.1 0 0 0</pose>
+        <geometry><capsule><radius>0.4</radius><length>0.55</length></capsule></geometry>
+      </collision>
+      <visual name="loose_float3_visual">
+        <pose>18.300 2.500 0.1 0 0 0</pose>
+        <geometry><capsule><radius>0.4</radius><length>0.55</length></capsule></geometry>
+        <material>
+          <ambient>0.95 0.95 0.95 1.0</ambient>
+          <diffuse>0.95 0.95 0.95 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+    </link>
+
+    <link name="goal_marker">
+      <visual name="goal_visual">
+        <pose>18.800 11.000 0.03 0 0 0</pose>
+        <geometry><cylinder><radius>0.6</radius><length>0.06</length></cylinder></geometry>
+        <material>
+          <ambient>0.05 0.85 0.15 1.0</ambient>
+          <diffuse>0.05 0.85 0.15 1.0</diffuse>
+          <specular>0.3 0.3 0.3 1.0</specular>
+        </material>
+      </visual>
+    </link>
+  </model>
+</sdf>

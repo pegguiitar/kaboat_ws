@@ -252,6 +252,17 @@
       <pose>0 60 0 0 0 0</pose>
     </include>
 
+    <!-- 현장 사진 기준 토너먼트 경기장 (20 x 15 m). 위 두 경기장과 겹치지 않게
+         y 를 100m 띄웠다 — world 좌표로 x 0~20, y 100~115 를 차지한다.
+         model.sdf 는 scripts/gen_tournament_course.py 가 생성한다.
+         배를 여기에 띄우려면 simulation.launch.py 스폰 pose 를 (-3, 107.5) 쯤으로
+         바꾼다(경기장 좌변 진입점 (0, 7.5) 의 world 좌표 = (0, 107.5)).
+         목적지 (18.8, 11.0) 의 world 좌표 = (18.8, 111.0). -->
+    <include>
+      <uri>model://kaboat_2026_tournament</uri>
+      <pose>0 100 0 0 0 0</pose>
+    </include>
+
 
     <!-- The wave field -->
     <plugin filename="libPublisherPlugin.so" name="vrx::PublisherPlugin">
