@@ -38,7 +38,7 @@ source ~/.zshrc
 | 1 | 젯슨 터미널 1 | `run_zenoh` | 노트북과 연결 |
 | 2 | 노트북 | `set_kaboat` | `🚀 [Zenoh] … 연결 시도 중` |
 | 3 | 젯슨 터미널 2 | `run_gq7_outdoor` | `[gq7_local_odom] /odom 원점 = (…) [file …]` 로그 |
-| 4 | 젯슨 터미널 3 | `ros2 launch kaboat_hardware onboard_lidar.launch.py port:=/dev/ttyUSB0` | `/scan` (선체 TG-50, 실제 포트 확인) |
+| 4 | 젯슨 터미널 3 | `run_lidar` (= `ros2 launch kaboat_hardware onboard_lidar.launch.py port:=/dev/ttyUSB0`) | `/scan` (선체 TG-50, 실제 포트 확인) |
 | 5 | 젯슨 터미널 4 | `run_motor` | 모터 드라이버 + GPS CSV 기록기 |
 | 6 | 젯슨 터미널 5 | `run_points` | 미션 지점 기록기 |
 | 7 | 노트북 | `rviz2 -d ~/Projects/KABOAT/kaboat_ws/scripts/remote_monitor.rviz` | Fixed Frame `odom` |
@@ -113,6 +113,8 @@ ros2 launch kaboat_hardware real_sensors.launch.py outdoor:=true rtk:=true \
 | `cb` / `sb` | `colcon build --symlink-install` / `source install/setup.bash` | 빌드 / 환경 리로드 |
 | `run_zenoh` | `python3 scripts/zenoh_monitor_link.py jetson` | 노트북 모니터링 브리지 |
 | `run_gq7_outdoor` | `ros2 launch kaboat_hardware real_sensors.launch.py outdoor:=true` | 야외 GQ7. `gq7_outdoor.yaml` + `gq7_local_odom`(`/ekf/odometry_earth` → 원점 파일 기준 `/odom`) |
+| `run_gq7_rtk` | `real_sensors.launch.py outdoor:=true rtk:=true ntrip_username:=… ntrip_password:=…` | 야외 GQ7 + RTK 보정 + 필터 위치. 계정은 `~/.ntrip_account` |
+| `run_lidar` | `ros2 launch kaboat_hardware onboard_lidar.launch.py port:=/dev/ttyUSB0` | 야외 선체 TG-50 (`/scan`, `/scan/level`). GQ7 먼저 |
 | `run_geo` | `ros2 launch kaboat_hardware geo_origin.launch.py` | GPS 원점 설정, 위도·경도 → x/y (`/geo/*`) |
 | `run_points` | `ros2 run kaboat_hardware point_recorder` | 미션 지점 기록기 |
 | `rec [이름]` | `python3 scripts/rec_point.py [이름]` | 지금 위치(x, y, 선수각) 기록. 이름 생략 시 `p1`, `p2` … |
