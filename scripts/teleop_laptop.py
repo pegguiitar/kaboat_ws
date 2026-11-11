@@ -8,7 +8,7 @@
   /teleop/esp_mode (String)         P = computer_control_mode, O = rc_control_mode
 받는 토픽: /teleop/status (젯슨 제어 모드), /teleop/event (ESP 모드 전송·GPS 기록 결과)
 
-키 (조종 창을 클릭해 포커스를 준 상태에서)
+키 (조종 창을 클릭해 포커스를 준 상태에서, 한글 입력 상태여도 같은 자리 키로 동작)
   W / S    속도 단계 +1 / -1 (-4 ~ +4, 떼도 유지)
   A / D    누르고 있는 동안 좌 / 우 회전 (좌우 출력 차이, 중립이면 제자리 회전)
   X        즉시 0단계(중립)
@@ -29,7 +29,7 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Bool, Empty, Int8MultiArray, String
 
-from teleop_keys import MAX_LEVEL, KeyTracker, SpeedLevel, teleop_command
+from teleop_keys import MAX_LEVEL, KeyTracker, SpeedLevel, normalize_key, teleop_command
 
 
 DOMAIN = '43'
@@ -60,6 +60,12 @@ class TeleopWindow:
         node.create_subscription(String, '/teleop/event', self._on_event, 10)
 
         self.root = tk.Tk()
+        # 한글 입력기가 W/A/S/D 를 가로채 ㅈ/ㅁ/ㄴ/ㅇ 로 바꾸지 않게 이 창은 입력기를 안 쓴다.
+        # (그래도 자모가 오면 normalize_key 가 같은 자리 영문 키로 바꾼다)
+        try:
+            self.root.tk.call('tk', 'useinputmethods', '0')
+        except tk.TclError:
+            pass
         self.root.title('KABOAT 노트북 키보드 조종')
         self.root.geometry('620x360')
         self.root.resizable(False, False)
@@ -126,8 +132,13 @@ class TeleopWindow:
         self.focused = False
         self._neutral()
 
+    @staticmethod
+    def _key(event):
+        return normalize_key(event.keysym, getattr(event, 'char', ''),
+                             getattr(event, 'keycode', None))
+
     def _key_press(self, event):
-        key = event.keysym.lower()
+        key = self._key(event)
         if not self.keys.press(key, time.monotonic()):
             return                                  # 자동반복 — 한 번만 처리
         if key == 'r':
@@ -150,7 +161,7 @@ class TeleopWindow:
             self.last_event = f'ESP 모드 전송 요청: {ESP_MODES[key]}'
 
     def _key_release(self, event):
-        self.keys.release(event.keysym.lower(), time.monotonic())
+        self.keys.release(self._key(event), time.monotonic())
 
     def _close(self, how):
         if self.closing is None:

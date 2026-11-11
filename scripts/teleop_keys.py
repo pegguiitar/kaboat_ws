@@ -14,6 +14,48 @@ A/D 는 누르고 있는 동안에만 좌우 추진기에 출력 차이를 준�
 
 MAX_LEVEL = 4
 
+# 한글 입력 상태에서 같은 자리 키 (두벌식). 조종 창은 입력기를 끄지만(Tk useinputmethods 0)
+# 입력기가 그래도 자모를 넘기는 환경을 위해 영문 키로 바꾼다.
+HANGUL_TO_KEY = {
+    'ㅂ': 'q', 'ㅈ': 'w', 'ㄷ': 'e', 'ㄱ': 'r', 'ㅅ': 't', 'ㅛ': 'y', 'ㅕ': 'u', 'ㅑ': 'i',
+    'ㅐ': 'o', 'ㅔ': 'p', 'ㅁ': 'a', 'ㄴ': 's', 'ㅇ': 'd', 'ㄹ': 'f', 'ㅎ': 'g', 'ㅗ': 'h',
+    'ㅓ': 'j', 'ㅏ': 'k', 'ㅣ': 'l', 'ㅋ': 'z', 'ㅌ': 'x', 'ㅊ': 'c', 'ㅍ': 'v', 'ㅠ': 'b',
+    'ㅜ': 'n', 'ㅡ': 'm',
+    'ㅃ': 'q', 'ㅉ': 'w', 'ㄸ': 'e', 'ㄲ': 'r', 'ㅆ': 't', 'ㅒ': 'o', 'ㅖ': 'p',  # Shift
+}
+# 같은 자모의 X11 keysym 이름 (event.keysym 이 'Hangul_Jieuj' 처럼 올 때)
+_HANGUL_KEYSYM = {
+    'pieub': 'ㅂ', 'jieuj': 'ㅈ', 'dikeud': 'ㄷ', 'kiyeog': 'ㄱ', 'sios': 'ㅅ', 'yo': 'ㅛ',
+    'yeo': 'ㅕ', 'ya': 'ㅑ', 'ae': 'ㅐ', 'e': 'ㅔ', 'mieum': 'ㅁ', 'nieun': 'ㄴ', 'ieung': 'ㅇ',
+    'rieul': 'ㄹ', 'hieuh': 'ㅎ', 'o': 'ㅗ', 'eo': 'ㅓ', 'a': 'ㅏ', 'i': 'ㅣ', 'khieuq': 'ㅋ',
+    'tieut': 'ㅌ', 'cieuc': 'ㅊ', 'phieuf': 'ㅍ', 'yu': 'ㅠ', 'u': 'ㅜ', 'eu': 'ㅡ',
+    'ssangpieub': 'ㅃ', 'ssangjieuj': 'ㅉ', 'ssangdikeud': 'ㄸ', 'ssangkiyeog': 'ㄲ',
+    'ssangsios': 'ㅆ', 'yae': 'ㅒ', 'ye': 'ㅖ',
+}
+# 마지막 수단: 리눅스 X11(evdev) 물리 키 번호 → 영문 키
+_X11_KEYCODE = {
+    24: 'q', 25: 'w', 26: 'e', 27: 'r', 28: 't', 29: 'y', 30: 'u', 31: 'i', 32: 'o', 33: 'p',
+    38: 'a', 39: 's', 40: 'd', 41: 'f', 42: 'g', 43: 'h', 44: 'j', 45: 'k', 46: 'l',
+    52: 'z', 53: 'x', 54: 'c', 55: 'v', 56: 'b', 57: 'n', 58: 'm', 65: 'space', 9: 'escape',
+}
+
+
+def normalize_key(keysym, char='', keycode=None):
+    """Tk 키 이벤트 → 영문 소문자 키 이름 ('w', 'space', 'escape' …). 한/영 상태와 무관.
+
+    순서: 영문 keysym → 한글 문자(event.char) → 한글 keysym 이름 → 물리 키 번호.
+    """
+    key = str(keysym or '').lower()
+    if (len(key) == 1 and 'a' <= key <= 'z') or key in ('space', 'escape'):
+        return key
+    if char in HANGUL_TO_KEY:
+        return HANGUL_TO_KEY[char]
+    if key.startswith('hangul_') and _HANGUL_KEYSYM.get(key[7:]) in HANGUL_TO_KEY:
+        return HANGUL_TO_KEY[_HANGUL_KEYSYM[key[7:]]]
+    if keycode in _X11_KEYCODE:
+        return _X11_KEYCODE[keycode]
+    return key
+
 # X11 은 키를 누르고 있으면 '떼기 → 누르기' 를 거의 동시에(수 ms) 반복해서 보낸다(자동반복).
 # 떼기 뒤 이 시간 안에 같은 키가 다시 눌리면 자동반복으로 보고 무시한다 [s].
 # 사람이 같은 키를 떼었다 다시 누르는 데는 이보다 오래 걸려 빠른 연타는 모두 센다.

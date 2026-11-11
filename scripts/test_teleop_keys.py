@@ -3,7 +3,37 @@
 import unittest
 
 from teleop_keys import (
-    AUTOREPEAT_GAP, MAX_LEVEL, KeyTracker, SpeedLevel, teleop_command)
+    AUTOREPEAT_GAP, MAX_LEVEL, KeyTracker, SpeedLevel, normalize_key, teleop_command)
+
+
+class NormalizeKeyTest(unittest.TestCase):
+    def test_english_keys_pass_through(self):
+        self.assertEqual(normalize_key('w'), 'w')
+        self.assertEqual(normalize_key('W'), 'w')                    # Caps Lock / Shift
+        self.assertEqual(normalize_key('space'), 'space')
+        self.assertEqual(normalize_key('Escape'), 'escape')
+
+    def test_hangul_input_maps_to_same_physical_key(self):
+        # 한글 입력 상태: 문자로 오든 keysym 이름으로 오든 같은 자리 영문 키
+        for char, key in (('ㅈ', 'w'), ('ㅁ', 'a'), ('ㄴ', 's'), ('ㅇ', 'd'), ('ㅌ', 'x'),
+                          ('ㄱ', 'r'), ('ㅂ', 'q'), ('ㅔ', 'p'), ('ㅐ', 'o'), ('ㅉ', 'w')):
+            self.assertEqual(normalize_key('??', char), key)
+        for keysym, key in (('Hangul_Jieuj', 'w'), ('Hangul_Mieum', 'a'),
+                            ('Hangul_Nieun', 's'), ('Hangul_Ieung', 'd'),
+                            ('Hangul_Tieut', 'x'), ('Hangul_SsangJieuj', 'w')):
+            self.assertEqual(normalize_key(keysym, ''), key)
+
+    def test_physical_keycode_is_the_last_resort(self):
+        self.assertEqual(normalize_key('??', '', 25), 'w')            # X11 evdev W 자리
+        self.assertEqual(normalize_key('??', '', 65), 'space')
+        self.assertEqual(normalize_key('Hangul', '', 130), 'hangul')  # 한/영 키는 무시됨
+
+    def test_press_and_release_agree_in_hangul_mode(self):
+        keys = KeyTracker()
+        self.assertTrue(keys.press(normalize_key('Hangul_Mieum'), 0.0))
+        self.assertIn('a', keys.held)
+        keys.release(normalize_key('Hangul_Mieum'), 0.1)
+        self.assertNotIn('a', keys.poll(0.2))
 
 
 class SpeedLevelTest(unittest.TestCase):
