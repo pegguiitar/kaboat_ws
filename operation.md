@@ -115,6 +115,7 @@ ros2 launch kaboat_hardware real_sensors.launch.py outdoor:=true rtk:=true \
 | `run_gq7_outdoor` | `ros2 launch kaboat_hardware real_sensors.launch.py outdoor:=true` | 야외 GQ7. `gq7_outdoor.yaml` + `gq7_local_odom`(`/ekf/odometry_earth` → 원점 파일 기준 `/odom`) |
 | `run_gq7_rtk` | `real_sensors.launch.py outdoor:=true rtk:=true ntrip_username:=… ntrip_password:=…` | 야외 GQ7 + RTK 보정 + 필터 위치. 계정은 `~/.ntrip_account` |
 | `run_lidar` | `ros2 launch kaboat_hardware onboard_lidar.launch.py port:=$(_tg50_port)` | 야외 선체 TG-50 (`/scan`, `/scan/level`). GQ7 먼저. 포트는 `/dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0`(없으면 `/dev/ttyUSB0`) |
+| `run_camera` | `ros2 launch kaboat_bringup d455.launch.py` | D455 카메라 (컬러 640×480 + 정렬 뎁스, 15 fps). 카메라 층·도킹용. USB 3 포트 |
 | `run_geo` | `ros2 launch kaboat_hardware geo_origin.launch.py` | GPS 원점 설정, 위도·경도 → x/y (`/geo/*`) |
 | `run_points` | `ros2 run kaboat_hardware point_recorder` | 미션 지점 기록기 |
 | `rec [이름]` | `python3 scripts/rec_point.py [이름]` | 지금 위치(x, y, 선수각) 기록. 이름 생략 시 `p1`, `p2` … |
@@ -257,7 +258,7 @@ test_avoid_outdoor start_point:=gate_entry goal_point:=gate_end   # 다른 지�
 대상(95)이 됩니다. 흰색은 수면 반짝임 오탐이 많아 기본 끔(`cam_white:=true`).
 
 ```bash
-ros2 launch kaboat_bringup d455.launch.py                          # 젯슨: D455 (컬러 + 정렬 뎁스)
+run_camera                                                         # 젯슨: D455 (= ros2 launch kaboat_bringup d455.launch.py)
 ros2 run kaboat_perception occupancy_grid --ros-args \
     -p cam_enabled:=true -p cam_height:=1.05                       # 흘수선→렌즈 실측값 (소수점 필수)
 test_avoid_outdoor cam_enabled:=true cam_height:=1.05             # 회피 시험에서 같이 켜기
