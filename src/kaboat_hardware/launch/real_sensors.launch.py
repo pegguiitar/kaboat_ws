@@ -150,6 +150,20 @@ def _gq7_actions(context):
     )]
 
 
+def _ntrip_launch_file() -> str:
+    """ntrip_client 패키지의 런치 파일 경로.
+
+    ROS 2 Humble apt 패키지(1.4.1)는 share/ntrip_client/ 바로 아래에, 소스(ros2 브랜치)
+    빌드는 share/ntrip_client/launch/ 아래에 설치한다 — 둘 다 찾는다.
+    """
+    share = get_package_share_directory('ntrip_client')
+    for path in (os.path.join(share, 'ntrip_client_launch.py'),
+                 os.path.join(share, 'launch', 'ntrip_client_launch.py')):
+        if os.path.isfile(path):
+            return path
+    raise FileNotFoundError(f'ntrip_client_launch.py 를 {share} 에서 못 찾음')
+
+
 def _rtk_actions(context):
     """NTRIP 클라이언트(ntrip_client) — 인터넷의 RTK 보정(RTCM)을 /rtcm 으로 낸다.
 
@@ -169,9 +183,7 @@ def _rtk_actions(context):
         LogInfo(msg=f'[GQ7] RTK: NTRIP {host}:{g("ntrip_port")}/{mount} → /rtcm → GQ7 AUX '
                     f'({g("gq7_aux_port")})'),
         IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(
-                PathJoinSubstitution([
-                    FindPackageShare('ntrip_client'), 'launch', 'ntrip_client_launch.py'])),
+            PythonLaunchDescriptionSource(_ntrip_launch_file()),
             launch_arguments={
                 'host': host,
                 'port': g('ntrip_port'),

@@ -27,6 +27,17 @@ def rs(monkeypatch):
     return mod
 
 
+def test_ntrip_launch_file_found_in_either_install_layout(rs, tmp_path, monkeypatch):
+    monkeypatch.setattr(rs, 'get_package_share_directory', lambda name: str(tmp_path))
+    with pytest.raises(FileNotFoundError):
+        rs._ntrip_launch_file()
+    (tmp_path / 'launch').mkdir()
+    (tmp_path / 'launch' / 'ntrip_client_launch.py').write_text('')   # 소스 빌드
+    assert rs._ntrip_launch_file().endswith('launch/ntrip_client_launch.py')
+    (tmp_path / 'ntrip_client_launch.py').write_text('')              # Humble apt 패키지
+    assert rs._ntrip_launch_file() == str(tmp_path / 'ntrip_client_launch.py')
+
+
 def _context(mod, **overrides):
     ld = mod._launch(None, None, 'false', '', '', os.path.join(CONFIG_DIR, 'gq7.yaml'))
     ctx = LaunchContext()
@@ -50,6 +61,7 @@ def test_ntrip_params_copy_enables_aux_input(rs, tmp_path):
 
 def test_rtk_off_by_default_and_on_adds_ntrip_client(rs, tmp_path, monkeypatch):
     monkeypatch.setattr(rs.tempfile, 'gettempdir', lambda: str(tmp_path))
+    monkeypatch.setattr(rs, '_ntrip_launch_file', lambda: '/opt/x/ntrip_client_launch.py')
     off = rs._gq7_actions(_context(rs, outdoor='true'))
     assert not any(isinstance(a, IncludeLaunchDescription) for a in off)
     assert [a.node_executable for a in off if isinstance(a, Node)] == ['gq7_local_odom']
