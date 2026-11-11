@@ -6,25 +6,26 @@ or /real_avoid_test/start is called. Motor output is disabled by default; when e
 publishes directly to /cmd_vel, so no other /cmd_vel source may run alongside it.
 """
 
+import copy
 import dataclasses
 import math
 import time
 
 import numpy as np
 import rclpy
-from geometry_msgs.msg import PoseStamped, Twist
+from geometry_msgs.msg import PointStamped, PoseStamped, Twist
 from nav_msgs.msg import OccupancyGrid, Odometry, Path
 from rclpy.node import Node
-from rclpy.qos import qos_profile_sensor_data
+from rclpy.qos import QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
 from sensor_msgs.msg import LaserScan
 from std_msgs.msg import Bool, String
 from std_srvs.srv import Trigger
 from visualization_msgs.msg import Marker, MarkerArray
 
-from kaboat_behaviors.avoid_fsm import AvoidFsm, FsmParams
+from kaboat_behaviors.avoid_fsm import AvoidFsm, FsmParams, follow_cmd
 from kaboat_behaviors.behavior_base import yaw_from_quaternion
 from kaboat_behaviors.bspline_planner import (
-    PlannerParams, check, generate,
+    PlannerParams, check, generate, generate_docking,
 )
 from kaboat_behaviors.dri import DriParams, build_dri
 from kaboat_behaviors.dri_marker import clear_dri_x_markers, dri_x_markers
@@ -48,6 +49,13 @@ class RealObstacleAvoidTest(Node):
         # 경로를 5초 넘게 못 만들거나 위험이 해소되지 않으면 후진 탈출(ESCAPE).
         # false 면 그때 정지(해제)한다. 후진 중에도 수조 경계 정지는 그대로 동작.
         self.declare_parameter('allow_escape', True)
+        self.declare_parameter('final_goal_topic', '')
+        self.declare_parameter('goal_topic', '')
+        self.declare_parameter('dock_waypoints_topic', '')
+        self.declare_parameter('dock_final_max_linear_cmd', .10)
+        self.declare_parameter('goal_timeout_sec', 0.7)
+        self.declare_parameter('goal_max_shift_m', 0.5)
+        self.declare_parameter('require_goal_updates_when_running',True)
         self.declare_parameter('goal_distance', 3.0)
         # 고정 목표(odom = 수조 좌표). 켜면 목표는 선수 앞 goal_distance 가 아니라
         # fixed_goal_xy 이고, 배는 어디서든 선수가 목표를 향해(start_heading_tolerance_deg)
@@ -87,6 +95,28 @@ class RealObstacleAvoidTest(Node):
         self.drive_enabled = bool(self.get_parameter('drive_enabled').value)
         self.wait_for_start = bool(self.get_parameter('wait_for_start').value)
         self.allow_escape = bool(self.get_parameter('allow_escape').value)
+        final_goal_topic = str(self.get_parameter('final_goal_topic').value)
+        self.final_goal_pub = (self.create_publisher(
+            PointStamped, final_goal_topic, QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT))
+            if final_goal_topic else None)
+        self.goal_topic = str(self.get_parameter('goal_topic').value)
+        self.require_goal_updates=bool(self.get_parameter('require_goal_updates_when_running').value)
+        self.dock_waypoints_topic=str(self.get_parameter('dock_waypoints_topic').value)
+        self.dock_final_cmd=float(self.get_parameter('dock_final_max_linear_cmd').value)
+        if not math.isfinite(self.dock_final_cmd) or not 0<self.dock_final_cmd<=1:
+            raise ValueError('invalid docking final command limit')
+        self.dock_waypoints=None;self.dock_waypoints_received=None;self.latched_dock_waypoints=None
+        self.dock_plan_reason=''
+        if self.dock_waypoints_topic:
+            self.create_subscription(Path,self.dock_waypoints_topic,self._on_dock_waypoints,10)
+        self.goal_timeout = float(self.get_parameter('goal_timeout_sec').value)
+        self.goal_max_shift = float(self.get_parameter('goal_max_shift_m').value)
+        if not all(math.isfinite(v) and v > 0 for v in (self.goal_timeout, self.goal_max_shift)):
+            raise ValueError('external goal freshness and shift limits must be positive')
+        self.external_goal = None
+        self.external_goal_received = None
+        self.external_goal_error = None
+        self.observed_goal_on_arm=None
         self.goal_distance = float(self.get_parameter('goal_distance').value)
         self.goal_tolerance = float(self.get_parameter('goal_tolerance').value)
         self.max_cross_track_error = float(
@@ -130,6 +160,8 @@ class RealObstacleAvoidTest(Node):
 
         self.fixed_goal_enabled = bool(
             self.get_parameter('fixed_goal_enabled').value)
+        if self.goal_topic and self.fixed_goal_enabled:
+            raise ValueError('goal_topic and fixed_goal_enabled are mutually exclusive')
         self.fixed_goal_xy = tuple(
             float(v) for v in self.get_parameter('fixed_goal_xy').value)
         self.fixed_start_xy = tuple(
@@ -183,7 +215,7 @@ class RealObstacleAvoidTest(Node):
         # 경로 추종 게인은 test_los 와 같은 값 (kp 1.4, kd 0.16)
         self.fsm = AvoidFsm(self.planner_params, self.fsm_params,
                             yaw_kp=BSPLINE_TRACK_YAW_KP,
-                            yaw_kd=BSPLINE_TRACK_YAW_KD)
+                            yaw_kd=BSPLINE_TRACK_YAW_KD,generator=self._generate_plan)
         gen_threshold = self.planner_params.safe_threshold * self.planner_params.gen_margin
         if (self.tank_enabled and self.exclude_tank_walls
                 and self.tank_wall_dri >= gen_threshold):
@@ -221,6 +253,8 @@ class RealObstacleAvoidTest(Node):
         self.status_pub = self.create_publisher(
             String, '/real_avoid_test/status', 10)
 
+        if self.goal_topic:
+            self.create_subscription(PointStamped, self.goal_topic, self._on_goal, qos_profile_sensor_data)
         self.create_subscription(Odometry, '/odom', self._on_odom, 10)
         self.create_subscription(OccupancyGrid, '/occupancy_grid',
                                  self._on_grid, 1)
@@ -234,17 +268,15 @@ class RealObstacleAvoidTest(Node):
         self.create_timer(0.1, self._tick)
 
         mode = 'DRIVE' if self.drive_enabled else 'PREVIEW ONLY'
+        if self.goal_topic:
+            goal_description = f'live marker goal from {self.goal_topic}; latched on start'
+        elif self.fixed_goal_enabled:
+            goal_description = f'fixed ({self.fixed_goal_xy[0]:.2f}, {self.fixed_goal_xy[1]:.2f})'
+        else:
+            goal_description = f'{self.goal_distance:.1f} m ahead of the start pose'
         self.get_logger().info(
-            f'Real avoidance test ready ({mode}). Goal: '
-            + (f'fixed ({self.fixed_goal_xy[0]:.2f}, {self.fixed_goal_xy[1]:.2f}), '
-               + (f'start ({self.fixed_start_xy[0]:.2f}, {self.fixed_start_xy[1]:.2f})'
-                  if self.start_tolerance > 0.0 else 'start anywhere')
-               + (f' facing the goal within '
-                  f'{math.degrees(self.start_heading_tolerance):.0f} deg'
-                  if self.start_heading_tolerance < math.pi else '')
-               if self.fixed_goal_enabled else
-               f'{self.goal_distance:.1f} m ahead of the start pose')
-            + '. Waiting for /scan, /odom and /occupancy_grid.')
+            f'Real avoidance test ready ({mode}). Goal: {goal_description}. '
+            'Waiting for /scan, /odom and /occupancy_grid.')
         if self.tank_enabled:
             self.get_logger().info(
                 f'Tank bounds {self.tank_bounds}: walls_excluded='
@@ -275,6 +307,78 @@ class RealObstacleAvoidTest(Node):
                                   self.tank_wall_dri)
         return build_dri(self.grid, boat, yaw, self.dri_params)
 
+    @staticmethod
+    def _goal_stamp(msg):
+        return msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+
+    def _on_goal(self, msg):
+        p = msg.point
+        expected = self.odom.header.frame_id if self.odom is not None else 'odom'
+        if (msg.header.frame_id != (expected or 'odom')
+                or not all(math.isfinite(v) for v in (p.x, p.y, p.z)) or abs(p.z) > 1e-6):
+            self.external_goal = self.external_goal_received = None
+            self.external_goal_error = 'invalid marker goal frame or coordinates'
+            return
+        age = self.get_clock().now().nanoseconds * 1e-9 - self._goal_stamp(msg)
+        if self._goal_stamp(msg) <= 0 or not -0.1 <= age <= self.goal_timeout:
+            return
+        if self.external_goal is not None and self._goal_stamp(msg) <= self._goal_stamp(self.external_goal):
+            return
+        self.external_goal = msg
+        self.external_goal_received = time.monotonic()
+        self.external_goal_error = None
+
+    def _on_dock_waypoints(self,msg):
+        valid=(msg.header.frame_id=='odom' and len(msg.poses)==3)
+        if valid:
+            for pose in msg.poses:
+                p,q=pose.pose.position,pose.pose.orientation
+                valid=valid and pose.header.frame_id in ('','odom') and abs(p.z)<1e-6
+                valid=valid and all(math.isfinite(v) for v in (p.x,p.y,p.z,q.x,q.y,q.z,q.w))
+                valid=valid and abs(q.x)<1e-6 and abs(q.y)<1e-6 and abs(q.z*q.z+q.w*q.w-1)<1e-3
+        if not valid:
+            self.dock_waypoints=self.dock_waypoints_received=None
+            return
+        age=self.get_clock().now().nanoseconds*1e-9-self._goal_stamp(msg)
+        if self._goal_stamp(msg)<=0 or not -.1<=age<=self.goal_timeout:return
+        if self.dock_waypoints is not None and self._goal_stamp(msg)<=self._goal_stamp(self.dock_waypoints):return
+        xy=np.array([[p.pose.position.x,p.pose.position.y] for p in msg.poses])
+        heading=yaw_from_quaternion(msg.poses[-1].pose.orientation)
+        unit=np.array([math.cos(heading),math.sin(heading)]);steps=np.diff(xy,axis=0)
+        if np.any(steps@unit<=.05) or np.any(abs(steps[:,0]*unit[1]-steps[:,1]*unit[0])>.02):
+            self.dock_waypoints=self.dock_waypoints_received=None
+            return
+        self.dock_waypoints=msg;self.dock_waypoints_received=time.monotonic()
+
+    def _generate_plan(self,dri,boat,yaw,vel,goal,params,now_t=0.):
+        if not self.dock_waypoints_topic:return generate(dri,boat,yaw,vel,goal,params,now_t)
+        msg=self.latched_dock_waypoints if self.started else self.dock_waypoints
+        if msg is None:return None
+        xy=np.array([[p.pose.position.x,p.pose.position.y] for p in msg.poses])
+        heading=yaw_from_quaternion(msg.poses[-1].pose.orientation)
+        plan=generate_docking(dri,boat,yaw,vel,xy,heading,params,now_t)
+        self.dock_plan_reason=''
+        if plan is None:
+            limit=params.safe_threshold*params.gen_margin
+            risks=dri.risk_at_many(xy[:,0],xy[:,1])
+            boat_risk=dri.risk_at(float(boat[0]),float(boat[1]))
+            if boat_risk>params.safe_threshold:
+                self.dock_plan_reason=f'START_OCCUPIED risk={boat_risk:.2f}'
+            elif risks[0]>limit:
+                self.dock_plan_reason=f'APPROACH_OCCUPIED risk={risks[0]:.2f}'
+            elif risks[-1]>limit:
+                self.dock_plan_reason=f'STOP_OCCUPIED risk={risks[-1]:.2f}'
+            else:
+                tail=np.linspace(xy[0],xy[-1],max(3,int(np.linalg.norm(xy[-1]-xy[0])/(.5*dri.resolution))+1))
+                tail_risk=float(np.max(dri.risk_at_many(tail[:,0],tail[:,1])))
+                self.dock_plan_reason=(f'FINAL_CORRIDOR_BLOCKED risk={tail_risk:.2f}' if tail_risk>limit
+                                       else 'NO_SAFE_CURVED_APPROACH')
+        if plan is not None and self.tank_enabled:
+            if any(self._tank_edge(float(x),float(y))<self.tank_stop_margin for x,y in plan.samples):
+                self.dock_plan_reason="PATH_NEAR_TANK_BOUNDARY"
+                return None
+        return plan
+
     def _on_odom(self, msg):
         self.odom = msg
         self.odom_received = time.monotonic()
@@ -290,7 +394,7 @@ class RealObstacleAvoidTest(Node):
         self.scan = msg
         self.scan_received = time.monotonic()
 
-    def _input_error(self, now):
+    def _input_error(self, now, *, require_goal=True):
         for name, msg, received, timeout in (
             ('/odom', self.odom, self.odom_received, self.odom_timeout),
             ('/scan', self.scan, self.scan_received, self.scan_timeout),
@@ -324,6 +428,36 @@ class RealObstacleAvoidTest(Node):
         qnorm = q.x*q.x + q.y*q.y + q.z*q.z + q.w*q.w
         if not 0.8 <= qnorm <= 1.2:
             return '/odom orientation quaternion is invalid'
+        if require_goal and self.goal_topic and not self.finished and (not self.started or self.require_goal_updates):
+            if self.external_goal is None or self.external_goal_received is None:
+                return self.external_goal_error or f'waiting for marker goal {self.goal_topic}'
+            age = self.get_clock().now().nanoseconds * 1e-9 - self._goal_stamp(self.external_goal)
+            if now - self.external_goal_received > self.goal_timeout or not -0.1 <= age <= self.goal_timeout:
+                return 'marker goal stale'
+            if self.external_goal.header.frame_id != (self.odom.header.frame_id or 'odom'):
+                return 'marker goal and odom frame IDs differ'
+            if self.started and self.goal is not None:
+                p = self.external_goal.point
+                reference=self.observed_goal_on_arm if self.observed_goal_on_arm is not None else self.goal
+                if math.hypot(p.x-reference[0],p.y-reference[1])>self.goal_max_shift:
+                    return 'marker moved away from the latched goal; reset and reacquire'
+        if require_goal and self.dock_waypoints_topic and not self.finished and (not self.started or self.require_goal_updates):
+            msg=self.dock_waypoints
+            if msg is None or self.dock_waypoints_received is None:return 'waiting for docking waypoints'
+            age=self.get_clock().now().nanoseconds*1e-9-self._goal_stamp(msg)
+            if now-self.dock_waypoints_received>self.goal_timeout or not -.1<=age<=self.goal_timeout:
+                return 'docking waypoints stale'
+            if self.external_goal is None:return 'waiting for docking stop goal'
+            p=msg.poses[-1].pose.position;g=self.external_goal.point
+            if math.hypot(p.x-g.x,p.y-g.y)>.02 or abs(self._goal_stamp(msg)-self._goal_stamp(self.external_goal))>1e-5:
+                return 'docking waypoints and stop goal are not synchronized'
+            if self.started and self.latched_dock_waypoints is not None:
+                old=self.latched_dock_waypoints
+                a=yaw_from_quaternion(msg.poses[-1].pose.orientation);b=yaw_from_quaternion(old.poses[-1].pose.orientation)
+                if abs(math.atan2(math.sin(a-b),math.cos(a-b)))>math.radians(15):return 'station normal changed; reset and reacquire'
+                for current,latched in zip(msg.poses,old.poses):
+                    p,q=current.pose.position,latched.pose.position
+                    if math.hypot(p.x-q.x,p.y-q.y)>self.goal_max_shift:return 'docking waypoints shifted; reset and reacquire'
         return None
 
     def _boat_state(self):
@@ -341,6 +475,9 @@ class RealObstacleAvoidTest(Node):
 
     def _target_goal(self, boat, yaw):
         """출발 전 미리보기용 목표 — 고정 목표가 켜져 있으면 그 좌표."""
+        if self.goal_topic:
+            p = self.external_goal.point
+            return (p.x, p.y)
         if self.fixed_goal_enabled:
             return self.fixed_goal_xy
         return self._relative_goal(boat, yaw)
@@ -354,7 +491,7 @@ class RealObstacleAvoidTest(Node):
         if len(occ_xy) == 0:
             return None
         lane_yaw, length = yaw, self.goal_distance
-        if self.fixed_goal_enabled and goal is not None:
+        if (self.fixed_goal_enabled or self.goal_topic) and goal is not None:
             dx, dy = goal[0] - boat[0], goal[1] - boat[1]
             length = math.hypot(dx, dy)
             if length < 1e-6:
@@ -403,9 +540,9 @@ class RealObstacleAvoidTest(Node):
                     return False, (f'goal is {goal_edge:.2f} m from the tank '
                                    f'boundary (stop margin '
                                    f'{self.tank_stop_margin:.2f} m)')
-        if self.fixed_goal_enabled:
+        if self.fixed_goal_enabled or self.goal_topic:
             pos = self.odom.pose.pose.position
-            if self.start_tolerance > 0.0:
+            if self.fixed_goal_enabled and self.start_tolerance > 0.0:
                 off = math.hypot(pos.x - self.fixed_start_xy[0],
                                  pos.y - self.fixed_start_xy[1])
                 if off > self.start_tolerance:
@@ -415,8 +552,8 @@ class RealObstacleAvoidTest(Node):
                         f'allowed {self.start_tolerance:.2f} m')
             if self.start_heading_tolerance < math.pi:
                 yaw = yaw_from_quaternion(self.odom.pose.pose.orientation)
-                bearing = math.atan2(self.fixed_goal_xy[1] - pos.y,
-                                     self.fixed_goal_xy[0] - pos.x)
+                heading_goal = self._target_goal((pos.x, pos.y), yaw)
+                bearing = math.atan2(heading_goal[1] - pos.y, heading_goal[0] - pos.x)
                 err = abs(math.atan2(math.sin(bearing - yaw),
                                      math.cos(bearing - yaw)))
                 if err > self.start_heading_tolerance:
@@ -431,7 +568,17 @@ class RealObstacleAvoidTest(Node):
         if (self.require_front_obstacle
                 and self.preview_obstacle_distance is None):
             return False, 'no confirmed obstacle ahead within goal distance'
+        if self.goal_topic:
+            pos=self.odom.pose.pose.position
+            observed=self._target_goal((pos.x,pos.y),yaw_from_quaternion(self.odom.pose.pose.orientation))
+            if math.hypot(observed[0]-self.preview_goal[0],observed[1]-self.preview_goal[1])>self.goal_max_shift:
+                return False, 'marker goal changed; wait for a new preview path'
+        if self.dock_waypoints_topic and self.tank_enabled:
+            if any(self._tank_edge(p.pose.position.x,p.pose.position.y)<self.tank_stop_margin for p in self.dock_waypoints.poses):
+                return False,'docking waypoint violates tank boundary'
+        self.observed_goal_on_arm=((self.external_goal.point.x,self.external_goal.point.y) if self.goal_topic else None)
         self.goal = self.preview_goal
+        self.latched_dock_waypoints=copy.deepcopy(self.dock_waypoints) if self.dock_waypoints_topic else None
         self.fsm.reset()
         self.started = True
         self.finished = False
@@ -457,10 +604,27 @@ class RealObstacleAvoidTest(Node):
         self.preview_plan = None
         self.preview_received = None
         self.fsm.reset()
+        self.latched_dock_waypoints=None
+        self.observed_goal_on_arm=None
         self._publish_command(Twist())
 
-    def _publish_command(self, cmd):
-        self.preview_cmd_pub.publish(cmd)
+    @staticmethod
+    def _is_final_segment(plan):
+        return (plan is not None and (plan.docking_phase=='FINAL'
+                or (plan.tail_samples is not None and plan.progress_idx>=len(plan.samples)-len(plan.tail_samples)-1)))
+
+    def _preview_follow_command(self,plan,boat,yaw,yaw_rate,goal):
+        cmd=Twist()
+        if plan is None:return cmd
+        linear,angular=follow_cmd(plan,boat,yaw,yaw_rate,goal,self.fsm_params,
+                                 BSPLINE_TRACK_YAW_KP,BSPLINE_TRACK_YAW_KD)
+        if not math.isfinite(linear) or not math.isfinite(angular):raise ValueError('nonfinite preview controller output')
+        limit=min(self.max_linear_cmd,self.dock_final_cmd) if self._is_final_segment(plan) else self.max_linear_cmd
+        cmd.linear.x=float(np.clip(linear,-limit,limit));cmd.angular.z=float(np.clip(angular,-self.max_angular_cmd,self.max_angular_cmd))
+        return cmd
+
+    def _publish_command(self, cmd, preview=None):
+        self.preview_cmd_pub.publish(cmd if preview is None else preview)
         if self.drive_enabled:
             self.cmd_pub.publish(cmd)
 
@@ -521,6 +685,15 @@ class RealObstacleAvoidTest(Node):
             self.preview_plan = None
             self.preview_received = None
             self._clear_visualization()
+            # The risk map is sensor data, so keep it available while the
+            # docking target is missing. Never label stale sensor data as fresh.
+            if self._input_error(now,require_goal=False) is None:
+                try:
+                    boat,yaw,_,_=self._boat_state()
+                    self._publish_dri(self._build_dri(boat,yaw),
+                                      self.grid.header.frame_id or 'odom',self.odom.header.stamp)
+                except (ValueError,ArithmeticError) as exc:
+                    self.get_logger().warn(f'DRI visualization unavailable: {exc}',throttle_duration_sec=2.)
             self._publish_status('WAIT', reason)
             return
         if self.finished:
@@ -548,7 +721,7 @@ class RealObstacleAvoidTest(Node):
                 now_t = now
 
             if not self.started:
-                plan = generate(dri, boat, yaw, vel, goal,
+                plan = self._generate_plan(dri, boat, yaw, vel, goal,
                                 self.planner_params, now_t)
                 if plan is not None and check(
                         plan, dri, boat, self.planner_params) is not None:
@@ -571,21 +744,29 @@ class RealObstacleAvoidTest(Node):
                     start_text = f', start_blocked={why}'
                     self.get_logger().warn(f'auto start blocked: {why}',
                                            throttle_duration_sec=2.0)
-                self._publish_command(Twist())
+                preview=(self._preview_follow_command(plan,boat,yaw,yaw_rate,goal)
+                         if self.dock_waypoints_topic else None)
+                self._publish_command(Twist(),preview=preview)
                 self._publish_debug(dri, plan, goal)
                 tank_text = ''
                 if self.tank_enabled:
                     tank_text = (f', tank_edge={self._tank_edge(*boat):.2f}'
                                  f', walls_excluded={self.exclude_tank_walls}')
+                phase=plan.docking_phase if plan is not None else '-'
                 self._publish_status(
                     'PREVIEW' if plan is not None else 'NO PLAN',
                     f'obstacles={len(dri.occ_xy)}, '
                     f'front={self.preview_obstacle_distance}, '
                     f'goal=({goal[0]:.2f}, {goal[1]:.2f}), '
-                    f'drive_enabled={self.drive_enabled}{tank_text}{start_text}')
+                    f'drive_enabled={self.drive_enabled}{tank_text}{start_text}, '
+                    f'dock_phase={phase}, blocked={self.dock_plan_reason}')
                 return
 
-            if math.hypot(goal[0] - boat[0], goal[1] - boat[1]) <= self.goal_tolerance:
+            aligned=True
+            if self.dock_waypoints_topic and self.latched_dock_waypoints is not None and not getattr(self,'approach_only',False):
+                terminal=yaw_from_quaternion(self.latched_dock_waypoints.poses[-1].pose.orientation)
+                aligned=abs(math.atan2(math.sin(yaw-terminal),math.cos(yaw-terminal)))<=math.radians(15)
+            if aligned and math.hypot(goal[0] - boat[0], goal[1] - boat[1]) <= self.goal_tolerance:
                 self.started = False
                 self.finished = True
                 self._publish_command(Twist())
@@ -618,9 +799,11 @@ class RealObstacleAvoidTest(Node):
                     return
 
             cmd = Twist()
+            final_limit=(min(self.max_linear_cmd,self.dock_final_cmd)
+                         if self._is_final_segment(out.plan) else self.max_linear_cmd)
             cmd.linear.x = float(np.clip(out.linear_x,
-                                         -self.max_linear_cmd,
-                                         self.max_linear_cmd))
+                                         -final_limit,
+                                         final_limit))
             cmd.angular.z = float(np.clip(out.angular_z,
                                           -self.max_angular_cmd,
                                           self.max_angular_cmd))
@@ -631,24 +814,8 @@ class RealObstacleAvoidTest(Node):
             self._disarm(f'planner error: {exc}')
             self._publish_status('ERROR', str(exc))
 
-    def _publish_debug(self, dri, plan, goal):
-        stamp = self.odom.header.stamp
-        frame = self.grid.header.frame_id or 'odom'
-        path = Path()
-        path.header.stamp = stamp
-        path.header.frame_id = frame
-        if plan is not None:
-            for x, y in plan.samples:
-                point = PoseStamped()
-                point.header = path.header
-                point.pose.position.x = float(x)
-                point.pose.position.y = float(y)
-                point.pose.position.z = 0.1
-                point.pose.orientation.w = 1.0
-                path.poses.append(point)
-        self.path_pub.publish(path)
-
-        if self.count_subscribers('/real_avoid_test/dri') > 0:
+    def _publish_dri(self,dri,frame,stamp):
+        if self.dri_pub.get_subscription_count() > 0:
             grid = OccupancyGrid()
             grid.header = self.grid.header
             grid.info = self.grid.info
@@ -657,10 +824,39 @@ class RealObstacleAvoidTest(Node):
             grid.data = np.rint(values).astype(np.int8).ravel().tolist()
             self.dri_pub.publish(grid)
 
-        if self.count_subscribers('/real_avoid_test/dri_marks') > 0:
+        if self.dri_marks_pub.get_subscription_count() > 0:
             self.dri_marks_pub.publish(dri_x_markers(
                 dri, self.viz_dri_mark_threshold, self.viz_dri_mark_size,
                 frame, stamp))
+
+
+    def _publish_debug(self, dri, plan, goal):
+        stamp = self.odom.header.stamp
+        frame = self.grid.header.frame_id or 'odom'
+        if self.final_goal_pub is not None:
+            final_goal = PointStamped()
+            final_goal.header.stamp, final_goal.header.frame_id = stamp, frame
+            final_goal.point.x, final_goal.point.y = goal
+            self.final_goal_pub.publish(final_goal)
+        path = Path()
+        path.header.stamp = stamp
+        path.header.frame_id = frame
+        if plan is not None:
+            for index,(x, y) in enumerate(plan.samples):
+                point = PoseStamped()
+                point.header = path.header
+                point.pose.position.x = float(x)
+                point.pose.position.y = float(y)
+                point.pose.position.z = 0.0
+                tangent=plan.samples[min(index+1,len(plan.samples)-1)]-plan.samples[max(0,index-1)]
+                heading=math.atan2(float(tangent[1]),float(tangent[0]))
+                if index==len(plan.samples)-1 and plan.terminal_heading is not None:heading=plan.terminal_heading
+                point.pose.orientation.z=math.sin(heading/2)
+                point.pose.orientation.w=math.cos(heading/2)
+                path.poses.append(point)
+        self.path_pub.publish(path)
+
+        self._publish_dri(dri,frame,stamp)
 
         markers = MarkerArray()
         wp = Marker()

@@ -1,4 +1,4 @@
-"""YOLO26 segmentation adapter; one physical marker of each class per station."""
+"""YOLO shape segmentation for dock markers."""
 
 from dataclasses import dataclass
 
@@ -6,12 +6,7 @@ import cv2
 import numpy as np
 
 
-CLASS_NAMES = ("red_triangle", "green_circle", "blue_square")
-CLASS_PARTS = {
-    "red_triangle": ("red", "triangle"),
-    "green_circle": ("green", "circle"),
-    "blue_square": ("blue", "square"),
-}
+CLASS_NAMES = ("triangle", "circle", "square")
 
 
 @dataclass(frozen=True)
@@ -23,13 +18,18 @@ class DockDetection:
 
 class DockSegmenter:
     def __init__(self, weights: str, confidence: float = 0.45,
-                 image_size: int = 640, device: str = "cpu"):
+                 image_size: int = 640, device: str = "0", half: bool = True):
+        import torch
         from ultralytics import YOLO
 
-        self.model = YOLO(weights)
+        # Leave CPU capacity for camera transport, TF, and mask postprocessing.
+        torch.set_num_threads(2)
+
+        self.model = YOLO(weights, task='segment')
         self.confidence = confidence
         self.image_size = image_size
         self.device = device
+        self.half = half and device != "cpu"
         names = self.model.names
         found = tuple(names[index] for index in range(len(names)))
         if found != CLASS_NAMES:
@@ -38,7 +38,7 @@ class DockSegmenter:
     def predict(self, bgr: np.ndarray) -> list[DockDetection]:
         result = self.model.predict(
             bgr, conf=self.confidence, imgsz=self.image_size,
-            device=self.device, retina_masks=True, verbose=False)[0]
+            device=self.device, quantize=16 if self.half else None, retina_masks=True, verbose=False)[0]
         if result.masks is None:
             return []
         height, width = bgr.shape[:2]

@@ -1,0 +1,5 @@
+# Install in the detector's ROS Python environment.
+# Install Jetson-compatible PyTorch/torchvision separately before this file.
+# NumPy 1.x is required by the ROS Humble cv_bridge binary.
+numpy>=1.23,<2
+ultralytics==8.4.110

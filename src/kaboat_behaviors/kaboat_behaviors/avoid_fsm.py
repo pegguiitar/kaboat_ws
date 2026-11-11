@@ -59,7 +59,7 @@ class FsmParams:
     # v_full 을 내는 추력 명령 = 회피 **전진** 출력 비율. 회피 노드는 이 값을 전진
     # 출력 상한으로도 쓴다. 회전 상한은 노드 쪽 별도 값(0.31)이다.
     # 2026-11-06 실물 튜닝: 0.3(직선 전진 0.27)이면 꺾이는 회피 경로에서 관성으로
-    # 바깥으로 밀려 추종을 못 했다. 0.15·0.2·0.23 을 거쳐 0.25(직선 전진 0.23, 수조 SOTA).
+    # 바깥으로 밀려 추종을 못 했다. 0.15·0.2·0.23(SOTA) 을 거쳐 0.25(직선 전진 0.23).
     cmd_full: float = 0.25
     v_full: float = 1.48          # ✅ cmd_full 에서의 실측 속도 [m/s]
     cmd_exp: float = 1.64         # ✅ v↔cmd 멱지수 — sim 2점 fit (12N→1.480,
@@ -226,8 +226,9 @@ class AvoidFsm:
     """
 
     def __init__(self, planner: PlannerParams, fsm: FsmParams,
-                 yaw_kp: float, yaw_kd: float):
+                 yaw_kp: float, yaw_kd: float, generator=None):
         self.p = planner
+        self.generate = generate if generator is None else generator
         self.fsm = fsm
         self.yaw_kp = yaw_kp
         self.yaw_kd = yaw_kd
@@ -266,7 +267,7 @@ class AvoidFsm:
         복귀는 **최소 이탈 시간 + 연속 성공** 둘 다 — 후진→p1 수축→generate
         재성공→전진→재막힘 채터링의 이중 차단 (확정 설계)."""
         f = self.fsm
-        new = generate(dri, boat_xy, yaw, vel_xy, wp_xy, self.p, now_t)
+        new = self.generate(dri, boat_xy, yaw, vel_xy, wp_xy, self.p, now_t)
         self._escape_ok = self._escape_ok + 1 if new is not None else 0
         if (new is not None
                 and now_t - self._escape_t0 >= f.escape_min_t
@@ -286,7 +287,7 @@ class AvoidFsm:
         # ── plan 없음 (활성화 직후 포함): 정지 + 확보 시도, t_retry → ESCAPE.
         # 성공해도 이번 tick 은 정지 — 추종은 다음 tick 부터 (§4 흐름 그대로).
         if self.plan is None:
-            self.plan = generate(dri, boat_xy, yaw, vel_xy, wp_xy, self.p, now_t)
+            self.plan = self.generate(dri, boat_xy, yaw, vel_xy, wp_xy, self.p, now_t)
             if self.plan is not None:
                 self._no_plan_t0 = None
                 return StepOut(0.0, 0.0, self.state, self.plan, 'plan_acquired')
@@ -320,7 +321,7 @@ class AvoidFsm:
             elif now_t - self.plan.created_t >= f.t_backstop:
                 trig = 'backstop_regen'
             if trig is not None:
-                new = generate(dri, boat_xy, yaw, vel_xy, wp_xy, self.p, now_t)
+                new = self.generate(dri, boat_xy, yaw, vel_xy, wp_xy, self.p, now_t)
                 if new is not None:
                     self.plan, ev = new, trig
         else:
@@ -334,7 +335,7 @@ class AvoidFsm:
                     self._stuck_t0 = None
                     break
             if violation is not None:
-                new = generate(dri, boat_xy, yaw, vel_xy, wp_xy, self.p, now_t)
+                new = self.generate(dri, boat_xy, yaw, vel_xy, wp_xy, self.p, now_t)
                 if new is not None:
                     self.plan, ev = new, 'violation_regen'
                     self._stuck_t0 = None

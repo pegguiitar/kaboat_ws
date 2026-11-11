@@ -100,7 +100,7 @@ def generate_launch_description():
                               description='정렬점 도착 선수각 [deg]'),
         DeclareLaunchArgument('dock_weights', description='Jetson의 YOLO .pt 절대 경로'),
         DeclareLaunchArgument('dock_target_class',
-                              description='red_triangle / green_circle / blue_square'),
+                              description='triangle / circle / square'),
         DeclareLaunchArgument(
             'slot_config',
             default_value=os.path.join(
