@@ -6,6 +6,8 @@
 
   /scan/flat  (PointCloud2, frame odom)  스캔 점을 바닥면 z = flat_z 에
   /odom/flat  (Odometry)                 z = 0, 선수각만 남긴 배 위치
+  TF odom → base_link_flat               같은 자세 — RViz 카메라가 배를 따라가는 기준
+                                         (노트북 /tf 는 브리지 허용 목록에 없어 젯슨으로 안 감)
 
 를 낸다. 표시 전용 — 젯슨의 /odom·TF·자율주행은 그대로다.
 라이다 장착 위치는 선체 기준 lidar_offset (기본 x 0.4 m, onboard_lidar.launch.py 의 TF 와 같음).
@@ -77,6 +79,7 @@ class PoseHistory:
 
 def main(args=None):
     import rclpy
+    from geometry_msgs.msg import TransformStamped
     from nav_msgs.msg import Odometry
     from rclpy.executors import ExternalShutdownException
     from rclpy.node import Node
@@ -84,6 +87,7 @@ def main(args=None):
     from sensor_msgs.msg import LaserScan
     from sensor_msgs_py import point_cloud2
     from std_msgs.msg import Header
+    from tf2_ros import TransformBroadcaster
 
     def stamp_sec(stamp):
         return stamp.sec + stamp.nanosec * 1e-9
@@ -95,10 +99,13 @@ def main(args=None):
             self.declare_parameter('lidar_offset_y', 0.0)
             self.declare_parameter('lidar_offset_yaw_deg', 0.0)
             self.declare_parameter('flat_z', 0.05)    # 지도(z 0) 면에 묻히지 않게 살짝 위
+            self.declare_parameter('flat_frame', 'base_link_flat')
             g = lambda n: float(self.get_parameter(n).value)
             self.offset = (g('lidar_offset_x'), g('lidar_offset_y'),
                            math.radians(g('lidar_offset_yaw_deg')))
             self.z = g('flat_z')
+            self.flat_frame = str(self.get_parameter('flat_frame').value)
+            self.tf_pub = TransformBroadcaster(self)
             self.history = PoseHistory()
             self.cloud_pub = self.create_publisher(
                 point_cloud2.PointCloud2, '/scan/flat', 5)
@@ -121,6 +128,13 @@ def main(args=None):
             flat.pose.pose.orientation.w = math.cos(yaw / 2.0)
             flat.twist = msg.twist
             self.odom_pub.publish(flat)
+            tf = TransformStamped()
+            tf.header.stamp = msg.header.stamp
+            tf.header.frame_id = msg.header.frame_id or 'odom'
+            tf.child_frame_id = self.flat_frame
+            tf.transform.translation.x, tf.transform.translation.y = p.x, p.y
+            tf.transform.rotation = flat.pose.pose.orientation
+            self.tf_pub.sendTransform(tf)
 
         def _on_scan(self, msg):
             pose = self.history.nearest(stamp_sec(msg.header.stamp))

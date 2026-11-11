@@ -162,6 +162,9 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
+      # 배를 따라감 (flat_scan_view.py 가 내는 높이 0·선수각만 반영한 배 자세). 원점 고정이면
+      # 배가 원점에서 멀어질 때 스캔·지도가 화면 밖으로 나간다
+      Target Frame: base_link_flat
       Distance: 15.0
       Focal Point:
         X: 0.0
