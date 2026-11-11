@@ -100,6 +100,32 @@ Visualization Manager:
         Value: /odom/flat
       Value: true
     - Class: rviz_default_plugins/Path
+      Name: "게이트 경로 /gate/path"
+      Enabled: true
+      Alpha: 1
+      Buffer Length: 1
+      Color: 80; 255; 120
+      Line Style: Lines
+      Line Width: 0.08
+      Pose Style: None
+      Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /gate/path
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Name: "게이트 쌍 /gate/pairs"
+      Enabled: true
+      Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /gate/pairs
+      Value: true
+    - Class: rviz_default_plugins/Path
       Name: "자율 회피 /avoid/plan"
       Enabled: true
       Alpha: 1

@@ -126,6 +126,7 @@ ros2 launch kaboat_hardware real_sensors.launch.py outdoor:=true rtk:=true \
 | `view_position` | `python3 scripts/view_position.py` | `/odom` x·y·선수각(동쪽 0°)·나침반 방위·속도·GNSS 상태(RTK Fixed 등) 실시간 한 줄 |
 | `run_boat_lidar` | `ros2 launch kaboat_hardware indoor_tank.launch.py enable_thrusters:=false enable_onboard_lidar:=true onboard_lidar_port:=$(_tg50_port)` | **실내 수조 전용** (야외에서 쓰지 않음) |
 | `cal_imu` | `ros2 run kaboat_hardware calibrate_indoor_imu` | 실내 수조 IMU 정지 보정 |
+| `test_gate_outdoor` | `ros2 launch kaboat_hardware outdoor_gate_test.launch.py` | 야외 게이트 7쌍 `gate_entry` → `gate_end`, **즉시 출발**. 5절 참고 |
 | `test_avoid_outdoor` | `ros2 launch kaboat_hardware outdoor_avoid_test.launch.py` | 야외 회피 시험 `avoid_entry` → `avoid_end`, **조건이 맞으면 즉시 출발**. 5절 참고 |
 | `test_straight` / `test_circle` / `test_bspline` / `test_station` / `test_waypoint` / `test_los` / `test_avoid` | 각 `*_test.launch.py … wait_for_start:=false` | 단독 주행 시험, **실행 즉시 출발** ([TANK_TESTS_GUIDE.md](TANK_TESTS_GUIDE.md)) |
 
@@ -248,6 +249,24 @@ test_avoid_outdoor start_point:=gate_entry goal_point:=gate_end   # 다른 지�
   벗어나면 정지, 경로가 5초 넘게 없으면 후진 탈출(`allow_escape:=false`면 정지).
 - 계획은 지도(15 m) 안에서 목표 쪽으로 짧게 이어 가므로 목표가 멀어도 됩니다.
 - 기록 당시 원점과 지금 원점이 다르면 시작을 거부합니다.
+
+**야외 게이트 시험** (`test_gate_outdoor`, 자율주행과 같은 `gate_follower` + `cmd_mux`, 게이트 미션 하나만)
+
+`mission_manager`가 기록 파일 전체가 아니라 `gate_entry`·`gate_end` 두 지점만 받으므로 다른 미션
+지점(`station_end` 등)이 없어도 됩니다. 준비는 `goto`와 같고 `run_lidar`도 필요합니다. 지도는 이 런치가 켭니다.
+
+```bash
+goto gate_entry max_goal_distance:=200       # 1) 첫 게이트 앞 통로 중심에 세움 → REACHED 후 Ctrl+C
+test_gate_outdoor motion_enabled:=false      # 2) 미리보기: 노트북 RViz 에 게이트 쌍(/gate/pairs)·경로(/gate/path)
+test_gate_outdoor                            # 3) 실제 주행 (7쌍 통과 → gate_end 2 m 안 → 정지)
+test_gate_outdoor approach:=true             # gate_entry 접근(직선, 회피 없음)부터
+```
+
+- 기록: `gate_entry` = 첫 게이트 앞 통로 중심(진행 방향으로 세워서), `gate_end` = 마지막 게이트 뒤
+  **2~3 m** 통로 중심. 모든 쌍을 지난 뒤 `gate_end`가 4 m 안이어야 그리로 가고 2 m 안이면 완료.
+- 쌍 고르기: 두 부표를 잇는 선이 진행 방향(직전 게이트 방향, 첫 게이트는 배→`gate_end`)의 수직에서
+  35° 안(`gate.max_pair_skew_deg`)이면 쌍. 통로가 휘어도 됨. 폭 1.5~7 m.
+- 상태: `ros2 topic echo /gate/status` (`FOLLOW_GATE_3/7`, `GATE_3/7_PASSED`, `WAIT_GATE_PAIR`, `COMPLETE` …).
 
 **카메라 층 — 라이다가 놓치는 낮은 색 장애물** (주황 붐 등, `occupancy_grid` 의 `cam_enabled`, 기본 끔)
 
