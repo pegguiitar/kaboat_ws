@@ -97,6 +97,16 @@ def test_outdoor_accepts_negative_coordinates_and_stops_when_goal_too_far():
         _close(node)
 
 
+def test_outdoor_default_has_no_distance_limit():
+    node = _node('outdoor:=true', 'target_x:=-12.5', 'target_y:=30.0')
+    try:
+        assert node.max_goal_distance == 0.0
+        _drive(node, 100.0, 30.0)                                # 112 m 떨어져도
+        assert node.last_status.startswith('PREVIEW_')           # 멈추지 않음
+    finally:
+        _close(node)
+
+
 def test_outdoor_goal_from_recorded_point_without_heading(files):
     points, origin, _ = files
     node = _node('outdoor:=true', 'point:=gate_entry', 'align_heading:=false', 'settle_time:=0.0',
@@ -128,6 +138,7 @@ def test_launch_point_or_coordinates(launch_mod):
     p = launch_mod.node_parameters(_args(launch_mod, point='gate_entry'))
     assert p['outdoor'] is True and p['point'] == 'gate_entry' and p['align_heading'] is True
     assert p['motion_enabled'] is True and p['thrust_ratio'] == 0.2
+    assert p['max_goal_distance'] == 0.0                         # 기본 거리 제한 없음
     assert 'target_x' not in p
 
     p = launch_mod.node_parameters(_args(launch_mod, x='-3.5', y='12', angle='90'))

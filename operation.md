@@ -228,7 +228,8 @@ goto gate_entry thrust_ratio:=0.3 position_tolerance:=1.5
 - 로그 1초마다 `[단계] 현재: (x, y) | 목표거리 | 선수각(오차) | 출력`. 도착하면 상태 `REACHED`, 이후 정지 명령만 냅니다. Ctrl+C로 끕니다.
 - 상태는 `ros2 topic echo /waypoint/status`, 목표는 `/waypoint/goal`(RViz).
 - 노트북 `teleop`으로 수동 모드를 켜면 언제든 넘겨받습니다(수동을 끄면 아직 도착 전이면 다시 이어서 감). 비상 정지는 아래 안전 명령.
-- 목표가 `max_goal_distance`(기본 50 m)보다 멀면 `GOAL_TOO_FAR`로 멈춥니다(원점·좌표 실수 방지). 먼 지점이면 `max_goal_distance:=100`.
+- 목표 거리 제한은 기본으로 없습니다. 좌표 실수가 걱정되면 `max_goal_distance:=50`처럼 걸면 그보다 먼 목표에서 `GOAL_TOO_FAR`로 멈춥니다.
+- 목표까지 **직선으로** 갑니다(장애물 회피 없음). 멀리 보낼 때는 지켜보다가 `teleop`으로 넘겨받으세요.
 - 기록 지점은 기록 당시 원점과 지금 원점이 다르면 시작을 거부합니다(`mission_manager`와 같은 규칙).
 
 **야외 회피 시험** (`test_avoid_outdoor`, 수조 `test_avoid`와 같은 DRI·B-spline·FSM)
@@ -237,7 +238,7 @@ goto gate_entry thrust_ratio:=0.3 position_tolerance:=1.5
 따로 켜 둔 것이 있으면 끄거나 `start_occupancy_grid:=false`.
 
 ```bash
-goto avoid_entry max_goal_distance:=200          # 1) 시작점에 기록 선수각으로 세움 → REACHED 후 Ctrl+C
+goto avoid_entry                                 # 1) 시작점에 기록 선수각으로 세움 → REACHED 후 Ctrl+C
 test_avoid_outdoor drive_enabled:=false          # 2) 미리보기: RViz /real_avoid_test/path 에 경로
 test_avoid_outdoor                               # 3) 실제 주행: 출발 조건이 맞으면 바로 출발
 test_avoid_outdoor start_point:=gate_entry goal_point:=gate_end   # 다른 지점 쌍
@@ -256,7 +257,7 @@ test_avoid_outdoor start_point:=gate_entry goal_point:=gate_end   # 다른 지�
 지점(`station_end` 등)이 없어도 됩니다. 준비는 `goto`와 같고 `run_lidar`도 필요합니다. 지도는 이 런치가 켭니다.
 
 ```bash
-goto gate_entry max_goal_distance:=200       # 1) 첫 게이트 앞 통로 중심에 세움 → REACHED 후 Ctrl+C
+goto gate_entry                              # 1) 첫 게이트 앞 통로 중심에 세움 → REACHED 후 Ctrl+C
 test_gate_outdoor motion_enabled:=false      # 2) 미리보기: 노트북 RViz 에 게이트 쌍(/gate/pairs)·경로(/gate/path)
 test_gate_outdoor                            # 3) 실제 주행 (7쌍 통과 → gate_end 2 m 안 → 정지)
 test_gate_outdoor approach:=true             # gate_entry 접근(직선, 회피 없음)부터
@@ -332,6 +333,6 @@ cat ~/kaboat_mission_points.json
 | `mission_manager` → `시작 거부: gate_end 이 없음` | 그 미션의 `_entry`/`_end` 중 하나만 기록됨. 나머지를 `rec`로 기록 |
 | `goto` → `CMD_VEL_PUBLISHER_CONFLICT` | 다른 `/cmd_vel` 노드가 켜져 있음 (`ros2 topic info /cmd_vel -v`). 끄고 다시 |
 | `goto` → `ODOM_PUBLISHER_COUNT_NOT_ONE` / `ODOM_TIMEOUT` | `/odom` 발행자가 0개 또는 2개 이상 (`ros2 topic info /odom -v`), GQ7 켜짐 확인 |
-| `goto` → `GOAL_TOO_FAR` | 목표 좌표·원점 확인, 정말 멀면 `max_goal_distance:=…` |
+| `goto` → `GOAL_TOO_FAR` | `max_goal_distance:=…`를 직접 준 경우만 — 목표 좌표·원점 확인 또는 값 올리기 |
 | behavior 가 안 움직임 | `/odom` `frame_id`가 `odom`인지, `autonomy.launch.py`의 `*_motion_enabled` |
 | 노트북에 토픽이 안 보임 | 브리지 허용 목록([`zenoh_monitor_link.py`](scripts/zenoh_monitor_link.py)), 양쪽 브리지 재시작 |

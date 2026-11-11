@@ -4,7 +4,7 @@
   point:=gate_entry            rec 로 기록한 지점 (x, y, 기록 당시 선수각)
   x:=12.0 y:=-3.5 [angle:=90]  /odom 좌표 직접 (angle 생략 = 선수각 맞추지 않음)
 
-수조 범위 검사 대신 목표가 max_goal_distance(기본 50 m)보다 멀면 GOAL_TOO_FAR 로 멈춘다.
+거리 제한은 기본 없음. max_goal_distance:=… (> 0) 을 주면 그보다 먼 목표에서 GOAL_TOO_FAR 로 멈춘다.
 motion_enabled:=false 면 /cmd_vel 없이 로그·/waypoint/cmd_preview 만 낸다.
 """
 
@@ -24,7 +24,7 @@ ARGS = [
     ('angle', '', '목표 선수각 [deg] (동쪽 0, 반시계 +); 생략 = 맞추지 않음'),
     ('thrust_ratio', '0.2', '추력 상한 대비 비율 [0..1] (기본 0.2 = 20%)'),
     ('motion_enabled', 'true', 'false = 미리보기 (모터 명령 안 냄)'),
-    ('max_goal_distance', '50.0', '목표가 이보다 멀면 정지 [m]'),
+    ('max_goal_distance', '0', '목표가 이보다 멀면 정지 [m] (0 = 제한 없음)'),
     ('position_tolerance', '0.9', '도착 판정 반경 [m]'),
     ('heading_tolerance_deg', '10.0', '최종 선수각 허용 오차 [deg]'),
     ('slow_radius', '1.5', '감속 시작 반경 [m]'),

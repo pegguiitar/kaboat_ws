@@ -5,8 +5,8 @@ publishes /cmd_vel.  Motion mode requires one fresh odom-frame /odom publisher
 and exclusive ownership of /cmd_vel; no motor driver is launched here.
 
 Tank (default): goal and /odom must lie inside the measured tank bounds.
-Outdoor (outdoor:=true): no tank bounds; instead the boat halts with GOAL_TOO_FAR
-while the goal is more than max_goal_distance away (wrong origin, typo).
+Outdoor (outdoor:=true): no tank bounds. Optionally (max_goal_distance > 0) the boat
+halts with GOAL_TOO_FAR while the goal is farther than that; 0 (default) = no limit.
 The goal can also be a point recorded with `rec` (point:=gate_entry).
 """
 
@@ -55,7 +55,7 @@ class IndoorWaypoint(Node):
             'odom_timeout_sec': 0.5,
             # 야외: 수조 범위 대신 목표 거리 상한
             'outdoor': False,
-            'max_goal_distance': 50.0,
+            'max_goal_distance': 0.0,    # > 0 이면 이보다 먼 목표에서 정지. 0 = 제한 없음
             # 비어 있지 않으면 target_x/y/angle 대신 rec 기록 지점을 목표로
             'point': '',
             'align_heading': True,     # false = 위치만 (선수각 맞추지 않음)
@@ -90,8 +90,8 @@ class IndoorWaypoint(Node):
             raise ValueError('odom_timeout_sec must be positive')
         if self.outdoor:
             if not (math.isfinite(self.max_goal_distance)
-                    and self.max_goal_distance > 0):
-                raise ValueError('max_goal_distance must be positive')
+                    and self.max_goal_distance >= 0):
+                raise ValueError('max_goal_distance must be >= 0 (0 = no limit)')
         elif (not all(math.isfinite(v) for v in
                       (self.size_x, self.size_y, self.margin))
                 or not 0 <= self.margin < min(self.size_x, self.size_y) / 2
@@ -127,8 +127,9 @@ class IndoorWaypoint(Node):
         heading = ('선수각 맞추지 않음' if self.target.angle_deg is None
                    else f'{self.target.angle_deg:.1f}')
         source = f'기록 지점 {self.point_name!r}' if self.point_name else '좌표 입력'
-        area = (f'야외(목표 거리 최대 {self.max_goal_distance:.0f} m)'
-                if self.outdoor else '수조')
+        limit = (f'목표 거리 최대 {self.max_goal_distance:.0f} m'
+                 if self.max_goal_distance > 0 else '거리 제한 없음')
+        area = f'야외({limit})' if self.outdoor else '수조'
         self.get_logger().info(
             f'waypoint({self.target.x:.2f}, {self.target.y:.2f}, {heading}, '
             f'{self.target.thrust_ratio:.2f}) in odom ({source}); {area}; '
@@ -206,7 +207,7 @@ class IndoorWaypoint(Node):
         if self.outdoor:
             distance = math.hypot(self.target.x - pose.position.x,
                                   self.target.y - pose.position.y)
-            if distance > self.max_goal_distance:
+            if 0 < self.max_goal_distance < distance:
                 self._halt('GOAL_TOO_FAR')
                 self.get_logger().warn(
                     f'목표까지 {distance:.1f} m > max_goal_distance '
