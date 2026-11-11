@@ -41,7 +41,7 @@ source ~/.zshrc
 | 4 | 젯슨 터미널 3 | `run_lidar` (= `ros2 launch kaboat_hardware onboard_lidar.launch.py port:=/dev/ttyUSB0`) | `/scan` (선체 TG-50, 실제 포트 확인) |
 | 5 | 젯슨 터미널 4 | `run_motor` | 모터 드라이버 + GPS CSV 기록기 |
 | 6 | 젯슨 터미널 5 | `run_points` | 미션 지점 기록기 |
-| 7 | 노트북 | `rviz2 -d ~/Projects/KABOAT/kaboat_ws/scripts/remote_monitor.rviz` | Fixed Frame `odom` |
+| 7 | 노트북 | `view_lidar` (= `rviz2 -d …/scripts/remote_monitor.rviz`) | Fixed Frame `odom`, 장애물 지도·`/scan`·배 위치 |
 | 8 | 노트북 | 배를 옮겨 가며 `rec 이름` (아래 이름 규칙) | `✓ 이름: x=… y=… 선수각 …` |
 | 9 | 젯슨 터미널 6 | `ros2 launch kaboat_bringup autonomy.launch.py` | 자율주행 스택. 로그에 `[기록 지점] gate: 시작 … → 끝 …` |
 
@@ -138,6 +138,7 @@ IP만 맞춥니다(지금 설정은 `/home/jiwoo/Projects/KABOAT/kaboat_ws`, 젯
 | `stop_kaboat` | Zenoh 브리지 종료 |
 | `set_default` | Jazzy 로드, 도메인 0으로 복귀 |
 | `rec [이름]` / `rec --list` | 젯슨에 지금 위치 기록 요청 / 기록한 지점 보기 (`set_kaboat` 후) |
+| `view_lidar` | 야외 모니터링 RViz (`remote_monitor.rviz`, Fixed Frame `odom`: 장애물 지도·`/scan`·`/odom`·경로). `set_kaboat` 후 |
 | `rviz_tank [시험]` / `clear_traj` | 수조 추적 RViz / 궤적 지우기 |
 | `rviz_remote` | 선체 `/scan`을 라이다 좌표계로 표시 |
 | `view_pitch` | 롤/피치 모니터 |
@@ -162,6 +163,7 @@ stop_kaboat() { pkill -f zenoh_monitor_link.py; pkill -f zenoh-bridge-ros2dds; }
 set_default() { source /opt/ros/jazzy/setup.zsh; export ROS_DOMAIN_ID=0 ROS_LOCALHOST_ONLY=0; }
 
 alias rec="python3 $KABOAT_WS/scripts/rec_point.py"
+view_lidar() { ROS_DOMAIN_ID=43 rviz2 -d $KABOAT_WS/scripts/remote_monitor.rviz "$@"; }
 alias rviz_tank="$KABOAT_WS/scripts/rviz_tank.sh"
 alias rviz_remote="$KABOAT_WS/scripts/rviz_remote.sh"
 alias clear_traj="$KABOAT_WS/scripts/clear_tank_trajectory.sh"
