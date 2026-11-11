@@ -88,7 +88,7 @@ def _follow_current_gate(node):
 
 
 def test_three_pairs_pass_before_completion_and_output_stays_preview_only():
-    rclpy.init()
+    rclpy.init(args=['--ros-args', '-p', 'gate.required_pairs:=3'])   # 기본 7 — 3쌍 배치
     node = None
     try:
         node = _ready_node()
@@ -158,7 +158,7 @@ def test_posts_need_not_be_visible_close_to_the_gate_line():
         _set_odom(node, mid[0] - 0.8, mid[1])           # 게이트선 0.8 m 앞 (해제 거리 1.0 m)
         node._scan_hits = np.asarray([node._pair.left])  # 한쪽 기둥만 보임
         node.compute_cmd()
-        assert node._status_text == 'FOLLOW_GATE_1/3'
+        assert node._status_text == 'FOLLOW_GATE_1/7'
     finally:
         if node is not None:
             node.destroy_node()
@@ -207,7 +207,7 @@ def test_stall_after_crossing_counts_the_gate_as_passed():
         node.compute_cmd()
         assert node._passed_midpoints == [mid]
         assert node._rejected == []
-        assert node._status_text == 'GATE_1/3_PASSED'
+        assert node._status_text == 'GATE_1/7_PASSED'
     finally:
         if node is not None:
             node.destroy_node()

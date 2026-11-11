@@ -16,22 +16,35 @@ from .los_controller import bspline_path
 
 @dataclass(frozen=True)
 class GateParams:
-    required_pairs: int = 3
+    required_pairs: int = 7          # 대회 게이트 7쌍 (2026-11-12, 예전 수조 3쌍)
     occ_threshold: int = 95
     min_cluster_cells: int = 2
     max_cluster_extent: float = 1.2
     min_gate_width: float = 1.5
     max_gate_width: float = 7.0
-    max_pair_along_error: float = 0.75
+    # 게이트선(두 기둥을 잇는 선)이 기준 진행 방향의 수직에서 이만큼까지 기울어도 쌍으로
+    # 인정 [deg]. 기준 = 직전에 통과한 게이트의 진행 방향(통로를 따라 꺾여 감), 첫 게이트는
+    # 배→목표 방향. 예전엔 배→목표 축 기준 기둥 앞뒤 차이(≤0.75 m)로 봐서 통로가 목표
+    # 축에서 15° 넘게 휘면(폭 2.5 m: 2.5·sin θ > 0.75) 진짜 쌍을 놓쳤다. 35° (2026-11-12,
+    # 현장 통로가 완전한 직선이 아님). 같은 줄의 두 기둥은 통로와 나란해 ~90° 라 걸리고,
+    # 대각선 오쌍은 아래 gate_circle_margin 이 거른다.
+    max_pair_skew_deg: float = 35.0
+    # 대각선 오쌍 거르기: 두 기둥을 지름으로 하는 원(반지름 = 폭/2)의 이 배수 안에 다른
+    # 기둥이 두 기둥을 잇는 선의 **양쪽에 모두** 있으면 게이트가 아니다. 직사각형 배치의
+    # 대각선은 나머지 두 기둥이 그 원 위 양쪽에 하나씩 놓이고(원주각 90°), 진짜 게이트는
+    # 가장 가까운 다른 기둥이 √(1+(2·간격/폭)²) 배 밖에 있다 (간격 2.5·폭 2.5 → 2.24,
+    # 수조 간격 2.0·폭 3.0 → 1.67). 한쪽에만 있는 것(게이트 앞 장애물)은 경로 검사가 맡는다.
+    gate_circle_margin: float = 1.2
     min_gate_forward: float = 0.3
     max_gate_forward: float = 9.0
     max_midpoint_lateral: float = 2.5
     passed_pair_exclusion: float = 1.0
     min_pair_advance: float = 0.8
-    # 연속 게이트 중점의 좌우 이동 허용치 [m]. 코스의 실제 최대 좌우 어긋남으로 둔다.
-    # 1.5 → 1.0 (2026-11-04 가정값, 대회장 실측 후 gate_params.yaml 에서 수정).
-    # 실제 어긋남보다 작으면 그 게이트를 건너뛰고 다음 게이트를 고른다.
-    max_midpoint_shift: float = 1.0
+    # 연속 게이트 중점의 좌우 이동 허용치 [m] (배→목표 축 기준). 코스의 실제 최대 좌우
+    # 어긋남보다 커야 한다 — 작으면 그 게이트를 건너뛰고 다음 게이트를 고른다.
+    # 1.0 → 2.0 (2026-11-12): 게이트 간격 2.5 m 통로가 목표 축에서 35° 휘면 2.5·sin35°
+    # = 1.43 m 어긋난다.
+    max_midpoint_shift: float = 2.0
     exit_distance: float = 1.0
     sample_spacing: float = 0.05
     min_clearance: float = 0.5
@@ -44,7 +57,7 @@ class GateParams:
                 or not 0 <= self.occ_threshold <= 100):
             raise ValueError('invalid gate count or occupancy thresholds')
         values = (self.max_cluster_extent, self.min_gate_width,
-                  self.max_gate_width, self.max_pair_along_error,
+                  self.max_gate_width, self.max_pair_skew_deg, self.gate_circle_margin,
                   self.min_gate_forward, self.max_gate_forward,
                   self.max_midpoint_lateral, self.passed_pair_exclusion,
                   self.min_pair_advance, self.max_midpoint_shift,
@@ -55,7 +68,8 @@ class GateParams:
                 or min(values) <= 0
                 or self.min_gate_width >= self.max_gate_width
                 or self.min_gate_forward >= self.max_gate_forward
-                or self.min_gate_width <= 2.0 * self.min_clearance):
+                or self.min_gate_width <= 2.0 * self.min_clearance
+                or self.max_pair_skew_deg >= 90.0):
             raise ValueError('invalid gate geometry or clearance parameters')
 
 
@@ -133,18 +147,28 @@ def pair_observed(pair: GatePair, scan_hits, p: GateParams):
 
 
 def select_gate_pair(grid, boat_xy, goal_xy, passed_midpoints, p: GateParams,
-                     excluded_midpoints=()):
+                     excluded_midpoints=(), last_direction=None):
     """Find the nearest credible aperture ahead along the mission goal axis.
 
     excluded_midpoints: 잠시 후보에서 뺄 쌍의 중점 (경로가 계속 막혀 버린 쌍).
+    last_direction: 직전에 통과한 게이트의 진행 방향 — 게이트선 기울기의 기준.
+    없으면 배→목표 방향.
     """
     direction = _unit_toward(boat_xy, goal_xy)
     if direction is None:
         return None
     lateral = np.array([-direction[1], direction[0]])
     boat = np.asarray(boat_xy, dtype=float)
+    axis = direction
+    if last_direction is not None:
+        last = np.asarray(last_direction, dtype=float)
+        if np.all(np.isfinite(last)) and np.linalg.norm(last) > 1e-6:
+            axis = last / np.linalg.norm(last)
+    max_skew_sin = math.sin(math.radians(p.max_pair_skew_deg))
     candidates = []
-    for point in _clusters(grid, p):
+    posts = _clusters(grid, p)
+    all_posts = np.asarray(posts, dtype=float).reshape(-1, 2)
+    for point in posts:
         delta = np.asarray(point) - boat
         along = float(delta @ direction)
         side = float(delta @ lateral)
@@ -154,11 +178,25 @@ def select_gate_pair(grid, boat_xy, goal_xy, passed_midpoints, p: GateParams,
     pairs = []
     for i, (a, ta, la) in enumerate(candidates):
         for b, tb, lb in candidates[i + 1:]:
-            width = abs(la - lb)
-            mid = (np.asarray(a) + np.asarray(b)) / 2.0
+            a_xy, b_xy = np.asarray(a, dtype=float), np.asarray(b, dtype=float)
+            post_line = b_xy - a_xy
+            width = float(np.linalg.norm(post_line))
+            mid = (a_xy + b_xy) / 2.0
+            if not p.min_gate_width <= width <= p.max_gate_width:
+                continue
+            # 지름 원 안 다른 기둥이 선 양쪽에 다 있으면 대각선 오쌍 (위 GateParams 주석)
+            rel = all_posts - mid
+            near = ((np.linalg.norm(rel, axis=1) < p.gate_circle_margin * width / 2.0)
+                    & (np.linalg.norm(all_posts - a_xy, axis=1) > 1e-6)
+                    & (np.linalg.norm(all_posts - b_xy, axis=1) > 1e-6))
+            if near.any():
+                side = post_line[0] * rel[near, 1] - post_line[1] * rel[near, 0]
+                if np.any(side > 0.0) and np.any(side < 0.0):
+                    continue
+            # 게이트선이 기준 진행 방향에 수직이면 0, 나란하면 1 (= sin 기울기)
+            skew_sin = abs(float(post_line @ axis)) / width
             mid_side = float((mid - boat) @ lateral)
-            if (not p.min_gate_width <= width <= p.max_gate_width
-                    or abs(ta - tb) > p.max_pair_along_error
+            if (skew_sin > max_skew_sin
                     or abs(mid_side) > p.max_midpoint_lateral
                     or any(np.linalg.norm(mid - old) < p.passed_pair_exclusion
                            for old in (*passed_midpoints, *excluded_midpoints))):
@@ -168,10 +206,16 @@ def select_gate_pair(grid, boat_xy, goal_xy, passed_midpoints, p: GateParams,
                 if (float(from_last @ direction) < p.min_pair_advance
                         or abs(float(from_last @ lateral)) > p.max_midpoint_shift):
                     continue
-            left, right = (a, b) if la > lb else (b, a)
+            # 게이트를 지나는 방향 = 게이트선의 수직, 기준 진행 방향 쪽으로.
+            # 통과 판정(crossed_gate)·경로 끝점(make_gate_path)이 이 방향을 쓴다.
+            normal = np.array([-post_line[1], post_line[0]]) / width
+            if float(normal @ axis) < 0.0:
+                normal = -normal
+            left_axis = np.array([-normal[1], normal[0]])
+            left, right = (a, b) if float((a_xy - mid) @ left_axis) > 0 else (b, a)
             pair = GatePair(left, right, (float(mid[0]), float(mid[1])),
-                            width, (float(direction[0]), float(direction[1])))
-            pairs.append((0.5 * (ta + tb), abs(ta - tb), abs(mid_side), pair))
+                            width, (float(normal[0]), float(normal[1])))
+            pairs.append((0.5 * (ta + tb), skew_sin, abs(mid_side), pair))
     return min(pairs, key=lambda row: row[:3])[-1] if pairs else None
 
 

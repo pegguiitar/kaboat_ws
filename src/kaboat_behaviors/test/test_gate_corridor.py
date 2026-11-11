@@ -144,3 +144,73 @@ def test_excluded_midpoints_are_skipped_like_passed_ones():
                              excluded_midpoints=[first.midpoint])
     assert other is not None
     assert np.linalg.norm(np.subtract(other.midpoint, first.midpoint)) > 1.0
+
+
+def _channel_grid(centers, width):
+    """게이트 중심 목록 → 각 게이트 기둥을 통로 진행 방향에 수직으로 놓은 격자."""
+    posts = []
+    for i, c in enumerate(centers):
+        c = np.asarray(c, dtype=float)
+        t = (np.asarray(centers[min(i + 1, len(centers) - 1)], dtype=float)
+             - np.asarray(centers[max(i - 1, 0)], dtype=float))
+        t /= np.linalg.norm(t)
+        n = np.array([-t[1], t[0]])
+        posts += [tuple(c + n * width / 2), tuple(c - n * width / 2)]
+    res, size, origin = 0.2, 250, (-25.0, -25.0)
+    data = np.zeros((size, size), dtype=np.int8)
+    for x, y in posts:
+        ix = int(math.floor((x - origin[0]) / res))
+        iy = int(math.floor((y - origin[1]) / res))
+        data[iy - 1:iy + 1, ix - 1:ix + 1] = 100
+    info = SimpleNamespace(
+        resolution=res, width=size, height=size,
+        origin=SimpleNamespace(position=SimpleNamespace(x=origin[0], y=origin[1])))
+    return SimpleNamespace(info=info, data=data.ravel().tolist())
+
+
+def _follow(grid, centers, goal, p):
+    """노드처럼 통과한 게이트 중점·방향을 넘기며 차례로 고른다 → 고른 중점 목록."""
+    boat, passed, dirs = (0.0, 0.0), [], []
+    for _ in centers:
+        pair = select_gate_pair(grid, boat, goal, passed, p,
+                                last_direction=dirs[-1] if dirs else None)
+        if pair is None:
+            break
+        passed.append(pair.midpoint)
+        dirs.append(pair.direction)
+        boat = tuple(np.asarray(pair.midpoint) + 0.6 * np.asarray(pair.direction))
+    return passed
+
+
+@pytest.mark.parametrize('skew_deg', [0.0, 20.0, 35.0])
+def test_field_channel_seven_pairs_up_to_35_deg_off_the_goal_axis(skew_deg):
+    """현장: 폭 2.5 m · 간격 2.5 m 7쌍, 통로가 배→목표 축에서 35° 까지 틀어져도 순서대로."""
+    u = np.array([math.cos(math.radians(skew_deg)), math.sin(math.radians(skew_deg))])
+    centers = [tuple(u * (2.0 + 2.5 * k)) for k in range(7)]
+    picked = _follow(_channel_grid(centers, 2.5), centers, (40.0, 0.0), GateParams())
+    assert len(picked) == 7
+    for got, want in zip(picked, centers):
+        assert np.linalg.norm(np.subtract(got, want)) < 0.25
+
+
+def test_field_channel_bending_ten_deg_per_gate():
+    centers, pos, ang = [], np.array([2.0, 0.0]), 0.0
+    for _ in range(7):
+        centers.append(tuple(pos))
+        ang += math.radians(10.0)
+        pos = pos + 2.5 * np.array([math.cos(ang), math.sin(ang)])
+    picked = _follow(_channel_grid(centers, 2.5), centers, tuple(pos), GateParams())
+    assert len(picked) == 7
+    for got, want in zip(picked, centers):
+        assert np.linalg.norm(np.subtract(got, want)) < 0.25
+
+
+def test_skewed_gate_crossing_uses_the_gate_normal():
+    """35° 기운 게이트: 통과 판정이 배→목표 축이 아니라 게이트선 수직 방향으로."""
+    u = np.array([math.cos(math.radians(35.0)), math.sin(math.radians(35.0))])
+    centers = [tuple(u * (2.0 + 2.5 * k)) for k in range(3)]
+    pair = select_gate_pair(_channel_grid(centers, 2.5), (0.0, 0.0), (40.0, 0.0), [],
+                            GateParams())
+    assert abs(float(np.dot(pair.direction, u))) > 0.99
+    mid = np.asarray(pair.midpoint)
+    assert crossed_gate(tuple(mid - 0.3 * u), tuple(mid + 0.3 * u), pair, GateParams())

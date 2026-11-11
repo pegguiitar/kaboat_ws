@@ -1,7 +1,7 @@
 gate_follower:
   ros__parameters:
-    # 실내 수조 시험: 세 쌍. 실외 4쌍 이상이면 실제 개수로 변경.
-    gate.required_pairs: 3
+    # 대회 게이트 7쌍 (2026-11-12). 예전 수조 시험은 3쌍.
+    gate.required_pairs: 7
     # 경로 명령은 기본적으로 미리보기만 발행한다.
     gate.motion_enabled: false
     gate.thrust_ratio: 0.5              # waypoint(첫 게이트 접근) 구간
@@ -12,16 +12,16 @@ gate_follower:
     gate.max_cluster_extent: 1.2
     gate.min_gate_width: 1.5
     gate.max_gate_width: 7.0
-    gate.max_pair_along_error: 0.75
+    gate.max_pair_skew_deg: 35.0        # 게이트선이 다가가는 방향의 수직에서 기울어도 되는 각도 (휜 통로)
+    gate.gate_circle_margin: 1.2        # 두 기둥을 지름으로 한 원 × 이 배수 안에 다른 기둥 → 대각선 오쌍으로 거름
     gate.min_gate_forward: 0.3
     gate.max_gate_forward: 9.0
     gate.max_midpoint_lateral: 2.5
     gate.passed_pair_exclusion: 1.0
     gate.min_pair_advance: 0.8
-    # 연속 게이트 중점의 좌우 어긋남 허용치 [m]. 지금은 코스 어긋남 최대 1 m 가정.
-    # ⚠ 대회장에서 실제 게이트 배치를 재고 수정할 것. 실제 어긋남보다 작으면
-    #   그 게이트를 건너뛰고 다음 게이트를 고른다(경로가 막혀 멈추거나 누락).
-    gate.max_midpoint_shift: 1.0
+    # 연속 게이트 중점의 좌우 어긋남 허용치 [m]. 간격 2.5 m 통로가 35° 휘면 1.43 m.
+    # ⚠ 실제 어긋남보다 작으면 그 게이트를 건너뛰고 다음 게이트를 고른다(누락).
+    gate.max_midpoint_shift: 2.0
     gate.exit_distance: 1.0
     gate.sample_spacing: 0.05
     gate.min_clearance: 0.5

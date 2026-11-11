@@ -91,6 +91,7 @@ class GateFollower(BehaviorBase):
         self._previous_xy = None
         self._crossed = False
         self._passed_midpoints = []
+        self._passed_directions = []   # 통과한 게이트 진행 방향 — 다음 쌍 기울기 기준
         self._status_text = None
         self._stall_since = None
         self._rejected = []          # [(midpoint, 다시 후보가 되는 시각)]
@@ -124,6 +125,7 @@ class GateFollower(BehaviorBase):
         self._previous_xy = None
         self._crossed = False
         self._passed_midpoints = []
+        self._passed_directions = []   # 통과한 게이트 진행 방향 — 다음 쌍 기울기 기준
         self._status_text = None
         self._stall_since = None
         self._rejected = []
@@ -179,6 +181,7 @@ class GateFollower(BehaviorBase):
 
     def _mark_passed(self):
         self._passed_midpoints.append(self._pair.midpoint)
+        self._passed_directions.append(self._pair.direction)
         self._drop_pair()
         passed = len(self._passed_midpoints)
         self._status(f'GATE_{passed}/{self.gate_params.required_pairs}_PASSED')
@@ -306,7 +309,9 @@ class GateFollower(BehaviorBase):
             self._rejected = [(m, until) for m, until in self._rejected if until > now]
             pair = select_gate_pair(
                 grid, boat, goal, self._passed_midpoints, self.gate_params,
-                excluded_midpoints=[m for m, _ in self._rejected])
+                excluded_midpoints=[m for m, _ in self._rejected],
+                last_direction=(self._passed_directions[-1]
+                                if self._passed_directions else None))
             if pair is None or not pair_observed(
                     pair, self._scan_hits, self.gate_params):
                 return self._stop('WAIT_GATE_PAIR')
