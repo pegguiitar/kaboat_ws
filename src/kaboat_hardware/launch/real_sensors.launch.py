@@ -46,44 +46,57 @@ def generate_launch_description():
                    default_gq7_config)
 
 
+def _truthy(context, name):
+    return context.perform_substitution(
+        LaunchConfiguration(name)).strip().lower() in ('true', '1', 'yes')
+
+
 def _gq7_actions(context):
-    """GQ7 드라이버 실행. gq7_origin_file 이 있으면 그 원점을 설정에 합쳐 넘긴다."""
-    enabled = context.perform_substitution(LaunchConfiguration('enable_gq7'))
-    if enabled.strip().lower() not in ('true', '1', 'yes'):
+    """GQ7 드라이버 실행.
+
+    야외(outdoor:=true): gq7_outdoor.yaml 로 켜고, /odom 은 gq7_local_odom 이 GQ7 필터의
+    /ekf/odometry_earth(ECEF)를 원점 파일 기준 x=동·y=북으로 바꿔 낸다. 드라이버의 고정 원점
+    기능(/ekf/odometry_map)은 쓰지 않는다 — 젯슨 드라이버에서 원점을 맞게 받고도 수백 km
+    떨어진 값을 냈다(2026-11-11). 원점 파일이 바뀌면 gq7_local_odom 이 바로 다시 읽는다.
+    실내·벤치(outdoor:=false): 예전처럼 /ekf/odometry_map → /odom remap(enable_odom_remap).
+    """
+    if not _truthy(context, 'enable_gq7'):
         return []
     params_file = context.perform_substitution(LaunchConfiguration('gq7_config_file'))
-    origin_file = context.perform_substitution(LaunchConfiguration('gq7_origin_file'))
-    outdoor = context.perform_substitution(LaunchConfiguration('outdoor'))
-    if outdoor.strip().lower() in ('true', '1', 'yes'):
+    outdoor = _truthy(context, 'outdoor')
+    actions = []
+    if outdoor:
         config_dir = os.path.join(get_package_share_directory('kaboat_hardware'), 'config')
         if os.path.basename(params_file) == 'gq7.yaml':
             params_file = os.path.join(config_dir, 'gq7_outdoor.yaml')
-        origin_file = origin_file or DEFAULT_ORIGIN_FILE
-    notes = []
-    if origin_file:
-        from kaboat_hardware.gq7_origin import load_origin_file, write_params_with_origin
-        origin = load_origin_file(origin_file)
-        if origin is None:
-            notes.append(LogInfo(msg=(
-                f'[GQ7] 원점 파일 없음 ({origin_file}) — 설정 기본 원점(처음 Full Nav '
-                '위치, 매번 바뀜)으로 시작. geo_origin 으로 /geo/set_origin 후 다시 켜면 고정됨')))
-        else:
-            params_file = write_params_with_origin(params_file, origin)
-            notes.append(LogInfo(msg=(
-                f'[GQ7] /ekf/odometry_map(/odom) 원점 = ({origin[0]:.8f}, {origin[1]:.8f}, '
-                f'{origin[2]:.2f} m) ← {origin_file}')))
+        origin_file = (context.perform_substitution(LaunchConfiguration('gq7_origin_file'))
+                       or DEFAULT_ORIGIN_FILE)
+        actions += [
+            LogInfo(msg=(f'[GQ7] 야외: /odom = gq7_local_odom (/ekf/odometry_earth → 원점 '
+                         f'{origin_file} 기준). 원점 파일이 바뀌면 GQ7 재시작 없이 바로 반영')),
+            Node(
+                package='kaboat_hardware',
+                executable='gq7_local_odom',
+                name='gq7_local_odom',
+                output='screen',
+                parameters=[{'origin_file': origin_file, 'use_sim_time': False}],
+            ),
+        ]
+    remap_odom = not outdoor and _truthy(context, 'enable_odom_remap')
 
     # 공식 MicroStrain launch를 사용하되, 나머지 자율주행 코드가 기대하는
     # KABOAT 표준 토픽으로 이름만 변환한다.
-    return notes + [GroupAction(
-        actions=[
-            SetRemap(src='/gnss_1/llh_position', dst='/gps/fix'),
-            SetRemap(src='/gnss_2/llh_position', dst='/gps/fix_secondary'),
-            # ⚠️ 실내 수조에서는 indoor_lidar_odom 이 /odom 을 발행하므로 이 remap 을
-            # 꺼야 한다. 켠 채로 두면 EKF 가 수렴하는 순간 /odom 발행자가 둘이
-            # 되어 두 좌표계가 섞인다 (GNSS 미수렴 중에는 조용해서 안 드러남).
-            SetRemap(src='/ekf/odometry_map', dst='/odom',
-                     condition=IfCondition(LaunchConfiguration('enable_odom_remap'))),
+    remaps = [
+        SetRemap(src='/gnss_1/llh_position', dst='/gps/fix'),
+        SetRemap(src='/gnss_2/llh_position', dst='/gps/fix_secondary'),
+    ]
+    if remap_odom:
+        # ⚠️ 실내 수조에서는 indoor_lidar_odom 이, 야외에서는 gq7_local_odom 이 /odom 을
+        # 발행하므로 이 remap 을 쓰지 않는다. 켠 채로 두면 /odom 발행자가 둘이 되어
+        # 두 좌표계가 섞인다 (GNSS 미수렴 중에는 조용해서 안 드러남).
+        remaps.append(SetRemap(src='/ekf/odometry_map', dst='/odom'))
+    return actions + [GroupAction(
+        actions=remaps + [
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
                     PathJoinSubstitution([
@@ -126,14 +139,15 @@ def _launch(d455, gq7, enable_d455, config_file, default_config, default_gq7_con
             description='GQ7 드라이버 override 설정 (야외: config/gq7_outdoor.yaml)'),
         DeclareLaunchArgument(
             'outdoor', default_value='false',
-            description='true: 야외 — gq7_outdoor.yaml + 저장된 원점(~/kaboat_geo_origin.yaml)'),
+            description='true: 야외 — gq7_outdoor.yaml + gq7_local_odom 이 원점 '
+                        '(~/kaboat_geo_origin.yaml) 기준 /odom 발행'),
         DeclareLaunchArgument(
             'gq7_origin_file', default_value='',
-            description='geo_origin 이 저장한 원점 파일. 주면 GQ7 /ekf/odometry_map 원점을 '
-                        '그 위도·경도로 고정 (gq7_config_file 은 device_setup: true 여야 함)'),
+            description="야외 /odom 원점 파일 (geo_origin 이 저장). '' 이면 ~/kaboat_geo_origin.yaml"),
         DeclareLaunchArgument(
             'enable_odom_remap', default_value='true',
-            description='GQ7 EKF → /odom remap. 실내 수조(indoor_lidar_odom)에서는 false'),
+            description='GQ7 /ekf/odometry_map → /odom remap (outdoor:=false 일 때만). '
+                        '실내 수조(indoor_lidar_odom)에서는 false'),
         DeclareLaunchArgument(
             'publish_tf', default_value='true',
             description='RViz Fixed Frame 용 최소 TF. 스택 자체는 TF 를 쓰지 않는다'),

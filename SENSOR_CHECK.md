@@ -117,7 +117,7 @@ GQ7 설치 방향과 두 GNSS 안테나의 lever arm을 실측하기 전에는 �
 | `/imu/data` | `/imu/data` (변경 없음) |
 | `/gnss_1/llh_position` | `/gps/fix` |
 | `/gnss_2/llh_position` | `/gps/fix_secondary` |
-| `/ekf/odometry_map` | `/odom` |
+| `/ekf/odometry_map` | `/odom` (실내·벤치. 야외 `outdoor:=true`는 `gq7_local_odom`이 `/ekf/odometry_earth`로 만듦) |
 
 `sensor_health_monitor`(`/diagnostics`)의 정상 판정은 토픽 존재가 아니라 다음을 모두 본다.
 

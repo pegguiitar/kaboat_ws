@@ -31,6 +31,7 @@ setup(
             'thruster_driver = kaboat_hardware.thruster_driver:main',
             'gps_mark_logger = kaboat_hardware.gps_mark_logger:main',
             'geo_origin = kaboat_hardware.geo_origin:main',
+            'gq7_local_odom = kaboat_hardware.gq7_local_odom:main',
             'point_recorder = kaboat_hardware.point_recorder:main',
             'lidar_boat_tracker = kaboat_hardware.lidar_boat_tracker:main',
             'indoor_lidar_odom = kaboat_hardware.indoor_lidar_odom:main',

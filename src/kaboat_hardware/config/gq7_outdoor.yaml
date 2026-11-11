@@ -4,9 +4,10 @@
 # ⚠ device_setup: true — 드라이버가 시작할 때 아래 값을 장치에 쓴다(save_settings: false
 #   라 장치 시작 설정으로 저장하지는 않음). 안테나 위치가 틀리면 헤딩이 틀어진다.
 #
-# 원점: real_sensors.launch.py 에 gq7_origin_file 을 주면(run_gq7_outdoor 단축어)
-#   geo_origin 이 저장한 고정 원점을 filter_relative_position_* 로 덮어쓴다.
-#   원점 파일이 없으면 아래 기본값(source 2 = 처음 Full Nav 위치, 매번 바뀜)을 쓴다.
+# /odom: 드라이버의 고정 원점 기능(filter_relative_position_*, /ekf/odometry_map)은 쓰지 않는다.
+#   젯슨 드라이버에서 원점을 맞게 받고도 수백 km 떨어진 값을 냈다(2026-11-11 현장).
+#   대신 gq7_local_odom(real_sensors outdoor:=true)이 /ekf/odometry_earth(ECEF)를
+#   ~/kaboat_geo_origin.yaml 원점 기준 x=동·y=북으로 바꿔 /odom 으로 낸다.
 microstrain_inertial_driver:
   ros__parameters:
     port: /dev/microstrain_main
@@ -24,7 +25,7 @@ microstrain_inertial_driver:
     frame_id: imu_link
     mount_frame_id: base_link
     target_frame_id: base_link
-    # /ekf/odometry_map 의 header.frame_id. 주행 코드는 'odom' 이 아니면 움직이지 않는다.
+    # /ekf/odometry_map 은 안 쓴다(위 설명). frame_id 만 맞춰 둠.
     map_frame_id: odom
     publish_mount_to_frame_id_transform: false
     tf_mode: 0                     # TF 는 odom_tf_broadcaster 가 /odom 으로 발행
@@ -49,9 +50,17 @@ microstrain_inertial_driver:
     filter_auto_init: true
 
     # 상대 위치 원점 (원점 파일이 있으면 런치가 source 1 + 고정 위도·경도로 덮어씀)
-    filter_relative_position_config: true
-    filter_relative_position_frame: 2
-    filter_relative_position_source: 2
+    # 드라이버 고정 원점 기능 끔 (/ekf/odometry_map 안 냄) — /odom 은 gq7_local_odom 이 만든다
+    filter_relative_position_config: false
+
+    # /odom 의 원본: 필터 위치(ECEF) + 자세 + 선체 기준 속도. gq7_local_odom 이 받는다.
+    filter_odometry_earth_data_rate: 25
+
+    # 듀얼 안테나 진단 (1 Hz)
+    #   /mip/filter/gnss_dual_antenna_status — fix_type, rcv_1/2_data_valid, antenna_offsets_valid
+    #   /ekf/dual_antenna_heading            — 두 안테나로 잰 헤딩 (fix 일 때만 의미)
+    mip_filter_gnss_dual_antenna_status_data_rate: 1
+    filter_dual_antenna_heading_data_rate: 1
 
     ntrip_interface_enable: false
     raw_file_enable: false

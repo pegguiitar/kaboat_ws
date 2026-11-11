@@ -36,6 +36,11 @@ def _ecef(lat: float, lon: float, height: float):
             (radius * (1.0 - WGS84_E2) + height) * sin_phi)
 
 
+def ecef_to_llh(x: float, y: float, z: float):
+    """ECEF [m] → (위도, 경도, 타원체고)."""
+    return _ecef_to_llh(x, y, z)
+
+
 def _ecef_to_llh(x: float, y: float, z: float):
     """ECEF → (위도, 경도, 타원체고). Bowring 반복 (수 회면 mm 이하로 수렴)."""
     lon = math.atan2(y, x)
@@ -66,14 +71,20 @@ class LocalFrame:
         a = math.radians(self.axis_yaw_deg)
         self._ca, self._sa = math.cos(a), math.sin(a)
 
+    def ecef_rotation(self):
+        """ECEF 벡터 → (동, 북, 위) 벡터 회전행렬. 행 = 원점의 동·북·위 단위벡터(ECEF 성분)."""
+        return ((-self._sl, self._cl, 0.0),
+                (-self._sp * self._cl, -self._sp * self._sl, self._cp),
+                (self._cp * self._cl, self._cp * self._sl, self._sp))
+
+    def ecef_to_enu(self, x: float, y: float, z: float):
+        """ECEF 위치 [m] → 원점 기준 (동, 북, 위) [m]."""
+        d = (x - self._xyz0[0], y - self._xyz0[1], z - self._xyz0[2])
+        return tuple(r[0] * d[0] + r[1] * d[1] + r[2] * d[2] for r in self.ecef_rotation())
+
     def to_enu(self, lat: float, lon: float, height: float | None = None):
         """위도·경도 → (동, 북, 위) [m]. 높이를 안 주면 원점 높이(2D 사용)."""
-        xyz = _ecef(lat, lon, self.origin[2] if height is None else height)
-        dx, dy, dz = (v - b for v, b in zip(xyz, self._xyz0))
-        east = -self._sl * dx + self._cl * dy
-        north = -self._sp * self._cl * dx - self._sp * self._sl * dy + self._cp * dz
-        up = self._cp * self._cl * dx + self._cp * self._sl * dy + self._sp * dz
-        return east, north, up
+        return self.ecef_to_enu(*_ecef(lat, lon, self.origin[2] if height is None else height))
 
     def to_local(self, lat: float, lon: float, height: float | None = None):
         """위도·경도 → 로컬 (x, y) [m]."""

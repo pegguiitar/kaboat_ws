@@ -37,7 +37,7 @@ source ~/.zshrc
 |---|---|---|---|
 | 1 | 젯슨 터미널 1 | `run_zenoh` | 노트북과 연결 |
 | 2 | 노트북 | `set_kaboat` | `🚀 [Zenoh] … 연결 시도 중` |
-| 3 | 젯슨 터미널 2 | `run_gq7_outdoor` | `[GQ7] /ekf/odometry_map(/odom) 원점 = …` 로그 |
+| 3 | 젯슨 터미널 2 | `run_gq7_outdoor` | `[gq7_local_odom] /odom 원점 = (…) [file …]` 로그 |
 | 4 | 젯슨 터미널 3 | `ros2 launch kaboat_hardware onboard_lidar.launch.py port:=/dev/ttyUSB0` | `/scan` (선체 TG-50, 실제 포트 확인) |
 | 5 | 젯슨 터미널 4 | `run_motor` | 모터 드라이버 + GPS CSV 기록기 |
 | 6 | 젯슨 터미널 5 | `run_points` | 미션 지점 기록기 |
@@ -67,9 +67,14 @@ run_geo                                                      # 젯슨 터미널 
 ros2 service call /geo/set_origin std_srvs/srv/Trigger '{}'  # 젯슨 터미널 B, 배를 원점에 멈춘 채
 ```
 
-GNSS 20개(약 10초)를 평균해 `~/kaboat_geo_origin.yaml`에 저장합니다. 그 뒤
-`run_gq7_outdoor`를 **다시 켜야** GQ7 `/odom` 원점에 반영됩니다(GQ7은 드라이버 시작 때만
-원점을 장치에 씀). 원점을 바꾸면 그 전에 기록한 지점 파일은 쓸 수 없습니다.
+GNSS 20개(약 10초)를 평균해 `~/kaboat_geo_origin.yaml`에 저장합니다. `run_gq7_outdoor`가
+켜져 있으면 `gq7_local_odom`이 **1초 안에 새 원점을 읽어** `/odom`에 반영합니다. GQ7을 다시 켤
+필요가 없습니다(다시 켜면 필터가 다시 수렴하느라 몇 분 걸림). 원점을 바꾸면 그 전에 기록한
+지점 파일은 쓸 수 없습니다.
+
+`/odom`은 GQ7 드라이버의 원점 기능(`/ekf/odometry_map`)이 아니라 `gq7_local_odom`이
+`/ekf/odometry_earth`를 원점 파일 기준으로 바꿔 만듭니다. 젯슨 드라이버의 원점 기능은 원점을
+맞게 받고도 수백 km 떨어진 값을 냈습니다(2026-11-11).
 
 ⚠️ 실내 수조 런치(`run_boat_lidar`)와 `run_gq7_outdoor`를 같이 켜면 `/odom` 발행자가
 둘이 됩니다. 하나만 켭니다.
@@ -82,7 +87,7 @@ GNSS 20개(약 10초)를 평균해 `~/kaboat_geo_origin.yaml`에 저장합니다
 |---|---|---|
 | `cb` / `sb` | `colcon build --symlink-install` / `source install/setup.bash` | 빌드 / 환경 리로드 |
 | `run_zenoh` | `python3 scripts/zenoh_monitor_link.py jetson` | 노트북 모니터링 브리지 |
-| `run_gq7_outdoor` | `ros2 launch kaboat_hardware real_sensors.launch.py outdoor:=true` | 야외 GQ7. `gq7_outdoor.yaml` + 원점 파일, `/ekf/odometry_map` → `/odom` |
+| `run_gq7_outdoor` | `ros2 launch kaboat_hardware real_sensors.launch.py outdoor:=true` | 야외 GQ7. `gq7_outdoor.yaml` + `gq7_local_odom`(`/ekf/odometry_earth` → 원점 파일 기준 `/odom`) |
 | `run_geo` | `ros2 launch kaboat_hardware geo_origin.launch.py` | GPS 원점 설정, 위도·경도 → x/y (`/geo/*`) |
 | `run_points` | `ros2 run kaboat_hardware point_recorder` | 미션 지점 기록기 |
 | `rec [이름]` | `python3 scripts/rec_point.py [이름]` | 지금 위치(x, y, 선수각) 기록. 이름 생략 시 `p1`, `p2` … |

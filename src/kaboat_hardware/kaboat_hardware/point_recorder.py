@@ -24,11 +24,10 @@
 - 저장 파일: ~/kaboat_mission_points.json (points_file 파라미터).
 - RViz: /mission_points/markers (MarkerArray, latched, frame odom) — 화살표 = 선수각.
 
-⚠ x/y 는 GQ7 /odom 기준이다. run_gq7_outdoor 가 ~/kaboat_geo_origin.yaml 로 원점을 고정한
-  상태에서 기록해야 다음에 다시 켜도 같은 자리다. 기록할 때 그 원점을 파일에 같이 남기고,
-  원점이 다른 파일에는 섞어 기록하지 않는다(거부 — points_file 을 바꾸거나 파일을 옮긴다).
-  원점 파일을 새로 잡은 뒤 센서 런치를 다시 안 켰으면 GQ7 은 아직 예전 원점이라 여기서
-  알아챌 수 없다 — 원점을 바꿨으면 run_gq7_outdoor 를 다시 켠 뒤 기록한다.
+⚠ x/y 는 /odom 기준이다. 야외에서는 run_gq7_outdoor 의 gq7_local_odom 이
+  ~/kaboat_geo_origin.yaml 원점으로 /odom 을 만들어서(파일이 바뀌면 1초 안에 반영) 다음에
+  다시 켜도 같은 자리다. 기록할 때 그 원점을 파일에 같이 남기고, 원점이 다른 파일에는 섞어
+  기록하지 않는다(거부 — points_file 을 바꾸거나 파일을 옮긴다).
 """
 
 from collections import OrderedDict

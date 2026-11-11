@@ -21,9 +21,9 @@
 
 좌표: x = 동쪽, y = 북쪽 (axis_yaw_deg 로 x 축을 돌릴 수 있음, geo_local.py 참고).
 ⚠ frame_id 는 기본 'geo_local' 이다. 야외 센서 런치(real_sensors outdoor:=true,
-  단축어 run_gq7_outdoor)는 같은 원점 파일을 읽어 GQ7 /ekf/odometry_map(→ /odom) 원점을
-  고정하므로, 그때는 /geo/position 과 /odom 의 x/y 가 같은 좌표계다(안테나·센서 위치 차이만큼
-  다름). 원점을 새로 정하면 센서 런치를 다시 켜야 GQ7 에 반영된다.
+  단축어 run_gq7_outdoor)의 gq7_local_odom 이 같은 원점 파일로 /odom 을 만들므로,
+  /geo/position 과 /odom 의 x/y 는 같은 좌표계다(안테나·선체 중심 위치 차이만큼 다름).
+  원점을 새로 정하면 gq7_local_odom 이 1초 안에 다시 읽는다 — GQ7 재시작 불필요.
   단 axis_yaw_deg = 0 일 때만이다. GQ7 /odom 은 항상 x = 동쪽, y = 북쪽이라 축을 돌리면
   /geo/position·/geo/targets 와 /odom 의 x/y 가 어긋난다 (0 이 아니면 시작 시 경고).
 ⚠ /gps/fix 는 GNSS 1 안테나 위치다(선체 중심이 아님). 센서 원점과 안테나 거리만큼 차이가 난다.
@@ -184,8 +184,8 @@ class GeoOrigin(Node):
             f'x 축 = 동쪽에서 반시계 {self.axis_yaw_deg:.1f}°')
         if source.startswith('set_origin'):
             self.get_logger().warn(
-                'GQ7 /odom 에도 이 원점을 쓰려면 야외 센서 런치(run_gq7_outdoor)를 '
-                '다시 켠다 — GQ7 은 드라이버 시작 때만 원점을 장치에 쓴다')
+                '원점 파일이 바뀌었다 — 야외 센서 런치(run_gq7_outdoor)의 gq7_local_odom 이 '
+                '1초 안에 /odom 원점을 바꾼다. 그 전에 rec 로 기록한 지점은 이 원점과 안 맞는다')
         # 다음 GNSS 를 기다리지 않고 마지막 위치를 새 원점 기준으로 바로 계산
         self.last_local = (self.frame.to_local(*self.recent[-1][1:3])
                            if self.recent else None)
