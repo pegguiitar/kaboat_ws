@@ -98,7 +98,7 @@ def test_node_holds_at_center_then_exits_before_reporting(tmp_path):
         buoys = _square(CENTER, rot_deg=0.0)
         hold = StationDecision(phase='HOLD', kind='anchor', center=CENTER,
                                center_kind='4', buoys=buoys, completed_now=True)
-        node.fsm.step = lambda *a: hold
+        node.fsm.step = lambda *a, **kw: hold
         _at(node, *CENTER)                                   # 유지 5 s 달성
         assert node.done == []                               # 아직 완료 아님 — 출구로
         assert node._exit_targets[0] == pytest.approx((CENTER[0] + 3.0, CENTER[1]))
@@ -122,7 +122,7 @@ def test_without_station_center_old_behaviour(tmp_path):
         assert node.fsm.goal == pytest.approx((CENTER[0] + 5.0, CENTER[1]))   # station_end 가 중심
         done = StationDecision(phase='HOLD', kind='anchor', center=node.fsm.goal,
                                buoys=[], completed_now=True)
-        node.fsm.step = lambda *a: done
+        node.fsm.step = lambda *a, **kw: done
         _at(node, CENTER[0] + 5.0, CENTER[1])
         assert [m.data for m in node.done] == ['station'] and node._exit_targets is None
     finally:

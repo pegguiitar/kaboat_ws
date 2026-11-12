@@ -11,18 +11,28 @@
    (해수면 반사 등 노이즈, 보통 1~2칸)는 공용 지도와 똑같이 깎여 금방 사라진다.
    공용 지도와 다른 behavior 는 그대로다.
    격자는 미션 목표(station_end) 중심에 고정된 정사각형이다(구역이 고정이라 rolling 불필요).
-2) find_buoys — 부표 크기 덩어리 중 목표 반경 안의 강한 순 최대 4개.
+2) find_buoys — 부표 크기 덩어리 중 강한 순 최대 4개. 후보는 기록 지점(지도 중심) 4 m 안,
+   그리고 사각형을 찾은 뒤엔 지금 추정 중심 square_search_radius 안 (2026-11-13: 사각형이 기록
+   위치에서 2 m 넘게 밀리면 먼 모서리 부표가 4 m 밖으로 빠져 출구를 엉뚱한 변으로 잡았다).
 3) estimate_center — 부표 수별 사각형 중심.
      2개: 한 변이면 중점에서 안쪽으로 간격/2, 대각선이면 중점
      3개: 가장 먼 쌍 = 대각선 → 그 중점
      4개: 평균
+   square_corners — 보이는 부표로 사각형 꼭짓점 4개 (3개면 평행사변형으로 4번째를 채움).
+   부표는 매 틱 다시 찾으므로 흔들리거나 밀린 사각형을 그대로 따라간다.
 4) 입구 — 처음 보이는 한 변(가장 가까운 쌍)을 입구로 고정하고, 입구 앞 정렬점을 거쳐
    중심으로 들어간다. 부표 사이를 지나므로 공용 waypoint()(전진 12 N)가 아니라 가상 앵커
    (전진 상한 max_forward 0.25 = 게이트 LOS 직진 상한)로 가서 해류에 밀리지 않게 한다.
-5) anchor_command — 수조 station_keeping_test 의 가상 앵커(위치 P + 선수각 PD + 불감대,
-   가까운 오버슈트는 저속 후진)를 순수 함수로 옮긴 것. 선수각은 HOLD 진입 때 방향 유지.
-6) StationFsm — SEARCH → ENTER → HOLD. 반경 hold_radius 안에서 hold_time 연속 유지하면
-   완료 1회 보고(다음 미션 전환은 mission_manager 몫). 완료 뒤에도 전환 전까지 계속 유지.
+5) anchor_command — 가상 앵커. 선수각 PD + 불감대는 수조 station_keeping_test 그대로.
+   전진은 속도 제어 (2026-11-13): 목표까지 거리에 비례한 목표 속도(min(max_speed,
+   k_approach·거리))를 /odom 전진 속도로 따라가고, 너무 빠르면 후진 추력으로 제동한다.
+   목표를 지나쳐 뒤에 두고 제자리 회전할 때·불감대 안에서도 남은 속도를 제동한다.
+   예전엔 거리 1 m 안까지 전진 0.25 를 내고 제동이 없어 관성(τ≈2.8 s)으로 사각형 변까지
+   미끄러졌다(시뮬: 변까지 0.1 m, 4회 중 2회 부표 접촉).
+6) StationFsm — SEARCH → ENTER → HOLD. 배 중심이 부표 사각형 안(각 변에서 inside_margin
+   안쪽)에 hold_time 연속 있으면 완료 1회 보고(다음 미션 전환은 mission_manager 몫). 완료
+   뒤에도 전환 전까지 계속 유지. (2026-11-13 경기 조건 변경: 예전엔 추정 중심 hold_radius
+   반경 안이었다.) 부표를 끝내 못 찾아 station_end 를 중심으로 쓸 때만 반경 hold_radius 로 판정.
 """
 
 from dataclasses import dataclass, field
@@ -58,7 +68,10 @@ class StationParams:
     occ_logodds: float = 2.0        # 이 이상인 칸만 부표 후보 (히트 3스캔)
     min_cluster_cells: int = 2
     max_cluster_extent: float = 1.2  # [m] 흔들림으로 번진 부표까지
-    buoy_search_radius: float = 4.0  # [m] 목표(station_end) 기준 부표 후보 반경
+    buoy_search_radius: float = 4.0  # [m] 기록 지점(station_center, 없으면 station_end) 기준 후보 반경
+    # [m] 사각형을 찾은 뒤 지금 추정 중심 기준 후보 반경 (반대각선 2.1 m + 흔들림·추정 오차).
+    # 위 반경과 합집합 — 부표가 밀려도 추정 중심이 따라가며 네 개를 계속 잡는다.
+    square_search_radius: float = 3.0
     merge_distance: float = 0.8     # [m] 이보다 가까운 덩어리는 같은 부표(약한 쪽 버림)
     side_length: float = 3.0        # [m] 사각형 한 변 (공칭)
     min_side: float = 1.5           # [m] 한 변으로 볼 최소 부표 간격
@@ -70,23 +83,34 @@ class StationParams:
     search_ratio: float = 1.0
     search_slow_radius: float = 2.0
     # ── 유지·완료 ──
-    hold_radius: float = 1.0        # [m] 중심에서 이 안이면 '유지 중'
+    # 완료 조건 (2026-11-13): 배 중심이 부표 사각형 각 변에서 inside_margin 이상 안쪽.
+    # 0.6 m ≈ 선체 반길이 0.55 m — 선체가 어느 방향이어도 거의 다 사각형 안. 배 중심만
+    # 안이면 되는 규정이면 0.
+    inside_margin: float = 0.6
+    hold_radius: float = 1.0        # [m] ENTER → HOLD 전환 반경, 부표를 못 찾았을 때 유지 판정
     hold_time: float = 5.0          # [s] 연속 유지 시간 → 완료 보고
     fallback_to_goal: bool = True   # 부표를 못 찾으면 station_end 를 중심으로 유지
     # ── 출구 (2026-11-12): 중심(station_center)과 station_end 가 다르면 유지 후 출구로 나간다 ──
     exit_outside: float = 1.5       # [m] 출구 쪽 변 중점에서 사각형 밖으로 이만큼 나간 경유점
     exit_reach: float = 0.8         # [m] 경유점·출구 도착 판정
-    # ── 가상 앵커 (수조 station_keeping_test 값, 상한은 LOS 직진·회전 상한) ──
+    # ── 가상 앵커 (선수각·불감대는 수조 station_keeping_test 값, 상한은 LOS 직진·회전 상한) ──
     pos_deadband: float = 0.5
     yaw_deadband_deg: float = 8.0
     max_forward: float = 0.25
-    max_reverse: float = 0.08
+    max_reverse: float = 0.08       # 뒤쪽 가까운 목표로 천천히 후진 (BACK)
     max_turn: float = 0.31
     min_forward: float = 0.04
-    kp_pos: float = 0.25
+    kp_pos: float = 0.25            # BACK 후진 = kp_pos × 거리 (max_reverse 까지)
     kp_yaw: float = 1.5
     kd_yaw: float = 0.15
     reverse_band: float = 0.3       # [m] 불감대 + 이 거리 안의 뒤쪽 목표는 후진으로
+    # ── 속도 제어·제동 (2026-11-13) ──
+    max_speed: float = 0.5          # [m/s] 목표 속도 상한 (예전 전진 0.25 ≈ 0.7~0.85 m/s)
+    k_approach: float = 0.4         # [1/s] 목표 속도 = k_approach × 거리 → 1 m 에서 0.4 m/s
+    speed_ff: float = 0.25          # 목표 속도 1 m/s 당 전진 명령 (실측 0.4 ≈ 1.0 m/s, 저속은 덜 듦)
+    k_speed: float = 0.4            # 속도 오차 1 m/s 당 명령 — 빠르면 음수 = 후진 제동
+    max_brake: float = 0.15         # 제동 후진 명령 상한 (약 1419 µs)
+    stop_speed: float = 0.08        # [m/s] 이보다 느리면 멈춘 것으로 보고 제동 안 함
 
     def __post_init__(self):
         floats = [v for v in vars(self).values() if not isinstance(v, bool)]
@@ -97,13 +121,18 @@ class StationParams:
                     self.side_length, self.min_side, self.pre_gate_distance,
                     self.gate_lateral_tol, self.track_radius, self.search_slow_radius,
                     self.hold_radius, self.pos_deadband, self.yaw_deadband_deg,
+                    self.square_search_radius,
                     self.max_forward, self.max_turn, self.kp_pos, self.kp_yaw,
-                    self.exit_outside, self.exit_reach)
+                    self.exit_outside, self.exit_reach, self.max_speed, self.k_approach,
+                    self.k_speed)
         if (min(positive) <= 0 or self.l_free > 0 or not 0.0 <= self.free_ratio <= 1.0
                 or self.l_min >= 0 or self.l_max <= self.occ_logodds
                 or self.min_cluster_cells < 1 or self.big_min_cells < 1 or self.hold_time < 0
                 or self.min_side >= self.side_length
+                or not 0.0 <= self.inside_margin < self.side_length / 2.0
                 or not 0.0 <= self.max_reverse <= 1.0 or self.max_forward > 1.0
+                or not 0.0 <= self.max_brake <= 1.0 or self.speed_ff < 0
+                or self.stop_speed < 0
                 or self.max_turn > 1.0 or self.kd_yaw < 0 or self.reverse_band < 0
                 or not 0.0 < self.search_ratio <= 1.0):
             raise ValueError('invalid station parameters')
@@ -203,8 +232,12 @@ class Buoy:
     strength: float   # 덩어리 log-odds 합
 
 
-def find_buoys(station_map: StationMap) -> list[Buoy]:
-    """목표 반경 안 부표 크기 덩어리, 강한 순 최대 4개 (가까운 덩어리는 하나로)."""
+def find_buoys(station_map: StationMap, near=None) -> list[Buoy]:
+    """부표 크기 덩어리, 강한 순 최대 4개 (가까운 덩어리는 하나로).
+
+    후보: 지도 중심(기록 지점) buoy_search_radius 안, 또는 near(지금 추정한 사각형 중심)가
+    있으면 그 square_search_radius 안.
+    """
     p = station_map.p
     weights = station_map.logodds
     occupied = weights >= p.occ_logodds
@@ -228,7 +261,9 @@ def find_buoys(station_map: StationMap) -> list[Buoy]:
         cy = slc[0].start + float(np.average(iy, weights=w)) + 0.5
         x = station_map.origin[0] + cx * p.resolution
         y = station_map.origin[1] + cy * p.resolution
-        if math.hypot(x - station_map.center[0], y - station_map.center[1]) > p.buoy_search_radius:
+        if (math.hypot(x - station_map.center[0], y - station_map.center[1]) > p.buoy_search_radius
+                and (near is None
+                     or math.hypot(x - near[0], y - near[1]) > p.square_search_radius)):
             continue
         candidates.append(Buoy(x, y, float(w.sum())))
     candidates.sort(key=lambda b: b.strength, reverse=True)
@@ -273,6 +308,52 @@ def estimate_center(points, boat_xy, params: StationParams, hint_xy=None):
             normal = -normal
         return tuple(mid + normal * gap / 2.0), 'side'
     return None
+
+
+def square_corners(points, center, params: StationParams):
+    """보이는 부표 + 추정 중심 → 사각형 꼭짓점 4개 (둘레 순서) 또는 None.
+
+    4개: 그대로. 3개: 가장 먼 쌍이 대각선 → 나머지 꼭짓점의 대각선 대칭점이 4번째.
+    2개 한 변: 중심 쪽 맞은편 변. 2개 대각선: 중점 둘레로 90° 돌린 대각선.
+    """
+    pts = [np.asarray(pt, dtype=float) for pt in points][:4]
+    if center is None or len(pts) < 2:
+        return None
+    if len(pts) == 3:
+        pairs = [(0, 1), (0, 2), (1, 2)]
+        i, j = max(pairs, key=lambda ij: np.linalg.norm(pts[ij[0]] - pts[ij[1]]))
+        pts.append(pts[i] + pts[j] - pts[3 - i - j])
+    elif len(pts) == 2:
+        a, b = pts
+        mid = (a + b) / 2.0
+        if float(np.linalg.norm(b - a)) >= params.diagonal_threshold:
+            half = (b - a) / 2.0
+            perp = np.array([-half[1], half[0]])
+            pts += [mid + perp, mid - perp]
+        else:
+            shift = 2.0 * (np.asarray(center, dtype=float) - mid)
+            pts += [a + shift, b + shift]
+    c = np.mean(pts, axis=0)
+    pts.sort(key=lambda q: math.atan2(q[1] - c[1], q[0] - c[0]))
+    return [tuple(map(float, q)) for q in pts]
+
+
+def square_clearance(boat_xy, corners) -> float:
+    """배 중심에서 사각형 각 변(직선)까지의 안쪽 거리 중 최소 [m]. 음수면 사각형 밖."""
+    pts = np.asarray(corners, dtype=float)
+    boat = np.asarray(boat_xy, dtype=float)
+    centroid = pts.mean(axis=0)
+    best = math.inf
+    for i in range(len(pts)):
+        a, d = pts[i], pts[(i + 1) % len(pts)] - pts[i]
+        length = float(np.linalg.norm(d))
+        if length < 1e-6:
+            continue
+        inward = np.array([-d[1], d[0]]) / length
+        if float(inward @ (centroid - a)) < 0.0:
+            inward = -inward
+        best = min(best, float(inward @ (boat - a)))
+    return best
 
 
 # ── 4) 입구 ──────────────────────────────────────────
@@ -362,31 +443,52 @@ def entry_target(boat_xy, gate: EntryGate, center, params: StationParams):
 
 # ── 5) 가상 앵커 ──────────────────────────────────────
 
-def anchor_command(boat_xy, yaw, yaw_rate, target_xy, hold_yaw, params: StationParams):
-    """→ (linear, angular, 단계). linear/angular 는 최대추력 비율."""
+def brake_command(speed, params: StationParams) -> float:
+    """남은 전진(후진) 속도 [m/s] 를 없애는 명령. 거의 멈췄으면 0."""
+    p = params
+    if abs(speed) <= p.stop_speed:
+        return 0.0
+    return max(-p.max_brake, min(p.max_forward, -p.k_speed * speed))
+
+
+def anchor_command(boat_xy, yaw, yaw_rate, target_xy, hold_yaw, params: StationParams,
+                   speed: float = 0.0):
+    """→ (linear, angular, 단계). linear/angular 는 최대추력 비율, speed 는 /odom 전진 속도 [m/s].
+
+    단계: RETURN(목표 쪽 전진) / BRAKE(목표 쪽인데 너무 빨라 후진 제동) / BACK(뒤 가까운
+    목표로 후진) / TURN(뒤 먼 목표 — 제자리 회전 + 제동) / ALIGN·HOLD(불감대 안 + 제동).
+    """
     p = params
     dx, dy = target_xy[0] - boat_xy[0], target_xy[1] - boat_xy[1]
     dist = math.hypot(dx, dy)
     rel = _wrap(math.atan2(dy, dx) - yaw)
+    brake = brake_command(speed, p)
 
     def turn(err):
         return _clamp(p.kp_yaw * err - p.kd_yaw * yaw_rate, p.max_turn)
 
     if dist <= p.pos_deadband:
+        stage = 'HOLD' if brake == 0.0 else 'BRAKE'
         if hold_yaw is None:
-            return 0.0, 0.0, 'HOLD'
+            return brake, 0.0, stage
         yaw_err = _wrap(hold_yaw - yaw)
         if abs(yaw_err) <= math.radians(p.yaw_deadband_deg):
-            return 0.0, 0.0, 'HOLD'
-        return 0.0, turn(yaw_err), 'ALIGN'
+            return brake, 0.0, stage
+        return brake, turn(yaw_err), 'ALIGN'
     if abs(rel) <= math.pi / 2.0:
-        speed = min(p.max_forward, max(p.min_forward, p.kp_pos * dist))
-        return speed * math.cos(rel), turn(rel), 'RETURN'
+        # 목표 속도는 거리에 비례 — 다가갈수록 느려져 불감대에 약 k_approach·0.5 m/s 로 들어온다
+        want = min(p.max_speed, p.k_approach * dist) * math.cos(rel)
+        linear = p.speed_ff * want + p.k_speed * (want - speed)
+        if 0.0 < linear < p.min_forward:
+            linear = p.min_forward          # ESC 가 반응하는 최소 추력
+        linear = max(-p.max_brake, min(p.max_forward, linear))
+        return linear, turn(rel), 'RETURN' if linear >= 0.0 else 'BRAKE'
     if dist < p.pos_deadband + p.reverse_band and p.max_reverse > 0.0:
         rev = _wrap(rel - math.pi)
-        speed = min(p.max_reverse, max(p.min_forward, p.kp_pos * dist))
-        return -speed * math.cos(rev), turn(rev), 'BACK'
-    return 0.0, turn(rel), 'TURN'
+        back = -min(p.max_reverse, max(p.min_forward, p.kp_pos * dist)) * math.cos(rev)
+        return min(back, brake), turn(rev), 'BACK'
+    # 목표를 지나쳐 뒤에 둠 — 돌아서는 동안 관성으로 더 멀어지지 않게 제동
+    return brake, turn(rel), 'TURN'
 
 
 # ── 5b) 출구 ─────────────────────────────────────────
@@ -441,11 +543,13 @@ class StationDecision:
     stage: str = ''                    # 세부 단계 (로그·상태)
     center: tuple | None = None
     center_kind: str | None = None
-    inside: bool = False
+    inside: bool = False               # HOLD: 완료 조건(사각형 안)을 지금 만족하는지
+    clearance: float | None = None     # HOLD: 사각형 변까지 최소 안쪽 거리 (사각형 없으면 None)
     hold_elapsed: float = 0.0
     completed_now: bool = False        # 이번 step 에서 완료 조건 처음 달성
     buoys: list = field(default_factory=list)
     gate: EntryGate | None = None
+    square: list | None = None         # 사각형 꼭짓점 4개 (둘레 순서)
 
 
 class StationFsm:
@@ -459,6 +563,7 @@ class StationFsm:
         self.gate: EntryGate | None = None
         self.center = None
         self.center_kind = None
+        self.square = None
         self.through = False
         self.hold_yaw = None
         self.inside_since = None
@@ -469,10 +574,13 @@ class StationFsm:
         self.map.integrate_scan(ranges, angle_min, angle_increment, range_min, range_max,
                                 lidar_xy, yaw)
 
-    def step(self, boat_xy, yaw, yaw_rate, now) -> StationDecision:
+    def step(self, boat_xy, yaw, yaw_rate, now, speed: float = 0.0) -> StationDecision:
+        """speed: /odom 전진 속도 [m/s] (선체 기준 twist.linear.x) — 가상 앵커 제동에 쓴다."""
         p = self.p
         boat = (float(boat_xy[0]), float(boat_xy[1]))
-        buoys = find_buoys(self.map)
+        # 부표로 추정한 중심이 있으면 그 둘레도 찾는다 (기록 지점 대신 쓴 'goal' 은 제외)
+        near = self.center if self.center_kind not in (None, 'goal') else None
+        buoys = find_buoys(self.map, near)
         pts = [(b.x, b.y) for b in buoys]
 
         if self.gate is not None:
@@ -482,11 +590,14 @@ class StationFsm:
         estimate = estimate_center(pts, boat, p, hint_xy=self.center)
         if estimate is not None:
             self.center, self.center_kind = estimate
+            square = square_corners(pts, self.center, p)
+            if square is not None:
+                self.square = square
 
         def decision(**kw):
             return StationDecision(phase=self.phase, center=self.center,
                                    center_kind=self.center_kind, buoys=buoys,
-                                   gate=self.gate, **kw)
+                                   gate=self.gate, square=self.square, **kw)
 
         if self.phase == 'SEARCH':
             if self.gate is not None and self.center is not None:
@@ -517,13 +628,19 @@ class StationFsm:
                         target, stage = entry_target(boat, self.gate, self.center, p)
                         self.through = stage == 'THROUGH'
                 # 부표 사이를 지나므로 해류에 밀리지 않게 가상 앵커(전진 상한 max_forward)로 간다
-                linear, angular, _ = anchor_command(boat, yaw, yaw_rate, target, None, p)
+                linear, angular, _ = anchor_command(boat, yaw, yaw_rate, target, None, p,
+                                                    speed=speed)
                 return decision(kind='anchor', target=target, linear=linear,
                                 angular=angular, stage=stage)
 
-        # HOLD
-        dist = math.dist(boat, self.center)
-        inside = dist <= p.hold_radius
+        # HOLD — 완료 조건: 배 중심이 부표 사각형 안 (각 변에서 inside_margin 안쪽).
+        # 부표를 못 찾아 station_end 로 유지 중이면(사각형 없음) 반경 hold_radius.
+        clearance = None
+        if self.square is not None:
+            clearance = square_clearance(boat, self.square)
+            inside = clearance >= p.inside_margin
+        else:
+            inside = math.dist(boat, self.center) <= p.hold_radius
         completed_now = False
         elapsed = 0.0
         if inside:
@@ -536,9 +653,10 @@ class StationFsm:
         else:
             self.inside_since = None
         linear, angular, stage = anchor_command(boat, yaw, yaw_rate, self.center,
-                                                self.hold_yaw, p)
+                                                self.hold_yaw, p, speed=speed)
         return decision(kind='anchor', linear=linear, angular=angular, stage=stage,
-                        inside=inside, hold_elapsed=elapsed, completed_now=completed_now)
+                        inside=inside, clearance=clearance, hold_elapsed=elapsed,
+                        completed_now=completed_now)
 
     def _start_hold(self, yaw):
         self.phase = 'HOLD'
