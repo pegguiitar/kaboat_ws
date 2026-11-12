@@ -131,6 +131,7 @@ ros2 launch kaboat_hardware real_sensors.launch.py outdoor:=true rtk:=true \
 | `rec [이름]` | `python3 scripts/rec_point.py [이름]` | 지금 위치(x, y, 선수각) 기록. 이름 생략 시 `p1`, `p2` … |
 | `list_points` | `python3 scripts/rec_point.py --list` | 기록한 지점 보기 |
 | `rec_bag [이름]` | `bash scripts/record_run.sh [이름]` | 주행 센서 rosbag 녹화 → `~/kaboat_bags/이름_날짜_시각/`. **센서를 다 켠 뒤** 실행, **Ctrl+C로 종료**(창을 그냥 닫지 말 것). 카메라는 압축 토픽(약 4~5 MB/s, 20분 ≈ 6 GB), 압축 토픽이 없으면 원본 + zstd(20분 ≈ 15~18 GB). 남은 용량 10 GB 미만이면 시작 안 함. 2 GB마다 파일 분할. 자세한 사용법 [ROSBAG_GUIDE.md](ROSBAG_GUIDE.md) |
+| `rec_rgb [이름]` | `bash scripts/record_run.sh --rgb [이름]` | 카메라 컬러(RGB) 영상만 녹화 → `~/kaboat_bags/이름_날짜_시각/` (이름 생략 시 `rgb`). `run_camera`만 켜면 됨, **Ctrl+C로 종료**. 압축 토픽(JPEG) 약 1~1.5 MB/s, 없으면 원본 + zstd. 영상은 `bag_to_mp4 <폴더>` |
 | `bag_to_mp4 <bag 폴더>` | `python3 scripts/bag_to_mp4.py <bag 폴더>` | bag 의 카메라 영상 → mp4 (bag 폴더 안 `<폴더 이름>.mp4`, 동영상 플레이어로 열림). `rec_bag` 폴더(압축 토픽)·`ros2 bag record` 폴더 둘 다. 토픽 기본 `/camera/color/image_raw`(또는 그 `/compressed`), 바꾸려면 `--topic /dock/debug_image`. OpenCV 가 mp4 를 못 쓰면 `.avi` |
 | `goto 지점` / `goto x y [각도]` | `ros2 launch kaboat_hardware outdoor_waypoint.launch.py point:=지점` (또는 `x:= y:= angle:=`) | 야외 웨이포인트 1개 주행, **실행 즉시 출발**(추력 40%). 5절 참고 |
 | `run_motor` | `ros2 launch kaboat_hardware thrusters.launch.py hardware_type:=serial port:=/dev/ttyCH341USB0 allow_port_scan:=false` | 아두이노(CH340) 모터 드라이버 + `gps_mark_logger` |

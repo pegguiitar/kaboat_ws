@@ -47,6 +47,21 @@ rec_bag gate_test          # ③ 녹화 시작. 이름은 자유 (생략 시 run
 `⚠️ 압축 토픽 없음`이 나오면 원본 영상으로 녹화 중입니다(1절 apt 설치 필요).
 `⚠️ 카메라 토픽이 아직 없음`이면 `run_camera`를 안 켠 것입니다. 나중에 켜도 녹화에 들어갑니다.
 
+### 카메라 RGB 영상만 녹화 (`rec_rgb`)
+
+센서·판단 토픽 없이 컬러 영상 하나만 남깁니다(뎁스·`camera_info`도 없음). `run_camera`만 켜 두면 됩니다.
+
+```bash
+rec_rgb                    # ~/kaboat_bags/rgb_20261112_153828/  (이름 생략 시 rgb)
+rec_rgb dock_view          # ~/kaboat_bags/dock_view_…/
+# 끝나면 Ctrl+C → 영상으로 보기
+bag_to_mp4 ~/kaboat_bags/rgb_20261112_153828   # 폴더 안 rgb_20261112_153828.mp4
+```
+
+- 압축 토픽(JPEG)이 있으면 약 1~1.5 MB/s, 없으면 원본 + zstd로 약 7~14 MB/s입니다(640×480 15 fps 기준).
+- 시작 화면에 `📷 RGB 영상만: /camera/color/image_raw/compressed`가 나오면 정상입니다.
+- `rec_bag`과 동시에 켤 필요는 없습니다. `rec_bag`에도 같은 컬러 영상이 들어 있습니다.
+
 ---
 
 ## 3. 무엇이 저장되나
@@ -54,11 +69,27 @@ rec_bag gate_test          # ③ 녹화 시작. 이름은 자유 (생략 시 run
 | 구분 | 토픽 |
 |---|---|
 | LiDAR | `/scan`, `/scan/raw`, `/scan/level` |
-| 자세·위치 | `/imu/data`, `/gps/fix`, `/gps/fix_secondary`, `/odom`, `/tf`, `/tf_static`, `/geo/origin`, `/geo/status` |
-| 카메라 | 컬러 JPEG, 정렬 뎁스 무손실 PNG(`compressedDepth`), `/camera/camera_info` |
-| 도킹 YOLO 결과 | `/dock/detection_status`(마커별 신뢰도·픽셀·시선, JSON), `/dock/debug_image`(마스크·도형 그린 영상 320 px 5 fps ≈ 1.2 MB/s), `/detections/dock_marks`, `/dock/bearing_markers`, `/dock/markers/<도형>/ray`·`depth_ground`, `/detector/enable` |
-| 도킹 라이다·경로 | `/dock/lidar/status`·`markers`·`direct_markers`·`<도형>/normal`·`wall_point`, `/dock/waypoints`, `/dock/avoid/goal(_status)`, `/dock/status`, `/dock/one_shot_path`·`gps`·`markers`, `/dock/cmd_preview`, `/cmd/dock`, `/mission/complete` |
-| 당시 판단 (비교용) | `/cmd_vel`, `/occupancy_grid`, `/mission/state`, `/mission/goal`, `/detections/buoys`, `/dock/lidar/status`, `/waypoint/status` |
+| 자세·위치 | `/imu/data`, `/gps/fix`, `/gps/fix_secondary`, `/odom`, `/tf`, `/tf_static`, `/geo/origin`, `/geo/status`, `/geo/position`, `/geo/targets`·`target_local`·`target_markers` |
+| GQ7 진단 | `/ekf/status`(**`gnss_state` = RTK Fixed/Float**), `/ekf/odometry_earth`(필터 원본 25 Hz), `/ekf/dual_antenna_heading`, `/gnss_1/velocity`, `/mip/ekf/gnss_dual_antenna_status`·`aiding_measurement_summary`·`gnss_position_aiding_status`, `/rtcm`(NTRIP 보정 입력), `/nmea` |
+| 카메라 | 컬러 JPEG, 정렬 뎁스 무손실 PNG(`compressedDepth`), `/camera/camera_info`, `/occupancy_grid/cam_points`(카메라 장애물 점, 최대 3000점) |
+| 수동·자율 구분 | `/teleop/enable`·`levels`·`esp_mode`·`status`·`event`, `/rc/cmd_vel`, `/emergency_stop`, `/diagnostics` |
+| 노드 로그 | `/rosout` — 회피 ESCAPE 진입 이유처럼 토픽으로 안 나오는 판단 |
+| 미션 전환 | `/mission/state`, `/mission/goal`, `/mission/entry_goal`, `/mission/complete`, `/cmd/approach`, `/mission/approach_cmd_preview`, `/mission_points/markers`·`result`, `/waypoint/status` |
+| 장애물 회피 | `/avoid/dri`(위험도 지도), `/avoid/plan`(B-spline 경로), `/avoid/cps`(제어점), `/avoid/dri_marks`(고위험 칸), `/cmd/avoid` |
+| 스테이션·수색 | `/station/map`·`markers`·`status`·`cmd_preview`, `/cmd/station`, `/search/markers`·`status`, `/cmd/search` |
+| 게이트 | `/gate/status`(WAIT·PASSED…), `/gate/pairs`, `/gate/path`, `/gate/cmd_preview`, `/cmd/gate` |
+| 도킹 YOLO 결과 | `/dock/detection_status`(마커별 신뢰도·픽셀·시선, JSON), `/dock/debug_image`(마스크·도형 그린 영상 320 px 5 fps ≈ 1.2 MB/s), `/detections/dock_marks`, `/dock/bearing_markers`, `/dock/markers/<도형>/ray`·`depth_ground`·`ground`·`base`·`ground_base`, `/dock/marker_base`·`marker_ground(_raw)`, `/dock/markers_base`·`markers_ground`, `/detector/enable` |
+| 도킹 라이다·경로 | `/dock/lidar/status`·`markers`·`direct_markers`·`<도형>/normal(_base)`·`wall_point(_base)`·`marker_ground`·`marker_base`, `/dock/waypoints`, `/dock/approach`·`alignment`·`stop_point`, `/dock/entrance_base`, `/dock/avoid/goal(_status)`·`goal_candidate`·`goal_markers`, `/dock/bspline_path`, `/dock/status`, `/dock/one_shot_path`·`gps`·`markers`, `/dock/cmd_preview`, `/cmd/dock` |
+| 당시 판단 (비교용) | `/cmd_vel`, `/occupancy_grid`, `/detections/buoys`·`buoys_viz` |
+| 야외 단독 시험 | `/real_avoid_test/path`, `/manual_dri/dri`·`status`, `/los_test/path`·`status`·`cmd_preview`, `/waypoint/goal` |
+
+- 그 순간 돌고 있는 노드의 토픽만 저장됩니다. 미션은 하나씩 돌아서 회피·스테이션 지도가 동시에
+  쌓이지 않습니다. 판단 토픽을 다 합쳐도 늘어나는 양은 많아야 약 0.3 MB/s입니다(카메라의 5% 안팎).
+- `/avoid/dri`·`/avoid/plan`·`/station/map`·`/occupancy_grid/cam_points`는 **구독자가 있을 때만**
+  만들어지는 디버그 토픽입니다. 녹화를 켜면 젯슨이 10 Hz로 만들기 시작하므로(메시지당 몇 ms),
+  처음 한 번은 `jtop`으로 CPU 여유를 봅니다.
+- 압축 안 된 카메라 원본(`image_raw`)은 일부러 뺐습니다. `ros2 bag record -a`(전부 녹화)를 쓰면 이것까지 들어가
+  용량이 몇 배가 되므로 쓰지 않습니다.
 
 토픽을 더 넣고 싶으면 `scripts/record_run.sh`의 `topics=( … )`에 추가합니다.
 
@@ -106,6 +137,7 @@ ros2 bag play … --clock --topics /scan /odom /imu/data    # 일부 토픽만
 
 - 시험할 노드는 `use_sim_time:=true`로 띄웁니다. 그래야 노드 시계가 bag 시각을 따릅니다.
 - 시험하는 노드가 내는 토픽(예: `/occupancy_grid`)은 재생에서 빼야 새 결과와 섞이지 않습니다.
+  예: 회피를 다시 돌릴 때 `ros2 bag play … --clock -x '^/(avoid/|cmd/avoid|cmd_vel$)'`
 - 재생은 **보트 움직임이 녹화 그대로**입니다. 인지(LiDAR·카메라·격자)와 판단(FSM 상태 전이)
   시험에는 좋지만, 제어 게인(LOS·웨이포인트) 튜닝에는 쓸 수 없습니다.
 
