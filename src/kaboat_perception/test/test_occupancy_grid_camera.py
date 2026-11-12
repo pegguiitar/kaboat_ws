@@ -69,6 +69,14 @@ def test_camera_boom_survives_lidar_and_decays_only_when_seen(node):
     assert _value_at(node, 3.1, 0.1) < 95
 
 
+def test_camera_topics_use_best_effort_so_realsense_connects(node):
+    from rclpy.qos import ReliabilityPolicy
+    subs = {s.topic_name: s.qos_profile.reliability for s in node.subscriptions}
+    assert subs['/camera/camera_info'] == ReliabilityPolicy.BEST_EFFORT
+    for topic in ('/camera/color/image_raw', '/camera/depth/image_raw'):
+        assert subs[topic] == ReliabilityPolicy.BEST_EFFORT
+
+
 def test_sparse_points_below_min_count_are_ignored(node):
     _set_pose(node)
     for _ in range(10):

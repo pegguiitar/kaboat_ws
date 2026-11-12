@@ -221,7 +221,10 @@ class OccupancyGridNode(Node):
         self.cam_points_pub = None
         if self.cam_enabled:
             g = lambda n: str(self.get_parameter(n).value)
-            self.create_subscription(CameraInfo, g('cam_info_topic'), self._on_cam_info, 1)
+            # realsense 가 camera_info 를 BEST_EFFORT 로 낸다 — RELIABLE 구독은 연결이 안 됨
+            # (2026-11-12 현장: "offering incompatible QoS"). BEST_EFFORT 는 어느 쪽과도 맞는다.
+            self.create_subscription(CameraInfo, g('cam_info_topic'), self._on_cam_info,
+                                     qos_profile_sensor_data)
             self._cam_subs = (
                 Subscriber(self, Image, g('cam_color_topic'), qos_profile=qos_profile_sensor_data),
                 Subscriber(self, Image, g('cam_depth_topic'), qos_profile=qos_profile_sensor_data))
