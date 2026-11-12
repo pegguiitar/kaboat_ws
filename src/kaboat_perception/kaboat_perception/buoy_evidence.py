@@ -14,6 +14,9 @@
 상태 (히스테리시스):
   후보 —(L ≥ l_confirm)→ 확정 —(L ≤ l_delete)→ 삭제
   후보는 L < 0 이 되거나 tentative_timeout 동안 다시 안 잡히면 삭제 (물보라·반짝임).
+  새 부표는 호출자가 허락한 검출(can_spawn — 노드는 카메라 시야 ±45°·20 m 안)에서만 만든다.
+  옆·뒤의 물가·다리 기둥·정박 배가 부표가 되지 않게. 이미 있는 부표는 어느 방향 검출로든 갱신.
+  시간이 1 s 넘게 거꾸로 가면(bag 반복 재생·시계 재설정) 처음부터 다시 시작한다.
   확정 부표 둘이 merge_radius 안이면 L 큰 쪽으로 합친다.
 
 색: 프레임별 표 ('red' | 'green' | 'unknown', None 은 표 없음). 빨강·초록 중 많은 쪽이
@@ -33,6 +36,7 @@ KNOWN_COLORS = ('red', 'green')
 KNOWN_COLOR_MIN_VOTES = 2
 KNOWN_COLOR_FRAC = 0.25
 MAX_STEP = 0.5   # [s] 프레임 간격 상한 — 스캔이 한동안 끊겼다 돌아온 첫 스캔에 깎임이 몰리지 않게
+TIME_JUMP_BACK = 1.0   # [s] 이보다 거꾸로 가면 리셋
 
 
 @dataclass(frozen=True)
@@ -126,16 +130,23 @@ class EvidenceTracker:
     def confirmed(self) -> List[EvTrack]:
         return [t for t in self.tracks if t.confirmed]
 
-    def update(self, detections: Sequence[Tuple[float, float, Optional[str]]], now: float,
+    def reset(self):
+        self.tracks = []
+        self._last_now = None
+
+    def update(self, detections: Sequence[Tuple], now: float,
                view: Optional[LidarView] = None) -> List[EvTrack]:
-        """detections = [(x, y, 색 표 또는 None)] (전역), view = 이 스캔 (없으면 깎지 않음)."""
+        """detections = [(x, y, 색 표 또는 None[, can_spawn=True])] (전역), view = 이 스캔 (없으면 깎지 않음)."""
         p = self.p
+        if self._last_now is not None and now < self._last_now - TIME_JUMP_BACK:
+            self.reset()
+        detections = [d if len(d) == 4 else (*d, True) for d in detections]
         dt = 0.0 if self._last_now is None else min(max(now - self._last_now, 0.0), MAX_STEP)
         self._last_now = now
 
         # ① 연결 — 가까운 쌍부터 1:1
         pairs = []
-        for i, (x, y, _c) in enumerate(detections):
+        for i, (x, y, _c, _s) in enumerate(detections):
             for t in self.tracks:
                 d = math.hypot(t.x - x, t.y - y)
                 if d <= p.gate_radius:
@@ -149,7 +160,7 @@ class EvidenceTracker:
             used_det.add(i)
             used_trk.add(tid)
             t = by_id[tid]
-            x, y, color = detections[i]
+            x, y, color, _s = detections[i]
             t.x += p.ema_alpha * (x - t.x)
             t.y += p.ema_alpha * (y - t.y)
             t.L = min(p.l_max, t.L + p.l_hit)
@@ -158,8 +169,8 @@ class EvidenceTracker:
             t.last_evidence = 'hit'
             if color is not None:
                 t.color_votes[color] = t.color_votes.get(color, 0) + 1
-        for i, (x, y, color) in enumerate(detections):
-            if i in used_det:
+        for i, (x, y, color, can_spawn) in enumerate(detections):
+            if i in used_det or not can_spawn:
                 continue
             t = EvTrack(self._next_id, float(x), float(y), p.l_hit, now, hits=1)
             if color is not None:

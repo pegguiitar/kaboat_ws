@@ -132,3 +132,28 @@ def test_never_seen_by_camera_is_unseen_not_unknown():
     for k in range(4):
         tk.update([(8.0, 0.0, None)], 0.1 * k)
     assert tk.confirmed()[0].color == 'unseen'
+
+
+# ---------- 새 부표 제한·시간 점프 ----------
+
+def test_detection_not_allowed_to_spawn_creates_nothing():
+    tk = EvidenceTracker(P)
+    for k in range(5):
+        tk.update([(8.0, 0.0, None, False)], 0.1 * k)
+    assert tk.tracks == []
+
+
+def test_existing_track_updated_by_non_spawning_detection():
+    tk = confirmed_at()
+    run(tk, view({0: 12.0}), 1.5)                    # L 0.8
+    tk.update([(8.0, 0.0, None, False)], 2.2)        # 시야 밖에서 다시 잡힘
+    assert tk.confirmed()[0].L == pytest.approx(1.6, abs=0.05)
+
+
+def test_time_jump_back_resets():
+    tk = confirmed_at()
+    tk.update([], 0.0)                               # bag 이 처음으로 돌아감 (0.5 → 0.0, 1 s 미만)
+    assert len(tk.confirmed()) == 1
+    tk.update([], 100.0)
+    tk.update([], 5.0)                               # 95 s 거꾸로
+    assert tk.tracks == []

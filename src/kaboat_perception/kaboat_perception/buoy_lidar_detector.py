@@ -58,12 +58,17 @@ class BuoyLidarDetector(Node):
         self.declare_parameter('image_max_age', 0.2)   # [s] 스캔과 이만큼 넘게 차이 나면 색 표 안 넣음
         # 카메라에 한 번도 안 찍힌 확정 부표(unseen)도 내보낼지 — 기본은 안 냄 (검정=unknown 오염 방지)
         self.declare_parameter('publish_unseen', False)
+        # 새 부표는 카메라 시야 안·이 거리 안 라이다 군집에서만 만든다 (옆·뒤 물가·기둥 제외)
+        self.declare_parameter('spawn_half_fov_deg', 45.0)
+        self.declare_parameter('spawn_max_range', 20.0)
         self.geom = BuoyGeometry()
         self.cp = self._params_from('color', ColorParams)
         self.ep = self._params_from('evidence', EvidenceParams)
         self.tracker = EvidenceTracker(self.ep)
         self.image_max_age = float(self.get_parameter('image_max_age').value)
         self.publish_unseen = bool(self.get_parameter('publish_unseen').value)
+        self.spawn_half_fov = math.radians(float(self.get_parameter('spawn_half_fov_deg').value))
+        self.spawn_max_range = float(self.get_parameter('spawn_max_range').value)
 
         self.poses = collections.deque(maxlen=400)   # (t, x, y, yaw)
         self.K = None
@@ -169,7 +174,12 @@ class BuoyLidarDetector(Node):
         view = LidarView(px + c * ox - sn * oy, py + sn * ox + c * oy, yaw,
                          s.angle_min, s.angle_increment, np.asarray(s.ranges, dtype=float),
                          s.range_min, s.range_max)
-        conf = self.tracker.update([(x, y, v) for (x, y), v in zip(world, votes)], t, view)
+        cam_x = g.cam_offset_x
+        spawn = [abs(math.atan2(y, x - cam_x)) <= self.spawn_half_fov
+                 and math.hypot(x - cam_x, y) <= self.spawn_max_range
+                 for (x, y), _r, _n in clusters]
+        conf = self.tracker.update([(x, y, v, ok) for (x, y), v, ok in zip(world, votes, spawn)],
+                                   t, view)
         self._publish(s.header.stamp, conf)
         self._publish_markers(s.header.stamp)
         if self.debug_pub.get_subscription_count() > 0 and self.image is not None:
