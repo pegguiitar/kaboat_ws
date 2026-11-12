@@ -295,8 +295,8 @@ test_avoid_outdoor cam_enabled:=true                              # 회피 시�
 ```
 
 - `cam_height` = 배가 물에 뜬 상태에서 흘수선부터 카메라 렌즈 중심까지 [m], 실측 **0.85**가 기본
-  (바꾸면 `-p cam_height:=0.9`처럼 소수점 포함). 숙여 달았으면
-  `cam_mount_pitch_deg`(+ = 아래). 선체 중심 기준 위치(뒤 0.33 m)는 도킹 실측값이 기본.
+  (바꾸면 `-p cam_height:=0.9`처럼 소수점 포함). 카메라는 **아래로 10°** 숙여 달았고 그게 기본
+  (`cam_mount_pitch_deg`, + = 아래). 각도를 바꾸면 도킹 TF(`dock_yolo.launch.py`의 `--pitch`)도 같이. 선체 중심 기준 위치(뒤 0.33 m)는 도킹 실측값이 기본.
 - 노트북 `view_lidar`의 주황 점(`/occupancy_grid/cam_points`)이 카메라가 고른 점입니다. 붐 위에
   모이는지, 수면에 점이 흩어지지 않는지 봅니다.
 - 색 기준·높이 하한은 `cam_orange_*`, `cam_white_*`, `cam_range_*` 파라미터.

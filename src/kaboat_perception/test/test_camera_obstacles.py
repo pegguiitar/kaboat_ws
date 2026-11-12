@@ -41,9 +41,14 @@ def _project(world, p, roll=0.0, pitch=0.0):
 
 
 def test_back_projection_level_and_tilted():
-    # 수평: 영상 가운데 행은 카메라 높이, 수면 점은 z 0
-    pts = pixels_to_level([320], [240], [3.0], K, P)
-    np.testing.assert_allclose(pts[0], [P.offset_x + 3.0, 0.0, 1.0], atol=1e-9)
+    # 수평으로 단 카메라: 영상 가운데 행은 카메라 높이, 수면 점은 z 0
+    flat = CameraObstacleParams(height=1.0, mount_pitch_deg=0.0)
+    pts = pixels_to_level([320], [240], [3.0], K, flat)
+    np.testing.assert_allclose(pts[0], [flat.offset_x + 3.0, 0.0, 1.0], atol=1e-9)
+    # 10° 숙여 단 카메라(현장 기본값): 영상 가운데 행은 아래로 10° 방향
+    assert CameraObstacleParams().mount_pitch_deg == 10.0
+    pts = pixels_to_level([320], [240], [3.0], K, CameraObstacleParams(height=1.0))
+    np.testing.assert_allclose(pts[0, 2], 1.0 - 3.0 * math.sin(math.radians(10.0)), atol=1e-9)
     water = (4.67, 0.5, 0.0)
     u, v, d = _project(water, P)
     np.testing.assert_allclose(pixels_to_level([u], [v], [d], K, P)[0], water, atol=1e-9)
@@ -74,7 +79,7 @@ def _scene(white=False):
     paint((3.67, 0.0, 0.15), (3.67, 0.0, 0.03), (255, 90, 0), 20)   # 붐 (0.03~0.15 m)
     paint((3.67, 0.0, -0.03), (3.67, 0.0, -0.15), (255, 90, 0), 20)  # 물에 비친 붐
     paint((2.67, 1.0, 0.30), (2.67, 1.0, 0.12), (245, 245, 245), 20)  # 흰 부표
-    paint((0.37, 0.0, 0.5), (0.37, 0.0, 0.3), (255, 90, 0))        # 0.7 m — 배 자체
+    paint((0.1, -0.15, 0.95), (0.1, -0.15, 0.85), (255, 90, 0), 30)  # 카메라 0.45 m — 배 자체 (오른쪽, 다른 물체와 안 겹침)
     return rgb, depth
 
 
@@ -82,9 +87,11 @@ def test_detect_keeps_boom_drops_reflection_white_and_too_close():
     rgb, depth = _scene()
     pts, labels = detect_points(rgb, depth, K, P)
     assert len(pts) > 20 and set(labels) == {'orange'}
+    near = (rgb[:, 420:490] == (255, 90, 0)).all(axis=2).sum()
+    assert near > 1000                                            # 가까운 띠가 화면에 보이는데도
     assert np.all(pts[:, 2] >= 0.02)                              # 반사상(음수 높이) 없음
     np.testing.assert_allclose(np.median(pts[:, 0]), 3.67, atol=0.05)
-    assert np.all(np.hypot(pts[:, 0] - P.offset_x, pts[:, 1]) >= P.range_min)
+    assert np.all(np.hypot(pts[:, 0] - P.offset_x, pts[:, 1]) >= P.range_min)  # 거리 하한으로 빠짐
 
     with_white = CameraObstacleParams(height=1.0, white=True)
     pts, labels = detect_points(rgb, depth, K, with_white)

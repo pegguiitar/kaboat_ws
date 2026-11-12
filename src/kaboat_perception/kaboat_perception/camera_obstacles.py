@@ -28,7 +28,7 @@ class CameraObstacleParams:
     offset_x: float = -0.33
     offset_y: float = 0.0
     height: float = 0.85             # 흘수선에서 카메라 렌즈까지 [m] (2026-11-12 실측)
-    mount_pitch_deg: float = 0.0     # 장착 숙임 (+ = 아래). 라이다와 평행 가정
+    mount_pitch_deg: float = 10.0    # 장착 숙임 (+ = 아래). 2026-11-12 아래로 10° 기울임
     step: int = 2                    # 픽셀 건너뛰기 (640×480 → 320×240)
     range_min: float = 0.6           # D455 유효 거리 [m] — 가까우면 배 자체, 멀면 부정확
     range_max: float = 5.0           # 멀수록 뎁스 오차가 거리² 로 커짐 (4 m ≈ 8 cm, 6 m ≈ 18 cm)
