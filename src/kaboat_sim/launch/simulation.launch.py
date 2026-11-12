@@ -152,7 +152,8 @@ def generate_launch_description():
 
     # 스폰 위치 — 기본값은 게이트 미션 시작점. 다른 미션을 검증할 때는
     # launch 파일을 복사하지 말고 이 인자를 넘긴다
-    # (예: 회피 부표 밭 진입 = spawn_y:=75.0, scripts/demo/sim_avoid.sh).
+    # (사진 기반 회피 구역 입구 바깥 = spawn_x:=2.0 spawn_y:=77.5,
+    #  scripts/demo/sim_avoid.sh).
     spawn_args = [
         DeclareLaunchArgument('spawn_x', default_value='2.0',
                               description='배 스폰 x [m]'),

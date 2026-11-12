@@ -1,6 +1,6 @@
 #!/bin/bash
-# 회피 검증용 sim — 부표 밭 서쪽(2, 75)에 스폰. 부표 행 라인 정면이라
-# 출발하자마자 회피 기동이 나온다(통로 정중앙 76.5 는 직진만 함).
+# 사진 기반 회피 구역 서쪽 입구 바깥(world 2, 77.5)에 스폰.
+# 짧은 변의 흰색 부표 두 개 사이로 진입해 동쪽 출구로 나간다.
 source "$(dirname "${BASH_SOURCE[0]}")/_env.sh"
 
 # 이전 sim이 비정상 종료되면서 남긴 odom publisher를 제거한다.
@@ -14,4 +14,4 @@ done
 pkill -KILL -f '[o]dom_gps_noise.py' 2>/dev/null || true
 
 # sigma=0.25m인 OU 위치잡음 — 오차의 약 95%(2σ)가 50cm 이내.
-exec ros2 launch kaboat_sim simulation.launch.py headless:=True spawn_y:=75.0 odom_noise_sigma:=0.25
+exec ros2 launch kaboat_sim simulation.launch.py headless:=True spawn_x:=2.0 spawn_y:=77.5 odom_noise_sigma:=0.25 "$@"

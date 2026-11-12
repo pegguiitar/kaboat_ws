@@ -253,7 +253,9 @@
     </include>
 
 
-    <!-- The wave field -->
+    <!-- Moderate waves for the photo-based arena prototype.
+         gain is a VRX wave-spectrum control, not wave height in metres.
+         Previously gain=1.7 / period=4.0; now gain=0.8 / period=5.0. -->
     <plugin filename="libPublisherPlugin.so" name="vrx::PublisherPlugin">
       <message type="gz.msgs.Param" topic="/vrx/wavefield/parameters"
                every="2.0">
@@ -268,14 +270,14 @@
           key: "gain"
           value {
             type: DOUBLE
-            double_value: 1.7
+            double_value: 0.8
           }
         }
         params {
           key: "period"
           value {
             type: DOUBLE
-            double_value: 4.0
+            double_value: 5.0
           }
         }
         params {
