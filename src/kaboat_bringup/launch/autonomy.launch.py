@@ -36,8 +36,7 @@ def generate_launch_description():
     perception = [
         Node(package='kaboat_perception', executable='occupancy_grid',
              name='occupancy_grid', output='screen', parameters=[common_params]),
-        Node(package='kaboat_perception', executable='buoy_detector',
-             name='buoy_detector', output='screen', parameters=[common_params]),
+        # buoy_detector 는 대회 스택에서 끔 — search_circler 는 부표 없이 제자리 탐색 선회만 한다.
         Node(package='kaboat_perception', executable='dock_mark_detector',
              name='dock_mark_detector', output='screen', parameters=[dock_detector_params]),
     ]
