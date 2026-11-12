@@ -214,3 +214,28 @@ def test_skewed_gate_crossing_uses_the_gate_normal():
     assert abs(float(np.dot(pair.direction, u))) > 0.99
     mid = np.asarray(pair.midpoint)
     assert crossed_gate(tuple(mid - 0.3 * u), tuple(mid + 0.3 * u), pair, GateParams())
+
+
+def test_selection_stats_explain_why_no_pair_was_chosen():
+    from kaboat_behaviors.gate_corridor import describe_reasons
+    stats = {}
+    grid = gate_grid()                                   # 3쌍 (x 3·5·7, y ±1.5)
+    pair = select_gate_pair(grid, (0.0, 0.0), (9.0, 0.0), [], GateParams(), stats=stats)
+    assert pair is not None and stats['posts'] == 6 and stats['ahead'] == 6
+    assert stats['chosen_skew_deg'] == pytest.approx(0.0, abs=1.0)
+    # 세 쌍 다 보류 중 → 쌍 없음, 이유가 '통과·보류'로 잡힌다
+    held = [(3.2, 0.1), (5.2, 0.1), (7.2, 0.1)]
+    assert select_gate_pair(grid, (0.0, 0.0), (9.0, 0.0), [], GateParams(),
+                            excluded_midpoints=held, stats=stats) is None
+    assert stats['held'] == 3 and stats['diagonal'] >= 2
+    text = describe_reasons(stats)
+    assert '부표 6' in text and '통과·보류 3' in text and '대각선' in text
+
+
+def test_gate_crossing_reports_point_and_offset():
+    from kaboat_behaviors.gate_corridor import gate_crossing
+    pair = select_gate_pair(gate_grid(), (0.0, 0.0), (9.0, 0.0), [], GateParams())
+    point, offset = gate_crossing((2.8, 0.6), (3.4, 0.6), pair)
+    assert point[0] == pytest.approx(pair.midpoint[0], abs=1e-6)
+    assert offset == pytest.approx(0.5, abs=1e-6)
+    assert gate_crossing((3.4, 0.6), (2.8, 0.6), pair) is None    # 반대 방향

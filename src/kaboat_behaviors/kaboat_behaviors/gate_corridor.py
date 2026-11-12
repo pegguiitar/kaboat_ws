@@ -146,14 +146,31 @@ def pair_observed(pair: GatePair, scan_hits, p: GateParams):
                for post in (pair.left, pair.right))
 
 
+# select_gate_pair(stats=…) 가 채우는 탈락 이유 (로그 순서·한글 이름)
+REJECT_REASONS = (
+    ('width', '폭'), ('diagonal', '대각선'), ('skew', '기울기'), ('lateral', '좌우 멀다'),
+    ('held', '통과·보류'), ('advance', '전진 부족'), ('shift', '좌우 어긋남'))
+
+
 def select_gate_pair(grid, boat_xy, goal_xy, passed_midpoints, p: GateParams,
-                     excluded_midpoints=(), last_direction=None):
+                     excluded_midpoints=(), last_direction=None, stats=None):
     """Find the nearest credible aperture ahead along the mission goal axis.
 
     excluded_midpoints: 잠시 후보에서 뺄 쌍의 중점 (경로가 계속 막혀 버린 쌍).
     last_direction: 직전에 통과한 게이트의 진행 방향 — 게이트선 기울기의 기준.
     없으면 배→목표 방향.
+    stats: dict 를 주면 진단용 개수를 채운다 — posts(지도 부표 덩어리), ahead(앞 창 안),
+    pairs(검사한 두 부표 조합), REJECT_REASONS 의 이유별 탈락 수, chosen_skew_deg.
     """
+    if stats is not None:
+        stats.clear()
+        stats.update({'posts': 0, 'ahead': 0, 'pairs': 0, 'chosen_skew_deg': None,
+                      **{key: 0 for key, _ in REJECT_REASONS}})
+
+    def reject(reason):
+        if stats is not None:
+            stats[reason] += 1
+
     direction = _unit_toward(boat_xy, goal_xy)
     if direction is None:
         return None
@@ -174,15 +191,20 @@ def select_gate_pair(grid, boat_xy, goal_xy, passed_midpoints, p: GateParams,
         side = float(delta @ lateral)
         if p.min_gate_forward <= along <= p.max_gate_forward:
             candidates.append((point, along, side))
+    if stats is not None:
+        stats['posts'], stats['ahead'] = len(posts), len(candidates)
 
     pairs = []
     for i, (a, ta, la) in enumerate(candidates):
         for b, tb, lb in candidates[i + 1:]:
+            if stats is not None:
+                stats['pairs'] += 1
             a_xy, b_xy = np.asarray(a, dtype=float), np.asarray(b, dtype=float)
             post_line = b_xy - a_xy
             width = float(np.linalg.norm(post_line))
             mid = (a_xy + b_xy) / 2.0
             if not p.min_gate_width <= width <= p.max_gate_width:
+                reject('width')
                 continue
             # 지름 원 안 다른 기둥이 선 양쪽에 다 있으면 대각선 오쌍 (위 GateParams 주석)
             rel = all_posts - mid
@@ -192,19 +214,28 @@ def select_gate_pair(grid, boat_xy, goal_xy, passed_midpoints, p: GateParams,
             if near.any():
                 side = post_line[0] * rel[near, 1] - post_line[1] * rel[near, 0]
                 if np.any(side > 0.0) and np.any(side < 0.0):
+                    reject('diagonal')
                     continue
             # 게이트선이 기준 진행 방향에 수직이면 0, 나란하면 1 (= sin 기울기)
             skew_sin = abs(float(post_line @ axis)) / width
             mid_side = float((mid - boat) @ lateral)
-            if (skew_sin > max_skew_sin
-                    or abs(mid_side) > p.max_midpoint_lateral
-                    or any(np.linalg.norm(mid - old) < p.passed_pair_exclusion
-                           for old in (*passed_midpoints, *excluded_midpoints))):
+            if skew_sin > max_skew_sin:
+                reject('skew')
+                continue
+            if abs(mid_side) > p.max_midpoint_lateral:
+                reject('lateral')
+                continue
+            if any(np.linalg.norm(mid - old) < p.passed_pair_exclusion
+                   for old in (*passed_midpoints, *excluded_midpoints)):
+                reject('held')
                 continue
             if passed_midpoints:
                 from_last = mid - np.asarray(passed_midpoints[-1])
-                if (float(from_last @ direction) < p.min_pair_advance
-                        or abs(float(from_last @ lateral)) > p.max_midpoint_shift):
+                if float(from_last @ direction) < p.min_pair_advance:
+                    reject('advance')
+                    continue
+                if abs(float(from_last @ lateral)) > p.max_midpoint_shift:
+                    reject('shift')
                     continue
             # 게이트를 지나는 방향 = 게이트선의 수직, 기준 진행 방향 쪽으로.
             # 통과 판정(crossed_gate)·경로 끝점(make_gate_path)이 이 방향을 쓴다.
@@ -216,7 +247,21 @@ def select_gate_pair(grid, boat_xy, goal_xy, passed_midpoints, p: GateParams,
             pair = GatePair(left, right, (float(mid[0]), float(mid[1])),
                             width, (float(normal[0]), float(normal[1])))
             pairs.append((0.5 * (ta + tb), skew_sin, abs(mid_side), pair))
-    return min(pairs, key=lambda row: row[:3])[-1] if pairs else None
+    if not pairs:
+        return None
+    best = min(pairs, key=lambda row: row[:3])
+    if stats is not None:
+        stats['chosen_skew_deg'] = math.degrees(math.asin(min(1.0, best[1])))
+    return best[-1]
+
+
+def describe_reasons(stats) -> str:
+    """select_gate_pair 의 stats → '부표 9 (앞 6), 조합 15 — 폭 3, 기울기 4 …' 한 줄."""
+    if not stats:
+        return '진단 없음'
+    rejected = ', '.join(f'{name} {stats[key]}' for key, name in REJECT_REASONS if stats[key])
+    return (f"부표 {stats['posts']} (앞 창 안 {stats['ahead']}), 조합 {stats['pairs']}"
+            + (f' — 탈락: {rejected}' if rejected else ''))
 
 
 def make_gate_path(boat_xy, pair: GatePair, p: GateParams):
@@ -296,8 +341,8 @@ def lookahead_chord_safe(dri, boat_xy, path, progress_idx, lookahead,
             and (grid is None or points_observed(grid, samples)))
 
 
-def crossed_gate(previous_xy, boat_xy, pair: GatePair, p: GateParams):
-    """True only when the boat crosses the post line within the clear gap."""
+def gate_crossing(previous_xy, boat_xy, pair: GatePair):
+    """이번 이동이 게이트선을 진행 방향으로 가로질렀으면 (가로지른 점, 중점에서 옆 거리), 아니면 None."""
     previous = np.asarray(previous_xy, dtype=float)
     current = np.asarray(boat_xy, dtype=float)
     mid = np.asarray(pair.midpoint)
@@ -305,9 +350,14 @@ def crossed_gate(previous_xy, boat_xy, pair: GatePair, p: GateParams):
     before = float((previous - mid) @ direction)
     after = float((current - mid) @ direction)
     if not before < 0 <= after:
-        return False
+        return None
     crossing = previous + (current - previous) * (-before / (after - before))
     gate_axis = np.asarray(pair.left) - np.asarray(pair.right)
     gate_axis /= np.linalg.norm(gate_axis)
-    offset = abs(float((crossing - mid) @ gate_axis))
-    return offset <= pair.width / 2.0 - p.min_clearance
+    return crossing, abs(float((crossing - mid) @ gate_axis))
+
+
+def crossed_gate(previous_xy, boat_xy, pair: GatePair, p: GateParams):
+    """True only when the boat crosses the post line within the clear gap."""
+    hit = gate_crossing(previous_xy, boat_xy, pair)
+    return hit is not None and hit[1] <= pair.width / 2.0 - p.min_clearance

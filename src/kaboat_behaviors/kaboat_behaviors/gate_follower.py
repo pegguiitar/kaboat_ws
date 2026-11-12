@@ -21,9 +21,13 @@ from .behavior_base import BehaviorBase, yaw_from_quaternion
 from .los_controller import LOS_TURN_RATIO
 from .dri import DriParams, build_dri
 from .gate_corridor import (
-    GateParams, crossed_gate, lookahead_chord_safe, make_gate_path,
+    GateParams, describe_reasons, gate_crossing, lookahead_chord_safe, make_gate_path,
     pair_observed, path_safe, points_observed, points_safe, scan_hits_world,
     select_gate_pair)
+
+
+def _xy(point) -> str:
+    return f'({point[0]:.2f}, {point[1]:.2f})'
 
 GATE_LOS_THRUST_RATIO = 0.4   # 게이트 통과(LOS) 직진 상한 — config/gate_params.yaml 과 같게
 
@@ -182,7 +186,21 @@ class GateFollower(BehaviorBase):
         self._stall_since = None
         self._los_follower.reset()
 
-    def _mark_passed(self):
+    def _post_seen(self, post) -> bool:
+        """기둥 하나가 지금 스캔(scan_match_radius 안)에 보이는지 — 진단 로그용."""
+        hits = np.asarray(self._scan_hits, dtype=float)
+        if hits.ndim != 2 or len(hits) == 0:
+            return False
+        return bool(np.any(np.sum((hits - np.asarray(post)) ** 2, axis=1)
+                           <= self.gate_params.scan_match_radius ** 2))
+
+    def _mark_passed(self, how='경로 끝 도달'):
+        n = len(self._passed_midpoints) + 1
+        crossing = getattr(self, '_crossing', None)
+        self.get_logger().info(
+            f'gate: 게이트 {n}/{self.gate_params.required_pairs} 통과 ({how}) — 중점 '
+            f'{_xy(self._pair.midpoint)}, 가로지른 점 '
+            f'{_xy(crossing) if crossing is not None else "없음"}')
         self._passed_midpoints.append(self._pair.midpoint)
         self._passed_directions.append(self._pair.direction)
         self._drop_pair()
@@ -202,14 +220,16 @@ class GateFollower(BehaviorBase):
                 # 게이트선은 실제로 넘었다 — 통과로 인정하고 다음 쌍으로
                 self.get_logger().warn(
                     f'gate: {reason} after crossing; counting the gate as passed')
-                self._mark_passed()
+                self._mark_passed('가로지른 뒤 막혀서 인정')
                 self._publish_debug()
                 self.preview_pub.publish(Twist())
                 return Twist()
             self.get_logger().warn(
                 f'gate: {reason} for {now - self._stall_since:.1f} s; '
                 f'dropping pair at ({self._pair.midpoint[0]:.2f}, '
-                f'{self._pair.midpoint[1]:.2f}) and re-selecting')
+                f'{self._pair.midpoint[1]:.2f}) and re-selecting '
+                f'(기둥 {_xy(self._pair.left)}·{_xy(self._pair.right)}, 폭 {self._pair.width:.2f} m, '
+                f'{self.reject_hold:.0f} s 동안 후보에서 뺌)')
             self._rejected.append((self._pair.midpoint, now + self.reject_hold))
             self._drop_pair()
             return self._stop(reason)
@@ -310,14 +330,36 @@ class GateFollower(BehaviorBase):
 
         if self._path is None:
             self._rejected = [(m, until) for m, until in self._rejected if until > now]
+            stats = {}
             pair = select_gate_pair(
                 grid, boat, goal, self._passed_midpoints, self.gate_params,
                 excluded_midpoints=[m for m, _ in self._rejected],
                 last_direction=(self._passed_directions[-1]
-                                if self._passed_directions else None))
-            if pair is None or not pair_observed(
-                    pair, self._scan_hits, self.gate_params):
+                                if self._passed_directions else None),
+                stats=stats)
+            if pair is None:
+                self.get_logger().info(
+                    f'gate: WAIT_GATE_PAIR — 쌍 없음: {describe_reasons(stats)}; '
+                    f'보류 중 쌍 {len(self._rejected)}, 통과 {len(self._passed_midpoints)}, '
+                    f'배 {_xy(boat)}', throttle_duration_sec=1.0)
                 return self._stop('WAIT_GATE_PAIR')
+            if not pair_observed(pair, self._scan_hits, self.gate_params):
+                seen = [self._post_seen(post) for post in (pair.left, pair.right)]
+                self.get_logger().info(
+                    f'gate: WAIT_GATE_PAIR — 쌍 {_xy(pair.midpoint)} 기둥이 지금 스캔에 안 보임 '
+                    f'(왼 {_xy(pair.left)} {"보임" if seen[0] else "안 보임"}, '
+                    f'오 {_xy(pair.right)} {"보임" if seen[1] else "안 보임"}; 지도에만 남은 것)',
+                    throttle_duration_sec=1.0)
+                return self._stop('WAIT_GATE_PAIR')
+            d = pair.direction
+            self.get_logger().info(
+                f'gate: 게이트 {len(self._passed_midpoints) + 1}/'
+                f'{self.gate_params.required_pairs} 쌍 선택 — 왼 {_xy(pair.left)}, '
+                f'오 {_xy(pair.right)}, 중점 {_xy(pair.midpoint)}, 폭 {pair.width:.2f} m, '
+                f'기울기 {stats.get("chosen_skew_deg") or 0.0:.0f}°, 진행 방향 '
+                f'{round(math.degrees(math.atan2(d[1], d[0]))) + 0:d}°, 배 {_xy(boat)}; '
+                f'{describe_reasons(stats)}')
+            self._crossing = None
             self._pair = pair
             self._path = make_gate_path(boat, pair, self.gate_params)
             self._previous_xy = boat
@@ -327,10 +369,18 @@ class GateFollower(BehaviorBase):
 
         # 통과 판정을 기둥 보임 확인보다 먼저 한다 — 중심이 선을 넘는 순간 기둥이
         # 라이다 뒤쪽 가림 구간에 들어가도 통과를 놓치지 않게.
-        if (not self._crossed and self._previous_xy is not None
-                and crossed_gate(self._previous_xy, boat,
-                                 self._pair, self.gate_params)):
-            self._crossed = True
+        if not self._crossed and self._previous_xy is not None:
+            hit = gate_crossing(self._previous_xy, boat, self._pair)
+            if hit is not None:
+                point, offset = hit
+                limit = self._pair.width / 2.0 - self.gate_params.min_clearance
+                inside = offset <= limit
+                self.get_logger().info(
+                    f'gate: 게이트선 가로지름 {_xy(point)} — 중점에서 옆 {offset:.2f} m '
+                    f'(허용 {limit:.2f}) → {"기둥 사이 통과" if inside else "기둥 사이 아님"}')
+                if inside:
+                    self._crossed = True
+                    self._crossing = point
         self._previous_xy = boat
 
         if (not self._crossed
@@ -356,6 +406,9 @@ class GateFollower(BehaviorBase):
             if not self._crossed:
                 # 경로 끝까지 왔는데 기둥 사이를 지나지 않았다. 다시 고르면 이 게이트는
                 # 이미 뒤라 다음 게이트로 넘어가 버리므로(게이트 누락) 정지 유지.
+                self.get_logger().warn(
+                    f'gate: GATE_NOT_CROSSED — 경로 끝인데 쌍 {_xy(self._pair.midpoint)} 기둥 '
+                    f'사이를 안 지남, 정지 유지 (배 {_xy(boat)})', throttle_duration_sec=2.0)
                 return self._stop('GATE_NOT_CROSSED')
             self._mark_passed()
             self._publish_debug()
