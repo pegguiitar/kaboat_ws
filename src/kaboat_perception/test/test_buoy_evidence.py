@@ -230,3 +230,37 @@ def test_centre_stays_behind_surface_even_if_points_curve_toward_lidar():
     t = tk.tracks[0]
     assert t.x > pts[:, 0].mean()                      # 면 뒤
     assert not t.grown
+
+
+# ---------- 색: 픽셀 수 누적 ----------
+
+def px(red, green, visible, usable=True, color=None):
+    from types import SimpleNamespace
+    return SimpleNamespace(red=red, green=green, visible=visible, usable=usable, color=color)
+
+
+def test_pixel_accumulation_separates_adjacent_pair():
+    # 초록 공: 창이 공 위 4 프레임 (초록 30~58 %). 검정 캡슐: 옆 공이 2 프레임 섞이고(초록 33 %)
+    # 나머지 6 프레임은 초록 0 — 표 한 장씩이면 둘 다 초록이 될 수 있지만 픽셀 비율로 갈린다.
+    green, black = EvidenceTracker(P), EvidenceTracker(P)
+    for k, f in enumerate([0.58, 0.46, 0.38, 0.30]):
+        green.update([(8.0, 0.0, px(0, int(1000 * f), 1000))], 0.1 * k)
+    for k, f in enumerate([0.33, 0.33, 0, 0, 0, 0, 0, 0]):
+        black.update([(8.0, 0.0, px(0, int(1000 * f), 1000))], 0.1 * k)
+    assert green.confirmed()[0].color == 'green'
+    assert black.confirmed()[0].color == 'unknown'
+
+
+def test_unusable_frames_do_not_count():
+    tk = EvidenceTracker(P)
+    for k in range(4):
+        tk.update([(8.0, 0.0, px(0, 900, 1000, usable=False))], 0.1 * k)
+    assert tk.confirmed()[0].px_visible == 0
+    assert tk.confirmed()[0].color == 'unseen'
+
+
+def test_red_needs_dominance_over_green():
+    tk = EvidenceTracker(P)
+    for k in range(4):
+        tk.update([(8.0, 0.0, px(300, 200, 1000))], 0.1 * k)
+    assert tk.confirmed()[0].color == 'unknown'           # 섞였으면 판정하지 않음

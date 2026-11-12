@@ -56,8 +56,9 @@ def test_behind_camera_or_off_screen_is_no_vote():
     ((55, 100, 120), 2),   # 초록 뚜껑
     ((36, 75, 50), 0),     # 부표 옆 올리브색 물 — 초록 아님
     ((17, 75, 106), 0),    # 초록 부표 옆면 황갈색 띠 — 빨강 아님
-    ((148, 110, 40), 0),   # 검정 부표 (보라 번짐)
-    ((156, 135, 99), 0),   # 렌즈 보라 번짐 물
+    ((148, 110, 40), 3),   # 검정 부표 위 보라 번짐 — 번짐 라벨
+    ((156, 135, 99), 3),   # 렌즈 보라 번짐 물
+    ((72, 55, 58), 2),     # 초록 공 부표 (채도 50~70, bag 실측)
     ((5, 133, 230), 1),    # 빨강 부표
     ((176, 188, 197), 1),  # 빨강 부표 (H 170+)
 ])
@@ -65,3 +66,15 @@ def test_pixel_colours_measured_at_sunset(hsv, label):
     import cv2
     bgr = cv2.cvtColor(np.array([[hsv]], dtype=np.uint8), cv2.COLOR_HSV2BGR)
     assert classify_colors(np.repeat(np.repeat(bgr, 2, 0), 2, 1), P)[0, 0] == label
+
+
+def test_window_mostly_magenta_tint_is_no_vote():
+    lab = paint(blank(), (6.0, 0.0), 0.25, 3)
+    v = vote_colors(lab, [((6.0, 0.0), 0.25)], K, G, P)[0]
+    assert v.color is None and not v.usable
+
+
+def test_usable_window_reports_pixel_counts():
+    lab = paint(blank(), (6.0, 0.0), 0.25, 2)
+    v = vote_colors(lab, [((6.0, 0.0), 0.25)], K, G, P)[0]
+    assert v.usable and v.green > 0 and v.visible >= v.green

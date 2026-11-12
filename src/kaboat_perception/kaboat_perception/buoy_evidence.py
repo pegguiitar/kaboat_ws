@@ -86,6 +86,12 @@ class EvidenceParams:
     fit_max_rms: float = 0.08       # 키울 때 함께 맞춘 원의 잔차 RMS 상한 [m] — 넘으면 번짐이라 안 키움
     fit_max_shift: float = 0.3      # 키울 때 중심이 이보다 많이 움직이면 안 키움 [m]
     fit_max_jump: float = 1.0       # 맞춘 중심이 이전보다 이만큼 넘게 튀면 그 결과는 버림 [m]
+    # 색 — 부표마다 창 픽셀 수 누적 (빨강·초록·보이는). 붙은 쌍에서 옆 부표가 한두 프레임 섞여도
+    # 자기 색 픽셀이 훨씬 많아 갈린다 (프레임마다 표 한 장씩 세면 섞인 표가 같은 무게였다).
+    px_min_frac: float = 0.15       # 빨강 또는 초록이 보이는 픽셀의 이 비율 이상이어야 그 색
+    px_dominance: float = 2.0       # 다른 색 픽셀의 이 배 이상이어야 그 색
+    px_min_visible: int = 150       # 누적 보이는 픽셀이 이보다 적으면 표 규칙으로 (그것도 없으면 unseen)
+                                    # (빨강 부표가 쓸 만한 프레임 1장·176 px 로 지나간 경우도 판정되게)
     fit_min_facing: float = 0.7     # 맞춘 원에서 라이다 쪽을 향한 점 비율이 이보다 작으면 버림 —
                                     # 원 중심은 보이는 면 뒤(라이다 반대편)에 있어야 한다
     fit_outlier: float = 0.3        # 원에서 이보다 먼 점은 맞추기에서 뺌 (물보라·옆 부표) [m]
@@ -116,12 +122,23 @@ class EvTrack:
     color_votes: Dict[str, int] = field(default_factory=dict)
     last_evidence: str = 'hit'
     radius: float = 0.2           # 원 맞추기 반지름 [m] (radius_prior 에서 시작, 키우기만)
+    px_red: int = 0               # 누적 창 픽셀 (usable 프레임만)
+    px_green: int = 0
+    px_visible: int = 0
+    px_params: Optional[Tuple[float, float, int]] = None   # (min_frac, dominance, min_visible)
     grown: bool = False           # 반지름이 사전값에서 커졌나 (점이 원 밖에 찍혀서)
     pts: Optional[np.ndarray] = None    # 모은 점 N×2 (전역)
     views: Optional[np.ndarray] = None  # 점마다 시선 방향 [rad] (라이다 원점 → 군집), NaN = 모름
 
     @property
     def color(self) -> str:
+        min_frac, dominance, min_visible = self.px_params or (0.15, 2.0, 150)
+        if self.px_visible >= min_visible:
+            for c, n, other in (('red', self.px_red, self.px_green),
+                                ('green', self.px_green, self.px_red)):
+                if n >= min_frac * self.px_visible and n >= dominance * other:
+                    return c
+            return 'unknown'
         total = sum(self.color_votes.values())
         if total == 0:
             return 'unseen'
@@ -322,16 +339,15 @@ class EvidenceTracker:
             t.hits += 1
             t.last_seen = now
             t.last_evidence = 'hit'
-            if color is not None:
-                t.color_votes[color] = t.color_votes.get(color, 0) + 1
+            self._add_color(t, color)
         for i, (x, y, color, can_spawn, pts) in enumerate(detections):
             if i in used_det or not can_spawn:
                 continue
             t = EvTrack(self._next_id, float(x), float(y), p.l_hit, now, hits=1,
                         radius=p.radius_prior)
             self._add_points(t, pts, view)
-            if color is not None:
-                t.color_votes[color] = 1
+            t.px_params = (p.px_min_frac, p.px_dominance, p.px_min_visible)
+            self._add_color(t, color)
             self._next_id += 1
             self.tracks.append(t)
             used_trk.add(t.id)
@@ -360,6 +376,22 @@ class EvidenceTracker:
         self.tracks = keep
         self._merge()
         return self.confirmed()
+
+    @staticmethod
+    def _add_color(t: EvTrack, color):
+        """색 표 — 문자열('red'|'green'|'unknown') 또는 픽셀 수(red/green/visible/usable 속성)."""
+        if color is None:
+            return
+        if isinstance(color, str):
+            t.color_votes[color] = t.color_votes.get(color, 0) + 1
+            return
+        if not getattr(color, 'usable', False):
+            return
+        t.px_red += int(color.red)
+        t.px_green += int(color.green)
+        t.px_visible += int(color.visible)
+        if color.color is not None:
+            t.color_votes[color.color] = t.color_votes.get(color.color, 0) + 1
 
     @staticmethod
     def _assoc_distance(t: EvTrack, x, y, pts) -> float:
@@ -394,6 +426,9 @@ class EvidenceTracker:
                     continue
                 for c, n in b.color_votes.items():
                     a.color_votes[c] = a.color_votes.get(c, 0) + n
+                a.px_red += b.px_red
+                a.px_green += b.px_green
+                a.px_visible += b.px_visible
                 if b.pts is not None:
                     a.pts = b.pts if a.pts is None else np.vstack((a.pts, b.pts))[-self.p.fit_max_points:]
                     a.views = (b.views if a.views is None

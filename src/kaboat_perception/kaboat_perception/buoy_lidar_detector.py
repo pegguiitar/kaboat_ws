@@ -189,7 +189,7 @@ class BuoyLidarDetector(Node):
                 dx, dy = wx - ipose[0], wy - ipose[1]
                 cands.append(((ic * dx + isn * dy, -isn * dx + ic * dy), r))
             res = vote_colors(self.label[1], cands, self.K, g, self.cp, self.roll, self.pitch)
-            votes = [v.color for v in res]
+            votes = list(res)   # ColorVote — 트래커가 픽셀 수를 누적
             self.last_votes = res
 
         ox, oy = g.lidar_offset_x, g.lidar_offset_y
@@ -255,7 +255,8 @@ class BuoyLidarDetector(Node):
             txt.pose.orientation.w = 1.0
             txt.scale.z = 0.35
             txt.color.r = txt.color.g = txt.color.b = txt.color.a = 1.0
-            votes = ' '.join(f'{k[0]}{v}' for k, v in sorted(tr.color_votes.items()))
+            votes = (f'R{100 * tr.px_red / tr.px_visible:.0f}% G{100 * tr.px_green / tr.px_visible:.0f}% '
+                     f'of {tr.px_visible}px' if tr.px_visible else 'no px')
             n_pts = 0 if tr.pts is None else len(tr.pts)
             txt.text = (f'#{tr.id} {tr.color} r={tr.radius:.2f}{"" if tr.grown else "(prior)"} '
                         f'pts={n_pts} p={tr.probability:.2f} {tr.last_evidence}'

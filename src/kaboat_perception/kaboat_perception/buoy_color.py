@@ -7,8 +7,9 @@
 표 (ColorVote.color):
   'red' / 'green'  창 안 빨강·초록 픽셀이 min_color_px 이상이고 한쪽이 dominance 배 이상
   'unknown'        창이 충분히 보이는데(min_visible_px) 빨강·초록 픽셀이 모자람 — 검정 부표 등
+  (트래커는 이 표보다 ColorVote.red/green/visible 픽셀 수를 부표마다 누적해 색을 정한다 — usable 일 때만)
   None             판정 불가 — 화면 밖(일부 포함), 카메라 뒤, 더 가까운 후보에 대부분 가림,
-                   보이는 픽셀이 적음,
+                   보이는 픽셀이 적음, 창 30 % 넘게 보라 번짐(D455 가장자리),
                    빨강·초록이 섞임. **표를 넣지 않는다.** 가려져서 잠깐씩만 보이는 초록
                    부표가 가려진 동안 unknown 표에 묻히지 않게 (2026-11-12 영상: 검정 뒤 초록이
                    1초 정도만 보임).
@@ -41,8 +42,13 @@ class ColorParams:
     red_v_min: int = 150          # 밝아야 — 황갈색 띠(S≈75, V≈106)는 빨강 아님
     green_h_min: int = 45         # 초록: green_h_min ≤ H ≤ green_h_max — 올리브 물(H < 45) 제외
     green_h_max: int = 89
-    green_s_min: int = 60         # 이보다 채도 낮으면(흰·회색·윤슬) 초록 아님
+    green_s_min: int = 40         # 이보다 채도 낮으면(흰·회색·윤슬) 초록 아님 — 초록 공 부표 S 50~70 (bag 실측)
     green_v_min: int = 20         # 짙은 초록 몸통(V≈34)도 초록
+    # D455 화면 가장자리 보라 번짐 — 창의 max_tint_frac 넘게 이 색이면 그 프레임은 색을 못 믿음 (표 없음)
+    tint_h_min: int = 140
+    tint_h_max: int = 169
+    tint_s_min: int = 40
+    max_tint_frac: float = 0.3
     window_top: float = 0.6       # 창 윗변 — 수면 위 높이 [m]
     min_half_width: float = 0.15  # 창 반폭 하한 [m] (라이다 반지름이 작게 나올 때)
     min_visible_px: int = 20      # 가림·화면 밖을 빼고 이만큼 보여야 판정 (step 후 픽셀)
@@ -58,10 +64,11 @@ class ColorVote:
     red: int = 0
     green: int = 0
     visible: int = 0
+    usable: bool = False          # 픽셀 수를 누적해도 되는 프레임 (보임·가림·번짐 조건 통과)
 
 
 def classify_colors(bgr, p: ColorParams):
-    """BGR → step 간격 라벨 (0 기타, 1 빨강, 2 초록)."""
+    """BGR → step 간격 라벨 (0 기타, 1 빨강, 2 초록, 3 보라 번짐)."""
     s = max(1, int(p.step))
     hsv = cv2.cvtColor(np.ascontiguousarray(bgr[::s, ::s]), cv2.COLOR_BGR2HSV)
     h, sat, val = hsv[..., 0], hsv[..., 1], hsv[..., 2]
@@ -70,6 +77,7 @@ def classify_colors(bgr, p: ColorParams):
           & ((h <= p.red_h_max) | (h >= p.red_h_min))] = 1
     label[(sat >= p.green_s_min) & (val >= p.green_v_min)
           & (h >= p.green_h_min) & (h <= p.green_h_max)] = 2
+    label[(sat >= p.tint_s_min) & (h >= p.tint_h_min) & (h <= p.tint_h_max)] = 3   # 보라 번짐
     return label
 
 
@@ -126,9 +134,12 @@ def vote_colors(label, candidates: Sequence[Tuple[Tuple[float, float], float]], 
                     * (math.ceil(v1 / s) - math.floor(v0 / s) + 1), 1)
         red, green = int(np.sum(win == 1)), int(np.sum(win == 2))
         vote = ColorVote(None, box, red, green, visible)
-        if visible < p.min_visible_px or visible < p.min_visible_frac * total:
+        tint = int(np.sum(win == 3))
+        if (visible < p.min_visible_px or visible < p.min_visible_frac * total
+                or tint > p.max_tint_frac * visible):
             out.append(vote)
             continue
+        vote.usable = True
         best, other_n = (('red', red), green) if red >= green else (('green', green), red)
         if best[1] >= p.min_color_px:
             if best[1] >= p.dominance * other_n:
