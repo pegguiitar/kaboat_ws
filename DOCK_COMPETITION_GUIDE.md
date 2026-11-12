@@ -52,15 +52,14 @@ docker exec -it kaboat_sim_container bash
 `docker compose build` 없이도 컨테이너는 시작하지만 YOLO 의존성이 부족하다.
 같은 이름의 기존 컨테이너가 있다면 중복 생성하지 말고 `docker update`만
 적용한다. 빌드 과정에서 노트북의 다른 Gazebo/YOLO 작업을 함께 돌리지 않는다.
-이 작업 디렉터리에는 Git에서 제외된 `docker-compose.override.yml`이 있어
-같은 커밋의 VRX/ros_gz 소스를 기존 작업 디렉터리에서 읽기 전용으로 공유한다.
-다른 컴퓨터에서는 이 로컬 파일 없이 아래 `setup_workspace.sh`가 소스를 받는다.
+Gazebo 기반 환경은 `competition`에 원래 있던 구성을 그대로 사용한다.
+이 브랜치의 Dockerfile 추가분은 YOLO와 PyTorch 의존성뿐이다.
+VRX/ros_gz가 필요한 기존 시뮬레이션 초기 설치는 저장소 `README.MD` 절차를 따른다.
 
 컨테이너 안에서 최초 1회, 또는 이 브랜치의 ROS 소스가 바뀐 뒤:
 
 ```bash
 cd /workspace/kaboat_ws
-[ -d src/vrx ] && [ -d src/ros_gz ] || ./scripts/setup_workspace.sh
 ./scripts/build_docking_competition_safe.sh --check-only
 ./scripts/build_docking_competition_safe.sh
 source install/setup.bash

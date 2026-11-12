@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Summarize VRX scan continuity and three independent dock-wall fits."""
+"""Summarize scan continuity and three independent dock-wall fits."""
 import argparse
 from collections import defaultdict
 import json

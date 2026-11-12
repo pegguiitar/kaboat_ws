@@ -32,8 +32,6 @@ export CMAKE_BUILD_PARALLEL_LEVEL=1
 exec nice -n 10 colcon build --symlink-install \
   --executor sequential --parallel-workers 1 \
   --packages-ignore ydlidar_ros2_driver \
-  --packages-select kaboat_msgs ros_gz_interfaces ros_gz_bridge ros_gz_sim \
-                    vrx_gazebo vrx_ros vrx_gz wamv_description wamv_gazebo \
-                    kaboat_sim kaboat_behaviors kaboat_perception \
+  --packages-select kaboat_msgs kaboat_sim kaboat_behaviors kaboat_perception \
                     kaboat_hardware kaboat_control kaboat_mission kaboat_bringup \
   --cmake-args -DBUILD_TESTING=OFF
