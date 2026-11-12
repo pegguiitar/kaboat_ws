@@ -19,6 +19,8 @@
   ③ lidar_buoys()      ② 로 안 잡힌 라이다 군집 (6 m 너머 등) → 영상에 투영한 창의 색 다수결
   ④ project_to_world() odom 으로 선체 좌표 → 전역 (x,y)
   ⑤ BuoyTracker        프레임 간 연결·N-of-M 확정·prune (순수 모듈)
+                       확정 부표는 시야 밖으로 나가도 안 지운다 — 보여야 하는 자리
+                       (시야·뎁스 거리 안, 안 가림)에서 drop_time 놓쳤을 때만 지운다
 
 반지름은 고정값이 아니라 매 관측 덩어리 폭으로 추정한다 (넘어진 부표 대비 상한만 둠).
 카메라·라이다 장착값은 TF 가 아니라 파라미터(cam_*, lidar_offset_*)다 — occupancy_grid 와 같게.
@@ -72,10 +74,19 @@ class BuoyDetector(Node):
         self.declare_parameter('gate_radius', 1.5)
         self.declare_parameter('confirm_hits', 3)
         self.declare_parameter('drop_time', 3.0)
+        # 확정 부표 삭제 판정 시야 (보여야 하는 자리에서 drop_time 놓치면 삭제)
+        self.declare_parameter('view_half_fov_deg', 38.0)
+        self.declare_parameter('view_range_min', 1.5)
+        self.declare_parameter('view_range_max', 6.0)
+        self.declare_parameter('occlusion_radius', 0.5)
         self.tracker = BuoyTracker(TrackerParams(
             gate_radius=float(self.get_parameter('gate_radius').value),
             confirm_hits=int(self.get_parameter('confirm_hits').value),
-            drop_time=float(self.get_parameter('drop_time').value)))
+            drop_time=float(self.get_parameter('drop_time').value),
+            view_half_fov=math.radians(float(self.get_parameter('view_half_fov_deg').value)),
+            view_range_min=float(self.get_parameter('view_range_min').value),
+            view_range_max=float(self.get_parameter('view_range_max').value),
+            occlusion_radius=float(self.get_parameter('occlusion_radius').value)))
 
         self.pub = self.create_publisher(BuoyArray, '/detections/buoys', 10)
         # RViz 디버그 — BuoyArray 는 커스텀 msg 라 RViz 가 못 읽어, 같은 부표를
@@ -191,8 +202,10 @@ class BuoyDetector(Node):
             detections.append(Detection(color=f.color, x=wx, y=wy,
                                         confidence=min(f.points / 100.0, 1.0)))
 
-        # ⑤ 시간 융합 → 확정 부표만
-        tracks = self.tracker.update(detections, now_t)
+        # ⑤ 시간 융합 → 확정 부표만. 뎁스가 없는 프레임은 6 m 안을 못 보니 놓친 시간을
+        # 쌓지 않는다 (boat_pose=None) — 센서가 빈 동안 부표가 지워지지 않게.
+        view_pose = (pos.x, pos.y, yaw) if depth is not None else None
+        tracks = self.tracker.update(detections, now_t, view_pose)
         self._publish(tracks)
 
     def _fresh_scan(self):
@@ -228,7 +241,7 @@ class BuoyDetector(Node):
                'black': (0.15, 0.15, 0.15),
                'unknown': (0.6, 0.6, 0.6)}
         marks = MarkerArray()
-        clear = Marker()             # 이전 프레임 잔상 제거 (prune 된 부표 지우기)
+        clear = Marker()             # 이전 프레임 잔상 제거 (삭제된 부표 지우기)
         clear.action = Marker.DELETEALL
         marks.markers.append(clear)
         for tr in tracks:

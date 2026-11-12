@@ -104,20 +104,96 @@ def test_two_detections_same_spot_claim_distinct_tracks():
 
 
 # ---------- prune ----------
+# 확정 부표는 "안 보임"으로 안 지운다 — 보여야 하는 자리(시야·거리 안, 안 가림)에서
+# drop_time 놓쳤을 때만. 미확정(노이즈)은 마지막 관측 후 drop_time.
 
-def test_prune_after_drop_time():
-    tk = BuoyTracker(TrackerParams(confirm_hits=1, drop_time=3.0))
+AHEAD = (0.0, 0.0, 0.0)          # 배 원점, 선수 +x — x=4 부표는 정면 4 m (시야 안)
+FACING_AWAY = (0.0, 0.0, math.pi)  # 같은 자리에서 뒤로 돎 — x=4 부표는 등 뒤
+
+
+def test_unconfirmed_noise_pruned_after_drop_time():
+    tk = BuoyTracker(TrackerParams(confirm_hits=3, drop_time=3.0))
     tk.update([det()], now=0.0)
-    assert len(tk.update([], now=2.9)) == 1     # 아직 살아있음
-    assert len(tk.update([], now=3.2)) == 0     # 3s 초과 → 삭제
+    tk.update([], now=2.9)
+    assert len(tk.tracks) == 1                  # 아직 살아있음
+    tk.update([], now=3.2)
+    assert tk.tracks == []                      # 3s 초과 → 삭제
+
+
+def test_confirmed_kept_without_pose():
+    tk = BuoyTracker(TrackerParams(confirm_hits=1, drop_time=3.0))
+    tk.update([det(x=4.0)], now=0.0)
+    for k in range(1, 101):
+        tk.update([], now=0.1 * k)              # 10 s, pose 없음 → 안 쌓임
+    assert len(tk.confirmed()) == 1
+
+
+def test_confirmed_kept_while_out_of_view():
+    tk = BuoyTracker(TrackerParams(confirm_hits=1, drop_time=3.0))
+    tk.update([det(x=4.0)], now=0.0, boat_pose=AHEAD)
+    for k in range(1, 101):
+        tk.update([], now=0.1 * k, boat_pose=FACING_AWAY)   # 10 s 등 뒤
+    assert len(tk.confirmed()) == 1
+    assert tk.tracks[0].missed == 0.0
+
+
+def test_confirmed_kept_beyond_view_range():
+    tk = BuoyTracker(TrackerParams(confirm_hits=1, drop_time=3.0))
+    tk.update([det(x=10.0)], now=0.0, boat_pose=AHEAD)      # 정면이지만 6 m 너머
+    for k in range(1, 101):
+        tk.update([], now=0.1 * k, boat_pose=AHEAD)
+    assert len(tk.confirmed()) == 1
+
+
+def test_confirmed_pruned_when_missed_in_view():
+    tk = BuoyTracker(TrackerParams(confirm_hits=1, drop_time=3.0))
+    tk.update([det(x=4.0)], now=0.0, boat_pose=AHEAD)
+    for k in range(1, 29):
+        tk.update([], now=0.1 * k, boat_pose=AHEAD)         # 2.8 s 놓침
+    assert len(tk.confirmed()) == 1
+    for k in range(29, 33):
+        tk.update([], now=0.1 * k, boat_pose=AHEAD)         # 3.2 s 놓침
     assert tk.tracks == []
 
 
-def test_reobservation_keeps_track_alive():
+def test_missed_time_only_counts_in_view():
+    # 시야 안 2 s → 등 뒤 5 s → 다시 시야 안 0.5 s: 놓친 시간은 2.5 s 라 남는다
     tk = BuoyTracker(TrackerParams(confirm_hits=1, drop_time=3.0))
-    tk.update([det()], now=0.0)
-    tk.update([det()], now=2.5)                 # 갱신
-    assert len(tk.update([], now=5.0)) == 1     # 2.5+3.0 아직 안 지남
+    tk.update([det(x=4.0)], now=0.0, boat_pose=AHEAD)
+    t = 0.0
+    for pose, n in ((AHEAD, 20), (FACING_AWAY, 50), (AHEAD, 5)):
+        for _ in range(n):
+            t += 0.1
+            tk.update([], now=t, boat_pose=pose)
+    assert len(tk.confirmed()) == 1
+    assert tk.tracks[0].missed == pytest.approx(2.5)
+
+
+def test_reobservation_resets_missed():
+    tk = BuoyTracker(TrackerParams(confirm_hits=1, drop_time=3.0))
+    tk.update([det(x=4.0)], now=0.0, boat_pose=AHEAD)
+    for k in range(1, 26):
+        tk.update([], now=0.1 * k, boat_pose=AHEAD)         # 2.5 s 놓침
+    tk.update([det(x=4.0)], now=2.6, boat_pose=AHEAD)       # 다시 봄
+    for k in range(27, 50):
+        tk.update([], now=0.1 * k, boat_pose=AHEAD)         # 2.3 s 놓침
+    assert len(tk.confirmed()) == 1
+
+
+def test_occluded_buoy_not_pruned():
+    # 정면 3 m 부표 뒤 5 m 부표 — 뒤 것은 가려져 못 보는 게 당연하니 안 지운다
+    tk = BuoyTracker(TrackerParams(confirm_hits=1, drop_time=3.0))
+    tk.update([det(x=3.0), det(x=5.0)], now=0.0, boat_pose=AHEAD)
+    for k in range(1, 51):
+        tk.update([det(x=3.0)], now=0.1 * k, boat_pose=AHEAD)
+    assert len(tk.confirmed()) == 2
+
+
+def test_camera_gap_does_not_jump_missed_time():
+    tk = BuoyTracker(TrackerParams(confirm_hits=1, drop_time=3.0))
+    tk.update([det(x=4.0)], now=0.0, boat_pose=AHEAD)
+    tk.update([], now=10.0, boat_pose=AHEAD)    # 카메라 10 s 끊겼다 복귀한 첫 프레임
+    assert len(tk.confirmed()) == 1
 
 
 # ---------- 색 투표 ----------
@@ -154,9 +230,9 @@ def test_new_tracks_get_incrementing_ids():
 
 
 def test_id_not_reused_after_prune():
-    tk = BuoyTracker(TrackerParams(confirm_hits=1, drop_time=1.0))
+    tk = BuoyTracker(TrackerParams(confirm_hits=3, drop_time=1.0))
     tk.update([det(x=10.0)], now=0.0)
-    tk.update([], now=2.0)                       # 첫 트랙(id0) prune
+    tk.update([], now=2.0)                       # 첫 트랙(id0, 미확정) prune
     tk.update([det(x=50.0)], now=2.1)            # 새 트랙
     assert tk.tracks[0].id == 1                  # id0 재사용 안 함
 
