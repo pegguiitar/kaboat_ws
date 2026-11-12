@@ -58,11 +58,10 @@ def test_boat_offset_translates():
     assert dist == pytest.approx(5.0) and bearing == pytest.approx(0.0)
 
 
-def test_roundtrip_with_project_to_world():
-    # project_to_world(정방향) ↔ buoy_range_bearing(역방향) 왕복 일치
-    from kaboat_perception.buoy_tracker import project_to_world
+def test_roundtrip_with_body_to_world():
+    # 배 기준 (방위 0.4 rad, 6 m) → 월드 (정방향) ↔ buoy_range_bearing(역방향) 왕복 일치
     bx, by, yaw = 3.0, -2.0, 0.7
-    wx, wy = project_to_world(0.4, 6.0, bx, by, yaw)
+    wx, wy = bx + 6.0 * math.cos(yaw + 0.4), by + 6.0 * math.sin(yaw + 0.4)
     dist, bearing = rb(fake_odom(bx, by, yaw), buoy('red', wx, wy))
     assert dist == pytest.approx(6.0) and bearing == pytest.approx(0.4)
 

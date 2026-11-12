@@ -34,7 +34,7 @@
                                   /camera/depth/points, /imu/data, /gps/fix
        │
        ├─▶ occupancy_grid      → /occupancy_grid          (장애물 격자 — v5 단일 장애물 표현)
-       ├─▶ buoy_detector       → /detections/buoys        (전역 좌표 부표맵 · HSV 상시 · 학습 불필요)
+       ├─▶ buoy_lidar_detector → /detections/buoys        (전역 좌표 부표맵 · 라이다=위치 · 카메라=색 · 구독자 있을 때만)
        └─▶ dock_mark_detector  → /detections/dock_marks   (YOLO 자리 · dock state 만 추론)
        localization(=gz odom / 실물은 robot_localization) → /odom, /tf
 
@@ -66,7 +66,7 @@
 ```
 
 이 구조는 **node_structure v5**(`node_structure.svg`) 기준입니다. 핵심 분리는
-부표·게이트 색=**buoy_detector**(HSV·상시) / 도킹 표식=**dock_mark_detector**
+부표=**buoy_lidar_detector**(라이다 위치·카메라 색, 구독자 있을 때만) / 도킹 표식=**dock_mark_detector**
 (YOLO·dock state 만). `/detections/*` 인터페이스가 고정이라 백엔드(HSV→YOLO)를
 갈아끼워도 behavior 는 변경 불필요합니다.
 
@@ -172,16 +172,10 @@ cell 과 구분되는 "좌표 랜드마크". 극좌표는 소비자가 자기 od
   실행: `ros2 run kaboat_perception occupancy_grid`. TODO(팀): decay(노후 셀
   감쇠 — 검토했으나 베이지안 의미 흐림+잔여 미실측이라 보류), 거리·빔각도
   함수형 inverse sensor model(현재 `L_OCC`/`L_FREE` 상수).
-- **`buoy_detector.py`** (v5, 상시·학습 불필요): 카메라·LiDAR·odom → `/detections/buoys`
-  (`BuoyArray`, frame="odom" — **전역 좌표 부표맵**). 매 프레임 ①HSV 색 →
-  ②기하 필터(원형도·solidity·종횡비로 눈부심 줄무늬 제거) → ③수면 필터
-  (아래 ⚠️) → ④거리(depth 3×3 median)·방위(아래 ⚠️) → ⑤LiDAR 교차확인
-  (그 방위에 반사 있나 — 광학 유령 제거) → ⑥odom 으로 전역 (x,y) 투영 →
-  ⑦시간 융합. ⑦은 ROS 무의존 순수 모듈 **`buoy_tracker.py`**(데이터 결합·
-  N-of-M 확정·prune·색 투표·EMA 위치평활)에 있고 노드는 배선만 — avoid 스택의
-  순수 라이브러리+얇은 노드 패턴 그대로. RViz 디버그로 `/detections/buoys_viz`
-  (MarkerArray, 색 구+id 텍스트)를 구독자 있을 때만 발행 — `scripts/demo/buoy.rviz`.
-  `test/test_buoy_tracker.py` 22개.
+- **`buoy_lidar_detector.py`** (2026-11-12, 예전 카메라·뎁스 중심 `buoy_detector`·`buoy_tracker` 를 대신함):
+  라이다 군집 = 부표 있음·위치, 카메라 RGB = 색, 부표별 존재 log-odds·원 맞추기·픽셀 누적 →
+  `/detections/buoys` (`BuoyArray`, frame="odom"). 구독자(`USES_BUOYS` behavior 가 활성 중)가 있을 때만 계산.
+  계산은 순수 모듈 `buoy_localize.py`(라이다 군집·투영)·`buoy_color.py`·`buoy_evidence.py`. 자세한 건 `BUOY_DETECTOR.md`.
   실물 D455는 `ros2 launch kaboat_bringup d455.launch.py`로 실행한다. 이 launch가
   `align_depth.enable=true`로 RGB 기준 정렬 depth를 켜고 RealSense 기본 토픽을
   위 표준 토픽으로 remap한다. 노드는 Gazebo `32FC1`[m]와 RealSense
@@ -237,7 +231,7 @@ cell 과 구분되는 "좌표 랜드마크". 극좌표는 소비자가 자기 od
   순수 FSM은 `test/test_docking_fsm.py`에서 전이·표식 유실·완료 조건을 검증한다.
 - **`search_circler.py`** + **`search_orbit.py`**(ROS 무의존): 규정 5.2(6) 탐색. `search.target_color`
   (당일 공지, launch `search_target_color:=`) 부표를 `search_end` 10 m 안에서 골라 위치를 고정하고,
-  반경 2 m 원을 LOS 로 돈다 — 빨강·초록 우현(cw), 검정 좌현(ccw). 검정 목표는 buoy_detector 의
+  반경 2 m 원을 LOS 로 돈다 — 빨강·초록 우현(cw), 검정 좌현(ccw). 검정 목표는 buoy_lidar_detector 의
   `unknown`(빨강·초록 아닌 부표 크기 물체, 소거법)에서 고른다. 원 띠 안에서 돈 각도가
   1.1 바퀴면 완료 신호 → `search_end` 로 이동. 목표점에서 90 s 못 찾으면 포기(완료 신호).
   선회 중 회피 반발은 목표 부표 둘레 1 m 셀만 뺀다. 테스트 `test_search_orbit.py`, `test_search_circler_los.py`.

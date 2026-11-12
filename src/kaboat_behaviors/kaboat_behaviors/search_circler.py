@@ -2,7 +2,7 @@
 
 규정 5.2(6) (2026-11): 사전에 주어진 색의 부표를 중심으로 원을 그리며 선회한다.
   빨강·초록 → 우현선회(시계), 검정(노랑에서 바뀜) → 좌현선회(반시계).
-  검정은 buoy_detector 가 'unknown'(빨강·초록 아닌 부표 크기 물체)으로 내므로 그중에서 고른다.
+  검정은 buoy_lidar_detector 가 'unknown'(빨강·초록 아닌 부표 크기 물체)으로 내므로 그중에서 고른다.
 목표 색은 대회 당일 공지 → search.target_color (autonomy.launch.py search_target_color:=).
 계산은 search_orbit.py(ROS 무의존)에 있고, 이 노드는 입출력과 주행만 맡는다.
 

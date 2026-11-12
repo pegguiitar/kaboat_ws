@@ -234,7 +234,7 @@ class BehaviorBase(Node):
         """월드 좌표 부표 1개 → 배 기준 (거리[m], 방위[rad, 좌측 +]).
 
         부표맵은 odom 프레임 좌표라, 극좌표(거리·방위)는 소비자가 자기 odom
-        으로 그때그때 계산한다 — buoy_detector 가 극좌표를 안 주는 이유다.
+        으로 그때그때 계산한다 — 부표 검출 노드가 극좌표를 안 주는 이유다.
         odom 이 아직 없으면 None.
         """
         if self.odom is None:

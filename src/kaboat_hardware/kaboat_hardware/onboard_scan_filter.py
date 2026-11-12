@@ -9,7 +9,7 @@
   신선도 검사가 센서 고장으로 보고 배를 세우기 때문에 여기서는 거르지 않는다.
 - /scan/level: IMU 롤/피치가 범위 안일 때만 발행한다(기본 pitch -4°~+2°, roll ±3°,
   occupancy_grid 와 같은 범위). 스캔 점을 기하적으로 바로 쓰는 노드(gate_follower 부표 쌍,
-  buoy_detector 교차확인, dock_lidar_markers 벽선, docking_ctrl 입구)가 쓴다 — 기운 스캔은
+  buoy_lidar_detector 부표, dock_lidar_markers 벽선, docking_ctrl 입구)가 쓴다 — 기운 스캔은
   수면·하늘을 훑어 엉뚱한 점을 준다. 기울면 tilt_action=drop(기본)은 건너뛰고,
   invalidate 는 모든 거리를 inf 로 바꿔 발행한다. IMU 가 없거나 지연되면 판정할 수 없어
   /scan/level 도 그대로 발행한다(경고).

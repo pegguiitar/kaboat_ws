@@ -1,121 +1,71 @@
-# buoy_detector — 부표 위치 + 색(빨강/초록/모름) (feature/buoy-detector)
+# 부표 검출 — buoy_lidar_detector (라이다 = 있음·위치, 카메라 = 색)
 
-탐색(`search_circler`)·게이트에서 쓸 부표맵 `/detections/buoys`를 만드는 노드를 다시 짰다.
-코드: `src/kaboat_perception/kaboat_perception/buoy_detector.py` (ROS 배선),
-`buoy_localize.py` (계산, ROS 무의존), 테스트 `test/test_buoy_localize.py`.
+탐색(`search_circler`)이 쓰는 부표 지도 `/detections/buoys`를 만드는 노드.
+예전 `buoy_detector`(카메라 프레임 중심, 뎁스로 물체를 따는 경로)는 2026-11-12 현장에서 윤슬·반사로
+뎁스가 크게 튀어 지웠다.
 
-## ⚠️ merge 전에 할 일 — 장착 파라미터를 competition 값으로 맞추기
+| 파일 | 역할 |
+|---|---|
+| `kaboat_perception/buoy_lidar_detector.py` | ROS 노드 — 스캔마다 돌고, 최신 영상으로 색, 결과 발행 |
+| `kaboat_perception/buoy_localize.py` | 라이다 군집(`lidar_points`·`lidar_cluster_points`)·카메라 투영(`level_to_pixel`) 기하 |
+| `kaboat_perception/buoy_color.py` | 라이다 후보를 영상에 투영한 창 → 빨강·초록 픽셀 수 |
+| `kaboat_perception/buoy_evidence.py` | 부표별 존재 log-odds, 원 맞추기, 색 누적 |
+| `test/test_buoy_localize.py`, `test_buoy_color.py`, `test_buoy_evidence.py` | 단위 테스트 |
 
-이 브랜치의 카메라·라이다 장착값은 **브랜치를 딴 시점(2026-11-12 오전) 값 그대로 두었다.**
-merge 할 때 competition 쪽 노드의 값이 정답이다 — 그걸 기준으로 `BuoyGeometry` 기본값
-(`buoy_localize.py`)을 고친다. TF 는 읽지 않는다 (대회 스택 `autonomy.launch.py` 는
-base_link→카메라 TF 를 안 띄우고, `cam_height` 는 흘수선 기준이라 TF 로 안 나온다).
-
-| buoy_detector 파라미터 (`BuoyGeometry`) | 이 브랜치 값 | 기준 (competition) | 2026-11-12 오후 competition 값 |
-|---|---|---|---|
-| `cam_offset_x` | ~~-0.33~~ → **-0.215** (2026-11-12 반영) | `camera_obstacles.py` `CameraObstacleParams.offset_x` (occupancy_grid 카메라 층 `cam_offset_x`) | **-0.215** (`camera_mount.py`: 라이다 0.4 − 0.615, 2026-11-12 실측) |
-| `cam_offset_y` | 0.0 | 〃 `offset_y` | 0.0 |
-| `cam_height` | ~~0.85~~ → **0.775** (반영) | 〃 `height` | **0.775** (다시 수평으로 단 뒤 실측) |
-| `cam_mount_pitch_deg` | ~~10.0~~ → **0.0** (반영) | 〃 `mount_pitch_deg` | **0.0** (10° 숙임 → 다시 수평) |
-| `lidar_offset_x` | 0.4 | `occupancy_grid.py` `lidar_offset_x` (= `gate_follower`·`station_keeper`·`odom_tf_broadcaster`·launch 의 base_link→라이다 TF) | 0.4 |
-| `lidar_offset_y` | 0.0 | 〃 `lidar_offset_y` | 0.0 |
-
-굵게 표시한 두 값은 이미 다르다. merge 때 위 표의 "기준" 위치에서 **그때의** 값을 다시
-읽어 맞출 것 (오후 이후에도 바뀌었을 수 있음). 카메라 각도를 바꾸면 도킹 TF
-(`dock_yolo.launch.py` `--pitch`)도 같이 바뀌어 있어야 한다.
-
-확인 순서:
-1. `git show origin/competition:src/kaboat_perception/kaboat_perception/camera_obstacles.py` 의
-   `CameraObstacleParams` 와 `occupancy_grid.py` 의 `lidar_offset_x/y` 를 본다.
-2. `buoy_localize.py` `BuoyGeometry` 의 `cam_*`·`lidar_offset_*` 기본값을 그 값으로 고친다.
-3. 테스트(`test_buoy_localize.py`)는 `G = BuoyGeometry()` 기본값으로 장면을 렌더하므로
-   값만 바꿔도 그대로 통과해야 한다 — 실패하면 기하 코드 문제다.
-4. 현장 launch 가 `cam_height`·`cam_mount_pitch_deg` 를 인자로 넘기면 buoy_detector 에도
-   같은 이름으로 넘긴다 (파라미터 이름이 occupancy_grid 의 `cam_*` 과 같다).
-
-## 동작
+## 흐름
 
 ```
-① classify_pixels  물체 픽셀 = 어두움, 또는 채도 있음 → 픽셀 색 라벨 (빨강·초록·기타)
-② depth_buoys      6 m 이내: 물체 픽셀 → 정렬 뎁스로 3D → 수면 위만(반사상 제거)
-                   → 수평 격자 덩어리 → 색 다수결 → 근처 라이다 군집과 위치 융합
-③ lidar_buoys      ② 로 안 잡힌 라이다 군집(6 m 너머 등) → 영상에 투영한 창의 색 다수결
-   (②③ 모두 빨강·초록이 아니면 버리지 않고 unknown — 검정 부표는 여기로 나온다)
-④ odom 으로 전역 투영 → ⑤ BuoyTracker (N-of-M 확정·prune)
+/scan/level ─▶ 라이다 군집 (빔 3+, 폭 0.1 m+, 거리 1.5~15 m) ─▶ 부표 후보 (위치)
+/camera/color ─▶ 후보를 영상에 투영한 창 ─▶ 빨강·초록·보이는 픽셀 수 (색)
+/odom (스캔 header 시각) ─▶ 전역 좌표
+                    ─▶ 부표별 트래커 (존재 log-odds · 원 맞추기 · 픽셀 누적) ─▶ /detections/buoys
 ```
 
-- **색 (2026-11 경기규정 기준): 빨강·초록만 색으로 판정하고, 나머지는 `unknown` (소거법).**
-  규정 5.2(6) — 탐색은 사전에 주어진 색의 부표를 돌며 빨강·초록은 우현선회, 노랑은 좌현선회
-  인데 이번에 노랑이 **검정**으로 바뀌었다.
-  **검정은 색으로 판정하지 않는다 (2026-11-12 변경).** 밝기(V)만으로는 그늘진 빨강·초록, 역광
-  실루엣, 어두운 물과 갈리지 않고(예전엔 어두운 픽셀이 '검정' 표라 그늘진 빨강이 검정으로
-  뒤집혔다), D455 뎁스도 무광 검정에서 빈다. 대신 부표 크기 물체(뎁스 덩어리 또는 라이다
-  군집)인데 빨강도 초록도 아니면 버리지 않고 `unknown` 으로 낸다. 검정 목표는 탐색 behavior 가
-  `search_end` 근처 unknown 부표에서 고른다. 그래서 흰 기둥·노랑·심판 보트처럼 부표 크기의 다른
-  물체도 unknown 이 된다 — `search_end` 를 목표 부표 근처에 찍는 게 중요하다.
-  주황은 빨강과 구분이 어려워 따로 두지 않고 빨강에 넣는다. 조명·햇빛에 색이 틀어져도
-  놓치지 않게 범위를 전체적으로 넉넉히 잡았다.
-  픽셀마다 (OpenCV H 0~180): V ≤ 70(`v_dark_max`) → 색 없는 물체 픽셀(기타 — 검정 부표가 뎁스
-  덩어리로 잡히게) / 채도 S ≥ 60 이면 H ≤ 25 또는 ≥ 155 빨강 (주황 포함), 30~89 초록
-  (연두 포함), 그 밖(노랑 26~29, 청록·파랑 90~154)은 기타.
-  채도 낮은 밝은 픽셀(흰·회색)은 물체 픽셀이 아니다 (뎁스 경로에선 안 잡히고 라이다 경로에서 unknown).
-  **물·하늘은 색으로 거르지 않는다.** 뎁스 경로는 수면 높이(z)와 6 m clamp 로 물·하늘이
-  빠지고, 라이다 경로(뎁스 없음)는 빨강·초록 픽셀끼리만 투표해서 창 뒤의 파란 물(기타)이
-  빠진다. 그래서 초록 윗경계(89)만은 넓히지 않았다 — 더 넓히면 라이다 경로 창의 청록빛 물이
-  초록 표가 된다.
-  물체 색: 뎁스 덩어리는 빨강·초록 중 1위가 물체 픽셀의 40 %(`min_color_frac`) 이상이면 그 색,
-  아니면 unknown. 라이다 창은 빨강·초록 픽셀이 `far_min_pixels`(6) 이상이면 다수결, 아니면 unknown.
-  트래커는 프레임별 표를 모아 빨강·초록 중 많은 쪽이 2표 이상이고 전체 표의 25 % 이상이면 그
-  색, 아니면 unknown 으로 낸다 — 멀리서 unknown 으로 잡히던 빨강이 가까이서 빨강으로 보이면
-  빨강이 되고, 검정 부표에 반짝임 한두 표가 빨강으로 들어와도 unknown 그대로다.
-  경계: `v_dark_max`, `s_min`, `red_h_max/min`, `green_h_min/max`.
-- **뎁스 (6 m 이내만):** `camera_obstacles`(점유지도 카메라 층)와 같은 방식 — 픽셀마다 3D,
-  수면 위 높이 `z_min`(0.02 m) 미만(물 자체·물에 비친 반사상)·`z_max`(1.5 m) 초과·
-  `depth_max`(6 m) 너머(하늘·먼 물가)를 버린다. D455 뎁스 오차는 거리² 로 커져서(4 m ≈ 8 cm, 6 m ≈ 18 cm) 6 m 너머는 안 쓴다.
-- **라이다:** 위치를 정하고, 6 m 너머 물체는 라이다 군집이 물체를 정한다.
-  6 m 이내는 뎁스 물체 `assoc_radius`(0.6 m) 안의 군집과 분산 가중평균 (라이다 1σ 5 cm,
-  뎁스 1σ = 0.005·R²) — 4 m 만 돼도 위치는 거의 라이다로 정해진다.
-  6 m 너머는 라이다 군집 위치 그대로, 색은 군집을 영상에 투영한 창(수면 ~ `far_z_max` 0.5 m)
-  에서 본다. 라이다는 물을 못 보니 물결 오검출이 없고, 창에 빨강·초록 픽셀이 없으면(검정·흰·
-  회색·노랑) unknown 이다. 창에서 뎁스가 군집보다 0.5 m(`occlusion_margin`) 넘게 가까운 픽셀은 앞을 가린 다른
-  물체라 투표에서 뺀다 — 앞 부표 뒤의 먼 부표가 앞 부표 색으로 잡히지 않게.
-  스캔은 `/scan/level`(배가 수평일 때만), `lidar_max_age_sec`(0.3 s)보다 오래되면 안 쓴다.
-- **부표맵 유지 (트래커 삭제 조건):** 확정 부표는 **안 보인다고 지우지 않는다.** 배가 지나가거나
-  돌면 부표는 카메라 옆·뒤로 나가는데, 탐색 선회·게이트가 그 부표를 계속 써야 하기 때문이다.
-  보여야 하는 자리 — 선수 ±`view_half_fov_deg`(38°, D455 ±43.5° 에 여유), 거리
-  `view_range_min`~`view_range_max`(1.5~6 m, 뎁스 경로), 더 가까운 확정 부표의
-  `occlusion_radius`(0.5 m) 뒤가 아님 — 에서 검출이 안 된 시간만 쌓아 `drop_time`(3 s)을
-  넘으면 지운다. 뎁스가 없는 프레임은 쌓지 않는다. 미확정 트랙(노이즈)은 예전처럼 마지막
-  관측 후 `drop_time` 지나면 지운다.
-- **중심·반지름:** 반지름은 고정값이 아니다 (대회 부표 크기를 모르고, 넘어질 때도 있음).
-  매 관측 덩어리의 시선 수직 폭 / 2 로 추정하고 (라이다는 빔 한 칸 간격 보정),
-  앞면 점 평균에서 시선 방향으로 (π/4)·r̂ 뒤를 중심으로 잡는다. 넘어진 부표의 넓은
-  실루엣 대비 `max_radius`(0.5 m) 상한만 둔다.
+- **구독자가 있을 때만 계산한다** — `/detections/buoys`, `~/markers`, `~/debug_image` 중 하나라도.
+  behavior 는 `USES_BUOYS = True` 인 것만 자기 state 활성 중에 구독한다 (지금은 search 만).
+  대회 스택(`autonomy.launch.py`)에서는 탐색 동안만 돈다. gate 가 쓰게 되면 `USES_BUOYS` 만 켠다.
+- 출력 색: `red` / `green` / `unknown`(빨강·초록 아닌 부표 크기 물체 — **검정 부표**). 카메라에 한 번도
+  안 찍힌 것은 `unseen` 이라 내보내지 않는다 (`publish_unseen`).
 
-## 남은 일
+## 존재 (log-odds, 부표 하나마다)
 
-- ~~장착 파라미터 맞추기 (위 표)~~ — search 작업 브랜치에서 `BuoyGeometry` 기본값을 `camera_mount.py` 를
-  읽게 바꿨다 (카메라를 옮겨도 `camera_mount.py` 한 곳만 고치면 된다).
-- HSV 경계 현장 캘리브 (셔터·AWB 고정 후). 지금 값은 sim 원색 기준.
-- ~~**`search_circler` 선회 방향이 규정과 다르다.**~~ search 작업 브랜치에서 고침 (`search.target_color`). 지금 코드는 초록 → 반시계(좌), 빨강 → 시계(우).
-  규정은 빨강·초록 → 우현(시계), 검정 → 좌현(반시계)이고, "사전에 주어진 색"의 부표만 돌아야
-  한다 (대회 당일 공지). behavior 쪽에서 목표 색 파라미터 + 규정대로 방향을 고쳐야 한다.
-- 검정 = 소거법(unknown)이라 부표 크기의 다른 물체(흰 기둥·노랑 부표·타이어·심판 보트·도크
-  끝단)도 unknown 이 된다. 탐색은 `search_end` 근처에서 고르므로 `search_end` 위치가 중요하다.
-  D455 는 무광 검정에서 뎁스가 비기 쉬워, 검정 부표는 라이다 경로로 잡히는 경우가 많을 것.
-- 나중에 시간이 되면 YOLO 부표 클래스(빨강·초록·검정) 학습이 정석 — `rec_bag` 으로 현장 영상 수집.
-- `gate_follower` 는 아직 `/detections/buoys` 를 안 쓴다 (라이다 점유지도로 게이트를 찾음).
-- `kaboat_msgs/Buoy.msg` 주석이 바뀌어 `kaboat_msgs` 재빌드 필요.
-- sim/보트 실주행 미검증. 합성 영상 테스트(perception 110개) + 노드 스모크만 통과.
-- 경기장 주황 부표(장애물·위치유지, 그림 1)는 **빨강으로 나온다.** 탐색 목표가 빨강이면
-  behavior 가 주황 부표를 돌 수 있다 — 탐색 구역·위치로 거르거나, 현장에서 빨강/주황이
-  갈리면 `red_h_max` 를 낮춘다.
-- 넉넉한 범위의 대가: 깊은 그늘의 빨강·초록(V ≤ `v_dark_max` 70)은 색 표가 없어 그 프레임은
-  unknown 이 될 수 있고(트래커가 다른 프레임 색으로 보정), `s_min` 60 이라 바랜 물체도 물체
-  픽셀이 된다. 현장 영상으로 확인.
+- 라이다 군집이 연결되면 +0.8. **빔이 부표 자리를 지나 더 멀리서 맞으면** −2.0/s.
+- 가림(앞에서 맞음)·반사 없음(검정 무광은 흡수할 수 있음)·거리 밖·스캔 없음은 근거가 아니다 —
+  "보였어야 하는데 안 보였을 때"만 지운다.
+- 확정 L ≥ 2.0, 삭제 L ≤ −1.0 (히스테리시스). 후보는 3 s 동안 다시 안 잡히면 삭제 (물보라).
+- 보는 거리 15 m (`cand_max_range`·`evidence.max_range`), 배에서 17 m 넘게 멀어지면 지움 (`forget_range`).
+- 연결: 군집 점 평균 ↔ 부표 원 둘레 0.5 m 안. 병합: 두 원이 실제로 겹칠 때만 (1.2 m 붙은 쌍은 안 합침).
 
-테스트 (컨테이너, 빌드 없이 소스에서):
+## 위치·크기 (원 맞추기)
+
+- 한 스캔의 호 폭으로는 지름을 모른다 (호가 몇 도인지 모름). 부표마다 연결된 군집 점을 전역 좌표로
+  모아(최대 600) **반지름 사전값 0.2 m 로 중심만 맞추고**, 중심은 늘 보이는 면 뒤(라이다 반대편)에 둔다.
+- 여러 시선 방향(30° 구간 3곳)에서 원 밖 점이 20 % 넘고, 키운 원 둘레 5 cm 안에 점의 70 % 가 붙고
+  잔차 RMS ≤ 8 cm 일 때만 반지름을 키운다 (상한 0.75 m, 줄이지 않음). 번진 점 덩어리로는 안 커진다.
+
+## 색 (창 픽셀 수 누적)
+
+- 픽셀: 빨강 H ≤ 20 | ≥ 170 · S ≥ 110 · V ≥ 150, 초록 H 45~89 · S ≥ 40 · V ≥ 20 (2026-11-12 해 질 녘 bag 실측).
+  D455 가장자리 보라 번짐(H 140~169)이 창의 30 % 넘으면 그 프레임은 안 센다.
+- 가림·화면 밖·대부분 가림(60 %)도 안 센다 — 가려져 잠깐 보이는 부표가 unknown 에 묻히지 않게.
+- 부표마다 빨강·초록·보이는 픽셀을 누적해 한쪽이 15 % 이상·다른 쪽의 2배 이상이면 그 색, 아니면 unknown.
+
+## bag 으로 확인
 
 ```bash
-docker exec kaboat_sim_container bash -lc 'source /opt/ros/humble/setup.bash; cd /workspace/kaboat_ws/src/kaboat_perception && PYTHONPATH=$PWD:$PYTHONPATH python3 -m pytest -q test/'
+scripts/demo/replay_buoy_lidar.sh <bag 폴더>     # 반복 재생 + RViz (라이다·점유지도·부표·카메라 디버그)
 ```
+
+`scripts/demo/loop_bag_play.py` 는 반복마다 시각을 bag 길이만큼 앞으로 민다 (`ros2 bag play --loop` 는
+시간이 거꾸로 가서 Humble RViz 가 죽는다).
+
+## 2026-11-12 bag 에서 알게 된 것
+
+- **라이다 정면이 약 1.5~2° 아래로 숙여져 있다.** 배가 수평이면 정면 반사의 95 % 가 6 m 안 수면,
+  선수를 1.5° 넘게 들어야 6~30 m 물체가 잡힌다. 부표는 주로 옆을 지날 때 잡힌다. 대회 전에 라이다 각도를 손볼 것.
+- 스캔을 겹치면 부표 중심이 RMS ≈ 0.15 m 흔들린다. deskew·시각 보정·RANSAC 은 개선이 없었다.
+- 1.2 m 붙은 초록 공·검정 캡슐 쌍: 라이다가 검정을 잡은 순간 카메라 창 한가운데에 초록 공이 들어오는
+  프레임이 있다. 최종 판정은 맞지만 초반에 한 번 틀릴 수 있다 — 픽셀 세는 방식(가운데 무게·겹친 창 배정·
+  배경 빼기·히스테리시스·프레임 상한)으로는 안 고쳐졌다.
+- 경기장 주황 부표는 빨강으로 나온다. 탐색 목표가 빨강이면 `search_end` 근처에서 고르므로 `search_end` 를
+  목표 부표 가까이 찍을 것.

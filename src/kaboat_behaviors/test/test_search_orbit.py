@@ -179,7 +179,7 @@ def test_exit_point_steps_off_buoy_recorded_as_goal():
 # ---------- 검정 = unknown (소거법) ----------
 
 def test_black_target_picks_unknown_buoy():
-    # buoy_detector 는 검정을 색으로 안 낸다 — 빨강·초록 아닌 물체는 unknown
+    # 부표 검출은 검정을 색으로 안 낸다 — 빨강·초록 아닌 물체는 unknown
     f = fsm('black')
     f.update([buoy('red', 52, 70), buoy('green', 51, 71), buoy('unknown', 53, 69)], (40, 70), 0.0)
     assert f.phase == 'ORBIT' and f.center == (53.0, 69.0) and f.direction == 'ccw'

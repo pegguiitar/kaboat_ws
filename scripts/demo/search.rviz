@@ -102,7 +102,7 @@ Visualization Manager:
     Name: BuoyMap
     Enabled: true
     Topic:
-      Value: /detections/buoys_viz
+      Value: /buoy_lidar_detector/markers
       Depth: 1
       Durability Policy: Volatile
       History Policy: Keep Last

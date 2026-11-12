@@ -423,7 +423,7 @@ GNSS 신호는 지표면 도달 세기가 잡음 수준이라(≈−130 dBm), �
 | `pose.pose.orientation` | occupancy_grid yaw, behavior 방위 계산 |
 | **`twist.twist.angular.z`** | `waypoint()` D항 — **전복 방지의 핵심** |
 | `twist.twist.linear.x/y` | avoid FSM 속도벡터 (**body frame**) |
-| **`header.stamp`** | **avoid FSM·buoy_tracker 의 시계** |
+| **`header.stamp`** | **avoid FSM 의 시계** (부표 검출은 스캔 header 시각으로 odom 을 찾음) |
 | `child_frame_id` | health monitor (비면 WARN) |
 
 `header.frame_id` 는 **아무도 안 읽는다** — 프레임 이름은 자유롭다.
@@ -488,8 +488,8 @@ ros2 topic echo /camera/camera_info --once
 
 ### 확인 포인트
 
-- **RGB 와 depth 해상도가 같아야 한다.** 다르면 `buoy_detector` 가 같은 픽셀의
-  거리로 오인하지 않으려고 해당 프레임을 버리고 오류를 낸다.
+- **RGB 와 depth 해상도가 같아야 한다.** 다르면 같은 픽셀의 거리로 오인하므로 뎁스를 쓰는 노드
+  (점유지도 카메라 층, 도킹)가 해당 프레임을 버린다.
 - **encoding**: RealSense depth 는 `16UC1`[mm], Gazebo 는 `32FC1`[m]. 코드가
   `depth_utils` 에서 float32 미터로 통일하므로 둘 다 정상이다.
 - **`camera_info` 의 K 가 해상도와 맞는지** — `width` 와 `k[0]`(fx),
@@ -796,7 +796,7 @@ data: '<sequence type: uint8, length: 614400>'
 ```
 
 ⚠️ **color 와 depth 의 `height`/`width` 가 같아야 한다.** 다르면
-`buoy_detector` 가 같은 픽셀의 거리로 오인하지 않으려고 그 프레임을 버린다.
+뎁스를 쓰는 노드(점유지도 카메라 층, 도킹)가 같은 픽셀의 거리로 오인하지 않으려고 그 프레임을 버린다.
 
 ## `/camera/camera_info` — `sensor_msgs/msg/CameraInfo`
 

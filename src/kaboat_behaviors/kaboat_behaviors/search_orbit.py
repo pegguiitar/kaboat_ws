@@ -3,7 +3,7 @@
 규정 5.2(6) (2026-11): 사전에 주어진 색의 부표를 중심으로 원을 그리며 선회한다.
   빨강·초록 → 우현선회(시계, cw), 검정(노랑에서 바뀜) → 좌현선회(반시계, ccw).
   목표 색은 대회 당일 공지 → search.target_color 로 넣는다.
-  검정은 buoy_detector 가 색으로 판정하지 않는다 — 빨강·초록 아닌 부표 크기 물체는 'unknown'
+  검정은 buoy_lidar_detector 가 색으로 판정하지 않는다 — 빨강·초록 아닌 부표 크기 물체는 'unknown'
   으로 나오므로(소거법, BUOY_DETECTOR.md), 검정 목표는 unknown 부표에서 고른다 (MATCH_COLORS).
   기록(3구간)은 "목표부표에서 원을 그리는 선회기동 수행이 완료되는 순간"까지.
 
@@ -28,7 +28,7 @@
   다시 찾는다. 목표 색이 lock_confirm_sec(1 s) 이어진 부표만 고른다.
 후보: 목표 색 부표 중 탐색 목표점에서 target_search_radius 안, 목표점에 가장 가까운 것.
   각도를 쌓기 시작하기 전에는 목표점에 switch_margin 이상 더 가까운 후보가 나오면 바꾼다
-  — 경기장 주황 부표는 buoy_detector 에서 빨강으로 나오므로(BUOY_DETECTOR.md), 멀리서
+  — 경기장 주황 부표는 부표 검출에서 빨강으로 나오므로(BUOY_DETECTOR.md), 멀리서
   주황 부표를 먼저 고른 뒤 진짜 목표가 보이는 경우를 위한 것이다.
 """
 import math

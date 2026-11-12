@@ -8,7 +8,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/_env.sh"
 COLOR=${1:-red}; GX=${2:-57.0}; GY=${3:-76.0}
 SIM=(--ros-args -p use_sim_time:=true)
 ros2 run kaboat_perception occupancy_grid "${SIM[@]}" &
-ros2 run kaboat_perception buoy_detector "${SIM[@]}" &
+ros2 run kaboat_perception buoy_lidar_detector "${SIM[@]}" &
 ros2 run kaboat_control cmd_mux "${SIM[@]}" &
 python3 "$WS/src/kaboat_sim/launch/twist2thrust.py" "${SIM[@]}" &
 ros2 run kaboat_behaviors search_circler "${SIM[@]}" -p search.target_color:="$COLOR" &
