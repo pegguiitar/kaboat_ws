@@ -100,6 +100,43 @@ def test_follow_large_heading_error_slow_forward():
     assert 0.0 < lin <= speed_to_cmd(0.3 * p.v_max, p) + 1e-12
 
 
+def test_follow_pivots_in_place_beyond_pivot_angle():
+    """pivot_angle(회피 FSM, 35°): 다음 목표점이 그보다 벗어나 있으면 전진 0 — 제자리 회전 정렬.
+    그 안이면 보통처럼 전진. pivot_angle=None(LOS 등)은 예전 규칙 그대로 (위 테스트)."""
+    fsm = make_fsm()
+    plan = acquire(fsm, dri_of([])).plan          # +x 직선
+    p = FsmParams()
+    lin, ang = follow_cmd(plan, BOAT, math.radians(50.0), 0.0, WP_FAR, p, KP, KD,
+                          pivot_angle=p.pivot_angle)
+    assert lin == 0.0 and ang < 0.0               # 오른쪽(시계)으로 돌아 +x 에 맞춤
+    lin, ang = follow_cmd(plan, BOAT, math.radians(20.0), 0.0, WP_FAR, p, KP, KD,
+                          pivot_angle=p.pivot_angle)
+    assert lin > 0.0 and ang < 0.0
+    # 예전 규칙이면 50° 에서도 전진 (60° 미만)
+    lin_old, _ = follow_cmd(plan, BOAT, math.radians(50.0), 0.0, WP_FAR, p, KP, KD)
+    assert lin_old > 0.0
+
+
+def test_stationary_boom_scene_pivots_then_goes():
+    """2026-11-12 영상 2:22~2:50 재현 — 정지한 배 앞 2.7 m 붐 줄, 왼쪽(+y) 끝만 열림.
+    예전: 전진 7 %·회전 31 % (좌 −·우 +) 로 제자리에서 흔들림.
+    지금: 첫 명령은 제자리 회전(전진 0), 경로 시작 방향에 맞추면 직선 속도로 전진."""
+    wall = [(2.7, -y) for y in np.round(np.arange(-1.4, 6.01, 0.1), 2)]
+    dri = dri_of(wall)
+    fsm = make_fsm()
+    out = fsm.step(dri, BOAT, YAW, (0.0, 0.0), 0.0, WP_FAR, 0.0)   # 정지 상태에서 계획
+    assert out.event == 'plan_acquired'
+    d1 = fsm.plan.cps[1] - fsm.plan.cps[0]
+    start = math.atan2(d1[1], d1[0])
+    assert start > math.radians(30.0)             # 열린 왼쪽으로 곧게 시작
+    out = fsm.step(dri, BOAT, YAW, (0.0, 0.0), 0.0, WP_FAR, 0.1)
+    assert out.state == 'FOLLOW' and out.linear_x == 0.0 and out.angular_z > 0.0
+    out = fsm.step(dri, BOAT, start, (0.0, 0.0), 0.0, WP_FAR, 0.2)  # 제자리 회전으로 정렬된 뒤
+    p = FsmParams()
+    assert out.state == 'FOLLOW'
+    assert out.linear_x >= speed_to_cmd(1.0, p)   # 곡률 감속에 묶이지 않음 (예전 0.07)
+
+
 def test_follow_slows_near_waypoint():
     """slow_radius 안 — 도착 감속 (mission_manager 5m 전환 전 과속 방지)."""
     fsm = make_fsm()

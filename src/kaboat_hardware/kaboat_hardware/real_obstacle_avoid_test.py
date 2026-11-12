@@ -617,7 +617,8 @@ class RealObstacleAvoidTest(Node):
         cmd=Twist()
         if plan is None:return cmd
         linear,angular=follow_cmd(plan,boat,yaw,yaw_rate,goal,self.fsm_params,
-                                 BSPLINE_TRACK_YAW_KP,BSPLINE_TRACK_YAW_KD)
+                                 BSPLINE_TRACK_YAW_KP,BSPLINE_TRACK_YAW_KD,
+                                 pivot_angle=self.fsm_params.pivot_angle)   # FSM 과 같은 제자리 정렬
         if not math.isfinite(linear) or not math.isfinite(angular):raise ValueError('nonfinite preview controller output')
         limit=min(self.max_linear_cmd,self.dock_final_cmd) if self._is_final_segment(plan) else self.max_linear_cmd
         cmd.linear.x=float(np.clip(linear,-limit,limit));cmd.angular.z=float(np.clip(angular,-self.max_angular_cmd,self.max_angular_cmd))

@@ -23,7 +23,7 @@ argmin)은 그 사각지대를 근거로 방향을 골라, 제자리 회전 뒤�
 않으므로, 그 길만 거꾸로 되짚는다.
 """
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import math
 
 import numpy as np
@@ -70,6 +70,12 @@ class FsmParams:
     # 실물 cmd_full(0.23) 기준 0.04 밖에 안 나와 수조에서 배가 움직이지 않았다
     # (2026-11-06 실물 튜닝, 수조 테스트에 ESCAPE 를 켜면서 0.1 로 정함).
     escape_thrust: float = 0.1
+    # 제자리 정렬: 선수가 다음 목표점(lookahead) 방향에서 이 각도 [rad] 넘게 벗어나면 전진 0 —
+    # 먼저 제자리 회전으로 정렬한 뒤 나간다. 예전 규칙(>60° 에서 0.3·v_max 저속 전진)은 12~60°
+    # 오차에서 전진하며 도는 동안 벽 쪽으로 밀렸다. 정지한 배는 경로가 첫 경로점 쪽으로 곧게
+    # 시작하므로(PlannerParams.stationary_surge) 출발 때 이 각도를 자주 넘는다 (2026-11-12).
+    # 회피 FSM 만 쓴다 — LOS·B-spline 시험의 follow_cmd 는 예전 규칙 그대로.
+    pivot_angle: float = math.radians(35.0)
     escape_min_t: float = 3.0     # 📝 최소 이탈 시간 [s] — 즉시 복귀 채터링 차단
     escape_n_ok: int = 5          # 📝 복귀 조건: generate 연속 성공 tick 수
     # v_full 을 내는 추력 명령 = 회피 **전진** 출력 비율. 회피 노드는 이 값을 전진
@@ -115,8 +121,8 @@ def speed_to_cmd(v: float, p: FsmParams) -> float:
 
 
 def follow_cmd(plan: Plan | SampledPlan, boat_xy, yaw: float, yaw_rate: float, wp_xy,
-               fsm: FsmParams, yaw_kp: float, yaw_kd: float
-               ) -> tuple[float, float]:
+               fsm: FsmParams, yaw_kp: float, yaw_kd: float,
+               pivot_angle: float | None = None) -> tuple[float, float]:
     """경로 추종 명령 (linear_x, angular_z) — PD 조향 + 곡률 feedforward 감속.
 
     조향은 공통 waypoint 와 같은 PD(게인도 노드가 같은 값 주입), 목표점만
@@ -125,7 +131,9 @@ def follow_cmd(plan: Plan | SampledPlan, boat_xy, yaw: float, yaw_rate: float, w
     1.1m/s에서도 0.47뿐인데 경로는 κ 0.9~1.2가 필요해(실측) 조향만으론
     물리적으로 못 따라간다.
     heading 오차 비례 감속 항은 v1 제외 — 위치 waypoint 의 이산 규칙(오차 >60°
-    면 저속)만 재사용한다 (제자리 급회전 = 전복 위험 차단, SKELETON §6).
+    면 저속)만 재사용한다 (제자리 급회전 = 전복 위험 차단, SKELETON §6 — sim 소형선 기준).
+    pivot_angle 을 주면(회피 FSM, 2026-11-12) 오차가 그 각도를 넘을 때 전진 0 — 실물은
+    텔레옵에서도 제자리 회전(좌 −·우 +)을 쓴다. None 이면 예전 규칙.
     """
     boat = np.asarray(boat_xy, dtype=np.float64)
     closed = isinstance(plan, SampledPlan) and plan.closed
@@ -171,11 +179,14 @@ def follow_cmd(plan: Plan | SampledPlan, boat_xy, yaw: float, yaw_rate: float, w
             vx=float(v * direction[0] / norm),
             vy=float(v * direction[1] / norm),
         )
-    out = control_velocity(
-        desired, yaw, yaw_rate, _controller_params(fsm, yaw_kp, yaw_kd),
-        # 기존 순서: 큰 오차 속도캡 후 waypoint 감속. 두 조건이 동시에
-        # 걸려도 refactor 전과 같은 명령이 되도록 캡에도 wp_scale을 적용한다.
-        turn_speed_limit=0.3 * fsm.v_max * wp_scale)
+    params = _controller_params(fsm, yaw_kp, yaw_kd)
+    # 기존 순서: 큰 오차 속도캡 후 waypoint 감속. 두 조건이 동시에
+    # 걸려도 refactor 전과 같은 명령이 되도록 캡에도 wp_scale을 적용한다.
+    turn_limit = 0.3 * fsm.v_max * wp_scale
+    if pivot_angle is not None:
+        params = replace(params, turn_slow_angle=pivot_angle)
+        turn_limit = 0.0              # 오차 > pivot_angle → 전진 0, 제자리 회전으로 정렬
+    out = control_velocity(desired, yaw, yaw_rate, params, turn_speed_limit=turn_limit)
     return out.linear_x, out.angular_z
 
 
@@ -456,7 +467,7 @@ class AvoidFsm:
                     ev, slow = 'violation_wait', True   # 감속 + 다음 tick 재시도
 
         lin, ang = follow_cmd(self.plan, boat_xy, yaw, yaw_rate, wp_xy,
-                              f, self.yaw_kp, self.yaw_kd)
+                              f, self.yaw_kp, self.yaw_kd, pivot_angle=f.pivot_angle)
         if slow:
             # 위반 지점까지는 안전(check 가 보장) — 기어가며 수리 기회를 번다
             lin = min(lin, speed_to_cmd(f.v_min, f))
