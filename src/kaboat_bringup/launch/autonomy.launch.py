@@ -6,6 +6,8 @@
 
 센서 배선 확인은 먼저 ``real_sensors.launch.py``를 사용한다. 이 launch는
 센서 드라이버나 실제 모터 드라이버를 자동으로 띄우지 않는다.
+지도(occupancy_grid)도 기본으로 안 띄운다 — 젯슨 ``run_map``(카메라 층 포함)으로 따로
+하나만 켜 두고 시험·미션이 같이 쓴다. 여기서 켜려면 start_occupancy_grid:=true.
 """
 
 import os
@@ -35,7 +37,8 @@ def generate_launch_description():
 
     perception = [
         Node(package='kaboat_perception', executable='occupancy_grid',
-             name='occupancy_grid', output='screen', parameters=[common_params]),
+             name='occupancy_grid', output='screen', parameters=[common_params],
+             condition=IfCondition(LaunchConfiguration('start_occupancy_grid'))),
         # buoy_detector 는 대회 스택에서 끔 — search_circler 는 부표 없이 제자리 탐색 선회만 한다.
         Node(package='kaboat_perception', executable='dock_mark_detector',
              name='dock_mark_detector', output='screen', parameters=[dock_detector_params]),
@@ -88,6 +91,9 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'use_sim_time', default_value='false',
             description='Gazebo 실행 때만 true'),
+        DeclareLaunchArgument(
+            'start_occupancy_grid', default_value='false',
+            description='false: 지도는 run_map 으로 따로 하나만 (발행자 둘이면 지도가 번갈아 들어옴)'),
         DeclareLaunchArgument(
             'use_sim_actuator', default_value='false',
             description='Gazebo용 twist2thrust 실행 여부; 실물에서는 false'),

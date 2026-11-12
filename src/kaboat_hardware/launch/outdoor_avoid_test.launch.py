@@ -2,7 +2,7 @@
 
 수조 시험과 같은 노드(real_obstacle_avoid_test: DRI → B-spline → FSM)를 쓰고,
 시작점·목표점만 ~/kaboat_mission_points.json 에서 읽는다 (기록 당시 원점과 지금 원점이
-다르면 시작 거부). 센서·모터는 따로: run_gq7_rtk, run_lidar, run_motor.
+다르면 시작 거부). 센서·모터·지도는 따로: run_gq7_rtk, run_lidar, run_motor, run_map.
 
   goto avoid_entry                                  # 1) 시작점에 기록 선수각으로 세움 (도착 후 Ctrl+C)
   test_avoid_outdoor drive_enabled:=false           # 2) 미리보기: 경로만 (RViz /real_avoid_test/path)
@@ -10,7 +10,7 @@
 
 출발 조건: 시작점 start_tolerance(3 m) 안, 선수가 목표 방향에서 45° 이내.
 start_point:=gate_entry goal_point:=gate_end 처럼 다른 지점 쌍도 쓸 수 있다.
-occupancy_grid 를 따로 켜 두었다면 start_occupancy_grid:=false (지도 발행자가 둘이 됨).
+지도는 run_map 으로 따로 하나만 켠다(기본). 따로 켠 게 없을 때만 start_occupancy_grid:=true.
 """
 
 import os
@@ -33,7 +33,7 @@ ARGS = [
     ('start_heading_tolerance_deg', '45.0', '선수가 목표 방향에서 이 각도 안이어야 출발 [deg]'),
     ('goal_tolerance', '2.0', '목표점 이 거리 안이면 종료 [m]'),
     ('max_cross_track_error', '1.5', '경로에서 이보다 벗어나면 정지 [m]'),
-    ('start_occupancy_grid', 'true', 'false = 이미 켠 occupancy_grid 를 씀'),
+    ('start_occupancy_grid', 'false', '지도는 run_map 으로 따로 (true 면 여기서 켬 — 따로 켠 게 없을 때만)'),
     ('grid_size', '15.0', '장애물 지도 한 변 [m]'),
     ('cam_enabled', 'false', '카메라 층 (주황 붐 등 낮은 색 장애물) — d455.launch.py 필요'),
     ('cam_height', '0.85', '흘수선에서 카메라 렌즈까지 [m] (2026-11-12 실측)'),

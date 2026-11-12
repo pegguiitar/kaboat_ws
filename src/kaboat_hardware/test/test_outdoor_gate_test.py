@@ -80,8 +80,7 @@ def test_preview_starts_no_cmd_mux_and_motion_does(mod, tmp_path):
         ctx.launch_configurations.update(values)
         return [a.node_executable for a in mod._actions(ctx)]
 
-    assert executables(motion_enabled='false') == ['occupancy_grid', 'gate_follower',
-                                                   'mission_manager']
-    assert executables() == ['occupancy_grid', 'gate_follower', 'mission_manager', 'cmd_mux']
+    assert executables(motion_enabled='false') == ['gate_follower', 'mission_manager']
+    assert executables() == ['gate_follower', 'mission_manager', 'cmd_mux']   # 지도는 run_map
     assert 'mission_approach' in executables(approach='true')
-    assert 'occupancy_grid' not in executables(start_occupancy_grid='false')
+    assert executables(start_occupancy_grid='true')[0] == 'occupancy_grid'

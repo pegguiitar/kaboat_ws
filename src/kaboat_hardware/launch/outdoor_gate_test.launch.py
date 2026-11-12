@@ -3,7 +3,7 @@
 자율주행 스택과 같은 노드(occupancy_grid → gate_follower → cmd_mux, mission_manager)를
 게이트 미션 하나만 돌리게 띄운다. mission_manager 는 기록 파일 전체를 읽지 않고
 (station_end 등이 없어도 됨) 여기서 읽은 두 지점만 받는다 — 기록 당시 원점이 지금과
-다르면 시작 거부. 센서·모터는 따로: run_gq7_rtk, run_lidar, run_motor (카메라 층은 run_camera).
+다르면 시작 거부. 센서·모터·지도는 따로: run_gq7_rtk, run_lidar, run_motor, run_map (+ run_camera).
 
   goto gate_entry                       # 1) 첫 게이트 앞 통로 중심에 세움 (도착 후 Ctrl+C)
   test_gate_outdoor motion_enabled:=false   # 2) 미리보기: 노트북 RViz 에 쌍·경로 (/gate/*)
@@ -40,7 +40,7 @@ ARGS = [
     ('motion_enabled', 'true', 'false = 미리보기 (모터 명령 안 냄)'),
     ('approach', 'false', 'true = gate_entry 까지 접근부터 (직선, 회피 없음)'),
     ('required_pairs', '7', '통과할 게이트 쌍 수'),
-    ('start_occupancy_grid', 'true', 'false = 이미 켠 occupancy_grid 를 씀'),
+    ('start_occupancy_grid', 'false', '지도는 run_map 으로 따로 (true 면 여기서 켬 — 따로 켠 게 없을 때만)'),
     ('cam_enabled', 'false', '카메라 층 (주황 등 낮은 색 장애물) — run_camera 필요'),
     ('cam_height', '0.85', '흘수선에서 카메라 렌즈까지 [m] (2026-11-12 실측)'),
     ('gate_params_file', _default_gate_params(), '게이트 파라미터 yaml'),

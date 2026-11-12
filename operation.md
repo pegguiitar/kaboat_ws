@@ -43,7 +43,8 @@ source ~/.zshrc
 | 6 | 젯슨 터미널 5 | `run_points` | 미션 지점 기록기 |
 | 7 | 노트북 | `view_lidar` (= `rviz2 -d …/scripts/remote_monitor.rviz`) | Fixed Frame `odom`, 장애물 지도·`/scan`·배 위치 |
 | 8 | 노트북 | 배를 옮겨 가며 `rec 이름` (아래 이름 규칙) | `✓ 이름: x=… y=… 선수각 …` |
-| 9 | 젯슨 터미널 6 | `ros2 launch kaboat_bringup autonomy.launch.py` | 자율주행 스택. 로그에 `[기록 지점] gate: 시작 … → 끝 …` |
+| 9 | 젯슨 터미널 6 | `run_map` (+ 카메라 층 쓰면 `run_camera`) | 장애물 지도 — 하나만. 로그 `가상 벽 2개 …`, `카메라 층 켜짐 …` |
+| 10 | 젯슨 터미널 7 | `ros2 launch kaboat_bringup autonomy.launch.py` | 자율주행 스택 (지도는 9번 것을 씀). 로그에 `[기록 지점] gate: 시작 … → 끝 …` |
 
 **웨이포인트 이름 규칙** — `mission_manager`가 `~/kaboat_mission_points.json`에서 이 이름만
 자동으로 읽어 `mission_params.yaml` 좌표를 덮어씁니다.
@@ -115,6 +116,7 @@ ros2 launch kaboat_hardware real_sensors.launch.py outdoor:=true rtk:=true \
 | `run_gq7_outdoor` | `ros2 launch kaboat_hardware real_sensors.launch.py outdoor:=true` | 야외 GQ7. `gq7_outdoor.yaml` + `gq7_local_odom`(`/ekf/odometry_earth` → 원점 파일 기준 `/odom`) |
 | `run_gq7_rtk` | `real_sensors.launch.py outdoor:=true rtk:=true ntrip_username:=… ntrip_password:=…` | 야외 GQ7 + RTK 보정 + 필터 위치. 계정은 `~/.ntrip_account` |
 | `run_lidar` | `ros2 launch kaboat_hardware onboard_lidar.launch.py port:=$(_tg50_port)` | 야외 선체 TG-50 (`/scan`, `/scan/level`). GQ7 먼저. 포트는 `/dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0`(없으면 `/dev/ttyUSB0`) |
+| `run_map` | `ros2 run kaboat_perception occupancy_grid --ros-args -p cam_enabled:=true` | 장애물 지도(라이다 + 카메라 층 + 가상 벽). **하나만** 켜 두고 `test_*`·`autonomy.launch.py`가 같이 씀 (`ros2 topic info /occupancy_grid` 발행자 1) |
 | `run_camera` | `ros2 launch kaboat_bringup d455.launch.py` | D455 카메라 (컬러 640×480 + 정렬 뎁스, 15 fps). 카메라 층·도킹용. USB 3 포트 |
 | `run_geo` | `ros2 launch kaboat_hardware geo_origin.launch.py` | GPS 원점 설정, 위도·경도 → x/y (`/geo/*`) |
 | `run_points` | `ros2 run kaboat_hardware point_recorder` | 미션 지점 기록기 |
@@ -234,8 +236,8 @@ goto gate_entry thrust_ratio:=0.5 position_tolerance:=1.5   # 기본 0.4 보다 
 
 **야외 회피 시험** (`test_avoid_outdoor`, 수조 `test_avoid`와 같은 DRI·B-spline·FSM)
 
-준비는 `goto`와 같고 `run_lidar`도 필요합니다. 지도(`occupancy_grid`)는 이 런치가 켭니다 —
-따로 켜 둔 것이 있으면 끄거나 `start_occupancy_grid:=false`.
+준비는 `goto`와 같고 `run_lidar`와 지도 `run_map`도 필요합니다(지도는 따로 하나만 — 이 런치는 기본으로
+안 켬. 따로 켠 게 없을 때만 `start_occupancy_grid:=true`).
 
 ```bash
 goto avoid_entry                                 # 1) 시작점에 기록 선수각으로 세움 → REACHED 후 Ctrl+C
@@ -260,7 +262,8 @@ test_avoid_outdoor start_point:=gate_entry goal_point:=gate_end   # 다른 지�
 **야외 게이트 시험** (`test_gate_outdoor`, 자율주행과 같은 `gate_follower` + `cmd_mux`, 게이트 미션 하나만)
 
 `mission_manager`가 기록 파일 전체가 아니라 `gate_entry`·`gate_end` 두 지점만 받으므로 다른 미션
-지점(`station_end` 등)이 없어도 됩니다. 준비는 `goto`와 같고 `run_lidar`도 필요합니다. 지도는 이 런치가 켭니다.
+지점(`station_end` 등)이 없어도 됩니다. 준비는 `goto`와 같고 `run_lidar`와 지도 `run_map`도 필요합니다
+(지도는 따로 하나만 — 이 런치는 기본으로 안 켬).
 
 ```bash
 goto gate_entry                              # 1) 첫 게이트 앞 통로 중심에 세움 → REACHED 후 Ctrl+C
