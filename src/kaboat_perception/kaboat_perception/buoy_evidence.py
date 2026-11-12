@@ -37,6 +37,8 @@
   단, 함께 맞춘 원이 점에 잘 맞을 때(fit_max_rms)·중심이 크게 안 움직일 때만 키운다.
   2026-11-12 bag 은 스캔을 겹치면 부표 중심이 RMS ≈ 0.15 m 흔들리고(odom·라이다 시각 맞춤,
   한쪽 호 중심 추정) 부표를 한쪽 30° 범위에서만 봐서, 키우지 않고 사전값 그대로가 맞다.
+  원 중심은 늘 보이는 면 뒤(라이다 반대편)에 둔다 (fit_min_facing) — 번진 점 무더기가 라이다
+  쪽으로 오목하게 휘면 맞추기가 원을 면 앞에 놓아, 점이 없는 쪽으로 커졌다 (초록 부표).
 
 숫자는 처음 기준값이다 — bag 으로 센서별 검출률·오검출률을 재서 맞춘다.
 """
@@ -84,6 +86,8 @@ class EvidenceParams:
     fit_max_rms: float = 0.08       # 키울 때 함께 맞춘 원의 잔차 RMS 상한 [m] — 넘으면 번짐이라 안 키움
     fit_max_shift: float = 0.3      # 키울 때 중심이 이보다 많이 움직이면 안 키움 [m]
     fit_max_jump: float = 1.0       # 맞춘 중심이 이전보다 이만큼 넘게 튀면 그 결과는 버림 [m]
+    fit_min_facing: float = 0.7     # 맞춘 원에서 라이다 쪽을 향한 점 비율이 이보다 작으면 버림 —
+                                    # 원 중심은 보이는 면 뒤(라이다 반대편)에 있어야 한다
     fit_outlier: float = 0.3        # 원에서 이보다 먼 점은 맞추기에서 뺌 (물보라·옆 부표) [m]
 
 
@@ -172,13 +176,47 @@ def fit_circle_free(pts, center, r, outlier, iters=15):
     return c, r
 
 
+def facing_fraction(pts, views, c) -> float:
+    """원 중심 c 에서 본 점 방향이 라이다 쪽(시선 반대)을 향하는 비율. 시선 모르면 1."""
+    ok = np.isfinite(views)
+    if not ok.any():
+        return 1.0
+    n = pts[ok] - np.asarray(c)
+    toward = -np.column_stack((np.cos(views[ok]), np.sin(views[ok])))
+    return float(np.mean(np.sum(n * toward, axis=1) > 0.0))
+
+
+def behind_surface(pts, views, r) -> Optional[np.ndarray]:
+    """점 평균에서 시선 방향(라이다 → 부표)으로 0.8 r 뒤 — 보이는 호 평균은 중심보다 약 0.8 r 앞."""
+    ok = np.isfinite(views)
+    if not ok.any():
+        return None
+    u = np.array([np.mean(np.cos(views[ok])), np.mean(np.sin(views[ok]))])
+    n = np.hypot(*u)
+    if n < 1e-6:
+        return None
+    return pts.mean(axis=0) + 0.8 * r * u / n
+
+
+def _fit_behind(pts, views, c, r, p: EvidenceParams):
+    """반지름 고정 맞추기 — 결과가 보이는 면 앞(라이다 쪽)에 놓이면 버리고 면 뒤 점을 쓴다.
+    스캔 번짐으로 점 무더기가 라이다 쪽으로 오목하게 휘면, 맞추기만으로는 원이 앞에 놓였다."""
+    start = behind_surface(pts, views, r)
+    c0 = c if start is None else start
+    c1 = fit_center_fixed_radius(pts, c0, r, p.fit_outlier)
+    if start is not None and (facing_fraction(pts, views, c1) < p.fit_min_facing
+                              or np.hypot(*(c1 - start)) > r):
+        return start
+    return c1
+
+
 def fit_track_circle(t: 'EvTrack', p: EvidenceParams):
     """① 이동 ② 안 맞으면 키움 — t.x, t.y, t.radius, t.grown 갱신."""
     pts, views = t.pts, t.views
     c = np.array([t.x, t.y])
     r = t.radius
     for _ in range(6):
-        c = fit_center_fixed_radius(pts, c, r, p.fit_outlier)
+        c = _fit_behind(pts, views, c, r, p)
         dist = np.hypot(pts[:, 0] - c[0], pts[:, 1] - c[1])
         inl = np.abs(dist - r) <= p.fit_outlier
         out = inl & (dist - r > p.fit_out_tol)
@@ -199,7 +237,8 @@ def fit_track_circle(t: 'EvTrack', p: EvidenceParams):
         rms = float(np.sqrt(np.mean(dfree[ok] ** 2))) if ok.any() else float('inf')
         r_new = min(p.radius_max, float(r_free))
         if (r_new <= r + 1e-3 or rms > p.fit_max_rms
-                or np.hypot(*(c_free - c)) > p.fit_max_shift):
+                or np.hypot(*(c_free - c)) > p.fit_max_shift
+                or facing_fraction(pts, views, c_free) < p.fit_min_facing):
             break
         r, t.grown = r_new, True
         c = c_free

@@ -217,3 +217,16 @@ def test_surface_points_associate_to_fitted_centre():
     for k in range(5):
         tk.update([(8.0, 0.0, None, True, pts)], 0.1 * k)
     assert len(tk.tracks) == 1
+
+
+def test_centre_stays_behind_surface_even_if_points_curve_toward_lidar():
+    # 번짐으로 점 무더기가 라이다(서쪽 (2, 0)) 쪽으로 오목 — 원 (7, 0) r 0.6 의 동쪽 호처럼 생김.
+    # 그대로 맞추면 중심이 점보다 라이다 쪽에 놓인다. 중심은 점들보다 라이다에서 멀어야 한다.
+    a = np.radians(np.linspace(-40, 40, 15))
+    pts = np.column_stack((7.0 + 0.6 * np.cos(a), 0.6 * np.sin(a)))
+    tk = EvidenceTracker(P)
+    for k in range(20):
+        tk.update([(7.6, 0.0, None, True, pts)], 0.1 * k, view({}, x=2.0, y=0.0))
+    t = tk.tracks[0]
+    assert t.x > pts[:, 0].mean()                      # 면 뒤
+    assert not t.grown
