@@ -23,6 +23,7 @@
   <exec_depend>kaboat_mission</exec_depend>   <!-- 원점 파일 읽기 (가상 벽) -->
   <exec_depend>python3-yaml</exec_depend>
   <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>launch_ros</exec_depend>   <!-- dock_nodes.py (도킹 launch 노드 묶음) -->
 
   <export>
     <build_type>ament_python</build_type>

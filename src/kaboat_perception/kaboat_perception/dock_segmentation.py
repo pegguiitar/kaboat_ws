@@ -36,9 +36,11 @@ class DockSegmenter:
             raise ValueError(f"Unexpected dock model classes: {found}")
 
     def predict(self, bgr: np.ndarray) -> list[DockDetection]:
+        # ultralytics 8.4.110 (requirements-yolo.txt): quantize=16 이 FP16. half= 는 deprecated
+        # (경고 후 quantize 로 바꿔 줌) — 도킹 브랜치에서 half= 로 바뀐 것을 되돌림.
         result = self.model.predict(
             bgr, conf=self.confidence, imgsz=self.image_size,
-            device=self.device, half=self.half, retina_masks=True, verbose=False)[0]
+            device=self.device, quantize=16 if self.half else None, retina_masks=True, verbose=False)[0]
         if result.masks is None:
             return []
         height, width = bgr.shape[:2]

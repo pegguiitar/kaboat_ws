@@ -39,9 +39,23 @@ class LocalGeo:
                 self.longitude + math.degrees(x / self.east_per_rad))
 
 
-def symmetric_markers(status, *, center_fraction=.08, mirror_fraction=.10,
+def parse_marker_order(text):
+    """'square,triangle,circle' → 왼쪽부터의 순서 tuple, '' → None (순서 안 봄)."""
+    names = tuple(n.strip() for n in str(text or '').split(',') if n.strip())
+    if not names:
+        return None
+    if sorted(names) != sorted(CLASSES):
+        raise ValueError(f'marker_order must list {CLASSES} once each, got {text!r}')
+    return names
+
+
+def symmetric_markers(status, *, order=None, center_fraction=.08, mirror_fraction=.10,
                       min_confidence=.55):
-    """Three distinct YOLO masks, centre target, mirrored outer markers."""
+    """Three distinct YOLO masks, the middle one on camera centre, outer ones mirrored.
+
+    order: 화면 왼쪽부터의 도형 순서. None 이면 실제 대회 배치를 모르므로 순서를 보지 않고
+    화면 위치로 가운데 마커를 정한다 (스테이션 정면 정렬 — 목표 슬롯은 경로가 따로 정함).
+    """
     rays = status.get('sight_rays', {})
     width = status.get('input_info', {}).get('color', {}).get('width', 0)
     if not isinstance(width, (int, float)) or width <= 0:
@@ -53,12 +67,14 @@ def symmetric_markers(status, *, center_fraction=.08, mirror_fraction=.10,
         pixels = {name: float(rays[name]['pixel_uv'][0]) for name in CLASSES}
     except (KeyError, IndexError, TypeError, ValueError):
         return False, 'marker pixel centres unavailable'
+    by_pixel = tuple(sorted(CLASSES, key=pixels.__getitem__))
+    if order is not None and by_pixel != tuple(order):
+        return False, f'marker order is not {"-".join(order)}'
+    left, middle, right = by_pixel
     centre = width / 2
-    if not (pixels['square'] < pixels['triangle'] < pixels['circle']):
-        return False, 'marker order is not square-triangle-circle'
-    if abs(pixels['triangle'] - centre) > center_fraction * width:
-        return False, 'target marker is off camera centre'
-    if abs((pixels['circle'] + pixels['square']) / 2 - centre) > mirror_fraction * width:
+    if abs(pixels[middle] - centre) > center_fraction * width:
+        return False, 'middle marker is off camera centre'
+    if abs((pixels[left] + pixels[right]) / 2 - centre) > mirror_fraction * width:
         return False, 'outer markers are not symmetric'
     return True, 'ok'
 

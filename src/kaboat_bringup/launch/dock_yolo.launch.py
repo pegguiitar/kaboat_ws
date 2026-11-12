@@ -4,8 +4,9 @@ Base origin (hull center): lidar at (+0.4, 0, 0) m (measured 2026-11-11);
 camera_link at (-0.215, 0, +0.635) m.
 Camera relative to lidar: (-0.615, 0, +0.635) m (sensor-to-sensor, measured 2026-11-12:
 camera 0.615 m aft of the TG-50 rotation centre, lens 0.635 m above its scan plane).
+Values live in kaboat_perception/camera_mount.py (shared with the camera layer and docking launches).
 Mount: level (2026-11-12, briefly pitched 10 deg down then re-levelled; +pitch = nose down);
-optical TF comes from D455. Keep in sync with occupancy_grid cam_mount_pitch_deg (camera_obstacles.py).
+optical TF comes from D455. The occupancy_grid camera layer reads the same camera_mount.py values.
 """
 
 import os
@@ -18,6 +19,8 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
+
+from kaboat_perception.camera_mount import camera_mount_tf_arguments
 
 
 def generate_launch_description():
@@ -63,10 +66,8 @@ def generate_launch_description():
         Node(
             package='tf2_ros', executable='static_transform_publisher',
             name='camera_mount_tf', output='screen',
-            arguments=['--x', '-0.615', '--y', '0', '--z', '0.635',   # 라이다 기준 실측 (2026-11-12)
-                       '--roll', '0', '--pitch', '0', '--yaw', '0',   # 수평 (2026-11-12 다시 맞춤)
-                       '--frame-id', LaunchConfiguration('camera_parent_frame'),
-                       '--child-frame-id', 'camera_link']),
+            # 라이다 → camera_link 실측값은 kaboat_perception/camera_mount.py 한곳에서
+            arguments=camera_mount_tf_arguments(LaunchConfiguration('camera_parent_frame'))),
         Node(
             package='kaboat_perception', executable='dock_mark_detector',
             name='dock_mark_detector', output='screen',

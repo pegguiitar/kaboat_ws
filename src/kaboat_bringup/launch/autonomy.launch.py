@@ -20,31 +20,23 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 
+from kaboat_perception.dock_nodes import default_weights, docking_nodes
+
 
 def generate_launch_description():
     bringup_share = get_package_share_directory('kaboat_bringup')
     mission_params = os.path.join(bringup_share, 'config', 'mission_params.yaml')
     gate_params = os.path.join(bringup_share, 'config', 'gate_params.yaml')
-    dock_weights = os.path.join(get_package_share_directory('kaboat_perception'),
-                                'models', 'best.pt')
-
     use_sim_time_value = LaunchConfiguration('use_sim_time')
     common_params = {'use_sim_time': use_sim_time_value}
-    dock_detector_params = {
-        **common_params,
-        'weights': LaunchConfiguration('dock_weights'),
-        'target_class': LaunchConfiguration('dock_target_class'),
-        'device': LaunchConfiguration('dock_device'),
-        'base_frame': LaunchConfiguration('dock_base_frame'),
-    }
+    L = LaunchConfiguration
 
     perception = [
         Node(package='kaboat_perception', executable='occupancy_grid',
              name='occupancy_grid', output='screen', parameters=[common_params],
              condition=IfCondition(LaunchConfiguration('start_occupancy_grid'))),
         # buoy_detector 는 대회 스택에서 끔 — search_circler 는 부표 없이 제자리 탐색 선회만 한다.
-        Node(package='kaboat_perception', executable='dock_mark_detector',
-             name='dock_mark_detector', output='screen', parameters=[dock_detector_params]),
+        # 도킹(YOLO·라이다 RANSAC·one-shot 경로)은 아래 docking_nodes — outdoor_dock_test 와 같은 구성
     ]
 
     behaviors = [
@@ -65,38 +57,14 @@ def generate_launch_description():
             'gate.motion_enabled': ParameterValue(
                 LaunchConfiguration('gate_motion_enabled'), value_type=bool),
         }]))
-    behaviors.extend([
-        Node(package='kaboat_hardware', executable='dock_lidar_markers',
-             name='dock_lidar_markers', output='screen', parameters=[common_params, {
-                 'target_class': LaunchConfiguration('dock_target_class'),
-                 'base_frame': LaunchConfiguration('dock_base_frame'),
-                 'marker_behind_wall_m': 0.0,
-                 'input_timeout_s': 2.0,
-             }]),
-        Node(package='kaboat_hardware', executable='dock_marker_goal',
-             name='dock_marker_goal', output='screen', parameters=[common_params, {
-                 'target_class': LaunchConfiguration('dock_target_class'),
-                 'tank_bounds': [-1000000.0, -1000000.0, 1000000.0, 1000000.0],
-                 'dock_stop_distance_m': 1.0,
-                 'approach_extra_m': 2.0,
-                 'marker_timeout_s': 2.0,
-                 'adaptive_entry_enabled': False,
-             }]),
-        Node(package='kaboat_hardware', executable='dock_ctrl_v2',
-             name='dock_ctrl_v2', output='screen', parameters=[common_params, {
-                 'mission_mode': True,
-                 'target_class': LaunchConfiguration('dock_target_class'),
-                 'drive_enabled': ParameterValue(
-                     LaunchConfiguration('dock_motion_enabled'), value_type=bool),
-                 'approach_cmd': ParameterValue(
-                     LaunchConfiguration('dock_approach_cmd'), value_type=float),
-                 'final_cmd': ParameterValue(
-                     LaunchConfiguration('dock_final_cmd'), value_type=float),
-                 'gps_timeout_s': 2.0,
-                 'odom_timeout_s': 2.0,
-                 'perception_timeout_s': 2.0,
-             }]),
-    ])
+    behaviors.extend(docking_nodes(
+        target_class=L('dock_target_class'), motion_enabled=L('dock_motion_enabled'),
+        weights=L('dock_weights'), device=L('dock_device'),
+        approach_cmd=L('dock_approach_cmd'), final_cmd=L('dock_final_cmd'),
+        retreat_cmd=L('dock_retreat_cmd'), marker_order=L('dock_marker_order'),
+        position_source=L('dock_position_source'), use_sim_time=use_sim_time_value,
+        base_frame=L('dock_base_frame'),
+        camera_tf_condition=IfCondition(L('publish_camera_tf'))))
 
     control = [
         Node(package='kaboat_control', executable='cmd_mux',
@@ -141,17 +109,27 @@ def generate_launch_description():
             'approach_motion_enabled', default_value='false',
             description='기본값 false: 미션 시작 위치/방향 접근은 미리보기만 수행'),
         DeclareLaunchArgument(
-            'dock_weights', default_value=dock_weights,
-            description='YOLO26n-seg .pt 절대 경로'),
+            'dock_weights', default_value=default_weights(),
+            description='YOLO26n-seg 가중치 (models/best.engine 이 있으면 그것, 없으면 best.pt)'),
         DeclareLaunchArgument(
             'dock_target_class', default_value='triangle',
             description='triangle / circle / square'),
         DeclareLaunchArgument(
-            'dock_device', default_value='cpu',
-            description='Ultralytics device: cpu 또는 Jetson CUDA 0'),
+            'dock_device', default_value='0',
+            description="Ultralytics device: 젯슨 CUDA '0' (기본, YOLO venv 필요 — scripts/run_dock_mission.sh 참고) 또는 cpu"),
         DeclareLaunchArgument('dock_base_frame', default_value='base_link'),
-        DeclareLaunchArgument('dock_approach_cmd', default_value='0.10'),
-        DeclareLaunchArgument('dock_final_cmd', default_value='0.05'),
+        DeclareLaunchArgument('dock_approach_cmd', default_value='0.10',
+                              description='경유점까지 LOS 직진 상한'),
+        DeclareLaunchArgument('dock_final_cmd', default_value='0.05',
+                              description='정지점까지 LOS 직진 상한'),
+        DeclareLaunchArgument('dock_retreat_cmd', default_value='0.05',
+                              description='정지점에서 후진 출력'),
+        DeclareLaunchArgument('dock_marker_order', default_value='',
+                              description="화면 왼쪽부터 도형 순서 (예 square,triangle,circle). '' = 안 봄"),
+        DeclareLaunchArgument('dock_position_source', default_value='odom',
+                              description='odom (RTK 필터, 기본) 또는 gps (/gps/fix 원시)'),
+        DeclareLaunchArgument('publish_camera_tf', default_value='true',
+                              description='라이다 → camera_link TF (camera_mount.py). dock_yolo 를 같이 켜면 false'),
         DeclareLaunchArgument(
             'slot_config',
             default_value=os.path.join(bringup_share, 'config', 'dock_slot.yaml'),

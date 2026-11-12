@@ -20,17 +20,18 @@ from dataclasses import dataclass
 import cv2
 import numpy as np
 
+from kaboat_perception import camera_mount
 from kaboat_perception.depth_utils import depth_to_meters
 
 
 @dataclass
 class CameraObstacleParams:
-    # 카메라 장착 (선체 중심 기준). x = 라이다 +0.4 에서 뒤로 0.615 (2026-11-12 실측,
-    # dock_yolo.launch.py 카메라 TF 와 같게. 예전 -0.33 = 라이다에서 -0.73)
-    offset_x: float = -0.215
-    offset_y: float = 0.0
-    height: float = 0.775            # 흘수선에서 카메라 렌즈까지 [m] (2026-11-12 수평으로 다시 단 뒤 실측)
-    mount_pitch_deg: float = 0.0     # 장착 숙임 (+ = 아래). 2026-11-12 10° 숙임 → 다시 수평
+    # 카메라 장착 (선체 중심 기준) — camera_mount.py 실측값 (도킹 TF 와 같은 출처).
+    # x = 라이다 +0.4 에서 뒤로 0.615 = -0.215, 렌즈 흘수선 위 0.775 m, 수평 장착 (2026-11-12)
+    offset_x: float = camera_mount.CAMERA_X
+    offset_y: float = camera_mount.CAMERA_Y
+    height: float = camera_mount.CAMERA_HEIGHT_ABOVE_WATER
+    mount_pitch_deg: float = camera_mount.CAMERA_PITCH_DEG   # + = 아래
     step: int = 2                    # 픽셀 건너뛰기 (640×480 → 320×240)
     range_min: float = 0.6           # D455 유효 거리 [m] — 가까우면 배 자체, 멀면 부정확
     range_max: float = 5.0           # 멀수록 뎁스 오차가 거리² 로 커짐 (4 m ≈ 8 cm, 6 m ≈ 18 cm)

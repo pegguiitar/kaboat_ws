@@ -134,6 +134,13 @@ ros2 topic echo /dock/one_shot_markers
 
 ## 실선 적용
 
+> **competition 합친 뒤 (2026-11-12):** 실선 단독 도킹은 `test_dock_outdoor`
+> (`scripts/run_dock_mission.sh` → `kaboat_hardware/outdoor_dock_test.launch.py`, rec 기록 `dock_entry`).
+> 합치면서 바꾼 것: 카메라 TF(라이다 → `camera_link`, `camera_mount.py` 실측)를 도킹 런치가 냄,
+> `dock_ctrl_v2` 위치 기본 `/odom`(`position_source`), 마커 순서 기본 안 봄(`marker_order`),
+> `retreat_cmd` 런치 인자, YOLO `quantize=16` 유지(ultralytics 8.4.110), 검출기 뎁스 지면 출력을 `depth_*`로
+> remap, YOLO 결과 영상 발행·`rec_bag` 녹화. 현장 명령은 `operation.md` 5절.
+
 실제 배의 Jetson 실행에는 VRX, `ros_gz`, Gazebo Garden, 시뮬레이션 Docker
 이미지가 필요 없다. 저장소의 `Dockerfile.lidar`/`kaboat_lidar`는 **노트북 외벽
 LiDAR 추적용**이며, 배의 YOLO 도킹 노드용 컨테이너가 아니다. 그러므로

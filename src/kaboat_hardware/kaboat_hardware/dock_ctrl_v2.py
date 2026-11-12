@@ -1,4 +1,9 @@
-"""GPS-positioned, single-plan docking with straight LOS segments."""
+"""Single-plan docking with straight LOS segments.
+
+위치 출처 position_source (기본 odom, 2026-11-12): /odom = GQ7 RTK 필터 위치(25 Hz, 선체 중심).
+gps 는 /gps/fix 원시(2 Hz, 좌현 안테나) 최근 5개 중앙값 — 시뮬레이션 원래 방식, 1~2 s 늦다.
+marker_order (기본 '' = 순서 안 봄): 화면 왼쪽부터의 도형 순서를 알면 'square,triangle,circle' 처럼.
+"""
 import json
 import math
 import time
@@ -18,8 +23,8 @@ from visualization_msgs.msg import Marker, MarkerArray
 
 from kaboat_behaviors.behavior_base import yaw_from_quaternion
 from kaboat_behaviors.los_controller import LosFollower, sampled_path
-from .dock_one_shot import (LocalGeo, aligned_normals, fixed_route, retreat_error,
-                            retreat_route, symmetric_markers, wrap)
+from .dock_one_shot import (LocalGeo, aligned_normals, fixed_route, parse_marker_order,
+                            retreat_error, retreat_route, symmetric_markers, wrap)
 
 
 def stamp(msg):
@@ -40,7 +45,8 @@ class DockCtrlV2(Node):
                     'approach_cmd': 0.10, 'final_cmd': 0.05,
                     'retreat_cmd': 0.05, 'retreat_distance_m': 3.25,
                     'via_tolerance_m': 0.30, 'goal_tolerance_m': 0.25,
-                    'yaw_tolerance_deg': 8.0, 'target_class': 'triangle'}
+                    'yaw_tolerance_deg': 8.0, 'target_class': 'triangle',
+                    'position_source': 'odom', 'marker_order': ''}
         for name, value in defaults.items():
             self.declare_parameter(name, value)
         p = lambda name: self.get_parameter(name).value
@@ -68,6 +74,10 @@ class DockCtrlV2(Node):
         self.goal_tol = float(p('goal_tolerance_m'))
         self.yaw_tol = math.radians(float(p('yaw_tolerance_deg')))
         self.target = str(p('target_class'))
+        self.position_source = str(p('position_source')).strip().lower()
+        if self.position_source not in ('odom', 'gps'):
+            raise ValueError("position_source must be 'odom' or 'gps'")
+        self.marker_order = parse_marker_order(p('marker_order'))
         if self.target not in ('triangle', 'circle', 'square'):
             raise ValueError('invalid target_class')
         if not all(math.isfinite(v) and v > 0 for v in
@@ -167,8 +177,14 @@ class DockCtrlV2(Node):
         if msg.header.frame_id == 'odom' and len(msg.poses) == 3:
             self.waypoints, self.waypoints_received = msg, time.monotonic()
 
-    def _position(self):
+    def _gps_xy(self):
         return np.median(np.asarray(self.gps_history), axis=0)
+
+    def _position(self):
+        """제어에 쓰는 배 위치 — odom 이면 /odom 그대로, gps 면 LocalGeo 평면의 GPS 중앙값."""
+        if self.position_source == 'odom':
+            return self._odom_xy()
+        return self._gps_xy()
 
     def _odom_xy(self):
         p = self.odom.pose.pose.position
@@ -176,6 +192,10 @@ class DockCtrlV2(Node):
 
     def _stage(self):
         if self.stage_ll[0] != -999 and self.stage_ll[1] != -999:
+            if self.geo is None or not self.gps_history:
+                return None
+            if self.position_source == 'odom':   # 위경도 → 지금 GPS 와의 차이로 odom 좌표
+                return self._odom_xy() + self.geo.xy(*self.stage_ll) - self._gps_xy()
             return self.geo.xy(*self.stage_ll)
         if self.sim_stage_enu is not None:
             return self.sim_stage_enu
@@ -185,7 +205,8 @@ class DockCtrlV2(Node):
 
     def _inputs(self):
         now = time.monotonic()
-        if not self.gps_history or now - self.gps_received > self.gps_timeout:
+        if self.position_source == 'gps' and (
+                not self.gps_history or now - self.gps_received > self.gps_timeout):
             return 'GPS fix stale or missing'
         if (self.odom is None or now - self.odom_received > self.odom_timeout
                 or self.odom.header.frame_id != 'odom'):
@@ -261,7 +282,11 @@ class DockCtrlV2(Node):
     def _report(self, detail):
         data = {'phase': self.phase, 'detail': detail, 'drive_enabled': self.drive,
                 'manual_handoff_enabled': self.manual_handoff,
-                'gps_xy': self._position().tolist() if self.gps_history else None,
+                'position_source': self.position_source,
+                'xy': (self._position().tolist()
+                       if (self.odom if self.position_source == 'odom' else self.gps_history)
+                       else None),
+                'gps_xy': self._gps_xy().tolist() if self.gps_history else None,
                 'route_fixed': self.route_enu is not None,
                 'route_xy': [xy.tolist() for xy in self.route_enu] if self.route_enu else None}
         self.status.publish(String(data=json.dumps(data)))
@@ -338,17 +363,26 @@ class DockCtrlV2(Node):
             p.pose.orientation.w = 1.0
             path.poses.append(p)
         self.fixed_path_msg = path
-        gps_points = [dict(latitude=lat, longitude=lon)
-                      for lat, lon in (self.geo.latlon(xy) for xy in self.route_enu)]
-        self.fixed_gps_msg = String(data=json.dumps({'start': gps_points[0],
-            'via': gps_points[1], 'goal': gps_points[2], 'exit': gps_points[3],
-            'frame': 'WGS84',
-            'one_shot': True}))
+        self.fixed_gps_msg = String(data=json.dumps(self._route_latlon()))
         self.path_pub.publish(self.fixed_path_msg)
         self._publish_route_markers(path.header)
         self.gps_path_pub.publish(self.fixed_gps_msg)
         self.last_path_pub = time.monotonic()
         return True
+
+    def _route_latlon(self):
+        """고정 경로 네 점의 위경도 (기록용). odom 위치면 지금 GPS 와의 차이로 바꾼다."""
+        names = ('start', 'via', 'goal', 'exit')
+        if self.geo is None or not self.gps_history:
+            return {'one_shot': True, 'frame': 'odom',
+                    **{n: list(map(float, xy)) for n, xy in zip(names, self.route_enu)}}
+        shift = (self._gps_xy() - self._odom_xy() if self.position_source == 'odom'
+                 else np.zeros(2))
+        points = {}
+        for name, xy in zip(names, self.route_enu):
+            lat, lon = self.geo.latlon(np.asarray(xy) + shift)
+            points[name] = dict(latitude=lat, longitude=lon)
+        return {'one_shot': True, 'frame': 'WGS84', **points}
 
     def _tick(self):
         if self.fixed_path_msg is not None and time.monotonic()-self.last_path_pub >= 1.0:
@@ -386,7 +420,8 @@ class DockCtrlV2(Node):
             now = time.monotonic()
             detection_fresh = self.det is not None and now-self.det_received < self.perception_timeout
             lidar_fresh = self.lidar is not None and now-self.lidar_received < self.perception_timeout
-            symmetric, why = symmetric_markers(self.det or {}) if detection_fresh else (False, 'YOLO stale')
+            symmetric, why = (symmetric_markers(self.det or {}, order=self.marker_order)
+                              if detection_fresh else (False, 'YOLO stale'))
             aligned, heading, normal_why = aligned_normals(self.lidar or {}, yaw) if lidar_fresh else (False, None, 'RANSAC stale')
             ready = symmetric and aligned
             if ready:

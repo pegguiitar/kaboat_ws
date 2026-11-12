@@ -130,6 +130,7 @@ ros2 launch kaboat_hardware real_sensors.launch.py outdoor:=true rtk:=true \
 | `run_boat_lidar` | `ros2 launch kaboat_hardware indoor_tank.launch.py enable_thrusters:=false enable_onboard_lidar:=true onboard_lidar_port:=$(_tg50_port)` | **실내 수조 전용** (야외에서 쓰지 않음) |
 | `cal_imu` | `ros2 run kaboat_hardware calibrate_indoor_imu` | 실내 수조 IMU 정지 보정 |
 | `test_gate_outdoor` | `ros2 launch kaboat_hardware outdoor_gate_test.launch.py` | 야외 게이트 7쌍 `gate_entry` → `gate_end`, **즉시 출발**. 5절 참고 |
+| `test_dock_outdoor` | `bash scripts/run_dock_mission.sh` (= YOLO CUDA venv + `outdoor_dock_test.launch.py`) | 야외 도킹 `dock_entry` → 목표 슬롯 → 후진 3.25 m, **즉시 시작**. `run_camera` 필요. 5절 참고 |
 | `test_avoid_outdoor` | `ros2 launch kaboat_hardware outdoor_avoid_test.launch.py` | 야외 회피 시험 `avoid_entry` → `avoid_end`, **조건이 맞으면 즉시 출발**. 5절 참고 |
 | `test_straight` / `test_circle` / `test_bspline` / `test_station` / `test_waypoint` / `test_los` / `test_avoid` | 각 `*_test.launch.py … wait_for_start:=false` | 단독 주행 시험, **실행 즉시 출발** ([TANK_TESTS_GUIDE.md](TANK_TESTS_GUIDE.md)) |
 
@@ -289,6 +290,39 @@ test_gate_outdoor approach:=true             # gate_entry 접근(직선, 회피 
   35° 안(`gate.max_pair_skew_deg`)이면 쌍. 통로가 휘어도 됨. 폭 1.5~7 m.
 - 상태: `ros2 topic echo /gate/status` (`FOLLOW_GATE_3/7`, `GATE_3/7_PASSED`, `WAIT_GATE_PAIR`, `COMPLETE` …).
 
+**야외 도킹 시험** (`test_dock_outdoor`, 자율주행과 같은 도킹 노드 + `cmd_mux`, 도킹 미션 하나만)
+
+`dock_entry` 하나만 기록하면 됩니다(`dock_end` 불필요 — 끝 지점은 도킹 중 고정한 경로의 이탈점).
+YOLO가 젯슨 CUDA venv를 써야 해서 `ros2 launch`가 아니라 `scripts/run_dock_mission.sh`로 켭니다
+(`run_dock_yolo.sh`와 같은 환경·잠금 — 둘을 같이 켜지 않습니다). 센서·모터·지도·카메라는 따로:
+`run_gq7_rtk`, `run_lidar`, `run_camera`, `run_map`, `run_motor`. 녹화는 `rec_bag dock_test`.
+
+```bash
+goto dock_entry                              # 1) 도크 정면, 세 도형이 다 보이는 곳에 세움 → Ctrl+C
+test_dock_outdoor motion_enabled:=false      # 2) 미리보기: SCAN 통과·경로 고정만 (RViz /dock/one_shot_path)
+test_dock_outdoor target_class:=circle       # 3) 실제 도킹 (기본 triangle)
+test_dock_outdoor approach:=true             # dock_entry 접근(직선, 회피 없음)부터
+```
+
+- 순서 (`dock_ctrl_v2`): **SCAN** 제자리에서 벽 법선 쪽으로만 돌며 YOLO 마커 3개(가운데 마커가 화면
+  중앙 ±8%, 양쪽 대칭)와 라이다 RANSAC 법선 3개가 5스캔·0.8초 안정 → 경로 **한 번** 고정 → 경유점
+  (목표 슬롯 뒷벽 앞 3 m) → 선수 정렬 → 정지점(1 m) → 선수 유지 후진 3.25 m(3 m 이상·좌우 0.75 m 안)
+  → `/mission/complete=dock` → 이탈점 2 m 안이면 `done`(정지).
+- ⚠️ SCAN에는 시간 제한이 없습니다. 마커가 안 보이면 추진 0으로 계속 기다립니다(`/dock/status`의 `detail`).
+- 도형 배치: 기본은 순서를 안 봄(화면 위치로 가운데 마커). 대회 배치를 알면
+  `marker_order:=square,triangle,circle`(화면 왼쪽부터)로 확인을 켭니다.
+- 위치: 기본 `/odom`(GQ7 RTK 필터 25 Hz, 선체 중심). `position_source:=gps`는 `/gps/fix` 원시(2 Hz, 늦음).
+- 추력 (`approach_cmd` / `final_cmd` / `retreat_cmd`, 기본 0.10 / 0.05 / 0.05 ≈ 1562 / 1544 / 1456 µs)은
+  teleop 1단계(1550 µs)와 비슷해 바람에 약합니다. 미리보기 뒤 바람을 보고 올립니다
+  (참고: 0.2 ≈ 1600 µs, goto 기본 0.4 ≈ 1675 µs).
+- 카메라 TF(라이다 → `camera_link`, 뒤 0.615·위 0.635 m, 수평)는 이 런치가 냅니다. 값은
+  `src/kaboat_perception/kaboat_perception/camera_mount.py` 한곳(카메라 층·`dock_yolo`와 공유).
+- 상태: `ros2 topic echo /dock/status` (`phase`: `SCAN` → `TO_VIA` → `ALIGN_VIA` → `TO_GOAL` → `REVERSE` →
+  `COMPLETE`), YOLO `/dock/detection_status`, 라이다 `/dock/lidar/status`. RViz `bash scripts/demo/rviz_dock.sh --real`.
+- 전체 미션(`autonomy.launch.py`)의 도킹도 같은 노드(`kaboat_perception/dock_nodes.py`)라 같은 인자
+  (`dock_target_class`, `dock_marker_order`, `dock_retreat_cmd` …)를 받습니다. YOLO 때문에 젯슨에서는
+  `run_dock_mission.sh`처럼 venv 환경(PYTHONPATH)을 맞춘 터미널에서 켭니다.
+
 **카메라 층 — 라이다가 놓치는 낮은 색 장애물** (주황 붐 등, `occupancy_grid` 의 `cam_enabled`, 기본 끔)
 
 라이다 수평 한 면은 수면에 누운 주황 붐 위로 지나갑니다. 카메라 층은 컬러 영상에서
@@ -307,8 +341,9 @@ test_avoid_outdoor cam_enabled:=true                              # 회피 시�
 
 - `cam_height` = 배가 물에 뜬 상태에서 흘수선부터 카메라 렌즈 중심까지 [m], 실측 **0.775**가 기본
   (바꾸면 `-p cam_height:=0.8`처럼 소수점 포함). 카메라는 **수평**으로 달았고(2026-11-12 10° 숙임에서
-  되돌림) 그게 기본 (`cam_mount_pitch_deg` 0, + = 아래). 각도를 바꾸면 도킹 TF(`dock_yolo.launch.py`의 `--pitch`)도 같이. 선체 중심 기준 위치는 뒤 **0.215 m**(`cam_offset_x`, 라이다에서 뒤 0.615 m·위 0.635 m, 2026-11-12 실측 —
-  도킹 TF `dock_yolo.launch.py` 와 같은 값).
+  되돌림) 그게 기본 (`cam_mount_pitch_deg` 0, + = 아래). 선체 중심 기준 위치는 뒤 **0.215 m**(`cam_offset_x`, 라이다에서 뒤 0.615 m·위 0.635 m, 2026-11-12 실측).
+  카메라를 옮기면 `src/kaboat_perception/kaboat_perception/camera_mount.py` 한곳만 고칩니다 — 카메라 층 기본값과
+  도킹 TF(`dock_yolo`, `test_dock_outdoor`, `autonomy.launch.py`)가 같이 읽습니다.
 - 노트북 `view_lidar`의 주황 점(`/occupancy_grid/cam_points`)이 카메라가 고른 점입니다. 붐 위에
   모이는지, 수면에 점이 흩어지지 않는지 봅니다.
 - 색 기준·높이 하한은 `cam_orange_*`, `cam_white_*`, `cam_range_*` 파라미터. 주황 기본값

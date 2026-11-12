@@ -37,6 +37,17 @@ topics=(
     /mission/state /mission/goal
     /detections/buoys /dock/lidar/status
     /geo/origin /geo/status /waypoint/status
+    /mission/complete /mission/entry_goal
+    # 도킹 YOLO 결과: 마커별 신뢰도·픽셀·시선(JSON), 마스크 그린 영상(320 px 5 fps ≈ 1.2 MB/s), 시선 방향
+    /detector/enable /dock/detection_status /detections/dock_marks /dock/debug_image
+    /dock/bearing_markers /dock/markers/{triangle,circle,square}/ray
+    /dock/markers/{triangle,circle,square}/depth_ground
+    # 도킹 라이다 RANSAC 벽·목표·one-shot 경로·명령
+    /dock/lidar/markers /dock/lidar/direct_markers
+    /dock/lidar/{triangle,circle,square}/normal /dock/lidar/{triangle,circle,square}/wall_point
+    /dock/waypoints /dock/avoid/goal /dock/avoid/goal_status
+    /dock/status /dock/one_shot_path /dock/one_shot_gps /dock/one_shot_markers
+    /dock/cmd_preview /cmd/dock
 )
 
 available="$(ros2 topic list 2>/dev/null || true)"

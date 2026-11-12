@@ -56,6 +56,8 @@ rec_bag gate_test          # ③ 녹화 시작. 이름은 자유 (생략 시 run
 | LiDAR | `/scan`, `/scan/raw`, `/scan/level` |
 | 자세·위치 | `/imu/data`, `/gps/fix`, `/gps/fix_secondary`, `/odom`, `/tf`, `/tf_static`, `/geo/origin`, `/geo/status` |
 | 카메라 | 컬러 JPEG, 정렬 뎁스 무손실 PNG(`compressedDepth`), `/camera/camera_info` |
+| 도킹 YOLO 결과 | `/dock/detection_status`(마커별 신뢰도·픽셀·시선, JSON), `/dock/debug_image`(마스크·도형 그린 영상 320 px 5 fps ≈ 1.2 MB/s), `/detections/dock_marks`, `/dock/bearing_markers`, `/dock/markers/<도형>/ray`·`depth_ground`, `/detector/enable` |
+| 도킹 라이다·경로 | `/dock/lidar/status`·`markers`·`direct_markers`·`<도형>/normal`·`wall_point`, `/dock/waypoints`, `/dock/avoid/goal(_status)`, `/dock/status`, `/dock/one_shot_path`·`gps`·`markers`, `/dock/cmd_preview`, `/cmd/dock`, `/mission/complete` |
 | 당시 판단 (비교용) | `/cmd_vel`, `/occupancy_grid`, `/mission/state`, `/mission/goal`, `/detections/buoys`, `/dock/lidar/status`, `/waypoint/status` |
 
 토픽을 더 넣고 싶으면 `scripts/record_run.sh`의 `topics=( … )`에 추가합니다.
