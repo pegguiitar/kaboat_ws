@@ -593,3 +593,46 @@ def test_closed_loop_retrace_follows_curved_trail(radius):
     assert out.event == 'escape_trail_end'
     assert np.hypot(*(xy - trail[0])) < 0.5          # 지나온 길의 시작점까지 되짚음
     assert worst < 0.3, worst                          # 궤적에서 30 cm 안
+
+
+# ---------- 새 경로는 check() 를 통과해야 채택 (2026-11-12) ----------
+
+def _blind_generator(dri, boat_xy, yaw, vel_xy, wp_xy, p, now_t=0.0, prev_plan=None):
+    """장애물을 안 보는 생성기 — 예전 생성이 가끔(무작위 장면 6 %) 내던 '만들자마자 위반'
+    경로를 흉내 낸다 (빈 바다 직선)."""
+    from kaboat_behaviors.bspline_planner import generate
+    return generate(dri_of([], boat_xy=boat_xy, yaw=yaw), boat_xy, yaw, vel_xy, wp_xy, p, now_t)
+
+
+CELL_AHEAD = [(1.2, 0.0)]       # 경로 위 1.2 m — 생성기의 직선 경로가 바로 지난다
+
+
+def test_violating_new_plan_is_not_acquired():
+    fsm = AvoidFsm(PlannerParams(), FsmParams(), KP, KD, generator=_blind_generator)
+    out = fsm.step(dri_of(CELL_AHEAD), BOAT, YAW, V_FULL, 0.0, WP_FAR, 0.0)
+    assert out.plan is None and out.event == 'generate_none'
+    assert (out.linear_x, out.angular_z) == (0.0, 0.0)
+
+
+def test_violating_regen_is_not_followed():
+    """위반 사다리의 재생성이 또 위반 경로면 채택하지 않는다 — 예전엔 'violation_regen' 으로
+    받아 그대로 전진했다 (감사 폐루프: 0.7 m 칸까지 0.06 m). 지금은 멈춘 채 확인 → ESCAPE."""
+    fsm = make_fsm(t_backstop=1e9)
+    acquire(fsm, dri_of([]))
+    fsm.generate = _blind_generator
+    out = fsm.step(dri_of(CELL_AHEAD), BOAT, YAW, V_FULL, 0.0, WP_FAR, 0.1)
+    assert out.event == 'panic_hold' and out.linear_x == 0.0
+    assert check(out.plan, dri_of(CELL_AHEAD), BOAT, fsm.p) is not None   # 옛 경로를 들고 멈춤
+    out = fsm.step(dri_of(CELL_AHEAD), BOAT, YAW, (0.0, 0.0), 0.0, WP_FAR, 1.7)
+    assert out.state == 'ESCAPE' and out.event == 'escape_panic'
+
+
+def test_escape_does_not_recover_onto_violating_plan():
+    fsm = make_fsm(t_backstop=1e9, d_panic=3.0, escape_confirm_t=0.0, escape_min_t=0.0, escape_n_ok=1)
+    enter_escape(fsm)
+    fsm.generate = _blind_generator
+    for k in range(10):
+        out = fsm.step(dri_of(CELL_AHEAD), BOAT, YAW, (0.0, 0.0), 0.0, WP_FAR, 0.2 + 0.1 * k)
+        assert out.state == 'ESCAPE' and out.event != 'escape_recovered'
+    out = fsm.step(dri_of([]), BOAT, YAW, (0.0, 0.0), 0.0, WP_FAR, 1.3)    # 칸이 사라지면 복귀
+    assert out.state == 'FOLLOW' and out.event == 'escape_recovered'

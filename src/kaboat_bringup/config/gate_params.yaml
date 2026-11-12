@@ -9,7 +9,7 @@ gate_follower:
     gate.los_turn_ratio: 0.31           # LOS 경로 추종 구간 회전 상한 — 수조 회피 SOTA
     gate.occ_threshold: 95
     gate.min_cluster_cells: 2
-    gate.max_cluster_extent: 1.2
+    gate.max_cluster_extent: 2.0        # 1.2 → 2.0: 실제 부표 덩어리 최대 2.0 m (1.2 면 게이트 하나 건너뜀)
     gate.min_gate_width: 1.5
     gate.max_gate_width: 7.0
     gate.max_pair_skew_deg: 35.0        # 게이트선이 다가가는 방향의 수직에서 기울어도 되는 각도 (휜 통로)
@@ -34,7 +34,11 @@ gate_follower:
     gate.visibility_release_distance: 1.0
     # 같은 쌍으로 이 시간 넘게 못 가면 쌍을 버리고 다시 고름 (넘었으면 통과 인정)
     gate.replan_timeout_sec: 2.0
-    gate.reject_hold_sec: 10.0          # 버린 쌍을 후보에서 빼 두는 시간
+    gate.reject_hold_sec: 3.0           # 버린 쌍을 후보에서 빼 두는 시간 (10 → 3: 그동안 추진 0 으로 밀림)
+    # 기둥 보임: 두 기둥이 각각 1초 안에 한 번 잡혔으면 보임 (0 = 지금 스캔에 둘 다 — 4번에 1번 추진 0)
+    gate.post_visible_timeout_sec: 1.0
+    # 서서 기다릴 때 자리·선수각 지키기 추력 (0 = 추진 0). 시뮬에서 아직 득실이 섞여 끔
+    gate.hold_thrust_ratio: 0.0
     # 게이트 사슬 (2026-11-12): 다음 게이트를 기억한 부표로 미리 골라 경로를 중점들로 이어 둔다.
     # 1 이면 미리 잇지 않음(지금 게이트를 지나는 순간 다음 쌍을 고름).
     gate.max_chain_gates: 3
@@ -50,3 +54,7 @@ gate_follower:
     # 게이트 두 부표 사이 물은 뒤에 맞을 게 없어 지도에 unknown 으로 남아 PATH_UNOBSERVED 로 멈췄다.
     gate.see_through_range: 6.0             # 이 거리 [m] 안만
     gate.see_through_max_bearing_deg: 110.0 # 선수 기준 ±각도 (뒤 120°~240° 는 선체 가림 마스크)
+    # 관측 검사 완화: 안 본 칸은 경로 앞 3 m·lookahead 직선만 보고, 걸려도 서지 않고 직진을
+    # 절반으로 줄여 계속 감 (상태 FOLLOW_GATE_n/7_SLOW). 장애물은 안전 검사(앞 6 m)가 거름.
+    gate.observed_horizon: 3.0
+    gate.unobserved_thrust_scale: 0.5

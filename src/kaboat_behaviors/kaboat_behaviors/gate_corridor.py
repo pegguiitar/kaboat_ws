@@ -19,7 +19,10 @@ class GateParams:
     required_pairs: int = 7          # 대회 게이트 7쌍 (2026-11-12, 예전 수조 3쌍)
     occ_threshold: int = 95
     min_cluster_cells: int = 2
-    max_cluster_extent: float = 1.2
+    # 부표 덩어리 크기 상한 [m] — 넘으면 벽·붙은 부표로 보고 뺀다. 1.2 → 2.0 (2026-11-12 녹화):
+    # 실제 게이트 부표 덩어리가 50/90/99 % 0.8/1.2/1.6 m, 최대 2.0 m. 1.2 면 2번·6번 게이트 부표가
+    # 절반쯤 빠져 x≈114 게이트를 건너뛰고 6개만 셌다. 그 밖 큰 덩어리(벽·해안)는 90 % 5.8 m.
+    max_cluster_extent: float = 2.0
     min_gate_width: float = 1.5
     max_gate_width: float = 7.0
     # 게이트선(두 기둥을 잇는 선)이 기준 진행 방향의 수직에서 이만큼까지 기울어도 쌍으로
@@ -75,6 +78,12 @@ class GateParams:
     # 이 거리 [m] 안, 선수 기준 이 각도 [deg] 안만 — 뒤쪽 120°~240° 는 선체 가림 마스크라 inf.
     see_through_range: float = 6.0
     see_through_max_bearing_deg: float = 110.0
+    # 관측 검사 완화 (2026-11-12): 안 본 칸(unknown 이고 빔도 안 지남)은 장애물이 아니다 —
+    # 장애물이면 지도에 점유로 잡혀 안전 검사(check_horizon)가 거른다. 그래서 관측은 경로 앞
+    # observed_horizon [m] 와 lookahead 직선만 보고, 걸려도 서지 않고 직진을
+    # unobserved_thrust_scale 배로 줄여 계속 간다 (예전: 앞 전체 → 정지 2초 → 쌍 버림 10초).
+    observed_horizon: float = 3.0
+    unobserved_thrust_scale: float = 0.5
 
     def __post_init__(self):
         if (self.required_pairs < 1 or self.min_cluster_cells < 1
@@ -91,7 +100,8 @@ class GateParams:
                   self.max_goal_after_gates, self.scan_match_radius,
                   self.check_horizon, self.memory_match_radius, self.memory_forget_sec,
                   self.memory_recheck_range, self.memory_prune_range,
-                  self.see_through_range, self.see_through_max_bearing_deg)
+                  self.see_through_range, self.see_through_max_bearing_deg,
+                  self.observed_horizon, self.unobserved_thrust_scale)
         if (not all(math.isfinite(v) for v in values)
                 or min(values) <= 0
                 or self.memory_recheck_range >= self.memory_prune_range
@@ -99,7 +109,8 @@ class GateParams:
                 or self.min_gate_forward >= self.max_gate_forward
                 or self.min_gate_width <= 2.0 * self.min_clearance
                 or self.max_pair_skew_deg >= 90.0
-                or self.see_through_max_bearing_deg >= 180.0):
+                or self.see_through_max_bearing_deg >= 180.0
+                or self.unobserved_thrust_scale > 1.0):
             raise ValueError('invalid gate geometry or clearance parameters')
 
 
@@ -144,7 +155,7 @@ def _clusters(grid, p: GateParams):
             continue
         extent = res * max(ix.max() - ix.min() + 1,
                            iy.max() - iy.min() + 1)
-        if extent > p.max_cluster_extent:
+        if extent > p.max_cluster_extent + 1e-6:   # float32 해상도(0.2000000030)×6칸 > 1.2 방지
             continue  # walls and merged posts are not gate markers
         clusters.append((ox + (float(ix.mean()) + 0.5) * res,
                          oy + (float(iy.mean()) + 0.5) * res))
@@ -256,6 +267,25 @@ REJECT_REASONS = (
     ('held', '통과·보류'), ('advance', '전진 부족'), ('shift', '좌우 어긋남'))
 
 
+def is_diagonal(a_xy, b_xy, posts, p: GateParams, own_radius=1e-6):
+    """두 기둥을 지름으로 한 원(× gate_circle_margin) 안에 다른 기둥이 선 양쪽에 다 있으면 대각선
+    오쌍. own_radius 안 기둥은 두 기둥 자신으로 본다(기억 위치가 조금 움직여도)."""
+    a, b = np.asarray(a_xy, dtype=float), np.asarray(b_xy, dtype=float)
+    others = np.asarray(posts, dtype=float).reshape(-1, 2)
+    if not len(others):
+        return False
+    line = b - a
+    width = float(np.linalg.norm(line))
+    rel = others - (a + b) / 2.0
+    near = ((np.linalg.norm(rel, axis=1) < p.gate_circle_margin * width / 2.0)
+            & (np.linalg.norm(others - a, axis=1) > own_radius)
+            & (np.linalg.norm(others - b, axis=1) > own_radius))
+    if not near.any():
+        return False
+    side = line[0] * rel[near, 1] - line[1] * rel[near, 0]
+    return bool(np.any(side > 0.0) and np.any(side < 0.0))
+
+
 def select_gate_pair(grid, boat_xy, goal_xy, passed_midpoints, p: GateParams,
                      excluded_midpoints=(), last_direction=None, stats=None):
     """Find the nearest credible aperture ahead along the mission goal axis (지도 덩어리)."""
@@ -331,15 +361,9 @@ def select_gate_pair_from_posts(posts, boat_xy, goal_xy, passed_midpoints, p: Ga
                 reject('width')
                 continue
             # 지름 원 안 다른 기둥이 선 양쪽에 다 있으면 대각선 오쌍 (위 GateParams 주석)
-            rel = all_posts - mid
-            near = ((np.linalg.norm(rel, axis=1) < p.gate_circle_margin * width / 2.0)
-                    & (np.linalg.norm(all_posts - a_xy, axis=1) > 1e-6)
-                    & (np.linalg.norm(all_posts - b_xy, axis=1) > 1e-6))
-            if near.any():
-                side = post_line[0] * rel[near, 1] - post_line[1] * rel[near, 0]
-                if np.any(side > 0.0) and np.any(side < 0.0):
-                    reject('diagonal')
-                    continue
+            if is_diagonal(a_xy, b_xy, all_posts, p):
+                reject('diagonal')
+                continue
             # 게이트선이 기준 진행 방향에 수직이면 0, 나란하면 1 (= sin 기울기)
             skew_sin = abs(float(post_line @ axis)) / width
             mid_side = float((mid - boat) @ lateral)
@@ -456,21 +480,37 @@ def path_ahead(path, start_idx=0, horizon=None):
     return path.samples[first:max(first + 2, last)]
 
 
-def points_safe(dri, points, p: GateParams):
-    """Check both the existing DRI field and raw occupied-cell clearance."""
+def points_safe(dri, points, p: GateParams, start=None):
+    """Check both the existing DRI field and raw occupied-cell clearance.
+
+    start(배 위치)를 주면 기준을 '지금보다 장애물에 더 가까워지지 않기'까지 풀어 준다 — 바람에
+    밀려 이미 부표 min_clearance 안에 들어온 배는 어느 선을 그어도 첫 점(배)이 걸려 영영 서
+    있었다(시뮬 북풍 0.1 m/s). 지금 안전한 배(장애물 min_clearance 밖, 위험 safe_threshold 아래)는
+    예전과 똑같다.
+    """
     points = np.asarray(points, dtype=float)
     if (points.ndim != 2 or points.shape[1] != 2 or len(points) == 0
             or not np.all(np.isfinite(points))):
         return False
+    risk_limit, clear_limit = p.safe_threshold, p.min_clearance
+    occupied = (np.asarray(dri.occ_xy, dtype=float)
+                if dri.occ_xy is not None and len(dri.occ_xy) else None)
+    if start is not None:
+        start = np.asarray(start, dtype=float)
+        r0 = float(dri.risk_at_many(np.array([start[0]]), np.array([start[1]]))[0])
+        if math.isfinite(r0):
+            risk_limit = max(risk_limit, r0 + 1e-6)
+        if occupied is not None:
+            d0 = float(np.min(np.linalg.norm(occupied - start, axis=1)))
+            clear_limit = min(clear_limit, d0 - 0.02)
     risks = dri.risk_at_many(points[:, 0], points[:, 1])
-    if not np.all(np.isfinite(risks) & (risks <= p.safe_threshold)):
+    if not np.all(np.isfinite(risks) & (risks <= risk_limit)):
         return False
-    if dri.occ_xy is not None and len(dri.occ_xy):
-        occupied = np.asarray(dri.occ_xy, dtype=float)
+    if occupied is not None:
         for chunk in np.array_split(points, max(1, math.ceil(len(points) / 100))):
             distances = np.linalg.norm(chunk[:, None, :] - occupied[None, :, :],
                                        axis=2)
-            if np.any(distances < p.min_clearance):
+            if np.any(distances < clear_limit):
                 return False
     return True
 
@@ -494,13 +534,20 @@ def points_observed(grid, points):
     return bool(np.all(data[iy, ix] >= 0))
 
 
-def path_safe(dri, path, p: GateParams, start_idx=0, horizon=None):
+def path_safe(dri, path, p: GateParams, start_idx=0, horizon=None, start=None):
     # The rolling DRI window may discard samples already behind the boat.
-    return points_safe(dri, path_ahead(path, start_idx, horizon), p)
+    return points_safe(dri, path_ahead(path, start_idx, horizon), p, start)
 
 
 def lookahead_chord_safe(dri, boat_xy, path, progress_idx, lookahead,
-                         p: GateParams, grid=None, rays=None):
+                         p: GateParams, grid=None, rays=None, escape=True):
+    samples = lookahead_chord(boat_xy, path, progress_idx, lookahead, p)
+    return (points_safe(dri, samples, p, start=boat_xy if escape else None)
+            and (grid is None or points_observed_or_seen(grid, samples, rays, p)))
+
+
+def lookahead_chord(boat_xy, path, progress_idx, lookahead, p: GateParams):
+    """배 → LOS 가 노리는 경로 점 직선의 점들 (배가 경로를 벗어나 있으면 실제로 갈 선)."""
     boat = np.asarray(boat_xy, dtype=float)
     goal = path.samples[-1]
     if np.linalg.norm(goal - boat) <= lookahead:
@@ -512,10 +559,8 @@ def lookahead_chord_safe(dri, boat_xy, path, progress_idx, lookahead,
         if np.linalg.norm(target - boat) < 0.3:
             target = goal
     length = float(np.linalg.norm(target - boat))
-    samples = np.linspace(boat, target,
-                          max(2, int(math.ceil(length / p.sample_spacing)) + 1))
-    return (points_safe(dri, samples, p)
-            and (grid is None or points_observed_or_seen(grid, samples, rays, p)))
+    return np.linspace(boat, target,
+                       max(2, int(math.ceil(length / p.sample_spacing)) + 1))
 
 
 def gate_crossing(previous_xy, boat_xy, pair: GatePair):
