@@ -71,9 +71,10 @@ class EvidenceParams:
     pass_margin: float = 0.5        # 빔이 부표보다 이만큼 멀리/가까이서 맞아야 지나감/가림 [m]
     beam_half_width: float = 0.15   # 부표 방향 빔 창 반폭 — 부표 반폭 [m]
     min_beam_half_angle: float = math.radians(0.5)
+    max_range: float = 10.0         # 라이다 원점에서 이보다 먼 부표는 깎지 않음 (노드는 군집도 이 안만) [m]
     # 원 맞추기
     radius_prior: float = 0.2       # 처음 반지름 [m] — 작게 시작 (줄이지 않으므로)
-    radius_max: float = 0.6         # 반지름 상한 [m]
+    radius_max: float = 0.75        # 반지름 상한 [m] (지름 1.5 m)
     fit_min_points: int = 10        # 이만큼 점이 모이면 원 맞추기로 중심을 잡는다
     fit_max_points: int = 600       # 부표마다 보관하는 점 (오래된 것부터 버림)
     fit_out_tol: float = 0.05       # 원 바깥으로 이만큼 넘게 벗어나야 '안 맞음' [m] (라이다 오차 이상)
@@ -211,7 +212,8 @@ def beam_evidence(view: LidarView, x: float, y: float, p: EvidenceParams) -> str
     """부표 자리 (x, y) 에 대한 이 스캔의 근거 → 'free' | 'occluded' | 'consistent' | 'none'."""
     dx, dy = x - view.x, y - view.y
     d = math.hypot(dx, dy)
-    if d < view.range_min + p.pass_margin or d > view.range_max - p.pass_margin:
+    if (d < view.range_min + p.pass_margin or d > view.range_max - p.pass_margin
+            or d > p.max_range):
         return 'none'
     bearing = math.atan2(dy, dx) - view.yaw
     half = max(p.min_beam_half_angle, math.atan2(p.beam_half_width, d))
@@ -256,9 +258,9 @@ class EvidenceTracker:
 
         # ① 연결 — 가까운 쌍부터 1:1
         pairs = []
-        for i, (x, y, _c, _s, _r) in enumerate(detections):
+        for i, (x, y, _c, _s, pts) in enumerate(detections):
             for t in self.tracks:
-                d = math.hypot(t.x - x, t.y - y)
+                d = self._assoc_distance(t, x, y, pts)
                 if d <= p.gate_radius:
                     pairs.append((d, i, t.id))
         pairs.sort()
@@ -320,6 +322,15 @@ class EvidenceTracker:
         self._merge()
         return self.confirmed()
 
+    @staticmethod
+    def _assoc_distance(t: EvTrack, x, y, pts) -> float:
+        """검출 ↔ 부표 거리. 군집 점이 있으면 점 평균(앞면)과 부표 원 둘레 사이 거리 —
+        부표 위치는 원 중심인데 군집은 앞면이라, 중심끼리 재면 같은 부표가 새 부표로 갈렸다."""
+        if pts is not None and len(pts):
+            m = np.asarray(pts, dtype=float).reshape(-1, 2).mean(axis=0)
+            return abs(math.hypot(m[0] - t.x, m[1] - t.y) - t.radius)
+        return math.hypot(t.x - x, t.y - y)
+
     def _add_points(self, t: EvTrack, pts, view: Optional[LidarView]):
         if pts is None or len(pts) == 0:
             return
@@ -334,7 +345,7 @@ class EvidenceTracker:
         t.views = v if t.views is None else np.concatenate((t.views, v))[-self.p.fit_max_points:]
 
     def _merge(self):
-        conf = sorted(self.confirmed(), key=lambda t: -t.L)
+        conf = sorted(self.confirmed(), key=lambda t: (-t.hits, -t.L))   # 많이 잡힌 쪽을 남긴다
         drop = set()
         for i, a in enumerate(conf):
             if a.id in drop:
@@ -344,6 +355,12 @@ class EvidenceTracker:
                     continue
                 for c, n in b.color_votes.items():
                     a.color_votes[c] = a.color_votes.get(c, 0) + n
+                if b.pts is not None:
+                    a.pts = b.pts if a.pts is None else np.vstack((a.pts, b.pts))[-self.p.fit_max_points:]
+                    a.views = (b.views if a.views is None
+                               else np.concatenate((a.views, b.views))[-self.p.fit_max_points:])
+                a.hits += b.hits
+                a.L = max(a.L, b.L)
                 drop.add(b.id)
         if drop:
             self.tracks = [t for t in self.tracks if t.id not in drop]

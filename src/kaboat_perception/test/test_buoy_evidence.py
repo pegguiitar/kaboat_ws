@@ -199,3 +199,21 @@ def test_radius_never_shrinks_below_prior():
 def test_one_direction_only_does_not_grow():
     t = run_arcs(0.3, [(2.0, 0.0)] * 40)
     assert not t.grown and t.radius == pytest.approx(P.radius_prior)
+
+
+def test_far_track_not_freed_beyond_max_range():
+    tk = EvidenceTracker(EvidenceParams(max_range=10.0))
+    for k in range(6):
+        tk.update([(12.0, 0.0, None)], 0.1 * k)
+    run(tk, view({0: 20.0}), 10.0)                   # 12 m 부표 자리를 빔이 지나가도
+    assert len(tk.confirmed()) == 1                  # clamp 밖이라 안 깎음
+
+
+def test_surface_points_associate_to_fitted_centre():
+    # 부표 중심 (8, 0) r 0.3 — 앞면 점 평균은 중심에서 ~0.25 m 앞. 중심끼리 재면 gate 0.2 밖이라
+    # 새 부표가 됐지만, 원 둘레 기준이면 같은 부표.
+    tk = EvidenceTracker(EvidenceParams(gate_radius=0.2, radius_prior=0.3))
+    pts = arc((8.0, 0.0), 0.3, (2.0, 0.0), noise=0.0)
+    for k in range(5):
+        tk.update([(8.0, 0.0, None, True, pts)], 0.1 * k)
+    assert len(tk.tracks) == 1

@@ -70,6 +70,8 @@ class BuoyLidarDetector(Node):
         self.declare_parameter('cand_min_beams', 3)
         self.declare_parameter('cand_min_width', 0.1)
         self.declare_parameter('cand_min_range', 2.0)
+        # 거리 clamp — 이보다 먼 군집은 안 씀 (먼 부표는 빔이 적고 물가·배가 섞임). evidence.max_range 와 같게.
+        self.declare_parameter('cand_max_range', 10.0)
         self.geom = BuoyGeometry()
         self.cp = self._params_from('color', ColorParams)
         self.ep = self._params_from('evidence', EvidenceParams)
@@ -82,6 +84,7 @@ class BuoyLidarDetector(Node):
         self.cand_min_beams = int(self.get_parameter('cand_min_beams').value)
         self.cand_min_width = float(self.get_parameter('cand_min_width').value)
         self.cand_min_range = float(self.get_parameter('cand_min_range').value)
+        self.cand_max_range = float(self.get_parameter('cand_max_range').value)
 
         self.poses = collections.deque(maxlen=400)   # (t, x, y, yaw)
         self.K = None
@@ -166,8 +169,9 @@ class BuoyLidarDetector(Node):
                      lidar_points(s.ranges, s.angle_min, s.angle_increment,
                                   s.range_min, s.range_max, g), g, s.angle_increment)
                  if len(cl) >= self.cand_min_beams and 2.0 * r >= self.cand_min_width
-                 and math.hypot(xy[0] - g.lidar_offset_x, xy[1] - g.lidar_offset_y)
-                 >= self.cand_min_range]
+                 and self.cand_min_range
+                 <= math.hypot(xy[0] - g.lidar_offset_x, xy[1] - g.lidar_offset_y)
+                 <= self.cand_max_range]
         clusters = [(xy, r, len(cl)) for xy, r, cl in found]
         px, py, yaw = pose
         c, sn = math.cos(yaw), math.sin(yaw)
