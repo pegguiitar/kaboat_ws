@@ -58,7 +58,8 @@ behavior 의 회피가 공유하는 지도를 만든다. v5 설계상 장애물 
 TODO(팀):
   1) decay(노후 셀 확률의 점진적 감쇠) — 현재는 window 밖으로 나갈 때만
      소멸하고, window 안 셀은 새 관측 없인 안 낡음
-  2) inverse sensor model 을 거리/각도 함수로 — 지금 L_OCC/L_FREE 는 거리·빔
+  2) inverse sensor model 을 거리/각도 함수로 — 히트는 거리 항을 넣었다(range_l_occ,
+     l_occ_near → L_OCC, 2026-11-12 선수 물보라). L_FREE 와 빔 각도는 아직 상수. 원래 L_OCC/L_FREE 는 거리·빔
      중심으로부터의 각도와 무관한 고정 상수(원래는 가까울수록/빔 중심에
      가까울수록 더 신뢰해야 함). 정확도보단 단순함을 택한 skeleton 근사.
      -> 일단 실물 테스트에서 log odds ratio는 상수로 하고 정확도가 안나오면 다른 알고리즘 모색
@@ -110,6 +111,20 @@ L_MIN, L_MAX = -4.5, 8.0   # log-odds 클램프. 상한 8.0(12히트)이면 포�
 # 정해지고, 상한까지 쌓이는 건 꾸준히 관측되는 실제 장애물뿐이다(예전 3.5는 포화 97이라
 # 문턱에 바짝 붙어 free 레이 한둘에 깜빡였다). 카메라 층도 같은 상한(cam_grid 클램프).
 TILT_MAX = math.radians(3.0)  # 이 이상 기울면 해당 스캔 버림
+
+
+def range_l_occ(r, r_min, near, full_range, far=L_OCC):
+    """빔 거리 r [m] → 히트 log-odds. 라이다 최소 거리 r_min 에서 near, full_range 이상에서 far,
+    그 사이는 거리에 비례 (inverse sensor model 의 거리 항 — TODO 2 일부).
+
+    선수 가까이 튀는 물보라는 오래 맞아야 장애물이 되고, 멀리서 이미 쌓인 실제 장애물은
+    다가가도 그대로 남는다(가까운 히트는 칸을 덜 올릴 뿐 지우지 않음).
+    """
+    r = np.asarray(r, dtype=np.float64)
+    if near >= far or full_range <= r_min:
+        return np.full(r.shape, float(far))
+    t = np.clip((r - r_min) / (full_range - r_min), 0.0, 1.0)
+    return near + (far - near) * t
 
 
 def _yaw(q) -> float:
@@ -176,6 +191,14 @@ class OccupancyGridNode(Node):
         # A/B 실측(파도 gain0.5, 45s): 노이즈 피크≥90 비율 78→14%, 수명 0.97→0.52s,
         # 부표 가시성 손실 없음. 성능도 최악조건 0.97→0.74ms/스캔으로 오히려 빨라짐
         # (np.add.at 산발 누적 → unique+인덱싱). False 로 두면 예전 중복 누적 방식.
+        # 히트 log-odds 를 거리에 비례해 올림 (range_l_occ): 라이다 최소 거리(range_min, TG-50
+        # 0.4 m)에서 l_occ_near, l_occ_full_range 이상에서 L_OCC(0.7). 2026-11-12 현장 영상 분석:
+        # 선수 V 자 물보라가 라이다 정면 0.4~1.6 m(최대 1.8 m)에 찍혀 그 칸(직전 L_MIN 근처)을
+        # 스캔 60~80% 로 맞혀 1.2~1.8 s 만에 95 → ESCAPE. 0.1 → 3.0 m 면 물보라 칸이 95 가 되는 데
+        # 1.6 m 에서 2.7 s 이상, 1.2 m 3.7 s, 0.8 m 6 s 이상. 거리 무관으로 되돌리려면
+        # -p l_occ_near:=0.7
+        self.declare_parameter('l_occ_near', 0.1)
+        self.declare_parameter('l_occ_full_range', 3.0)
         # 카메라 층 (camera_obstacles.py) — 기본 끔. 켜려면 d455.launch.py (run_camera).
         # 가상 벽 (virtual_walls.py): 위도·경도 꺾은선을 지금 원점 기준으로 바꿔 지도에 100 으로.
         self.declare_parameter('virtual_walls_file', _default_walls_file())   # '' / none = 끔
@@ -202,6 +225,12 @@ class OccupancyGridNode(Node):
         rate = float(self.get_parameter('publish_rate').value)
         self.cells = int(self.size / self.resolution)
         self.hit_dedup = bool(self.get_parameter('hit_dedup').value)
+        self.l_occ_near = float(self.get_parameter('l_occ_near').value)
+        self.l_occ_full_range = float(self.get_parameter('l_occ_full_range').value)
+        if not (0.0 < self.l_occ_near <= L_OCC and math.isfinite(self.l_occ_full_range)
+                and self.l_occ_full_range > 0.0):
+            raise ValueError(f'l_occ_near 는 (0, {L_OCC}], l_occ_full_range 는 양수여야 함 '
+                             f'(받은 값 {self.l_occ_near}, {self.l_occ_full_range})')
         self.lidar_offset_x = float(self.get_parameter('lidar_offset_x').value)
         self.lidar_offset_y = float(self.get_parameter('lidar_offset_y').value)
         if not (math.isfinite(self.lidar_offset_x) and math.isfinite(self.lidar_offset_y)):
@@ -283,7 +312,9 @@ class OccupancyGridNode(Node):
             f'occupancy_grid 시작 — {self.cells}×{self.cells}셀 @ {self.resolution}m '
             f'→ /occupancy_grid (기울기 차단: {self.enable_tilt_gate}, '
             f'pitch=[{self.pitch_min_deg:.1f}°, {self.pitch_max_deg:.1f}°], '
-            f'roll=[{self.roll_min_deg:.1f}°, {self.roll_max_deg:.1f}°])')
+            f'roll=[{self.roll_min_deg:.1f}°, {self.roll_max_deg:.1f}°], '
+            f'히트 {self.l_occ_near:.2f}(최소 거리)→{L_OCC:.2f}({self.l_occ_full_range:.1f} m), '
+            f'free {L_FREE:.2f})')
         if self.cam_enabled:
             c = self.cam_params
             colors = [n for n in ('orange', 'white') if getattr(c, n)]
@@ -412,13 +443,19 @@ class OccupancyGridNode(Node):
         free[hy, hx] = 0                     # 히트 셀은 free 갱신에서 제외 (기존과 동일)
         fm = free.astype(bool)
         self.grid[fm] += L_FREE
+        # 히트 증가량은 빔 거리에 비례 (가까울수록 작게 — range_l_occ, 파라미터 주석 참고)
+        inc = range_l_occ(r[m], msg.range_min, self.l_occ_near, self.l_occ_full_range)
         if self.hit_dedup:
-            # 스캔당 셀당 1회 — 같은 스캔의 이웃 빔은 독립 관측이 아님 (파라미터 주석 참고)
-            uniq = np.unique(hy.astype(np.int64) * c + hx)
-            self.grid[uniq // c, uniq % c] += L_OCC
+            # 스캔당 셀당 1회 — 같은 스캔의 이웃 빔은 독립 관측이 아님 (파라미터 주석 참고).
+            # 한 칸에 여러 빔이면 가장 큰 증가량(가장 먼 빔) 하나만.
+            flat = hy.astype(np.int64) * c + hx
+            best = np.zeros(c * c)
+            np.maximum.at(best, flat, inc)
+            uniq = np.nonzero(best)[0]
+            self.grid[uniq // c, uniq % c] += best[uniq]
         else:
             # 같은 셀에 박힌 빔 수만큼 중복 누적 — 실물 장애물이 한 스캔에 포화되는 근거
-            np.add.at(self.grid, (hy, hx), L_OCC)
+            np.add.at(self.grid, (hy, hx), inc)
         np.clip(self.grid, L_MIN, L_MAX, out=self.grid)
         self.observed |= fm
         self.observed[hy, hx] = True
