@@ -52,7 +52,8 @@ class DockLidarMarkers(Node):
         super().__init__('dock_lidar_markers')
         defaults={'marker_behind_wall_m':1.,'ray_scan_slop_s':.12,'input_timeout_s':.7,
                   'angular_window_deg':15.,'ransac_inlier_m':.06,'ransac_min_span_m':.65,
-                  'ransac_min_points':12,'shared_extrapolation_m':2.,'base_frame':'base_link','target_class':'triangle',
+                  'ransac_min_points':12,'shared_extrapolation_m':2.,'max_incidence_deg':40.,
+                  'base_frame':'base_link','target_class':'triangle',
                   'station_normal_hint_odom':[0.,0.], 'station_history_timeout_s':1.5,
                   'scan_topic':'/scan/level'}
         for k,v in defaults.items():self.declare_parameter(k,v)
@@ -70,11 +71,17 @@ class DockLidarMarkers(Node):
         self.timeout=float(get('input_timeout_s'));self.base=str(get('base_frame'))
         if not all(math.isfinite(v) and v>=0 for v in (self.behind,self.slop,self.timeout)) or not self.base:
             raise ValueError('invalid lidar marker settings')
+        # 시선과 벽 법선 사이 최대각. 72.5°(RayWallParams 기본)면 비스듬히 볼 때 슬롯 옆면을 벽으로
+        # 잡았다 — 2026-11-12 bag 4~9 m 에서 연속 5 스캔 안정 판정을 통과한 것의 22 %가 법선 ~27° 이상
+        # 틀림. 40° 면 1 % (맞는 벽 검출률은 그대로 65 %). 배는 슬롯을 40° 안쪽에서 바라봐야 한다.
+        max_incidence=float(get('max_incidence_deg'))
+        if not 0<max_incidence<90:raise ValueError('max_incidence_deg must be in (0, 90)')
         self.params=RayWallParams(angular_window=math.radians(float(get('angular_window_deg'))),
                                  inlier_distance=float(get('ransac_inlier_m')),
                                  min_span=float(get('ransac_min_span_m')),
                                  min_points=int(get('ransac_min_points')),
-                                 shared_extrapolation=float(get('shared_extrapolation_m')))
+                                 shared_extrapolation=float(get('shared_extrapolation_m')),
+                                 min_incidence=math.cos(math.radians(max_incidence)))
         if (not 0<self.params.angular_window<math.pi/2 or self.params.inlier_distance<=0
                 or self.params.min_span<=0 or self.params.min_points<3 or self.params.shared_extrapolation<0):
             raise ValueError('invalid RANSAC settings')

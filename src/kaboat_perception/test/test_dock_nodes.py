@@ -53,6 +53,7 @@ def test_detector_outputs_are_kept_apart_from_lidar_markers():
     assert detector['device'] == '0'                           # 문자열 (정수 0 이면 타입 오류)
     ctrl = _params(nodes['dock_ctrl_v2'])
     assert (ctrl['position_source'], ctrl['marker_order'], ctrl['retreat_cmd']) == ('odom', '', 0.05)
+    assert ctrl['seek_cmd'] == 0.07                            # 목표 방위 서행
 
 
 def test_camera_tf_can_be_left_to_another_owner():

@@ -79,7 +79,7 @@ bag_to_mp4 ~/kaboat_bags/rgb_20261112_153828   # 폴더 안 rgb_20261112_153828.
 | 스테이션·수색 | `/station/map`·`markers`·`status`·`cmd_preview`, `/cmd/station`, `/search/markers`·`status`, `/cmd/search` |
 | 게이트 | `/gate/status`(WAIT·PASSED…), `/gate/pairs`, `/gate/path`, `/gate/cmd_preview`, `/cmd/gate` |
 | 도킹 YOLO 결과 | `/dock/detection_status`(마커별 신뢰도·픽셀·시선, JSON), `/dock/debug_image`(마스크·도형 그린 영상 320 px 5 fps ≈ 1.2 MB/s), `/detections/dock_marks`, `/dock/bearing_markers`, `/dock/markers/<도형>/ray`·`depth_ground`·`ground`·`base`·`ground_base`, `/dock/marker_base`·`marker_ground(_raw)`, `/dock/markers_base`·`markers_ground`, `/detector/enable` |
-| 도킹 라이다·경로 | `/dock/lidar/status`·`markers`·`direct_markers`·`<도형>/normal(_base)`·`wall_point(_base)`·`marker_ground`·`marker_base`, `/dock/waypoints`, `/dock/approach`·`alignment`·`stop_point`, `/dock/entrance_base`, `/dock/avoid/goal(_status)`·`goal_candidate`·`goal_markers`, `/dock/bspline_path`, `/dock/status`, `/dock/one_shot_path`·`gps`·`markers`, `/dock/cmd_preview`, `/cmd/dock` |
+| 도킹 라이다·경로 | `/dock/lidar/status`·`markers`·`direct_markers`·`<도형>/normal(_base)`·`wall_point(_base)`·`marker_ground`·`marker_base`, `/dock/waypoints`, `/dock/approach`·`alignment`·`stop_point`, `/dock/entrance_base`, `/dock/avoid/goal(_status)`·`goal_candidate`·`goal_markers`, `/dock/bspline_path`, `/dock/slot_markers`(제어가 고른 ㄷ자 슬롯), `/dock/status`(`slot`: 찾았는지·이유·면별 점 비율), `/dock/one_shot_path`·`gps`·`markers`, `/dock/cmd_preview`, `/cmd/dock` |
 | 당시 판단 (비교용) | `/cmd_vel`, `/occupancy_grid`, `/detections/buoys`·`buoys_viz` |
 | 야외 단독 시험 | `/real_avoid_test/path`, `/manual_dri/dri`·`status`, `/los_test/path`·`status`·`cmd_preview`, `/waypoint/goal` |
 

@@ -376,28 +376,46 @@ YOLO가 젯슨 CUDA venv를 써야 해서 `ros2 launch`가 아니라 `scripts/ru
 `run_gq7_rtk`, `run_lidar`, `run_camera`, `run_map`, `run_motor`. 녹화는 `rec_bag dock_test`.
 
 ```bash
-goto dock_entry                              # 1) 도크 정면, 세 도형이 다 보이는 곳에 세움 → Ctrl+C
-test_dock_outdoor motion_enabled:=false      # 2) 미리보기: SCAN 통과·경로 고정만 (RViz /dock/one_shot_path)
+goto dock_entry                              # 1) 도크 정면, 세 도형이 다 보이는 곳(뒷벽에서 8~12 m)에 세움 → Ctrl+C
+test_dock_outdoor motion_enabled:=false      # 2) 미리보기: 배가 안 도니 목표가 화면 가운데 ±6°면 방위 고정까지 (/dock/status)
 test_dock_outdoor target_class:=circle       # 3) 실제 도킹 (기본 triangle)
 test_dock_outdoor approach:=true             # dock_entry 접근(직선, 회피 없음)부터
 ```
 
-- 순서 (`dock_ctrl_v2`): **SCAN** 제자리에서 벽 법선 쪽으로만 돌며 YOLO 마커 3개(가운데 마커가 화면
-  중앙 ±8%, 양쪽 대칭)와 라이다 RANSAC 법선 3개가 5스캔·0.8초 안정 → 경로 **한 번** 고정 → 경유점
-  (목표 슬롯 뒷벽 앞 3 m) → 선수 정렬 → 정지점(1 m) → 선수 유지 후진 3.25 m(3 m 이상·좌우 0.75 m 안)
-  → `/mission/complete=dock` → 이탈점 2 m 안이면 `done`(정지).
-- ⚠️ SCAN에는 시간 제한이 없습니다. 마커가 안 보이면 추진 0으로 계속 기다립니다(`/dock/status`의 `detail`).
+- 순서 (`dock_ctrl_v2`, 2026-11-13):
+  1. **SCAN**: 제자리에서 목표 도형만 화면 가운데(±6°)로 돌리고, 회전이 멎은 채 5프레임 방위가 3° 안이면
+     그 방위를 고정합니다. 세 슬롯 중 어디로 갈지는 이것으로 정합니다.
+  2. **SEEK**: 그 방위 직선을 `seek_cmd`(기본 0.07)로 서행합니다. 라이다 스캔면이 수면 위 0.14 m라 슬롯 벽은
+     **약 6 m 안에서만** 잡힙니다(2026-11-12 bag: 6 m 안 91~100%, 8 m 밖 거의 0).
+     - 최근 1초의 `/scan/level`을 odom에 쌓아 **고정 치수 ㄷ자 슬롯**을 찾습니다(`dock_slot.yaml`:
+       폭 2.97 m, 깊이 1.94 m). 뒷벽, 양쪽 안쪽 면(가려지면 칸막이 끝), 비어 있는 슬롯 안을 한꺼번에 맞춥니다.
+     - 목표 방위선에서 1.6 m 안의 ㄷ자만 봅니다. YOLO는 세 슬롯 중 어디인지만 정하고, 중심은 라이다로 잡습니다.
+     - 뒷벽 8 m 안에서 같은 ㄷ자가 1초 넘게 같은 자리(0.3 m)·법선(5°)이면 경로를 **한 번** 고정합니다.
+     - 앞 ±25°·2 m 안에 점이 있거나, 10 m를 가도 못 잡으면 멈춰 기다립니다.
+     - 예전 방식(마커 시선 + 직선 하나)은 뒷벽과 평행한 칸막이 끝면(1.94 m 앞)을 벽으로 잡았습니다.
+       2026-11-12 bag 기준으로 접근 첫 고정 8번 중 5번이 정지점 2 m 짧음, 옆으로 0.8~2.3 m 어긋남이었습니다.
+       ㄷ자 방식은 같은 bag에서 첫 고정 13번 중 12번이 깊이 0.24 m·좌우 0.38 m·법선 2.8° 안이었습니다.
+       나머지 1번은 화면 끝 YOLO 검출로 옆 슬롯을 고른 경우인데, SCAN은 화면 가운데에서만 방위를 고정합니다.
+  3. 고정할 때 이미 경유점 + 0.5 m보다 가까우면 먼저 선수 유지 후진(**BACKOFF**, 최대 3 m)합니다.
+  4. 경유점(입구 밖 `pre_entry_offset` 1.5 m = 뒷벽 앞 3.44 m) → ㄷ자 중심선과 평행하게 선수 정렬 →
+     정지점(뒷벽 앞 `berth_distance` 1.0 m, 선체 중심) → 선수 유지 후진 3.25 m
+     (3 m 이상·좌우 0.75 m 안) → `/mission/complete=dock` → 이탈점 2 m 안이면 `done`(정지).
+- ⚠️ 양쪽 면이 보이려면 슬롯을 **40° 안쪽**에서 바라봐야 합니다(`dock_entry`는 가운데 슬롯 정면, 8~12 m).
+  RViz에서 찾은 ㄷ자는 `/dock/slot_markers`(초록 선), 상태는 `/dock/status`의 `slot`(찾았는지, 이유, 면별 점 비율).
+- ⚠️ SCAN에는 시간 제한이 없습니다. 목표 도형이 안 보이면 추진 0으로 계속 기다립니다(`/dock/status`의 `detail`).
 - 도킹 전에 마스크만 따로 확인: `bash scripts/run_dock_yolo.sh`(카메라 이미 켰으면 `start_camera:=false`) →
-  다른 창에서 `check_yolo`. 세 도형이 모두 ✓이고 검출률이 높아야 SCAN을 통과합니다(신뢰도 0.55 이상 필요).
-- 도형 배치: 기본은 순서를 안 봄(화면 위치로 가운데 마커). 대회 배치를 알면
-  `marker_order:=square,triangle,circle`(화면 왼쪽부터)로 확인을 켭니다.
+  다른 창에서 `check_yolo`. 목표 도형이 신뢰도 0.55 이상으로 꾸준히 잡혀야 합니다.
+- 도형 배치: 기본은 순서를 안 봄. 대회 배치를 알면 `marker_order:=square,triangle,circle`(화면 왼쪽부터)로
+  켭니다. 그러면 같이 보이는 마커들의 좌우 순서가 어긋난 프레임은 목표 방위에서 뺍니다. 화면 끝의 엉뚱한
+  도형 오검출을 거르는 용도입니다.
 - 위치: 기본 `/odom`(GQ7 RTK 필터 25 Hz, 선체 중심). `position_source:=gps`는 `/gps/fix` 원시(2 Hz, 늦음).
-- 추력 (`approach_cmd` / `final_cmd` / `retreat_cmd`, 기본 0.10 / 0.05 / 0.05 ≈ 1562 / 1544 / 1456 µs)은
+- 추력 (`seek_cmd` / `approach_cmd` / `final_cmd` / `retreat_cmd`, 기본 0.07 / 0.10 / 0.05 / 0.05
+  ≈ 1551 / 1562 / 1544 / 1456 µs)은
   teleop 1단계(1550 µs)와 비슷해 바람에 약합니다. 미리보기 뒤 바람을 보고 올립니다
   (참고: 0.2 ≈ 1600 µs, goto 기본 0.4 ≈ 1675 µs).
 - 카메라 TF(라이다 → `camera_link`, 뒤 0.615·위 0.635 m, 수평)는 이 런치가 냅니다. 값은
   `src/kaboat_perception/kaboat_perception/camera_mount.py` 한곳(카메라 층·`dock_yolo`와 공유).
-- 상태: `ros2 topic echo /dock/status` (`phase`: `SCAN` → `TO_VIA` → `ALIGN_VIA` → `TO_GOAL` → `REVERSE` →
+- 상태: `ros2 topic echo /dock/status` (`phase`: `SCAN` → `SEEK` → (`BACKOFF`) → `TO_VIA` → `ALIGN_VIA` → `TO_GOAL` → `REVERSE` →
   `COMPLETE`), YOLO `/dock/detection_status`, 라이다 `/dock/lidar/status`. RViz `bash scripts/demo/rviz_dock.sh --real`.
 - 전체 미션(`autonomy.launch.py`)의 도킹도 같은 노드(`kaboat_perception/dock_nodes.py`)라 같은 인자
   (`dock_target_class`, `dock_marker_order`, `dock_retreat_cmd` …)를 받습니다. 그냥 `ros2 launch`로 켜도

@@ -1,7 +1,10 @@
-"""GPS-local straight docking route and three-marker readiness checks.
+"""GPS-local straight docking route, target-marker sight and target-wall lock checks.
 
 All coordinates in this module are east/north metres, except explicit WGS84
 latitude/longitude values.  No spline or ROS dependency is used here.
+예전 SCAN(세 마커 대칭 + RANSAC 법선 세 개)은 세 도형이 다 보이는 거리에서 라이다가 거의 안
+들어와(2026-11-12 bag) 뺐다 — 목표 도형 방위(target_sight)로 서행하다 ㄷ자 슬롯(dock_u_slot)이
+안정되면(stable_wall_lock) 고정.
 """
 
 import math
@@ -49,68 +52,91 @@ def parse_marker_order(text):
     return names
 
 
-def symmetric_markers(status, *, order=None, center_fraction=.08, mirror_fraction=.10,
-                      min_confidence=.55):
-    """Three distinct YOLO masks, the middle one on camera centre, outer ones mirrored.
+def target_sight(status, target, *, order=None, min_confidence=.55):
+    """YOLO 결과에서 목표 도형의 화면 방위 [rad, + = 왼쪽]. 세 슬롯 중 어디로 갈지는 이것만으로 정한다.
 
-    order: 화면 왼쪽부터의 도형 순서. None 이면 실제 대회 배치를 모르므로 순서를 보지 않고
-    화면 위치로 가운데 마커를 정한다 (스테이션 정면 정렬 — 목표 슬롯은 경로가 따로 정함).
+    order(화면 왼쪽부터의 도형 순서)를 주면, 같이 보이는 신뢰 마커들의 좌우 순서가 그와
+    어긋나는 프레임은 버린다 — 화면 가장자리의 엉뚱한 도형 오검출 거르기.
+    반환 (ok, bearing 또는 None, 이유).
     """
-    rays = status.get('sight_rays', {})
-    width = status.get('input_info', {}).get('color', {}).get('width', 0)
-    if not isinstance(width, (int, float)) or width <= 0:
-        return False, 'camera width unavailable'
-    if any(name not in rays or rays[name].get('confidence', 0) < min_confidence
-           for name in CLASSES):
-        return False, 'waiting for three confident marker masks'
+    rays = status.get('sight_rays', {}) if isinstance(status, dict) else {}
+    ray = rays.get(target)
+    if not isinstance(ray, dict) or ray.get('confidence', 0) < min_confidence:
+        return False, None, f'waiting for confident {target} mask'
     try:
-        pixels = {name: float(rays[name]['pixel_uv'][0]) for name in CLASSES}
-    except (KeyError, IndexError, TypeError, ValueError):
-        return False, 'marker pixel centres unavailable'
-    by_pixel = tuple(sorted(CLASSES, key=pixels.__getitem__))
-    if order is not None and by_pixel != tuple(order):
-        return False, f'marker order is not {"-".join(order)}'
-    left, middle, right = by_pixel
-    centre = width / 2
-    if abs(pixels[middle] - centre) > center_fraction * width:
-        return False, 'middle marker is off camera centre'
-    if abs((pixels[left] + pixels[right]) / 2 - centre) > mirror_fraction * width:
-        return False, 'outer markers are not symmetric'
-    return True, 'ok'
+        bearing = math.radians(float(ray['bearing_left_deg']))
+    except (KeyError, TypeError, ValueError):
+        return False, None, f'{target} bearing unavailable'
+    if not math.isfinite(bearing):
+        return False, None, f'{target} bearing unavailable'
+    if order is not None:
+        try:
+            seen = sorted((float(r['pixel_uv'][0]), name) for name, r in rays.items()
+                          if name in order and isinstance(r, dict)
+                          and r.get('confidence', 0) >= min_confidence)
+        except (KeyError, IndexError, TypeError, ValueError):
+            return False, None, 'marker pixel centres unavailable'
+        names = [name for _, name in seen]
+        if names != [name for name in order if name in names]:
+            return False, None, f'marker order is not {"-".join(order)}'
+    return True, bearing, 'ok'
 
 
-def aligned_normals(status, yaw, *, max_spread_deg=8.0, max_yaw_deg=8.0,
-                    max_plane_offset_m=.25):
-    """Require three coherent back-wall fits and bow toward their common normal."""
-    fits = status.get('direct_normals', {})
-    if any(name not in fits or not fits[name].get('valid') for name in CLASSES):
-        return False, None, 'waiting for three direct RANSAC normals'
-    vectors = np.asarray([fits[name]['normal_odom'] for name in CLASSES], float)
-    if vectors.shape != (3, 2) or not np.isfinite(vectors).all():
-        return False, None, 'invalid RANSAC normal'
-    lengths = np.linalg.norm(vectors, axis=1)
+def stable_bearing(bearings, *, min_samples=5, max_spread_deg=3.0):
+    """최근 세계 방위들이 서로 max_spread 안이면 그 원형 평균 [rad]. 반환 (ok, 평균 또는 None, 이유)."""
+    values = np.asarray(bearings, float)[-min_samples:]
+    if len(values) < min_samples or not np.isfinite(values).all():
+        return False, None, f'collecting target bearing {len(values)}/{min_samples}'
+    mean = math.atan2(float(np.mean(np.sin(values))), float(np.mean(np.cos(values))))
+    spread = max(abs(wrap(v - mean)) for v in values)
+    if math.degrees(spread) > max_spread_deg:
+        return False, None, f'target bearing unstable ({math.degrees(spread):.1f} deg)'
+    return True, mean, 'ok'
+
+
+def stable_wall_lock(samples, *, min_samples=5, window_s=1.5, max_goal_spread_m=.3,
+                     max_normal_spread_deg=8.0, min_span_s=0.0):
+    """목표 슬롯 벽이 연속 측정에서 같은 자리·같은 법선이면 진입 기하를 고정.
+
+    samples: 시간순 (stamp_s, wall_xy, outward, approach_xy, goal_xy) — outward 는 벽에서
+    물(배) 쪽 단위 법선, approach = 경유점, goal = 정지점 (odom).
+    마지막 샘플에서 window_s 안의 샘플 전부를 본다: min_samples 개 이상이고 min_span_s 이상
+    이어져야 한다(겹친 누적 스캔은 독립 측정이 아니므로 개수만으로는 부족 — 10 Hz 면 5 개가 0.4 s).
+    반환 (ok, lock 또는 None, 이유). lock = wall·outward·via·stop·heading(벽 쪽, 법선과 평행).
+    """
+    samples = list(samples)
+    if not samples:
+        return False, None, f'collecting target wall 0/{min_samples}'
+    recent = [s for s in samples if s[0] >= samples[-1][0] - window_s]
+    if len(recent) < min_samples:
+        return False, None, f'collecting target wall {len(recent)}/{min_samples}'
+    if recent[-1][0] - recent[0][0] < min_span_s:
+        return False, None, f'target wall seen for {recent[-1][0] - recent[0][0]:.1f}/{min_span_s:.1f}s'
+    wall, outward, via, stop = (np.asarray([s[i] for s in recent], float) for i in range(1, 5))
+    if not all(np.isfinite(a).all() and a.shape == (len(recent), 2)
+               for a in (wall, outward, via, stop)):
+        return False, None, 'invalid target wall sample'
+    lengths = np.linalg.norm(outward, axis=1)
     if np.min(lengths) < .9:
-        return False, None, 'invalid RANSAC normal length'
-    vectors = vectors / lengths[:, None]
-    mean = np.mean(vectors, axis=0)
+        return False, None, 'invalid target wall normal'
+    outward = outward / lengths[:, None]
+    mean = outward.mean(axis=0)
     if np.linalg.norm(mean) < .95:
-        return False, None, 'RANSAC normals disagree'
-    outward = mean / np.linalg.norm(mean)
-    spread = max(math.degrees(math.acos(float(np.clip(v @ outward, -1, 1))))
-                 for v in vectors)
-    heading = math.atan2(-outward[1], -outward[0])
-    if spread > max_spread_deg:
-        return False, heading, 'RANSAC normals are not stable together'
-    if all('wall_center_odom' in fits[name] for name in CLASSES):
-        centers = np.asarray([fits[name]['wall_center_odom'] for name in CLASSES], float)
-        if centers.shape != (3, 2) or not np.isfinite(centers).all():
-            return False, heading, 'invalid RANSAC wall centres'
-        planes = centers @ outward
-        if float(np.ptp(planes)) > max_plane_offset_m:
-            return False, heading, 'RANSAC back walls are not collinear'
-    if abs(math.degrees(wrap(heading - yaw))) > max_yaw_deg:
-        return False, heading, 'bow not parallel to wall normals'
-    return True, heading, 'ok'
+        return False, None, 'target wall normals disagree'
+    mean /= np.linalg.norm(mean)
+    spread = max(math.degrees(math.acos(float(np.clip(v @ mean, -1, 1)))) for v in outward)
+    if spread > max_normal_spread_deg:
+        return False, None, f'target wall normal unstable ({spread:.1f} deg)'
+    stop_mean = stop.mean(axis=0)
+    if float(np.max(np.linalg.norm(stop - stop_mean, axis=1))) > max_goal_spread_m:
+        return False, None, 'target stop point unstable'
+    return True, dict(wall=wall.mean(axis=0), outward=mean, via=via.mean(axis=0),
+                      stop=stop_mean, heading=math.atan2(-mean[1], -mean[0])), 'ok'
+
+
+def wall_distance(position, wall, outward):
+    """위치가 벽 앞(물 쪽)으로 법선 방향 몇 m 떨어졌나."""
+    return float((np.asarray(position, float) - np.asarray(wall, float)) @ np.asarray(outward, float))
 
 
 def straight_samples(start, end, spacing=.1):

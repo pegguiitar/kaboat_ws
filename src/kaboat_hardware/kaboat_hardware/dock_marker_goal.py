@@ -202,7 +202,7 @@ class DockMarkerGoal(Node):
             status=dict(valid=boundary_error is None and path_ready,
                 reason=(boundary_error+'; preview only, arming remains blocked' if boundary_error
                         else entry_info['reason'] if entry_info and not path_ready else 'ok'),
-                geometry_valid=True,motion_bounds_valid=boundary_error is None,
+                geometry_valid=True,motion_bounds_valid=boundary_error is None,stamp_s=stamp,
                 geometry_source='lidar_ransac',normal_source=fit.get('source'),normal_shared=fit.get('shared'),
                 wall_xy=mean_wall.tolist(),outward=normal.tolist(),goal_xy=waypoints[-1].tolist(),
                 approach_xy=waypoints[0].tolist(),alignment_xy=waypoints[1].tolist(),
