@@ -10,6 +10,7 @@
 
 출발 조건: 시작점 start_tolerance(3 m) 안, 선수가 목표 방향에서 45° 이내.
 start_point:=gate_entry goal_point:=gate_end 처럼 다른 지점 쌍도 쓸 수 있다.
+토너먼트 회피 경기장(종합 미션과 별개)은 outdoor_tournament_test.launch.py (test_tournament).
 지도는 run_map 으로 따로 하나만 켠다(기본). 따로 켠 게 없을 때만 start_occupancy_grid:=true.
 """
 
@@ -110,8 +111,9 @@ def _actions(context):
     return actions
 
 
-def generate_launch_description():
+def generate_launch_description(args=ARGS):
+    """args = (이름, 기본값, 설명) 목록. outdoor_tournament_test 가 기본 지점만 바꿔 다시 쓴다."""
     return LaunchDescription(
         [DeclareLaunchArgument(name, default_value=default, description=text)
-         for name, default, text in ARGS]
+         for name, default, text in args]
         + [OpaqueFunction(function=_actions)])

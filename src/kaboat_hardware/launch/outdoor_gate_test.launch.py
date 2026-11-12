@@ -3,7 +3,7 @@
 자율주행 스택과 같은 노드(occupancy_grid → gate_follower → cmd_mux, mission_manager)를
 게이트 미션 하나만 돌리게 띄운다. mission_manager 는 기록 파일 전체를 읽지 않고
 (station_end 등이 없어도 됨) 여기서 읽은 두 지점만 받는다 — 기록 당시 원점이 지금과
-다르면 시작 거부. 센서·모터·지도는 따로: run_gq7_rtk, run_lidar, run_motor, run_map (+ run_camera).
+다르면 시작 거부. 센서·모터·지도는 따로: run_gq7_rtk, run_lidar, run_motor, run_map.
 
   goto gate_entry                       # 1) 첫 게이트 앞 통로 중심에 세움 (도착 후 Ctrl+C)
   test_gate_outdoor motion_enabled:=false   # 2) 미리보기: 노트북 RViz 에 쌍·경로 (/gate/*)

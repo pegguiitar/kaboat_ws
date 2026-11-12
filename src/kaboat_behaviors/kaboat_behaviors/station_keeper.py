@@ -10,6 +10,11 @@
           중심 hold_radius(1 m) 안에 hold_time(5 s) 연속이면 /mission/complete 1회.
           다음 미션 전환은 mission_manager 가 한다(완료 + station_end 2 m 안). 전환 전까지 계속 유지.
 
+출구 (2026-11-12): rec 기록 파일에 station_center 가 있고 station_end 와 다르면, 사각형
+중심은 station_center 를 쓰고 station_end 는 출구 지점으로 본다. HOLD 5 s 가 끝나면 바로
+완료하지 않고 출구 쪽 변 가운데를 지나 사각형 밖 경유점 → station_end 로 나가서 완료를
+보고한다(그래야 다음 미션 접근이 부표 사각형을 가로지르지 않는다). station_center 가
+없으면 예전처럼 station_end = 중심, 유지 끝에 완료.
 부표는 공용 /occupancy_grid 가 아니라 station 전용 지도로 찾는다: /scan/level 을 목표 중심
 고정 격자에 쌓되, 큰 덩어리(4칸 이상 = 부표)는 빔이 지나간 칸을 깎는 양을 공용 지도의
 free_ratio(기본 0.1)배로 줄여 라이다가 앞만 보는 동안 옆·뒤로 간 부표를 잊지 않는다. 작은
@@ -35,8 +40,11 @@ from sensor_msgs.msg import LaserScan
 from std_msgs.msg import String
 from visualization_msgs.msg import Marker, MarkerArray
 
+from kaboat_mission.mission_points import (
+    DEFAULT_ORIGIN_FILE, DEFAULT_POINTS_FILE, recorded_point)
+
 from .behavior_base import BehaviorBase, yaw_from_quaternion
-from .station_keeping import StationFsm, StationParams
+from .station_keeping import StationFsm, StationParams, anchor_command, exit_waypoints
 
 GOAL_RESET_DISTANCE = 1.0   # [m] 목표가 이만큼 바뀌면 전용 지도·상태를 새로 시작
 SCAN_STALE_SEC = 2.0        # [s] /scan/level 이 이보다 오래 끊기면 경고 (지도는 유지)
@@ -50,6 +58,10 @@ class StationKeeper(BehaviorBase):
         super().__init__()
         self.params = self._params_from('station', StationParams)
         self.declare_parameter('station.motion_enabled', True)
+        # 사각형 중심을 따로 기록한 지점 이름 (없으면 station_end 가 중심)
+        self.declare_parameter('station.center_point', 'station_center')
+        self.declare_parameter('points_file', DEFAULT_POINTS_FILE)
+        self.declare_parameter('origin_file', DEFAULT_ORIGIN_FILE)
         # 선체 라이다 장착 위치 (occupancy_grid·gate_follower 의 lidar_offset_x/y 와 같은 값)
         self.declare_parameter('lidar_offset_x', 0.4)
         self.declare_parameter('lidar_offset_y', 0.0)
@@ -59,6 +71,12 @@ class StationKeeper(BehaviorBase):
         if not all(math.isfinite(v) for v in self.lidar_offset):
             raise ValueError('lidar_offset_x/y must be finite')
 
+        self.center_point = str(self.get_parameter('station.center_point').value).strip()
+        self.points_file = str(self.get_parameter('points_file').value)
+        self.origin_file = str(self.get_parameter('origin_file').value)
+        self._center_xy = None      # station_center (활성화 때 읽음)
+        self._exit_targets = None   # 유지 후 출구 경유점 [사각형 밖, station_end]
+        self._exit_reported = False
         self.fsm = None
         self._fsm_at = 0.0
         self._last_status = None
@@ -93,6 +111,24 @@ class StationKeeper(BehaviorBase):
         self.fsm = None
         self._last_status = None
         self._last_decision = None
+        self._exit_targets = None
+        self._exit_reported = False
+        self._center_xy = self._load_center()
+
+    def _load_center(self):
+        """rec 기록 파일의 station_center → (x, y). 없거나 원점이 다르면 None (station_end 가 중심)."""
+        if not self.center_point:
+            return None
+        try:
+            point = recorded_point(self.center_point, self.points_file, self.origin_file)
+        except ValueError as exc:
+            self.get_logger().info(
+                f'station: {self.center_point} 없음 — station_end 를 중심으로 (출구 없음): {exc}')
+            return None
+        self.get_logger().info(
+            f'station: 중심 = {self.center_point} ({point.x:+.2f}, {point.y:+.2f}), '
+            f'station_end 는 유지 후 나갈 출구')
+        return (point.x, point.y)
 
     def on_deactivate(self):
         self.fsm = None
@@ -123,10 +159,17 @@ class StationKeeper(BehaviorBase):
                 or not self.waypoint_odom_ready()):
             return Twist()
         goal_xy = (self.goal.pose.position.x, self.goal.pose.position.y)
-        if self.fsm is None or math.dist(goal_xy, self.fsm.goal) > GOAL_RESET_DISTANCE:
-            self.fsm = StationFsm(goal_xy, self.params)
+        # 중심 = station_center (station_end 와 1 m 넘게 다를 때), 출구 = station_end
+        exit_xy = None
+        center_xy = goal_xy
+        if self._center_xy is not None and math.dist(self._center_xy, goal_xy) > GOAL_RESET_DISTANCE:
+            center_xy, exit_xy = self._center_xy, goal_xy
+        if self.fsm is None or math.dist(center_xy, self.fsm.goal) > GOAL_RESET_DISTANCE:
+            self.fsm = StationFsm(center_xy, self.params)
             self._fsm_at = time.monotonic()
-            self._status(f'SEARCH — 목표 ({goal_xy[0]:+.2f}, {goal_xy[1]:+.2f}) 로 접근, 부표 탐색')
+            self._exit_targets = None
+            self._exit_reported = False
+            self._status(f'SEARCH — 목표 ({center_xy[0]:+.2f}, {center_xy[1]:+.2f}) 로 접근, 부표 탐색')
 
         pose = self.odom.pose.pose
         boat_xy = (pose.position.x, pose.position.y)
@@ -140,6 +183,9 @@ class StationKeeper(BehaviorBase):
             self.get_logger().warning(
                 '/scan/level 이 끊김 — 전용 지도는 마지막 상태로 유지',
                 throttle_duration_sec=5.0)
+
+        if self._exit_targets is not None:          # 유지 끝 — 출구로 나가는 중
+            return self._exit_cmd(boat_xy, yaw)
 
         center = ('없음' if d.center is None
                   else f'({d.center[0]:+.2f}, {d.center[1]:+.2f}) [{d.center_kind}]')
@@ -156,7 +202,16 @@ class StationKeeper(BehaviorBase):
             self.get_logger().info(
                 f'위치유지 달성 — 중심 {self.params.hold_radius} m 이내 '
                 f'{self.params.hold_time} s 유지 (부표 {len(d.buoys)}개, 중심 {center})')
-            self.report_complete()
+            if exit_xy is None:
+                self.report_complete()
+            else:
+                self._exit_targets = exit_waypoints(
+                    d.buoys, d.center or center_xy, exit_xy, self.params)
+                route = ' → '.join(f'({x:+.2f}, {y:+.2f})' for x, y in self._exit_targets)
+                self.get_logger().info(f'station: 출구로 나감 — {route}')
+
+        if self._exit_targets is not None:
+            return self._exit_cmd(boat_xy, yaw)
 
         if d.kind == 'waypoint':
             cmd, _ = self.waypoint(d.target[0], d.target[1], thrust_ratio=d.thrust_ratio,
@@ -167,6 +222,29 @@ class StationKeeper(BehaviorBase):
             cmd.angular.z = float(d.angular)
             # 가상 앵커의 상한(직진·회전)이 곧 전체 스케일 — _tick 이 이 값으로 자른다
             self._command_full_scale = (self.params.max_forward, self.params.max_turn)
+        self.preview_pub.publish(cmd)
+        return cmd if self.motion_enabled else Twist()
+
+    def _exit_cmd(self, boat_xy, yaw):
+        """유지 후 사각형 밖 경유점 → station_end. 출구에 닿으면 완료 보고, 그 자리 유지."""
+        p = self.params
+        target = self._exit_targets[0]
+        if len(self._exit_targets) > 1 and math.dist(boat_xy, target) <= p.exit_reach:
+            self._exit_targets.pop(0)
+            target = self._exit_targets[0]
+        if not self._exit_reported and math.dist(boat_xy, target) <= p.exit_reach \
+                and len(self._exit_targets) == 1:
+            self._exit_reported = True
+            self._status('EXIT — 출구 도착, 완료 보고')
+            self.report_complete()
+        elif not self._exit_reported:
+            self._status(f'EXIT — ({target[0]:+.2f}, {target[1]:+.2f}) 로 '
+                         f'({len(self._exit_targets)}개 남음)')
+        linear, angular, _ = anchor_command(
+            boat_xy, yaw, self.odom.twist.twist.angular.z, target, None, p)
+        cmd = Twist()
+        cmd.linear.x, cmd.angular.z = float(linear), float(angular)
+        self._command_full_scale = (p.max_forward, p.max_turn)
         self.preview_pub.publish(cmd)
         return cmd if self.motion_enabled else Twist()
 

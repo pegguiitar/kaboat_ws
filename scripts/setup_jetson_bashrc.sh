@@ -73,10 +73,11 @@ run_gq7_rtk() {
         ntrip_password:="${NTRIP_PASS:?~/.ntrip_account 에 NTRIP_PASS 가 없음}" "$@"
 }
 alias run_geo="ros2 launch kaboat_hardware geo_origin.launch.py"
-# D455 카메라 (컬러 640×480 + 정렬 뎁스, 15 fps). occupancy_grid 카메라 층(cam_enabled)·도킹용
+# D455 카메라 (컬러 640×480 + 정렬 뎁스, 15 fps). 도킹용 (지도 카메라 층은 기본 끔)
 alias run_camera="ros2 launch kaboat_bringup d455.launch.py"
-# 장애물 지도 (라이다 + 카메라 층 + 가상 벽). 하나만 켜 두고 test_*·autonomy 가 같이 쓴다
-alias run_map="ros2 run kaboat_perception occupancy_grid --ros-args -p cam_enabled:=true"
+# 장애물 지도 (라이다 + 가상 벽, 카메라 안 씀). 하나만 켜 두고 test_*·autonomy 가 같이 쓴다
+#   뒤에 -p 이름:=값 을 붙일 수 있게 --ros-args 로 끝낸다 (카메라 층: run_map -p cam_enabled:=true)
+alias run_map="ros2 run kaboat_perception occupancy_grid --ros-args"
 
 # 미션 지점 기록 (지금 /odom 위치 → ~/kaboat_mission_points.json)
 alias run_points="ros2 run kaboat_hardware point_recorder"
@@ -84,6 +85,8 @@ alias rec='python3 "$KABOAT_WS/scripts/rec_point.py"'
 alias list_points='python3 "$KABOAT_WS/scripts/rec_point.py" --list'
 # 주행 센서 녹화 (~/kaboat_bags/이름_날짜_시각/, Ctrl+C 로 종료). 센서를 다 켠 뒤 실행
 alias rec_bag='bash "$KABOAT_WS/scripts/record_run.sh"'
+# bag 의 카메라 영상 → mp4 (bag 폴더 안 <폴더 이름>.mp4). bag_to_mp4 rgb_153828 [--topic …] [--fps N]
+alias bag_to_mp4='python3 "$KABOAT_WS/scripts/bag_to_mp4.py"'
 # 야외 웨이포인트 1개 주행 (실행 즉시 출발, 추력 40%):
 #   goto gate_entry          rec 기록 지점 (위치 + 기록 선수각)
 #   goto 12.0 -3.5 [90]      /odom x y [선수각, 생략 = 위치만]
@@ -123,11 +126,16 @@ alias test_los="ros2 launch kaboat_hardware los_path_test.launch.py path_kind:=b
 alias test_avoid="ros2 launch kaboat_hardware real_obstacle_avoid_test.launch.py drive_enabled:=true wait_for_start:=false"
 # 야외 회피 시험: rec 기록 avoid_entry → avoid_end (goto avoid_entry 로 세운 뒤. drive_enabled:=false 면 미리보기)
 alias test_avoid_outdoor="ros2 launch kaboat_hardware outdoor_avoid_test.launch.py"
+# 토너먼트 회피 (종합 미션과 별개 경기장): rec 기록 tournament_entry → tournament_end. 인자는 test_avoid_outdoor 와 같음
+alias test_tournament="ros2 launch kaboat_hardware outdoor_tournament_test.launch.py"
 # 야외 게이트 시험: rec 기록 gate_entry → gate_end, 7쌍 (goto gate_entry 로 세운 뒤. motion_enabled:=false 면 미리보기)
 alias test_gate_outdoor="ros2 launch kaboat_hardware outdoor_gate_test.launch.py"
 # 야외 도킹 시험: rec 기록 dock_entry 에서 one-shot 도킹 (goto dock_entry 로 세운 뒤, run_camera 필요.
 # YOLO CUDA venv 로 켬. target_class:=circle, motion_enabled:=false 면 경로만 미리보기)
 alias test_dock_outdoor='bash "$KABOAT_WS/scripts/run_dock_mission.sh"'
+# 도킹 YOLO 마스크만 확인 (run_dock_yolo.sh 를 먼저 켜 둠): 도형별 신뢰도·화면 위치·검출률,
+# 마스크 그린 영상 PNG 저장 (~/kaboat_yolo_checks). Ctrl+C 로 요약
+alias check_yolo='python3 "$KABOAT_WS/scripts/check_yolo_masks.py"'
 
 echo "🤖 [KABOAT Jetson] 환경 세팅 완료 (DOMAIN: $ROS_DOMAIN_ID | WS: ${KABOAT_WS:-미탐색})"
 echo "   - run_boat_lidar: 선체 TG-50 포함 센서/오도메트리 가동 (cal_imu 불필요, 즉시 /odom 생성)"
@@ -136,7 +144,7 @@ echo "   - run_gq7_rtk   : 야외 GQ7 + RTK 보정 (계정 ~/.ntrip_account)"
 echo "   - run_lidar     : 야외 선체 TG-50 라이다 (CP2102 고정 경로, GQ7 먼저)"
 echo "   - run_geo       : GPS 원점 설정·위도경도→x/y 변환 (geo_origin)"
 echo "   - run_camera    : D455 카메라 (컬러 + 정렬 뎁스)"
-echo "   - run_map       : 장애물 지도 (라이다 + 카메라 층 + 가상 벽) — 하나만 켜 둠"
+echo "   - run_map       : 장애물 지도 (라이다 + 가상 벽, 카메라 안 씀) — 하나만 켜 둠"
 echo "   - run_points    : 미션 지점 기록기 (~/kaboat_mission_points.json)"
 echo "   - rec 이름      : 지금 위치(x, y, 선수각) 기록 (이름 생략 시 p1, p2 …)"
 echo "   - list_points   : 기록한 지점 보기"
@@ -152,8 +160,10 @@ echo "   - test_waypoint : 5개 웨이포인트 순차 주행 (출력 30%, 즉�
 echo "   - test_los      : LOS 경로 추종 테스트 (SOTA 직진 0.25·회전 0.31, 즉시 시작)"
 echo "   - test_avoid    : 실시간 장애물 회피 주행 (즉시 시작)"
 echo "   - test_avoid_outdoor : 야외 회피 avoid_entry → avoid_end (시작점 3 m·목표 방향 45° 안이면 즉시 출발)"
+echo "   - test_tournament    : 토너먼트 회피 tournament_entry → tournament_end (test_avoid_outdoor 와 같은 조건)"
 echo "   - test_gate_outdoor  : 야외 게이트 7쌍 gate_entry → gate_end (즉시 출발)"
 echo "   - test_dock_outdoor  : 야외 도킹 dock_entry → 목표 슬롯 → 후진 (YOLO 결과는 rec_bag 이 저장)"
+echo "   - check_yolo    : 도킹 YOLO 마스크 확인 (run_dock_yolo.sh 먼저, 영상 PNG ~/kaboat_yolo_checks)"
 echo "   - view_position : /odom x·y·선수각·나침반 방위·GNSS 상태 실시간 표시"
 echo "   - run_zenoh     : 노트북 모니터링 브리지 가동"
 echo "   - cb / sb       : 빌드 / 환경 리로드"

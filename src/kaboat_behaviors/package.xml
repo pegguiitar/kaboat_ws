@@ -14,6 +14,7 @@
   <exec_depend>kaboat_msgs</exec_depend>
   <exec_depend>python3-numpy</exec_depend>
   <exec_depend>python3-scipy</exec_depend>
+  <exec_depend>kaboat_mission</exec_depend>   <!-- station_center 기록 지점 -->
 
   <export>
     <build_type>ament_python</build_type>

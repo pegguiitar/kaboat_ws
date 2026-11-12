@@ -43,7 +43,7 @@ source ~/.zshrc
 | 6 | 젯슨 터미널 5 | `run_points` | 미션 지점 기록기 |
 | 7 | 노트북 | `view_lidar` (= `rviz2 -d …/scripts/remote_monitor.rviz`) | Fixed Frame `odom`, 장애물 지도·`/scan`·배 위치 |
 | 8 | 노트북 | 배를 옮겨 가며 `rec 이름` (아래 이름 규칙) | `✓ 이름: x=… y=… 선수각 …` |
-| 9 | 젯슨 터미널 6 | `run_map` (+ 카메라 층 쓰면 `run_camera`) | 장애물 지도 — 하나만. 로그 `가상 벽 2줄 …`, `카메라 층 켜짐 …` |
+| 9 | 젯슨 터미널 6 | `run_map` | 장애물 지도 (라이다만) — 하나만. 로그 `가상 벽 2줄 …` |
 | 10 | 젯슨 터미널 7 | `ros2 launch kaboat_bringup autonomy.launch.py` | 자율주행 스택 (지도는 9번 것을 씀). 로그에 `[기록 지점] gate: 시작 … → 끝 …` |
 
 **웨이포인트 이름 규칙** — `mission_manager`가 `~/kaboat_mission_points.json`에서 이 이름만
@@ -116,13 +116,14 @@ ros2 launch kaboat_hardware real_sensors.launch.py outdoor:=true rtk:=true \
 | `run_gq7_outdoor` | `ros2 launch kaboat_hardware real_sensors.launch.py outdoor:=true` | 야외 GQ7. `gq7_outdoor.yaml` + `gq7_local_odom`(`/ekf/odometry_earth` → 원점 파일 기준 `/odom`) |
 | `run_gq7_rtk` | `real_sensors.launch.py outdoor:=true rtk:=true ntrip_username:=… ntrip_password:=…` | 야외 GQ7 + RTK 보정 + 필터 위치. 계정은 `~/.ntrip_account` |
 | `run_lidar` | `ros2 launch kaboat_hardware onboard_lidar.launch.py port:=$(_tg50_port)` | 야외 선체 TG-50 (`/scan`, `/scan/level`). GQ7 먼저. 포트는 `/dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0`(없으면 `/dev/ttyUSB0`) |
-| `run_map` | `ros2 run kaboat_perception occupancy_grid --ros-args -p cam_enabled:=true` | 장애물 지도(라이다 + 카메라 층 + 가상 벽). **하나만** 켜 두고 `test_*`·`autonomy.launch.py`가 같이 씀 (`ros2 topic info /occupancy_grid` 발행자 1) |
-| `run_camera` | `ros2 launch kaboat_bringup d455.launch.py` | D455 카메라 (컬러 640×480 + 정렬 뎁스, 15 fps). 카메라 층·도킹용. USB 3 포트 |
+| `run_map` | `ros2 run kaboat_perception occupancy_grid --ros-args` | 장애물 지도(라이다 + 가상 벽, **카메라 안 씀**). **하나만** 켜 두고 `test_*`·`autonomy.launch.py`가 같이 씀 (`ros2 topic info /occupancy_grid` 발행자 1). 뒤에 `-p 이름:=값` 붙임 — 카메라 층은 `run_map -p cam_enabled:=true` |
+| `run_camera` | `ros2 launch kaboat_bringup d455.launch.py` | D455 카메라 (컬러 640×480 + 정렬 뎁스, 15 fps). 도킹용 (지도 카메라 층은 기본 끔). USB 3 포트 |
 | `run_geo` | `ros2 launch kaboat_hardware geo_origin.launch.py` | GPS 원점 설정, 위도·경도 → x/y (`/geo/*`) |
 | `run_points` | `ros2 run kaboat_hardware point_recorder` | 미션 지점 기록기 |
 | `rec [이름]` | `python3 scripts/rec_point.py [이름]` | 지금 위치(x, y, 선수각) 기록. 이름 생략 시 `p1`, `p2` … |
 | `list_points` | `python3 scripts/rec_point.py --list` | 기록한 지점 보기 |
 | `rec_bag [이름]` | `bash scripts/record_run.sh [이름]` | 주행 센서 rosbag 녹화 → `~/kaboat_bags/이름_날짜_시각/`. **센서를 다 켠 뒤** 실행, **Ctrl+C로 종료**(창을 그냥 닫지 말 것). 카메라는 압축 토픽(약 4~5 MB/s, 20분 ≈ 6 GB), 압축 토픽이 없으면 원본 + zstd(20분 ≈ 15~18 GB). 남은 용량 10 GB 미만이면 시작 안 함. 2 GB마다 파일 분할. 자세한 사용법 [ROSBAG_GUIDE.md](ROSBAG_GUIDE.md) |
+| `bag_to_mp4 <bag 폴더>` | `python3 scripts/bag_to_mp4.py <bag 폴더>` | bag 의 카메라 영상 → mp4 (bag 폴더 안 `<폴더 이름>.mp4`, 동영상 플레이어로 열림). `rec_bag` 폴더(압축 토픽)·`ros2 bag record` 폴더 둘 다. 토픽 기본 `/camera/color/image_raw`(또는 그 `/compressed`), 바꾸려면 `--topic /dock/debug_image`. OpenCV 가 mp4 를 못 쓰면 `.avi` |
 | `goto 지점` / `goto x y [각도]` | `ros2 launch kaboat_hardware outdoor_waypoint.launch.py point:=지점` (또는 `x:= y:= angle:=`) | 야외 웨이포인트 1개 주행, **실행 즉시 출발**(추력 40%). 5절 참고 |
 | `run_motor` | `ros2 launch kaboat_hardware thrusters.launch.py hardware_type:=serial port:=/dev/ttyCH341USB0 allow_port_scan:=false` | 아두이노(CH340) 모터 드라이버 + `gps_mark_logger` |
 | `view_pitch` | `python3 scripts/view_roll_pitch.py` | 롤/피치와 스캔 차단 상태 |
@@ -131,7 +132,9 @@ ros2 launch kaboat_hardware real_sensors.launch.py outdoor:=true rtk:=true \
 | `cal_imu` | `ros2 run kaboat_hardware calibrate_indoor_imu` | 실내 수조 IMU 정지 보정 |
 | `test_gate_outdoor` | `ros2 launch kaboat_hardware outdoor_gate_test.launch.py` | 야외 게이트 7쌍 `gate_entry` → `gate_end`, **즉시 출발**. 5절 참고 |
 | `test_dock_outdoor` | `bash scripts/run_dock_mission.sh` (= YOLO CUDA venv + `outdoor_dock_test.launch.py`) | 야외 도킹 `dock_entry` → 목표 슬롯 → 후진 3.25 m, **즉시 시작**. `run_camera` 필요. 5절 참고 |
+| `check_yolo` | `python3 scripts/check_yolo_masks.py` | 도킹 YOLO **마스크만** 확인 (뎁스·라이다 무관). `bash scripts/run_dock_yolo.sh`(D455 + YOLO, 모터 없음)를 먼저 켜 둔다. 1초마다 도형별 ✓신뢰도·화면 위치·방위각·최근 검출률, 추론 ms. 마스크 그린 영상을 5초마다 `~/kaboat_yolo_checks/날짜_시각/`에 PNG (`--save-every 0` 끔). Ctrl+C로 요약 |
 | `test_avoid_outdoor` | `ros2 launch kaboat_hardware outdoor_avoid_test.launch.py` | 야외 회피 시험 `avoid_entry` → `avoid_end`, **조건이 맞으면 즉시 출발**. 5절 참고 |
+| `test_tournament` | `ros2 launch kaboat_hardware outdoor_tournament_test.launch.py` | 토너먼트 회피(종합 미션과 별개 경기장) `tournament_entry` → `tournament_end`. `test_avoid_outdoor`와 같은 노드·조건·인자, **조건이 맞으면 즉시 출발**. 5절 참고 |
 | `test_straight` / `test_circle` / `test_bspline` / `test_station` / `test_waypoint` / `test_los` / `test_avoid` | 각 `*_test.launch.py … wait_for_start:=false` | 단독 주행 시험, **실행 즉시 출발** ([TANK_TESTS_GUIDE.md](TANK_TESTS_GUIDE.md)) |
 
 ---
@@ -273,6 +276,26 @@ test_avoid_outdoor start_point:=gate_entry goal_point:=gate_end   # 다른 지�
   3 m 입구에서 회피 계획이 지날 수 있는 폭은 약 2 m (DRI 1.116 이하).
 - 기록 당시 원점과 지금 원점이 다르면 시작을 거부합니다.
 
+**토너먼트 회피 시험** (`test_tournament`, 종합 자율 미션과 별개로 따로 하는 회피 경기장)
+
+위 야외 회피 시험과 같은 노드·출발 조건·인자이고, 시작·목표 지점 이름만 `tournament_entry` →
+`tournament_end`입니다. 종합 미션(`mission_manager`)은 이 두 이름을 읽지 않습니다 — 그래서 `rec` 할 때
+`(미션 이름 규칙 아님 …)`이 붙어 나오는 게 정상입니다.
+
+```bash
+rec tournament_entry                             # 0) 노트북: 경기장 입구에 진행 방향으로 세우고 기록
+rec tournament_end                               #    도착(목표) 지점에서 기록
+goto tournament_entry                            # 1) 시작점에 기록 선수각으로 세움 → REACHED 후 Ctrl+C
+test_tournament drive_enabled:=false             # 2) 미리보기: RViz /real_avoid_test/path 에 경로
+test_tournament                                  # 3) 실제 주행: 출발 조건이 맞으면 바로 출발
+```
+
+- 출발 조건(3 m·45°), 목표 2 m, 경로 이탈 1.5 m 정지, 후진 탈출은 `test_avoid_outdoor`와 같고 같은 인자로
+  바꿉니다. 예) `test_tournament max_cross_track_error:=2.5`.
+- 상태: `ros2 topic echo /real_avoid_test/status`.
+- **가상 벽은 회피 경기장(`arenas.avoid`)만 있습니다.** 토너먼트 경기장 둘레 로프(라이다에 안 잡힘)는
+  아직 지도에 없습니다. 두 경기장이 가까워 회피 경기장 벽이 지도에 걸리면 `run_map -p virtual_walls_file:=none`.
+
 **야외 게이트 시험** (`test_gate_outdoor`, 자율주행과 같은 `gate_follower` + `cmd_mux`, 게이트 미션 하나만)
 
 `mission_manager`가 기록 파일 전체가 아니라 `gate_entry`·`gate_end` 두 지점만 받으므로 다른 미션
@@ -315,6 +338,8 @@ test_dock_outdoor approach:=true             # dock_entry 접근(직선, 회피 
   (목표 슬롯 뒷벽 앞 3 m) → 선수 정렬 → 정지점(1 m) → 선수 유지 후진 3.25 m(3 m 이상·좌우 0.75 m 안)
   → `/mission/complete=dock` → 이탈점 2 m 안이면 `done`(정지).
 - ⚠️ SCAN에는 시간 제한이 없습니다. 마커가 안 보이면 추진 0으로 계속 기다립니다(`/dock/status`의 `detail`).
+- 도킹 전에 마스크만 따로 확인: `bash scripts/run_dock_yolo.sh`(카메라 이미 켰으면 `start_camera:=false`) →
+  다른 창에서 `check_yolo`. 세 도형이 모두 ✓이고 검출률이 높아야 SCAN을 통과합니다(신뢰도 0.55 이상 필요).
 - 도형 배치: 기본은 순서를 안 봄(화면 위치로 가운데 마커). 대회 배치를 알면
   `marker_order:=square,triangle,circle`(화면 왼쪽부터)로 확인을 켭니다.
 - 위치: 기본 `/odom`(GQ7 RTK 필터 25 Hz, 선체 중심). `position_source:=gps`는 `/gps/fix` 원시(2 Hz, 늦음).
@@ -326,8 +351,10 @@ test_dock_outdoor approach:=true             # dock_entry 접근(직선, 회피 
 - 상태: `ros2 topic echo /dock/status` (`phase`: `SCAN` → `TO_VIA` → `ALIGN_VIA` → `TO_GOAL` → `REVERSE` →
   `COMPLETE`), YOLO `/dock/detection_status`, 라이다 `/dock/lidar/status`. RViz `bash scripts/demo/rviz_dock.sh --real`.
 - 전체 미션(`autonomy.launch.py`)의 도킹도 같은 노드(`kaboat_perception/dock_nodes.py`)라 같은 인자
-  (`dock_target_class`, `dock_marker_order`, `dock_retreat_cmd` …)를 받습니다. YOLO 때문에 젯슨에서는
-  `run_dock_mission.sh`처럼 venv 환경(PYTHONPATH)을 맞춘 터미널에서 켭니다.
+  (`dock_target_class`, `dock_marker_order`, `dock_retreat_cmd` …)를 받습니다. 그냥 `ros2 launch`로 켜도
+  됩니다 — 런치가 젯슨 YOLO 가상환경(`.venv-dock-yolo`)을 찾아 **검출기 노드에만** `PYTHONPATH`·
+  `LD_LIBRARY_PATH`(libcusparseLt)를 붙입니다. 못 찾으면 시작할 때 `⚠️ [dock] YOLO 가상환경 … 못 찾음`이
+  나오고 검출을 안 합니다. 가상환경 확인은 [DOCKING_YOLO.md](DOCKING_YOLO.md) "젯슨 YOLO 가상환경".
 
 **카메라 층 — 라이다가 놓치는 낮은 색 장애물** (주황 붐 등, `occupancy_grid` 의 `cam_enabled`, 기본 끔)
 
@@ -340,9 +367,8 @@ test_dock_outdoor approach:=true             # dock_entry 접근(직선, 회피 
 
 ```bash
 run_camera                                                         # 젯슨: D455 (= ros2 launch kaboat_bringup d455.launch.py)
-ros2 run kaboat_perception occupancy_grid --ros-args \
-    -p cam_enabled:=true                                           # 카메라 높이 기본 0.775 m (실측)
-test_avoid_outdoor cam_enabled:=true                              # 회피 시험에서 같이 켜기
+run_map -p cam_enabled:=true                                       # 지도에 카메라 층 켜기 (run_map 기본은 라이다만)
+                                                                   # 카메라 높이 기본 0.775 m (실측)
 ```
 
 - `cam_height` = 배가 물에 뜬 상태에서 흘수선부터 카메라 렌즈 중심까지 [m], 실측 **0.775**가 기본

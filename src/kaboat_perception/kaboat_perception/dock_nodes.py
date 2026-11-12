@@ -10,6 +10,7 @@
 
 import os
 
+from launch.actions import LogInfo
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 
@@ -28,6 +29,46 @@ DETECTOR_REMAPS = [
 ]
 
 
+def _workspace_from_install():
+    """설치된 share 경로(<ws>/install/kaboat_perception/share/kaboat_perception) → <ws>."""
+    try:
+        from ament_index_python.packages import get_package_share_directory
+        share = get_package_share_directory('kaboat_perception')
+    except Exception:
+        return ''
+    return os.path.abspath(os.path.join(share, '..', '..', '..', '..'))
+
+
+def yolo_env(environ=None, workspace=None):
+    """젯슨 YOLO CUDA 가상환경을 검출기 노드에만 붙일 환경 변수. 못 찾으면 {}.
+
+    젯슨의 CUDA PyTorch(nv24.08)·ultralytics 8.4.110 은 <ws>/.venv-dock-yolo 에만 있다. 노드는
+    시스템 python3 로 돌므로 그 site-packages 를 PYTHONPATH 앞에, PyTorch 가 찾는 libcusparseLt 를
+    LD_LIBRARY_PATH 앞에 둔다(시작할 때만 읽혀서 노드 안에서는 못 바꿈). run_dock_yolo.sh 와 같은 값.
+    위치: KABOAT_YOLO_ENV → $KABOAT_WS/.venv-dock-yolo → 설치 경로에서 찾은 워크스페이스.
+    """
+    import sys
+    environ = os.environ if environ is None else environ
+    candidates = [environ.get('KABOAT_YOLO_ENV', '')]
+    for ws in (environ.get('KABOAT_WS', ''), workspace if workspace is not None
+               else _workspace_from_install()):
+        if ws:
+            candidates.append(os.path.join(ws, '.venv-dock-yolo'))
+    python = f'python{sys.version_info.major}.{sys.version_info.minor}'
+    for root in filter(None, candidates):
+        site = os.path.join(root, 'lib', python, 'site-packages')
+        if not os.path.isdir(site):
+            continue
+        env = {'PYTHONPATH': os.pathsep.join(filter(None, [site, environ.get('PYTHONPATH', '')])),
+               'YOLO_CONFIG_DIR': environ.get('YOLO_CONFIG_DIR', '/tmp/kaboat_yolo_config')}
+        cusparselt = os.path.join(site, 'nvidia', 'cusparselt', 'lib')
+        if os.path.isdir(cusparselt):
+            env['LD_LIBRARY_PATH'] = os.pathsep.join(
+                filter(None, [cusparselt, environ.get('LD_LIBRARY_PATH', '')]))
+        return env
+    return {}
+
+
 def default_weights():
     """kaboat_perception/models/best.engine (젯슨 TensorRT) 이 있으면 그것, 없으면 best.pt."""
     try:
@@ -43,10 +84,21 @@ def docking_nodes(*, target_class, motion_enabled, weights, device='0',
                   approach_cmd=0.10, final_cmd=0.05, retreat_cmd=0.05,
                   marker_order='', position_source='odom', use_sim_time=False,
                   base_frame='base_link', camera_tf=True, camera_tf_condition=None,
-                  debug_image=True):
-    """도킹 노드 목록. camera_tf=False 면 카메라 TF 를 안 냄(시뮬레이션·dock_yolo 가 내는 경우)."""
+                  debug_image=True, detector_env=None):
+    """도킹 노드 목록. camera_tf=False 면 카메라 TF 를 안 냄(시뮬레이션·dock_yolo 가 내는 경우).
+
+    detector_env: 검출기 노드에만 붙일 환경 변수. None 이면 yolo_env() — 젯슨 YOLO 가상환경을 찾아
+    붙인다(ros2 launch 를 어느 터미널에서 켜도 CUDA YOLO). 못 찾으면 경고를 내고 시스템 Python 으로
+    돈다(torch 가 없으면 검출기는 'Dock YOLO unavailable' 로 fail-closed).
+    """
     common = {'use_sim_time': use_sim_time}
+    env = yolo_env() if detector_env is None else detector_env
     nodes = []
+    if not env:
+        nodes.append(LogInfo(msg='⚠️ [dock] YOLO 가상환경(.venv-dock-yolo, KABOAT_YOLO_ENV) 못 찾음 — '
+                                 '검출기는 시스템 Python 으로 돔 (CUDA PyTorch 없으면 검출 안 함)'))
+    elif 'YOLO_CONFIG_DIR' in env:
+        os.makedirs(env['YOLO_CONFIG_DIR'], exist_ok=True)
     if camera_tf:
         nodes.append(Node(
             package='tf2_ros', executable='static_transform_publisher',
@@ -55,6 +107,7 @@ def docking_nodes(*, target_class, motion_enabled, weights, device='0',
     nodes += [
         Node(package='kaboat_perception', executable='dock_mark_detector',
              name='dock_mark_detector', output='screen', remappings=DETECTOR_REMAPS,
+             additional_env=env or None,
              parameters=[common, {
                  'weights': weights,
                  'target_class': target_class,

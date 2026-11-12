@@ -3,6 +3,8 @@
 # 단축어: test_dock_outdoor [target_class:=circle] [motion_enabled:=false] …
 # 환경은 run_dock_yolo.sh 와 같다 (JetPack 6 / CUDA 12.6, KABOAT_YOLO_ENV 로 venv 변경).
 # 카메라는 run_camera 로 따로 켠다. dock_yolo(run_dock_yolo.sh)와 같은 잠금을 써서 검출기가 둘 뜨지 않게 한다.
+# 런치(dock_nodes.py)도 검출기 노드에 가상환경을 붙이지만, 여기서는 시작 전에 CUDA 를 확인하고
+# 잠금을 잡는다 (DOCKING_YOLO.md "젯슨 YOLO 가상환경").
 set -eo pipefail
 exec 9>/tmp/kaboat_dock_yolo.lock
 if ! flock -n 9; then

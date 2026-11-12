@@ -73,7 +73,8 @@ def test_dock_arguments_defaults_and_validation(mod, tmp_path):
 def _executables(mod, tmp_path, **overrides):
     from types import SimpleNamespace
     context = SimpleNamespace(launch_configurations=_configs(mod, tmp_path, **overrides))
-    return [a._Node__node_executable for a in mod._actions(context)]
+    from launch_ros.actions import Node
+    return [a._Node__node_executable for a in mod._actions(context) if isinstance(a, Node)]
 
 
 def test_nodes_motion_and_preview(mod, tmp_path):

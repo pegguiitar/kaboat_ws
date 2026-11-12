@@ -4,7 +4,7 @@ import math
 
 from kaboat_perception import camera_mount
 from kaboat_perception.camera_obstacles import CameraObstacleParams
-from kaboat_perception.dock_nodes import DETECTOR_REMAPS, docking_nodes
+from kaboat_perception.dock_nodes import DETECTOR_REMAPS, docking_nodes, yolo_env
 
 
 def test_camera_mount_is_the_single_source():
@@ -23,9 +23,11 @@ def test_camera_mount_is_the_single_source():
 
 
 def _nodes(**overrides):
-    args = dict(target_class='circle', motion_enabled=True, weights='/w.pt')
+    from launch_ros.actions import Node
+    args = dict(target_class='circle', motion_enabled=True, weights='/w.pt',
+                detector_env={'PYTHONPATH': '/venv/site'})
     args.update(overrides)
-    return {n._Node__node_executable: n for n in docking_nodes(**args)}
+    return {n._Node__node_executable: n for n in docking_nodes(**args) if isinstance(n, Node)}
 
 
 def _params(node):
@@ -55,3 +57,43 @@ def test_detector_outputs_are_kept_apart_from_lidar_markers():
 
 def test_camera_tf_can_be_left_to_another_owner():
     assert 'static_transform_publisher' not in _nodes(camera_tf=False)
+
+
+def _fake_venv(root, cusparselt=True):
+    import sys
+    site = root / 'lib' / f'python{sys.version_info.major}.{sys.version_info.minor}' / 'site-packages'
+    (site / 'nvidia' / 'cusparselt' / 'lib').mkdir(parents=True) if cusparselt else site.mkdir(parents=True)
+    return site
+
+
+def test_yolo_env_finds_the_jetson_venv(tmp_path):
+    # 젯슨: <ws>/.venv-dock-yolo 의 CUDA PyTorch + libcusparseLt (run_dock_yolo.sh 와 같은 값)
+    site = _fake_venv(tmp_path / 'ws' / '.venv-dock-yolo')
+    env = yolo_env({'KABOAT_WS': str(tmp_path / 'ws'), 'PYTHONPATH': '/opt/ros/lib',
+                    'LD_LIBRARY_PATH': '/opt/ros/lib'}, workspace='')
+    assert env['PYTHONPATH'] == f'{site}:/opt/ros/lib'                     # 가상환경이 앞
+    assert env['LD_LIBRARY_PATH'] == f'{site}/nvidia/cusparselt/lib:/opt/ros/lib'
+    assert env['YOLO_CONFIG_DIR'] == '/tmp/kaboat_yolo_config'
+
+
+def test_yolo_env_override_and_missing(tmp_path):
+    other = _fake_venv(tmp_path / 'other', cusparselt=False)
+    _fake_venv(tmp_path / 'ws' / '.venv-dock-yolo')
+    env = yolo_env({'KABOAT_YOLO_ENV': str(tmp_path / 'other'),
+                    'KABOAT_WS': str(tmp_path / 'ws')}, workspace='')
+    assert env['PYTHONPATH'] == str(other) and 'LD_LIBRARY_PATH' not in env
+    assert yolo_env({'KABOAT_WS': str(tmp_path / 'none')}, workspace='') == {}   # 노트북 등
+
+
+def test_venv_env_goes_to_the_detector_only():
+    from launch_ros.actions import Node
+    nodes = _nodes()
+    detector_env = dict((k[0].text, v[0].text) for k, v in nodes['dock_mark_detector'].additional_env)
+    assert detector_env == {'PYTHONPATH': '/venv/site'}
+    for name, node in nodes.items():
+        if name != 'dock_mark_detector':
+            assert not node.additional_env                       # 다른 노드는 시스템 Python 그대로
+    without = docking_nodes(target_class='circle', motion_enabled=True, weights='/w.pt',
+                            detector_env={})
+    assert not isinstance(without[0], Node)                      # 못 찾으면 경고(LogInfo) 먼저
+    assert 'YOLO' in without[0].msg[0].text
