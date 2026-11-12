@@ -60,8 +60,10 @@ class BuoyLidarDetector(Node):
         self.declare_parameter('publish_unseen', False)
         # RViz 마커에 확정 전 후보도 그릴지 — 기본은 확정만 (후보가 부표처럼 보여 헷갈림)
         self.declare_parameter('show_tentative', False)
-        # 새 부표는 카메라 시야 안·이 거리 안 라이다 군집에서만 만든다 (옆·뒤 물가·기둥 제외)
-        self.declare_parameter('spawn_half_fov_deg', 45.0)
+        # 새 부표는 이 거리 안 라이다 군집에서만 만든다. 시야 제한(spawn_half_fov_deg)은 기본 끔(180) —
+        # 배가 부표를 옆으로 지나가는 일이 많아, 카메라 정면에서만 만들면 점유지도보다 10~20 s
+        # 늦었다 (2026-11-12 bag). 카메라에 안 찍힌 건 unseen 이라 /detections/buoys 로 안 나간다.
+        self.declare_parameter('spawn_half_fov_deg', 180.0)
         self.declare_parameter('spawn_max_range', 20.0)
         # 부표 후보가 될 라이다 군집 — 수면·물보라·선수파 hit(빔 2개, 폭 몇 cm, 배 옆 1~1.5 m)를 거른다.
         # 2026-11-12 bag: 진짜 부표는 빔 8~21개·폭 0.2~0.33 m, 가짜는 빔 2개·폭 1~6 cm.

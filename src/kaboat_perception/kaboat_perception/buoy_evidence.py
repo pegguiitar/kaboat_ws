@@ -14,7 +14,7 @@
 상태 (히스테리시스):
   후보 —(L ≥ l_confirm)→ 확정 —(L ≤ l_delete)→ 삭제
   후보는 L < 0 이 되거나 tentative_timeout 동안 다시 안 잡히면 삭제 (물보라·반짝임).
-  새 부표는 호출자가 허락한 검출(can_spawn — 노드는 카메라 시야 ±45°·20 m 안)에서만 만든다.
+  새 부표는 호출자가 허락한 검출(can_spawn — 노드는 20 m 안)에서만 만든다.
   옆·뒤의 물가·다리 기둥·정박 배가 부표가 되지 않게. 이미 있는 부표는 어느 방향 검출로든 갱신.
   시간이 1 s 넘게 거꾸로 가면(bag 반복 재생·시계 재설정) 처음부터 다시 시작한다.
   확정 부표 둘이 merge_radius 안이면 L 큰 쪽으로 합친다.
@@ -66,7 +66,8 @@ class EvidenceParams:
     l_min: float = -2.0
     l_max: float = 4.0
     tentative_timeout: float = 3.0  # 후보가 이만큼 안 잡히면 삭제 [s]
-    merge_radius: float = 0.8       # 확정 부표 병합 거리 [m]
+    merge_radius: float = 1.0       # 확정 부표 병합 거리 [m] — 스캔 번짐으로 한 부표가 둘로 갈린 것 합침
+                                    # (1.2 m 붙은 초록·검정 쌍보다는 작게)
     pass_margin: float = 0.5        # 빔이 부표보다 이만큼 멀리/가까이서 맞아야 지나감/가림 [m]
     beam_half_width: float = 0.15   # 부표 방향 빔 창 반폭 — 부표 반폭 [m]
     min_beam_half_angle: float = math.radians(0.5)
