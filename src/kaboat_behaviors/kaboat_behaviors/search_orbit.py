@@ -12,7 +12,9 @@
            (|거리 − orbit_radius| ≤ orbit_band) 안에 있을 때만 부표 둘레를 규정 방향으로
            돈 각도를 쌓고, laps 바퀴가 되면 DONE.
   DONE     완료 — 노드가 완료 신호 1회 + 탐색 목표점으로 (mission_manager 전환 = 완료 +
-           search_end 2 m 안).
+           search_end 2 m 안). search_end 가 목표 부표 위(done_clearance 안)에 찍혀 있으면
+           부표에 들이받지 않게 부표에서 배 쪽으로 done_clearance 떨어진 점으로 간다
+           (exit_point — 그래도 search_end 2 m 안이다).
   GIVE_UP  SEEK 에서 목표점에 도착하고 give_up_sec 동안 못 찾음 — 완료 신호를 내고 다음
            미션으로 넘긴다 (탐색 점수는 없지만 15분 제한 안에 회피를 하러 간다).
 
@@ -51,13 +53,15 @@ class SearchParams:
     orbit_thrust: float = 0.25        # 선회 LOS 직진 (공용 LOS 직진 0.25)
     orbit_turn: float = 0.31          # 선회 LOS 회전 상한 (공용 LOS 회전 0.31)
     ignore_radius: float = 1.0        # 선회 중 회피 반발에서 뺄 목표 부표 둘레 반경 [m]
+    done_clearance: float = 1.5       # 완료 뒤 목표 부표에 이보다 가까이 안 감 [m]
+                                      # (mission_manager transition_radius 2.0 보다 작게)
 
     def __post_init__(self):
         if self.target_color not in ('',) + TARGET_COLORS:
             raise ValueError(f"search.target_color must be one of {TARGET_COLORS} or ''")
         positive = (self.orbit_radius, self.orbit_band, self.laps, self.target_search_radius,
                     self.relock_radius, self.recenter_distance, self.arrive_radius,
-                    self.give_up_sec, self.ignore_radius)
+                    self.give_up_sec, self.ignore_radius, self.done_clearance)
         if not all(math.isfinite(v) and v > 0.0 for v in positive):
             raise ValueError('search radii, laps and give_up_sec must be finite and > 0')
         unit = (self.refine_alpha, self.scan_turn, self.orbit_thrust, self.orbit_turn)
@@ -112,6 +116,18 @@ class SearchFsm:
     @property
     def target_laps(self) -> float:
         return self.swept / (2.0 * math.pi)
+
+    def exit_point(self, boat_xy) -> Tuple[float, float]:
+        """완료 뒤 갈 점 — 보통 탐색 목표점, 목표점이 부표 위면 부표에서 배 쪽으로 비킨 점."""
+        if self.center is None or math.dist(self.goal, self.center) >= self.p.done_clearance:
+            return self.goal
+        cx, cy = self.center
+        vx, vy = boat_xy[0] - cx, boat_xy[1] - cy
+        n = math.hypot(vx, vy)
+        if n < 1e-6:
+            vx, vy, n = 1.0, 0.0, 1.0
+        k = self.p.done_clearance / n
+        return (cx + vx * k, cy + vy * k)
 
     def _dist_goal(self, xy) -> float:
         return math.hypot(xy[0] - self.goal[0], xy[1] - self.goal[1])

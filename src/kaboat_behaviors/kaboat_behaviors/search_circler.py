@@ -9,6 +9,7 @@
   ORBIT    부표 고정 → 반경 orbit_radius 원을 LOS 로 추종. 원 띠 안에서 laps 바퀴 돌면 DONE
            (회피 반발은 켜 두되 목표 부표 둘레 ignore_radius 안 셀은 뺀다)
   DONE     /mission/complete 1회 → search_end 로 이동 (mission_manager 전환 = 완료 + 2 m 안)
+           search_end 가 부표 위에 찍혀 있으면 부표에서 1.5 m 비킨 점으로 (exit_point)
   GIVE_UP  목표점에서 give_up_sec 동안 못 찾음 → 완료 신호 내고 search_end 에서 대기
 
 입력   /detections/buoys, /odom, /mission/goal, /mission/state, /occupancy_grid
@@ -112,7 +113,7 @@ class SearchCircler(BehaviorBase):
             self._status('완료 — 탐색 목표점으로' if phase == 'DONE'
                          else f'{self.params.give_up_sec:.0f} s 동안 목표 부표 못 찾음 — 포기')
             self.report_complete()
-            return self._go_goal(goal)
+            return self._go_goal(fsm.exit_point(boat))
 
         if phase == 'SEEK':
             if self.distance_to_goal() > self.params.arrive_radius:
@@ -141,11 +142,12 @@ class SearchCircler(BehaviorBase):
         return apply_repulsion(cmd, self.occupancy_grid, self.odom,
                                ignore=(cx, cy, self.params.ignore_radius))
 
-    def _go_goal(self, goal):
-        if self.distance_to_goal() <= self.params.arrive_radius:
+    def _go_goal(self, target):
+        pos = self.odom.pose.pose.position
+        if math.hypot(target[0] - pos.x, target[1] - pos.y) <= self.params.arrive_radius:
             self._los_follower.reset()
             return Twist()
-        cmd, _ = self.waypoint(goal[0], goal[1], slow_radius=3.0)
+        cmd, _ = self.waypoint(target[0], target[1], slow_radius=3.0)
         return apply_repulsion(cmd, self.occupancy_grid, self.odom)
 
     # ── RViz ─────────────────────────────────────────────

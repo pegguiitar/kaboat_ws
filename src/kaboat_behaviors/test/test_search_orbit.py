@@ -146,3 +146,20 @@ def test_done_is_sticky():
     orbit(f, (51, 70), 2.0, 'cw', 60)
     assert f.phase == 'DONE'
     assert f.update([buoy('red', 51, 70)], (40, 70), 1.0) == 'DONE'
+
+
+# ---------- 완료 뒤 갈 점 ----------
+
+def test_exit_point_is_goal_when_goal_clear_of_buoy():
+    f = fsm('red')
+    f.update([buoy('red', 53, 70)], (40, 70), 0.0)
+    assert f.exit_point((55, 70)) == GOAL
+
+
+def test_exit_point_steps_off_buoy_recorded_as_goal():
+    # search_end 를 부표 위에 찍은 경우 (sim mission_params 가 그렇다) — 부표에서 배 쪽으로 1.5 m
+    f = fsm('red', done_clearance=1.5)
+    f.update([buoy('red', 50, 70)], (40, 70), 0.0)
+    x, y = f.exit_point((50, 72))
+    assert (x, y) == pytest.approx((50.0, 71.5))
+    assert math.dist((x, y), GOAL) < 2.0          # mission_manager 전환 반경 안
