@@ -43,7 +43,7 @@ source ~/.zshrc
 | 6 | 젯슨 터미널 5 | `run_points` | 미션 지점 기록기 |
 | 7 | 노트북 | `view_lidar` (= `rviz2 -d …/scripts/remote_monitor.rviz`) | Fixed Frame `odom`, 장애물 지도·`/scan`·배 위치 |
 | 8 | 노트북 | 배를 옮겨 가며 `rec 이름` (아래 이름 규칙) | `✓ 이름: x=… y=… 선수각 …` |
-| 9 | 젯슨 터미널 6 | `run_map` (+ 카메라 층 쓰면 `run_camera`) | 장애물 지도 — 하나만. 로그 `가상 벽 2개 …`, `카메라 층 켜짐 …` |
+| 9 | 젯슨 터미널 6 | `run_map` (+ 카메라 층 쓰면 `run_camera`) | 장애물 지도 — 하나만. 로그 `가상 벽 2줄 …`, `카메라 층 켜짐 …` |
 | 10 | 젯슨 터미널 7 | `ros2 launch kaboat_bringup autonomy.launch.py` | 자율주행 스택 (지도는 9번 것을 씀). 로그에 `[기록 지점] gate: 시작 … → 끝 …` |
 
 **웨이포인트 이름 규칙** — `mission_manager`가 `~/kaboat_mission_points.json`에서 이 이름만
@@ -253,13 +253,16 @@ test_avoid_outdoor start_point:=gate_entry goal_point:=gate_end   # 다른 지�
 - 계획은 지도(15 m) 안에서 목표 쪽으로 짧게 이어 가므로 목표가 멀어도 됩니다.
 - 목표 방향 ±45° 안에 안전한 경로가 없으면 같은 순간 ±90°로 한 번 더 찾습니다(`planner.search_fov_fallback`,
   막힐 때만). 넓혀 만든 경로는 수리 후 곡선 전체가 안전할 때만 씁니다.
-- **가상 벽:** 회피 경기장 긴 두 변(노란 작은 부이 로프)은 `occupancy_grid`가 지도에 장애물(100)로
-  박습니다 — `src/kaboat_perception/config/virtual_walls.yaml`(위도·경도, 2026-11-12 Space 기록 #2~#5).
-  켤 때와 원점을 다시 잡을 때 지금 원점 기준으로 바꿉니다. 로그 `가상 벽 2개 — avoid_north …`.
+- **가상 벽:** 회피 경기장 둘레를 `occupancy_grid`가 지도에 장애물(100)로 박습니다 — 긴 두 변
+  (노란 작은 부이 로프)은 전부, 짧은 두 변(동쪽 입구 #2–#3·서쪽 출구 #4–#5)은 **가운데 3 m만 비우고**.
+  `src/kaboat_perception/config/virtual_walls.yaml`의 `arenas.avoid`(모서리 위도·경도, 2026-11-12 Space
+  기록 #2~#5, 비우는 폭 `openings`). 켤 때와 원점을 다시 잡을 때 지금 원점 기준으로 바꿉니다.
+  로그 `가상 벽 2줄 — avoid_0 … 비움: avoid 변 0 가운데 3.0 m, avoid 변 2 가운데 3.0 m`.
   끄려면 `-p virtual_walls_file:=none`. 원점 파일이 없으면 벽을 쓰지 않습니다.
-  기록 지점이 부표 안쪽이라 벽이 안쪽에 잡혀서, 각 벽을 경기장 바깥쪽으로 **0.6 m** 밀고
-  (`virtual_wall_outward_offset`, 0 = 기록 위치 그대로) 두께 **0.3 m**(`virtual_wall_thickness`,
-  칸 0.2 m 라 1칸)로 칠합니다. 예) `run_map -p virtual_wall_outward_offset:=0.8`.
+  기록 지점이 부표 안쪽이라 벽이 안쪽에 잡혀서, 둘레를 경기장 바깥쪽으로 **0.6 m** 넓히고
+  (`virtual_wall_outward_offset`, 0 = 기록 위치 그대로, 모서리는 이어짐) 두께 **0.3 m**
+  (`virtual_wall_thickness`, 칸 0.2 m 라 1칸)로 칠합니다. 예) `run_map -p virtual_wall_outward_offset:=0.8`.
+  3 m 입구에서 회피 계획이 지날 수 있는 폭은 약 2 m (DRI 1.116 이하).
 - 기록 당시 원점과 지금 원점이 다르면 시작을 거부합니다.
 
 **야외 게이트 시험** (`test_gate_outdoor`, 자율주행과 같은 `gate_follower` + `cmd_mux`, 게이트 미션 하나만)

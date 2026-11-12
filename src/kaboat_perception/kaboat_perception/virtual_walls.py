@@ -38,24 +38,111 @@ def latlon_to_local(lat, lon, origin):
     return east, north
 
 
-def load_walls(path):
-    """yaml 의 walls: {이름: [[lat, lon], …]} → {이름: [(lat, lon), …]}. 파일 없으면 {}."""
+def _read_yaml(path):
     path = os.path.expanduser(path)
     if not path or not os.path.exists(path):
         return {}
     with open(path, encoding='utf-8') as f:
-        data = yaml.safe_load(f) or {}
+        return yaml.safe_load(f) or {}
+
+
+def _latlon_points(name, points, minimum):
+    pts = [(float(p[0]), float(p[1])) for p in points]
+    if len(pts) < minimum:
+        raise ValueError(f'가상 벽 {name!r}: 점이 {minimum}개 이상이어야 함')
+    for lat, lon in pts:
+        if not (math.isfinite(lat) and -90 <= lat <= 90
+                and math.isfinite(lon) and -180 <= lon <= 180):
+            raise ValueError(f'가상 벽 {name!r}: 위도·경도가 잘못됨 ({lat}, {lon})')
+    return pts
+
+
+def load_walls(path):
+    """yaml 의 walls: {이름: [[lat, lon], …]} → {이름: [(lat, lon), …]}. 파일 없으면 {}."""
+    return {str(name): _latlon_points(name, points, 2)
+            for name, points in (_read_yaml(path).get('walls') or {}).items()}
+
+
+def load_arenas(path):
+    """yaml 의 arenas: {이름: {corners: [[lat, lon], …], openings: {변 번호: 폭 m}}}.
+
+    corners 는 둘레 순서, 변 i = 모서리 i → i+1 (마지막 → 처음). openings 의 변은 가운데를
+    그 폭만큼 비우고 나머지 변은 전부 벽. 파일 없으면 {}.
+    """
+    arenas = {}
+    for name, spec in (_read_yaml(path).get('arenas') or {}).items():
+        corners = _latlon_points(name, (spec or {}).get('corners') or [], 3)
+        openings = {}
+        for side, width in ((spec or {}).get('openings') or {}).items():
+            side, width = int(side), float(width)
+            if not 0 <= side < len(corners):
+                raise ValueError(f'경기장 {name!r}: 변 번호 {side} 는 0~{len(corners) - 1}')
+            if not (math.isfinite(width) and width > 0):
+                raise ValueError(f'경기장 {name!r}: 변 {side} 비우는 폭이 잘못됨 ({width})')
+            openings[side] = width
+        arenas[str(name)] = {'corners': corners, 'openings': openings}
+    return arenas
+
+
+def offset_polygon(corners_xy, distance):
+    """닫힌 다각형을 바깥쪽으로 distance [m] 넓힌다 (모서리는 두 변의 연장선이 만나는 점)."""
+    q = np.asarray(corners_xy, dtype=float)
+    if distance == 0.0:
+        return q.copy()
+    nxt = np.roll(q, -1, axis=0)
+    ccw = float(np.sum(q[:, 0] * nxt[:, 1] - nxt[:, 0] * q[:, 1])) > 0.0
+    edges = nxt - q
+    tangent = edges / np.linalg.norm(edges, axis=1)[:, None]
+    normal = np.stack([tangent[:, 1], -tangent[:, 0]], axis=1)    # 반시계면 오른쪽 = 바깥
+    if not ccw:
+        normal = -normal
+    before = np.roll(normal, 1, axis=0)                           # 꼭짓점 i 로 들어오는 변
+    miter = (before + normal) / np.maximum(1.0 + np.sum(before * normal, axis=1), 1e-6)[:, None]
+    return q + distance * miter
+
+
+def arena_walls(name, corners_xy, openings, offset=0.0):
+    """경기장 둘레를 offset 만큼 바깥으로 넓혀 벽 꺾은선들로. openings 변은 가운데만 비운다.
+
+    {이름_번호: N×2}. 비운 곳이 없으면 닫힌 꺾은선 하나.
+    """
+    q = offset_polygon(corners_xy, offset)
+    n = len(q)
+
+    def cut(i):
+        a, b = q[i], q[(i + 1) % n]
+        length = float(np.linalg.norm(b - a))
+        gap = min(openings[i], length)
+        u = (b - a) / max(length, 1e-9)
+        return a + u * (length - gap) / 2.0, a + u * (length + gap) / 2.0
+
+    if not openings:
+        return {f'{name}_0': np.vstack([q, q[:1]])}
+    first = min(openings)
+    pieces, current = [], [cut(first)[1]]
+    for k in range(1, n + 1):
+        i = (first + k) % n
+        current.append(q[i])                    # 앞 변의 끝 = 이 변의 시작 모서리
+        if i in openings:
+            start_gap, end_gap = cut(i)
+            current.append(start_gap)
+            pieces.append(current)
+            current = [end_gap]
     walls = {}
-    for name, points in (data.get('walls') or {}).items():
-        pts = [(float(p[0]), float(p[1])) for p in points]
-        if len(pts) < 2:
-            raise ValueError(f'가상 벽 {name!r}: 점이 2개 이상이어야 함')
-        for lat, lon in pts:
-            if not (math.isfinite(lat) and -90 <= lat <= 90
-                    and math.isfinite(lon) and -180 <= lon <= 180):
-                raise ValueError(f'가상 벽 {name!r}: 위도·경도가 잘못됨 ({lat}, {lon})')
-        walls[str(name)] = pts
+    for piece in pieces:
+        pts = [p for j, p in enumerate(piece) if j == 0 or np.linalg.norm(p - piece[j - 1]) > 1e-6]
+        if len(pts) >= 2:
+            walls[f'{name}_{len(walls)}'] = np.array(pts)
     return walls
+
+
+def layout_to_local(walls, arenas, origin, offset=0.0):
+    """walls + arenas (위도·경도) → 지금 원점 기준 벽 꺾은선 {이름: N×2}, 바깥으로 offset 민 것."""
+    out = offset_outward(walls_to_local(walls, origin), offset)
+    for name, spec in arenas.items():
+        corners = np.array([latlon_to_local(lat, lon, origin) for lat, lon in spec['corners']])
+        out.update(arena_walls(name, corners, spec['openings'], offset))
+    return out
 
 
 def walls_to_local(walls, origin):

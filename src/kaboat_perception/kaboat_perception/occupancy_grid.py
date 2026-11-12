@@ -81,7 +81,7 @@ import sensor_msgs_py.point_cloud2 as pc2
 from kaboat_perception.camera_obstacles import (
     CameraObstacleParams, color_image_rgb, depth_image_m, detect_points, visible_mask)
 from kaboat_perception.virtual_walls import (
-    load_walls, offset_outward, wall_mask, walls_to_local)
+    layout_to_local, load_arenas, load_walls, wall_mask)
 from kaboat_mission.mission_points import DEFAULT_ORIGIN_FILE, read_origin_file
 
 
@@ -228,8 +228,9 @@ class OccupancyGridNode(Node):
             raise ValueError('virtual_wall_outward_offset must be finite')
         self.origin_file = str(self.get_parameter('origin_file').value)
         walls_file = str(self.get_parameter('virtual_walls_file').value).strip()
-        self.walls_latlon = ({} if walls_file.lower() in ('', 'none')
-                             else load_walls(walls_file))
+        off = walls_file.lower() in ('', 'none')
+        self.walls_latlon = {} if off else load_walls(walls_file)
+        self.arenas_latlon = {} if off else load_arenas(walls_file)   # 둘레 벽 + 입구
         self.walls_xy = {}
         self._origin_stamp = None
 
@@ -254,7 +255,7 @@ class OccupancyGridNode(Node):
                 Imu, '/imu/data', self._on_imu, qos_profile_sensor_data)
 
         self.pub = self.create_publisher(OccupancyGrid, '/occupancy_grid', 1)
-        if self.walls_latlon:
+        if self.walls_latlon or self.arenas_latlon:
             self._reload_walls()
             self.create_timer(1.0, self._reload_walls)      # 원점을 다시 잡으면 1 s 안에 반영
         self.cam_points_pub = None
@@ -308,14 +309,18 @@ class OccupancyGridNode(Node):
                 self.get_logger().warn(f'원점 파일 없음 ({path}) — 가상 벽 안 씀')
             self.walls_xy = {}
             return
-        self.walls_xy = offset_outward(walls_to_local(self.walls_latlon, origin),
-                                       self.wall_offset)
+        self.walls_xy = layout_to_local(self.walls_latlon, self.arenas_latlon, origin,
+                                        self.wall_offset)
         desc = ', '.join(f'{n} ({xy[0, 0]:.1f}, {xy[0, 1]:.1f})→({xy[-1, 0]:.1f}, {xy[-1, 1]:.1f})'
                          for n, xy in self.walls_xy.items())
-        self.get_logger().info(f'가상 벽 {len(self.walls_xy)}개 — {desc} m, '
-                               f'바깥으로 {self.wall_offset:.2f} m 밂, 두께 {self.wall_thickness:.1f} m')
-        if self.wall_offset and len(self.walls_xy) < 2:
-            self.get_logger().warn('가상 벽이 하나라 바깥 방향을 정할 수 없음 — 기록 위치 그대로')
+        gaps = ', '.join(f'{n} 변 {side} 가운데 {w:.1f} m'
+                         for n, a in self.arenas_latlon.items()
+                         for side, w in sorted(a['openings'].items()))
+        self.get_logger().info(f'가상 벽 {len(self.walls_xy)}줄 — {desc} m, '
+                               f'바깥으로 {self.wall_offset:.2f} m 밂, 두께 {self.wall_thickness:.1f} m'
+                               + (f', 비움: {gaps}' if gaps else ''))
+        if self.wall_offset and len(self.walls_latlon) == 1:
+            self.get_logger().warn('walls: 가 하나라 바깥 방향을 정할 수 없음 — 기록 위치 그대로')
 
     def _on_odom(self, msg: Odometry):
         self.odom = msg
