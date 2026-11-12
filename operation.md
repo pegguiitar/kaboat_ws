@@ -308,7 +308,11 @@ test_avoid_outdoor cam_enabled:=true                              # 회피 시�
   (`cam_mount_pitch_deg`, + = 아래). 각도를 바꾸면 도킹 TF(`dock_yolo.launch.py`의 `--pitch`)도 같이. 선체 중심 기준 위치(뒤 0.33 m)는 도킹 실측값이 기본.
 - 노트북 `view_lidar`의 주황 점(`/occupancy_grid/cam_points`)이 카메라가 고른 점입니다. 붐 위에
   모이는지, 수면에 점이 흩어지지 않는지 봅니다.
-- 색 기준·높이 하한은 `cam_orange_*`, `cam_white_*`, `cam_range_*` 파라미터.
+- 색 기준·높이 하한은 `cam_orange_*`, `cam_white_*`, `cam_range_*` 파라미터. 주황 기본값
+  (2026-11-12 현장 완화): 채도 ≥ **90**(`cam_orange_s_min`), 밝기 ≥ **50**(`cam_orange_v_min`),
+  높이 ≥ **−0.3 m**(`cam_orange_z_min`) — 장착 각도 오차로 붐이 수면 아래로 계산돼도 받고, 반사상은
+  붐과 같은 자리라 받아도 됨. 붐 앞 수면에 점이 번지면 `-p cam_orange_z_min:=-0.1`, 갈색·석양 반사가
+  잡히면 `-p cam_orange_s_min:=110`.
 - 튜닝용 녹화 (영상이 커서 30초 안팎으로): `ros2 bag record -o boom_$(date +%H%M%S)
   /camera/color/image_raw /camera/depth/image_raw /camera/camera_info /imu/data /odom /scan`
 

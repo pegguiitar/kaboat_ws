@@ -1,4 +1,4 @@
-"""camera_obstacles: 색 판별, 기울기 보정, 반사상·흰색·근거리 제외, 시야 판정."""
+"""camera_obstacles: 색 판별, 기울기 보정, 반사상 수용·뎁스 오류·흰색·근거리 제외, 시야 판정."""
 
 import math
 
@@ -27,6 +27,18 @@ def test_color_classes():
     assert 'white' not in color_masks(_px((240, 240, 240)), P)      # 흰색 기본 끔
     assert color_masks(_px((240, 240, 240)), on)['white'][0, 0]
     assert not color_masks(_px((150, 160, 175)), on)['white'][0, 0]  # 회색 하늘·수면
+
+
+def test_washed_out_and_shaded_orange_now_count():
+    # 2026-11-12 현장 기준 완화: 채도 120 → 90, 밝기 70 → 50
+    assert (P.orange_s_min, P.orange_v_min) == (90, 50)
+    old = CameraObstacleParams(orange_s_min=120, orange_v_min=70)
+    for rgb in ((220, 150, 130),     # 햇빛에 바랜 붐 (채도 약 104)
+                (60, 30, 10)):       # 그늘진 붐 (밝기 60)
+        assert color_masks(_px(rgb), P)['orange'][0, 0]
+        assert not color_masks(_px(rgb), old)['orange'][0, 0]
+    assert not color_masks(_px((150, 120, 110)), P)['orange'][0, 0]  # 회갈색 (채도 68)
+    assert not color_masks(_px((40, 25, 20)), P)['orange'][0, 0]     # 어두운 그림자 (밝기 40)
 
 
 def _project(world, p, roll=0.0, pitch=0.0):
@@ -78,19 +90,25 @@ def _scene(white=False):
         depth[rows, cols] = (d_top + d_bot) / 2
     paint((3.67, 0.0, 0.15), (3.67, 0.0, 0.03), (255, 90, 0), 20)   # 붐 (0.03~0.15 m)
     paint((3.67, 0.0, -0.03), (3.67, 0.0, -0.15), (255, 90, 0), 20)  # 물에 비친 붐
+    paint((4.0, -0.8, -0.6), (4.0, -0.8, -0.9), (255, 90, 0), 10)    # 수면 아래 0.6 m — 뎁스 오류
     paint((2.67, 1.0, 0.30), (2.67, 1.0, 0.12), (245, 245, 245), 20)  # 흰 부표
     paint((0.1, -0.15, 0.95), (0.1, -0.15, 0.85), (255, 90, 0), 30)  # 카메라 0.45 m — 배 자체 (오른쪽, 다른 물체와 안 겹침)
     return rgb, depth
 
 
-def test_detect_keeps_boom_drops_reflection_white_and_too_close():
+def test_detect_keeps_boom_and_reflection_drops_bad_depth_white_and_too_close():
     rgb, depth = _scene()
     pts, labels = detect_points(rgb, depth, K, P)
     assert len(pts) > 20 and set(labels) == {'orange'}
     near = (rgb[:, 420:490] == (255, 90, 0)).all(axis=2).sum()
     assert near > 1000                                            # 가까운 띠가 화면에 보이는데도
-    assert np.all(pts[:, 2] >= 0.02)                              # 반사상(음수 높이) 없음
-    np.testing.assert_allclose(np.median(pts[:, 0]), 3.67, atol=0.05)
+    assert np.any(pts[:, 2] < 0.0)                                # 반사상도 받음 (z -0.03~-0.15)
+    assert np.all(pts[:, 2] >= P.orange_z_min)                    # 수면 아래 0.3 m 넘는 점은 버림
+    np.testing.assert_allclose(pts[:, 0], 3.67, atol=0.05)        # 반사상도 붐과 같은 자리 → 같은 칸
+    assert not np.any(np.abs(pts[:, 1] + 0.8) < 0.2)              # 뎁스 오류 점 (y -0.8) 없음
+    no_floor = CameraObstacleParams(height=1.0, orange_z_min=-10.0)
+    pts_all, _ = detect_points(rgb, depth, K, no_floor)
+    assert np.any(np.abs(pts_all[:, 1] + 0.8) < 0.2)              # 높이 하한이 없으면 들어옴
     assert np.all(np.hypot(pts[:, 0] - P.offset_x, pts[:, 1]) >= P.range_min)  # 거리 하한으로 빠짐
 
     with_white = CameraObstacleParams(height=1.0, white=True)
