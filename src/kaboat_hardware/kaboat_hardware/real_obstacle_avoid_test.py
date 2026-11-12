@@ -775,9 +775,16 @@ class RealObstacleAvoidTest(Node):
                 return
 
             out = self.fsm.step(dri, boat, yaw, vel, yaw_rate, goal, now_t)
-            if out.event:
+            if out.state != getattr(self, '_last_fsm_state', 'FOLLOW'):
+                # 상태 전환(ESCAPE 진입·복귀)은 거르지 않고 이유와 함께 — 1 s throttle 에 묻혀
+                # ESCAPE 진입이 로그에 안 남은 적이 있다 (2026-11-12 영상 분석)
+                detail = self.fsm.escape_detail if out.state == 'ESCAPE' else ''
+                log = self.get_logger().warn if out.state == 'ESCAPE' else self.get_logger().info
+                log(f'[{out.state}] {out.event or ""}' + (f' — {detail}' if detail else ''))
+            elif out.event:
                 self.get_logger().info(f'[{out.state}] {out.event}',
                                        throttle_duration_sec=1.0)
+            self._last_fsm_state = out.state
             if out.state == 'ESCAPE' and not self.allow_escape:
                 self._disarm('ESCAPE requested; reverse motion disabled')
                 self._publish_debug(dri, None, goal)

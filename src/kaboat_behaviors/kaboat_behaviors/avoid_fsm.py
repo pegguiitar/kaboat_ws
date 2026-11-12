@@ -307,6 +307,7 @@ class AvoidFsm:
         self._stuck_t0 = None      # 위반 미해소(수리·재생성 다 실패) 시작 시각
         self._escape_t0 = None     # ESCAPE 진입 시각 — 최소 이탈 판정
         self._escape_ok = 0        # ESCAPE 중 generate 연속 성공 tick 수
+        self.escape_detail = ''    # 마지막 ESCAPE 진입 이유 (노드 로그용 — 위반 거리·막힌 시간)
         # 지나온 궤적 — 재활성화 때 지운다 (이전 activation 의 길은 근거가 아님)
         self.trail = Trail(self.fsm.trail_spacing, self.fsm.trail_max_length)
         self._retrace = None       # ESCAPE 되짚기 샘플 (지금 위치 → 오래된 점)
@@ -325,8 +326,9 @@ class AvoidFsm:
         return self._follow_tick(dri, boat_xy, yaw, vel_xy, yaw_rate,
                                  wp_xy, now_t)
 
-    def _enter_escape(self, now_t: float, ev: str, boat_xy) -> StepOut:
+    def _enter_escape(self, now_t: float, ev: str, boat_xy, detail: str = '') -> StepOut:
         self.state = 'ESCAPE'
+        self.escape_detail = detail
         self.plan = None           # ESCAPE 는 plan 없이 산다 — 복귀 시 새로
         self._escape_t0 = now_t
         self._escape_ok = 0
@@ -393,7 +395,9 @@ class AvoidFsm:
             if self._no_plan_t0 is None:
                 self._no_plan_t0 = now_t
             if now_t - self._no_plan_t0 > f.t_retry:
-                return self._enter_escape(now_t, 'escape_no_plan', boat_xy)
+                return self._enter_escape(
+                    now_t, 'escape_no_plan', boat_xy,
+                    f'경로 없음 {now_t - self._no_plan_t0:.1f} s (t_retry {f.t_retry:.1f} s)')
             return StepOut(0.0, 0.0, self.state, None, 'generate_none')
 
         ev = None
@@ -445,7 +449,10 @@ class AvoidFsm:
                     d_viol = (violation - self.plan.progress_idx) * self.plan.spacing
                     if (d_viol < f.d_panic
                             or now_t - self._stuck_t0 > f.t_retry):
-                        return self._enter_escape(now_t, 'escape_panic', boat_xy)
+                        return self._enter_escape(
+                            now_t, 'escape_panic', boat_xy,
+                            f'경로상 위반까지 {d_viol:.2f} m (d_panic {f.d_panic:.1f} m), '
+                            f'수리·재생성 실패 {now_t - self._stuck_t0:.1f} s')
                     ev, slow = 'violation_wait', True   # 감속 + 다음 tick 재시도
 
         lin, ang = follow_cmd(self.plan, boat_xy, yaw, yaw_rate, wp_xy,

@@ -263,6 +263,8 @@ def test_escape_on_close_violation():
     out = fsm.step(dri_of(WALL), BOAT, YAW, V_FULL, 0.0, WP_FAR, 0.1)
     assert out.state == 'ESCAPE' and out.event == 'escape_panic'
     assert (out.linear_x, out.angular_z) == (0.0, 0.0)  # ③ 전 stub — 정지
+    # 노드가 로그에 남길 진입 이유: 경로상 위반 거리와 d_panic
+    assert '위반까지' in fsm.escape_detail and 'd_panic 3.0 m' in fsm.escape_detail
 
 
 def test_escape_after_no_plan_retry_timeout():
@@ -278,6 +280,9 @@ def test_escape_after_no_plan_retry_timeout():
         t += 0.1
     assert out.state == 'ESCAPE' and out.event == 'escape_no_plan'
     assert t <= 2.5
+    assert fsm.escape_detail.startswith('경로 없음') and 't_retry 2.0 s' in fsm.escape_detail
+    fsm.reset()
+    assert fsm.escape_detail == ''
 
 
 # ---------- ESCAPE ----------
