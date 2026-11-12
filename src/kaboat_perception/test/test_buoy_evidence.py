@@ -264,3 +264,9 @@ def test_red_needs_dominance_over_green():
     for k in range(4):
         tk.update([(8.0, 0.0, px(300, 200, 1000))], 0.1 * k)
     assert tk.confirmed()[0].color == 'unknown'           # 섞였으면 판정하지 않음
+
+
+def test_buoy_forgotten_when_boat_far_away():
+    tk = confirmed_at(8.0)
+    tk.update([], 1.0, view({}, x=-10.0, y=0.0))     # 배(라이다)가 18 m 떨어짐
+    assert tk.tracks == []

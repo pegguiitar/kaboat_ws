@@ -255,12 +255,7 @@ class BuoyLidarDetector(Node):
             txt.pose.orientation.w = 1.0
             txt.scale.z = 0.35
             txt.color.r = txt.color.g = txt.color.b = txt.color.a = 1.0
-            votes = (f'R{100 * tr.px_red / tr.px_visible:.0f}% G{100 * tr.px_green / tr.px_visible:.0f}% '
-                     f'of {tr.px_visible}px' if tr.px_visible else 'no px')
-            n_pts = 0 if tr.pts is None else len(tr.pts)
-            txt.text = (f'#{tr.id} {tr.color} r={tr.radius:.2f}{"" if tr.grown else "(prior)"} '
-                        f'pts={n_pts} p={tr.probability:.2f} {tr.last_evidence}'
-                        f'{" CONF" if tr.confirmed else ""} [{votes}]')
+            txt.text = f'{tr.probability:.2f}'   # 존재 확률만
             arr.markers.append(txt)
         self.marker_pub.publish(arr)
 

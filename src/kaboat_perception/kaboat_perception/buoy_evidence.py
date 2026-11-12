@@ -17,6 +17,7 @@
   새 부표는 호출자가 허락한 검출(can_spawn — 노드는 20 m 안)에서만 만든다.
   옆·뒤의 물가·다리 기둥·정박 배가 부표가 되지 않게. 이미 있는 부표는 어느 방향 검출로든 갱신.
   시간이 1 s 넘게 거꾸로 가면(bag 반복 재생·시계 재설정) 처음부터 다시 시작한다.
+  배에서 forget_range(15 m) 넘게 멀어진 부표는 지운다 — 점유지도가 배 주변 창 밖을 버리듯.
   확정 부표 둘이 merge_radius 안이면 L 큰 쪽으로 합친다.
 
 색: 프레임별 표 ('red' | 'green' | 'unknown', None 은 표 없음). 빨강·초록 중 많은 쪽이
@@ -74,6 +75,7 @@ class EvidenceParams:
     beam_half_width: float = 0.15   # 부표 방향 빔 창 반폭 — 부표 반폭 [m]
     min_beam_half_angle: float = math.radians(0.5)
     max_range: float = 10.0         # 라이다 원점에서 이보다 먼 부표는 깎지 않음 (노드는 군집도 이 안만) [m]
+    forget_range: float = 15.0      # 라이다 원점에서 이보다 멀어진 부표는 지움 — 점유지도 창처럼 배 주변만 [m]
     # 원 맞추기
     radius_prior: float = 0.2       # 처음 반지름 [m] — 작게 시작 (줄이지 않으므로)
     radius_max: float = 0.75        # 반지름 상한 [m] (지름 1.5 m)
@@ -362,9 +364,11 @@ class EvidenceTracker:
                 if ev == 'free':
                     t.L = max(p.l_min, t.L + p.l_free_rate * dt)
 
-        # ③ 상태 전이
+        # ③ 상태 전이 (배에서 forget_range 넘게 멀어진 부표는 지움)
         keep = []
         for t in self.tracks:
+            if view is not None and math.hypot(t.x - view.x, t.y - view.y) > p.forget_range:
+                continue
             if not t.confirmed:
                 if t.L >= p.l_confirm:
                     t.confirmed = True
