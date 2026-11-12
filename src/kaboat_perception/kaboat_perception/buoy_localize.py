@@ -1,12 +1,16 @@
-"""buoy_localize — 부표 위치 + 색 판정 빨강/초록/검정 (ROS 무의존 순수 모듈).
+"""buoy_localize — 부표 위치 + 색 판정 빨강/초록/모름 (ROS 무의존 순수 모듈).
 
 색 판정 (2026-11 경기규정): 탐색은 사전에 주어진 색의 부표를 돌며 빨강·초록은 우현,
-  검정(노랑에서 바뀜)은 좌현 선회 — 그래서 빨강·초록·검정 세 가지만 받는다. 주황은
-  빨강과 구분이 어려워 따로 두지 않고 빨강 범위에 넣는다 (범위는 전체적으로 넉넉히).
-  픽셀마다: 어두우면(V ≤ v_black_max) 검정, 채도 있으면(S ≥ s_min) 색상(H)으로
-  빨강(주황 포함)·초록(연두 포함), 그 밖(노랑·파랑·자홍 등)은 기타. 채도 낮은 밝은
-  픽셀(흰·회색)은 물체 픽셀이 아니다. 물·하늘을 색으로 거르지는 않는다 — 뎁스 경로는
-  수면 높이(z)와 6 m clamp 가, 라이다 경로는 빨강·초록·검정끼리만 투표하는 것이 거른다.
+  검정(노랑에서 바뀜)은 좌현 선회한다. 검정은 색으로 판정하지 않는다 — 밝기만으로는
+  그늘진 빨강·초록, 역광 실루엣, 어두운 물과 갈리지 않고, D455 뎁스도 무광 검정에서 빈다.
+  그래서 빨강·초록만 색으로 판정하고, 부표 크기 물체인데 빨강도 초록도 아니면 'unknown'
+  으로 낸다 (소거법). 검정 목표는 탐색 behavior 가 unknown 부표에서 고른다.
+  주황은 빨강과 구분이 어려워 따로 두지 않고 빨강 범위에 넣는다 (범위는 전체적으로 넉넉히).
+  픽셀마다: 채도 있으면(S ≥ s_min) 색상(H)으로 빨강(주황 포함)·초록(연두 포함), 그 밖
+  (노랑·파랑·자홍 등)은 기타. 어두운 픽셀(V ≤ v_dark_max)은 색 없이 물체 픽셀(기타)로만
+  넣는다 — 검정 부표도 뎁스 경로에서 덩어리로 잡히게. 채도 낮은 밝은 픽셀(흰·회색)은 물체
+  픽셀이 아니다. 물·하늘을 색으로 거르지는 않는다 — 뎁스 경로는 수면 높이(z)와 6 m clamp 가,
+  라이다 경로는 라이다 군집(물을 못 봄)이 물체를 정한다.
 
 두 경로:
   뎁스 (depth_max=6 m 이내) — camera_obstacles 와 같은 방식으로 뎁스가 물체를 딴다.
@@ -15,12 +19,13 @@
     2) 수면 높이 이하(물 자체·물에 비친 반사상)·너무 높은 것(구조물)·6 m 너머(하늘·먼
        물가 포함)를 버린다 — 물·하늘은 여기서 빠지므로 색으로 거르지 않는다.
     3) 남은 점을 수평 격자 연결요소로 묶으면 한 덩어리 = 물체 1개 → 색 다수결
-       (1위가 기타거나 min_color_frac 미만이면 버림).
+       (빨강·초록 중 1위가 min_color_frac 미만이면 unknown).
     4) 근처에 라이다 군집이 있으면 위치를 분산 가중평균으로 융합 (라이다가 훨씬 정확).
   라이다 (뎁스로 안 잡힌 것 — 6 m 너머, 또는 뎁스가 빈 경우) — 부표 크기 라이다 군집을
     영상에 투영해 그 자리(수면 ~ far_z_max 높이)의 픽셀로 색을 판정한다. 뎁스가 없어 창 뒤의
-    물을 z 로 못 거르므로 빨강·초록·검정 픽셀끼리만 투표한다 (파란 물은 기타라 빠진다).
-    그런 픽셀이 없으면(흰·회색 기둥) 부표가 아니다. 라이다는 물을 못 보니 물결 오검출이 없다.
+    물을 z 로 못 거르므로 빨강·초록 픽셀끼리만 투표한다 (파란 물은 기타라 빠진다).
+    그런 픽셀이 far_min_pixels 보다 적으면(검정·흰·회색·노랑) unknown. 라이다는 물을 못
+    보니 물결 오검출이 없다.
 
 중심: 센서는 앞면만 본다. 반지름은 고정값이 아니라 매 관측에서 덩어리의 시선 수직
   폭 / 2 로 추정하고(max_radius 로 자름 — 넘어진 부표의 넓은 실루엣 대비), 앞면 점
@@ -57,13 +62,13 @@ class BuoyGeometry:
     # 들어온다. 초록 윗경계(89)만은 청록 앞에서 끊는다: 라이다 경로 색 창의 물 배경은 z 로
     # 못 거르니, 더 넓히면 청록빛 물이 초록 표가 된다. 현장 캘리브 필요 (셔터·AWB 고정 후).
     step: int = 2                     # 픽셀 건너뛰기 (640×480 → 320×240)
-    v_black_max: int = 70             # V ≤ 이 값 → 검정
+    v_dark_max: int = 70              # V ≤ 이 값 → 어두운 물체 픽셀 (색 없음 — 검정 부표 덩어리용)
     s_min: int = 60                   # 이보다 채도 낮은 밝은 픽셀(흰·회색)은 배경
     red_h_max: int = 25               # 빨강: H ≤ red_h_max 또는 H ≥ red_h_min (주황 포함)
     red_h_min: int = 155
     green_h_min: int = 30             # 초록: green_h_min ≤ H ≤ green_h_max (연두 포함)
     green_h_max: int = 89
-    min_color_frac: float = 0.4       # 1위 색이 물체 픽셀의 이 비율 이상이어야 판정
+    min_color_frac: float = 0.4       # 빨강·초록 1위가 물체 픽셀의 이 비율 미만이면 unknown
     # 뎁스 물체 (camera_obstacles 와 같은 기준)
     depth_min: float = 0.6            # D455 유효 거리 [m]
     depth_max: float = 6.0            # 이보다 먼 뎁스는 안 씀
@@ -81,7 +86,7 @@ class BuoyGeometry:
     lidar_min_points: int = 2         # 라이다 군집 최소 빔 수 (1빔은 물보라·노이즈)
     # 라이다 경로 색 창 윗변 (수면 위 높이) [m] — 카메라 높이보다 낮아야 창 뒤 배경이 물이 된다
     far_z_max: float = 0.5
-    far_min_pixels: int = 6           # 라이다 경로 색 창 안 최소 빨강·초록·검정 픽셀 수 (step 후)
+    far_min_pixels: int = 6           # 라이다 경로 색 창 안 빨강·초록 픽셀이 이보다 적으면 unknown (step 후)
     occlusion_margin: float = 0.5     # 색 창에서 뎁스가 군집보다 이만큼 가까운 픽셀 = 앞을 가린 물체 [m]
 
     def camera(self) -> CameraObstacleParams:
@@ -93,7 +98,7 @@ class BuoyGeometry:
 @dataclass
 class BuoyFix:
     """부표 1개 위치 (선체 수평 프레임)."""
-    color: str          # 'red' | 'green' | 'black'
+    color: str          # 'red' | 'green' | 'unknown'
     x: float
     y: float
     radius: float       # 추정 반지름 [m]
@@ -142,7 +147,8 @@ def surface_center(pts, origin, g: BuoyGeometry, robust=False, pad=0.0):
     return mean + (math.pi / 4.0) * r * los, r
 
 
-COLORS = ('other', 'red', 'green', 'black')   # classify_pixels 라벨 번호 순
+COLORS = ('other', 'red', 'green')   # classify_pixels 라벨 번호 순
+UNKNOWN = 'unknown'                   # 부표 크기 물체인데 빨강·초록이 아님 (검정 부표 포함)
 
 
 def classify_pixels(bgr, g: BuoyGeometry):
@@ -150,21 +156,20 @@ def classify_pixels(bgr, g: BuoyGeometry):
     s = max(1, int(g.step))
     hsv = cv2.cvtColor(np.ascontiguousarray(bgr[::s, ::s]), cv2.COLOR_BGR2HSV)
     h, sat, val = hsv[..., 0], hsv[..., 1], hsv[..., 2]
-    black = val <= g.v_black_max
-    colored = ~black & (sat >= g.s_min)
-    label = np.zeros(h.shape, dtype=np.uint8)                       # 기타
+    dark = val <= g.v_dark_max
+    colored = ~dark & (sat >= g.s_min)
+    label = np.zeros(h.shape, dtype=np.uint8)                       # 기타 (어두운 픽셀 포함)
     label[colored & ((h <= g.red_h_max) | (h >= g.red_h_min))] = 1  # 빨강
     label[colored & (h >= g.green_h_min) & (h <= g.green_h_max)] = 2  # 초록
-    label[black] = 3                                                # 검정
-    return black | colored, label
+    return dark | colored, label
 
 
 def _vote(labels, g: BuoyGeometry):
-    """물체 픽셀 라벨들 → 색 이름, 1위가 기타거나 min_color_frac 미만이면 None."""
+    """물체 픽셀 라벨들 → 'red' | 'green', 빨강·초록 1위가 min_color_frac 미만이면 unknown."""
     counts = np.bincount(labels, minlength=len(COLORS))
     best = int(np.argmax(counts[1:])) + 1
-    if counts[best] < g.min_color_frac * labels.size:
-        return None
+    if counts[best] == 0 or counts[best] < g.min_color_frac * labels.size:
+        return UNKNOWN
     return COLORS[best]
 
 
@@ -208,9 +213,7 @@ def depth_buoys(obj, label, depth_m, K, g: BuoyGeometry, roll=0.0,
         cl = xy[idx]
         if np.ptp(cl, axis=0).max() > g.max_cluster_width:
             continue
-        color = _vote(pt_label[idx], g)
-        if color is None:
-            continue                                  # 색이 섞였거나 부표 색이 아님
+        color = _vote(pt_label[idx], g)               # 빨강·초록 아니면 unknown
         (cx, cy), r = surface_center(cl, cam, g, robust=True)
         out.append(BuoyFix(color, float(cx), float(cy), r, 'depth', n))
     return out
@@ -306,11 +309,8 @@ def lidar_buoys(clusters, obj, label, K, g: BuoyGeometry, roll=0.0, pitch=0.0,
             win = win & ~(np.isfinite(near) & (near > 0.0)
                           & (near < d.min() - g.occlusion_margin))
         voters = label[r0:r1, c0:c1][win]
-        voters = voters[voters > 0]                    # 빨강·초록·검정만 — 창 뒤 물(기타) 제외
-        if voters.size < g.far_min_pixels:
-            continue                                   # 부표 색 픽셀 없음 (흰·회색·노랑) — 부표 아님
-        color = _vote(voters, g)
-        if color is None:
-            continue
+        voters = voters[voters > 0]                    # 빨강·초록만 — 창 뒤 물(기타) 제외
+        # 빨강·초록 픽셀이 없으면(검정·흰·회색·노랑) unknown — 라이다 군집이라 물체는 맞다
+        color = _vote(voters, g) if voters.size >= g.far_min_pixels else UNKNOWN
         out.append(BuoyFix(color, float(center[0]), float(center[1]), r, 'lidar', n))
     return out

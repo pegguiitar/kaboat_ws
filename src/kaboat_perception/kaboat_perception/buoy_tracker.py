@@ -31,6 +31,11 @@ from typing import List, Dict, Optional, Tuple
 # 쌓여 부표가 지워지지 않게.
 MAX_MISS_STEP = 0.5
 
+# 색 확정 (Track.color) — 검출기는 'red' | 'green' | 'unknown'(빨강·초록 아닌 물체, 검정 포함)
+KNOWN_COLORS = ('red', 'green')
+KNOWN_COLOR_MIN_VOTES = 2
+KNOWN_COLOR_FRAC = 0.25
+
 
 def project_to_world(bearing: float, distance: float,
                      boat_x: float, boat_y: float, yaw: float) -> tuple:
@@ -84,10 +89,21 @@ class Track:
 
     @property
     def color(self) -> str:
-        """지금까지 가장 많이 관측된 색 (물결 반짝임 한두 프레임에 안 흔들리게)."""
-        if not self.color_votes:
-            return 'unknown'
-        return max(self.color_votes.items(), key=lambda kv: kv[1])[0]
+        """누적 색 투표 → 'red' | 'green' | 'unknown'.
+
+        빨강·초록 중 많은 쪽이 KNOWN_COLOR_MIN_VOTES 표 이상이고 전체 표의
+        KNOWN_COLOR_FRAC 이상이면 그 색, 아니면 unknown. unknown 표는 단순 다수결로
+        세지 않는다 — 멀리서 색 픽셀이 모자라 unknown 으로 여러 번 잡힌 빨강 부표가
+        가까이서 빨강으로 보여도 unknown 으로 남지 않게. 반대로 검정 부표에 물결 반짝임
+        한두 표가 빨강으로 들어와도 비율이 모자라 unknown 그대로다.
+        """
+        total = sum(self.color_votes.values())
+        known = [(n, c) for c, n in self.color_votes.items() if c in KNOWN_COLORS]
+        if known:
+            n, c = max(known)
+            if n >= KNOWN_COLOR_MIN_VOTES and n >= KNOWN_COLOR_FRAC * total:
+                return c
+        return 'unknown'
 
     def confirmed(self, confirm_hits: int) -> bool:
         return self.hits >= confirm_hits

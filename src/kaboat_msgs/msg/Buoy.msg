@@ -2,6 +2,6 @@
 # 점유지도(cell)와 달리 색·정체성·전역좌표를 갖는 "점 랜드마크"다.
 
 uint32 id                     # 안정 트랙 id (같은 부표는 프레임이 바뀌어도 같은 id)
-string color                  # "red" | "green" | "black" | "unknown"
+string color                  # "red" | "green" | "unknown" (빨강·초록 아닌 부표 크기 물체 — 검정 부표 포함)
 geometry_msgs/Point position  # 부표 중심의 odom 프레임 좌표 [m], z 는 미사용(0)
 float32 confidence            # 0.0 ~ 1.0

@@ -207,6 +207,32 @@ def test_color_majority_vote():
     assert out[0].color == 'red'
 
 
+def test_unknown_votes_do_not_hide_a_seen_colour():
+    # 멀리서 색 픽셀이 모자라 unknown 으로 6번, 가까이서 빨강 2번 → 빨강
+    tk = BuoyTracker(TrackerParams(confirm_hits=1))
+    for k in range(6):
+        tk.update([det(color='unknown')], now=0.1 * k)
+    tk.update([det(color='red')], now=0.6)
+    out = tk.update([det(color='red')], now=0.7)
+    assert out[0].color == 'red'
+
+
+def test_single_stray_colour_vote_stays_unknown():
+    # 검정 부표(unknown)에 물결 반짝임 빨강 1표 — 2표 미만이라 unknown 그대로
+    tk = BuoyTracker(TrackerParams(confirm_hits=1))
+    tk.update([det(color='red')], now=0.0)
+    for k in range(1, 6):
+        out = tk.update([det(color='unknown')], now=0.1 * k)
+    assert out[0].color == 'unknown'
+
+
+def test_rare_colour_votes_below_fraction_stay_unknown():
+    tk = BuoyTracker(TrackerParams(confirm_hits=1))
+    for k in range(20):
+        out = tk.update([det(color='red' if k in (3, 11) else 'unknown')], now=0.1 * k)
+    assert out[0].color == 'unknown'             # 2 / 20 = 10 % < 25 %
+
+
 def test_track_color_defaults_unknown_when_empty():
     t = Track(id=0, x=0.0, y=0.0, hits=0, last_seen=0.0, confidence=0.0)
     assert t.color == 'unknown'
