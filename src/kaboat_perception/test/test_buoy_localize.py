@@ -1,7 +1,7 @@
 """buoy_localize.py 단독 테스트 — ROS 없이 돈다.
 
-합성 장면: 수면(z=0, 파랑) 위에 원기둥 부표를 세우고, 현장 카메라 기하(뒤 0.33 m ·
-높이 0.85 m · 10° 숙임)로 정렬 RGB + 뎁스 영상을 렌더한다. 물에 비친 반사상은 수면
+합성 장면: 수면(z=0, 파랑) 위에 원기둥 부표를 세우고, 현장 카메라 기하(BuoyGeometry
+기본값)로 정렬 RGB + 뎁스 영상을 렌더한다. 물에 비친 반사상은 수면
 아래 허상(z<0)으로 렌더한다. 라이다 빔은 원과의 첫 교점. 알고리즘은 부표 반지름을 모른다.
 """
 import math
@@ -17,7 +17,7 @@ from kaboat_perception.camera_obstacles import pixels_to_level
 
 W, H = 640, 480
 K = (380.0, 380.0, 320.0, 240.0)   # 640×480 D455 근사
-G = BuoyGeometry()                 # 현장 기본값: 카메라 -0.33 m · 10° 숙임, 라이다 +0.4 m
+G = BuoyGeometry()                 # 현장 기본값 (카메라·라이다 장착)
 
 RED, GREEN, ORANGE = (30, 30, 220), (40, 200, 40), (0, 140, 255)   # BGR
 BLACK, YELLOW, MAGENTA, GRAY = (25, 25, 25), (0, 220, 230), (200, 40, 200), (128, 128, 128)
@@ -109,7 +109,7 @@ def test_water_reflection_is_removed_by_height():
 
 
 @pytest.mark.parametrize('bgr, color', [(RED, 'red'), (ORANGE, 'red'), (GREEN, 'green'),
-                                        (BLACK, 'black')])
+                                        (BLACK, 'unknown')])
 def test_each_buoy_color_has_its_own_label(bgr, color):
     fixes = _depth_fixes([(4.0, 0.0, 0.25, 0.6, bgr, 'real')])
     assert [f.color for f in fixes] == [color]
@@ -125,9 +125,24 @@ def test_loose_ranges_take_shifted_reds_and_greens(bgr, color):
     assert [f.color for f in fixes] == [color]
 
 
-@pytest.mark.parametrize('bgr', [YELLOW, MAGENTA, WATER, GRAY])
-def test_other_colors_and_gray_are_not_buoys(bgr):
-    assert _depth_fixes([(4.0, 0.0, 0.25, 0.6, bgr, 'real')]) == []   # WATER = 파란 물체
+@pytest.mark.parametrize('bgr', [BLACK, YELLOW, MAGENTA, WATER])
+def test_objects_neither_red_nor_green_are_unknown(bgr):
+    # 소거법 — 검정은 색으로 판정하지 않고 다른 기타 색과 함께 unknown (WATER = 파란 물체)
+    fixes = _depth_fixes([(4.0, 0.0, 0.25, 0.6, bgr, 'real')])
+    assert [f.color for f in fixes] == ['unknown']
+    assert _dist(fixes[0], (4.0, 0.0)) < 0.05
+
+
+def test_gray_is_not_an_object_pixel_for_depth():
+    # 흰·회색은 물체 픽셀이 아니라 뎁스 경로에선 안 잡힌다 (라이다 경로에선 unknown)
+    assert _depth_fixes([(4.0, 0.0, 0.25, 0.6, GRAY, 'real')]) == []
+
+
+def test_red_and_black_side_by_side_keep_their_labels():
+    # 예전엔 어두운 픽셀이 '검정' 표라 빨강과 표를 다퉜다 — 이제 검정은 따로 표가 없다
+    fixes = sorted(_depth_fixes([(3.5, 1.0, 0.25, 0.6, BLACK, 'real'),
+                                 (3.5, -1.0, 0.25, 0.6, RED, 'real')]), key=lambda f: f.y)
+    assert [f.color for f in fixes] == ['red', 'unknown']
 
 
 def test_water_and_sky_drop_out_by_height_and_range_not_color():
@@ -182,15 +197,18 @@ def test_far_buoys_get_color_from_projected_window():
                                  (10.0, -1.5, 0.25, 0.6, RED, 'real'),
                                  (11.0, 4.5, 0.25, 0.6, BLACK, 'real'),
                                  (9.0, -4.0, 0.25, 0.6, ORANGE, 'real')]), key=lambda f: f.y)
-    assert [(f.color, f.source) for f in fixes] == [   # 주황(9, -4)은 빨강으로
-        ('red', 'lidar'), ('red', 'lidar'), ('green', 'lidar'), ('black', 'lidar')]
+    assert [(f.color, f.source) for f in fixes] == [   # 주황(9, -4)은 빨강, 검정은 unknown
+        ('red', 'lidar'), ('red', 'lidar'), ('green', 'lidar'), ('unknown', 'lidar')]
     assert _dist(fixes[1], (10.0, -1.5)) < 0.08     # 0.5° 빔 간격 ≈ 9~10 cm
     assert _dist(fixes[2], (12.0, 2.0)) < 0.08
 
 
-def test_lidar_object_without_buoy_color_is_not_a_buoy():
-    assert _lidar_fixes([(9.0, 0.0, 0.15, 1.2, GRAY, 'real')]) == []    # 회색 기둥
-    assert _lidar_fixes([(9.0, 0.0, 0.25, 0.6, YELLOW, 'real')]) == []  # 노랑 (기타)
+@pytest.mark.parametrize('bgr, r, h', [(GRAY, 0.15, 1.2), (YELLOW, 0.25, 0.6),
+                                       (BLACK, 0.25, 0.6)])
+def test_lidar_object_without_red_or_green_is_unknown(bgr, r, h):
+    # 라이다 군집은 물체가 맞다 — 빨강·초록 픽셀이 없으면 버리지 않고 unknown
+    fixes = _lidar_fixes([(9.0, 0.0, r, h, bgr, 'real')])
+    assert [f.color for f in fixes] == ['unknown']
 
 
 def test_far_buoy_behind_near_buoy_keeps_its_own_color():
@@ -198,8 +216,8 @@ def test_far_buoy_behind_near_buoy_keeps_its_own_color():
     near = BuoyFix('orange', 4.0, -1.2, 0.25, 'fused', 300)
     scene = [(4.0, -1.2, 0.25, 0.6, ORANGE, 'real'), (9.0, -2.4, 0.25, 0.6, RED, 'real')]
     assert [f.color for f in _lidar_fixes(scene, skip=[near])] == ['red']
-    scene[1] = (9.0, -2.4, 0.25, 0.6, YELLOW, 'real')       # 뒤가 노랑(기타)이면 버림
-    assert _lidar_fixes(scene, skip=[near]) == []
+    scene[1] = (9.0, -2.4, 0.25, 0.6, BLACK, 'real')        # 뒤가 검정이면 앞 주황 색이 아니라 unknown
+    assert [f.color for f in _lidar_fixes(scene, skip=[near])] == ['unknown']
 
 
 def test_lidar_path_skips_buoys_found_by_depth():
