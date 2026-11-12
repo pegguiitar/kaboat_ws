@@ -137,7 +137,7 @@ def _args(mod, **overrides):
 def test_launch_point_or_coordinates(launch_mod):
     p = launch_mod.node_parameters(_args(launch_mod, point='gate_entry'))
     assert p['outdoor'] is True and p['point'] == 'gate_entry' and p['align_heading'] is True
-    assert p['motion_enabled'] is True and p['thrust_ratio'] == 0.2
+    assert p['motion_enabled'] is True and p['thrust_ratio'] == 0.4
     assert p['max_goal_distance'] == 0.0                         # 기본 거리 제한 없음
     assert 'target_x' not in p
 

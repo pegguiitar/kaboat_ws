@@ -120,7 +120,7 @@ ros2 launch kaboat_hardware real_sensors.launch.py outdoor:=true rtk:=true \
 | `run_points` | `ros2 run kaboat_hardware point_recorder` | 미션 지점 기록기 |
 | `rec [이름]` | `python3 scripts/rec_point.py [이름]` | 지금 위치(x, y, 선수각) 기록. 이름 생략 시 `p1`, `p2` … |
 | `list_points` | `python3 scripts/rec_point.py --list` | 기록한 지점 보기 |
-| `goto 지점` / `goto x y [각도]` | `ros2 launch kaboat_hardware outdoor_waypoint.launch.py point:=지점` (또는 `x:= y:= angle:=`) | 야외 웨이포인트 1개 주행, **실행 즉시 출발**(추력 20%). 5절 참고 |
+| `goto 지점` / `goto x y [각도]` | `ros2 launch kaboat_hardware outdoor_waypoint.launch.py point:=지점` (또는 `x:= y:= angle:=`) | 야외 웨이포인트 1개 주행, **실행 즉시 출발**(추력 40%). 5절 참고 |
 | `run_motor` | `ros2 launch kaboat_hardware thrusters.launch.py hardware_type:=serial port:=/dev/ttyCH341USB0 allow_port_scan:=false` | 아두이노(CH340) 모터 드라이버 + `gps_mark_logger` |
 | `view_pitch` | `python3 scripts/view_roll_pitch.py` | 롤/피치와 스캔 차단 상태 |
 | `view_position` | `python3 scripts/view_position.py` | `/odom` x·y·선수각(동쪽 0°)·나침반 방위·속도·GNSS 상태(RTK Fixed 등) 실시간 한 줄 |
@@ -222,7 +222,7 @@ goto gate_entry motion_enabled:=false   # 미리보기: 로그의 출력 [전진
 goto gate_entry                         # 기록 지점으로 가서 기록 선수각까지 맞춤
 goto gate_end heading:=false            # 위치만
 goto 10.0 -5.0 90                       # /odom 좌표 (x 동쪽, y 북쪽, 선수각 동쪽 0° 반시계 +)
-goto gate_entry thrust_ratio:=0.3 position_tolerance:=1.5
+goto gate_entry thrust_ratio:=0.5 position_tolerance:=1.5   # 기본 0.4 보다 세게
 ```
 
 - 로그 1초마다 `[단계] 현재: (x, y) | 목표거리 | 선수각(오차) | 출력`. 도착하면 상태 `REACHED`, 이후 정지 명령만 냅니다. Ctrl+C로 끕니다.
