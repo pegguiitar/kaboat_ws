@@ -1,0 +1,60 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+  - Class: rviz_common/Views
+    Name: Views
+Preferences:
+  PromptSaveOnExit: false
+Visualization Manager:
+  Class: ''
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Meter grid
+      Enabled: true
+      Cell Size: 1
+      Plane Cell Count: 80
+      Color: 70; 70; 80
+      Offset:
+        X: 120
+        Y: -16
+        Z: -0.05
+      Reference Frame: <Fixed Frame>
+    - Class: rviz_default_plugins/MarkerArray
+      Name: Recorded walls comparison
+      Enabled: true
+      Topic:
+        Value: /gate_wall_experiment/markers
+        Depth: 1
+        Durability Policy: Transient Local
+        Reliability Policy: Reliable
+        History Policy: Keep Last
+  Global Options:
+    Background Color: 30; 33; 42
+    Fixed Frame: odom
+    Frame Rate: 15
+  Name: root
+  Tools:
+    - Class: rviz_default_plugins/Interact
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Name: Current View
+      Target Frame: odom
+      Distance: 33
+      Focal Point:
+        X: 120
+        Y: -16
+        Z: 0
+      Pitch: 1.5707
+      Yaw: 4.71239
+      Near Clip Distance: 0.01
+    Saved: null
+Window Geometry:
+  Height: 980
+  Width: 1420
+  X: 0
+  Y: 0
+  Hide Left Dock: false
+  Hide Right Dock: true

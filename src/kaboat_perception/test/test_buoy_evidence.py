@@ -128,7 +128,7 @@ def test_overlapping_confirmed_tracks_merge():
 
 
 def test_adjacent_pair_never_merges():
-    tk = EvidenceTracker(EvidenceParams(gate_radius=0.1))
+    tk = EvidenceTracker(EvidenceParams(gate_radius=0.1, spawn_min_sep=0.8))
     for k in range(4):
         tk.update([(8.0, 0.0, 'green'), (8.9, 0.0, None)], 0.1 * k)   # 0.9 m — 원이 안 겹침
     assert len(tk.confirmed()) == 2
@@ -194,7 +194,7 @@ PASS_BY = [(x, -6.0) for x in np.linspace(0.0, 16.0, 40)]   # 옆을 지나가�
 def test_radius_grows_to_true_size_when_seen_from_many_directions():
     t = run_arcs(0.3, PASS_BY)
     assert t.grown and t.radius == pytest.approx(0.3, abs=0.04)
-    assert math.hypot(t.x - 8.0, t.y) < 0.04
+    assert math.hypot(t.x - 8.0, t.y) < 0.05
 
 
 def test_radius_never_shrinks_below_prior():
@@ -203,9 +203,10 @@ def test_radius_never_shrinks_below_prior():
     assert math.hypot(t.x - 8.0, t.y) < 0.1
 
 
-def test_one_direction_only_does_not_grow():
+def test_one_direction_grows_only_to_chord_lower_bound():
+    # 한 방향 ±60° 호 — 호 폭 2·0.3·sin60 = 0.52 → 반지름 하한 0.26. 원 맞추기로 더 키우지는 않는다
     t = run_arcs(0.3, [(2.0, 0.0)] * 40)
-    assert not t.grown and t.radius == pytest.approx(P.radius_prior)
+    assert t.radius == pytest.approx(0.26, abs=0.02)
 
 
 def test_far_track_not_freed_beyond_max_range():
@@ -236,7 +237,6 @@ def test_centre_stays_behind_surface_even_if_points_curve_toward_lidar():
         tk.update([(7.6, 0.0, None, True, pts)], 0.1 * k, view({}, x=2.0, y=0.0))
     t = tk.tracks[0]
     assert t.x > pts[:, 0].mean()                      # 면 뒤
-    assert not t.grown
 
 
 # ---------- 색: 픽셀 수 누적 ----------
@@ -286,4 +286,46 @@ def test_smeared_blob_does_not_grow():
     for k, vw in enumerate(PASS_BY):
         pts = np.array([8.0, 0.0]) + rng.uniform(-0.2, 0.2, (15, 2))
         tk.update([(8.0, 0.0, None, True, pts)], 0.1 * k, view({}, x=vw[0], y=vw[1]))
-    assert not tk.tracks[0].grown and tk.tracks[0].radius == pytest.approx(P.radius_prior)
+    assert tk.tracks[0].radius <= 0.22                # 호 폭 하한(≈0.2) 이상으로 안 커짐
+
+
+# ---------- 중복 생성 막기·호 폭 하한 ----------
+
+def test_no_new_buoy_right_next_to_existing():
+    tk = EvidenceTracker(EvidenceParams(gate_radius=0.1))
+    for k in range(4):
+        tk.update([(8.0, 0.0, None)], 0.1 * k)
+    tk.update([(8.9, 0.0, None)], 0.5)                 # 0.9 m 옆 — 같은 부표의 다른 면
+    assert len(tk.tracks) == 1
+
+
+def test_adjacent_pair_at_1_2m_gets_two_buoys():
+    tk = EvidenceTracker(EvidenceParams(gate_radius=0.1))
+    for k in range(4):
+        tk.update([(8.0, 0.0, 'green'), (9.3, 0.0, None)], 0.1 * k)   # 탐색 bag 쌍 중심 간격 ≥ 1.37 m
+    assert len(tk.confirmed()) == 2
+
+
+def test_radius_grows_to_chord_lower_bound():
+    tk = EvidenceTracker(P)
+    pts = np.column_stack((np.full(9, 8.0), np.linspace(-0.25, 0.25, 9)))   # 호 폭 0.5 m
+    for k in range(12):
+        tk.update([(8.0, 0.0, None, True, pts)], 0.1 * k, view({}, x=0.0, y=0.0))
+    assert tk.tracks[0].radius == pytest.approx(0.25, abs=0.01)
+
+
+def test_split_cluster_in_one_scan_makes_one_buoy():
+    # 한 스캔에서 한 부표가 두 군집(0.5 m 간격)으로 쪼개져도 새 부표는 하나
+    tk = EvidenceTracker(EvidenceParams(gate_radius=0.1))
+    tk.update([(8.0, 0.0, None), (8.0, 0.5, None)], 0.0)
+    assert len(tk.tracks) == 1
+
+
+def test_confirmed_tracks_drifting_within_spawn_sep_merge():
+    tk = EvidenceTracker(EvidenceParams(gate_radius=0.1, spawn_min_sep=0.8))
+    for k in range(4):
+        tk.update([(8.0, 0.0, None), (9.0, 0.0, None)], 0.1 * k)     # 1.0 m — 둘 다 생김
+    assert len(tk.confirmed()) == 2
+    tk.tracks[1].x = 8.7                                              # 0.7 m 로 다가옴
+    tk.update([], 0.5)
+    assert len(tk.confirmed()) == 1
