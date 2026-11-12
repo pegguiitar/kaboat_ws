@@ -350,8 +350,10 @@ class RealObstacleAvoidTest(Node):
             return
         self.dock_waypoints=msg;self.dock_waypoints_received=time.monotonic()
 
-    def _generate_plan(self,dri,boat,yaw,vel,goal,params,now_t=0.):
-        if not self.dock_waypoints_topic:return generate(dri,boat,yaw,vel,goal,params,now_t)
+    def _generate_plan(self,dri,boat,yaw,vel,goal,params,now_t=0.,prev_plan=None):
+        # prev_plan: FSM 재계획 때 지금 경로 — 같은 쪽 유지(w_hist). 도킹 경로는 쓰지 않음
+        if not self.dock_waypoints_topic:return generate(dri,boat,yaw,vel,goal,params,now_t,
+                                                         prev_plan=prev_plan)
         msg=self.latched_dock_waypoints if self.started else self.dock_waypoints
         if msg is None:return None
         xy=np.array([[p.pose.position.x,p.pose.position.y] for p in msg.poses])

@@ -224,8 +224,8 @@ def test_trigger_a_fires_after_passing_r1():
 
 
 def test_trigger_a2_fires_on_none_to_finite():
-    """저장 r1=None(빈 밭 직선 plan) ∧ 현재 r1 유한 → (a') 발동."""
-    fsm = make_fsm(t_backstop=1e9)
+    """저장 r1=None(빈 밭 직선 plan) ∧ 현재 r1 유한 → (a') 발동 (hold 0 — 판정만 격리)."""
+    fsm = make_fsm(t_backstop=1e9, trigger_a2_hold=0.0)
     out = acquire(fsm, dri_of([]))
     assert out.plan.r1 is None
     dri2 = dri_of([(6.0, 3.0)])             # 전방 부채꼴 등장, 경로는 안 건드림
@@ -235,14 +235,55 @@ def test_trigger_a2_fires_on_none_to_finite():
 
 
 def test_trigger_a2_fires_on_r1_drop():
-    """(a') 급락: 더 가까운 위협 등장 → 저장 r1 − δ 아래로 → 기준 교체."""
-    fsm = make_fsm(t_backstop=1e9, delta_r1=1.0)
+    """(a') 급락: 더 가까운 위협 등장 → 저장 r1 − δ 아래로 → 기준 교체 (hold 0)."""
+    fsm = make_fsm(t_backstop=1e9, delta_r1=1.0, trigger_a2_hold=0.0)
     out = acquire(fsm, dri_of([(8.0, 3.0)]))
     r1_far = out.plan.r1
     near = [(8.0, 3.0), (4.0, -2.5)]        # 4.7m 측방 — r1_far(8.5)보다 급락
     out = fsm.step(dri_of(near), BOAT, YAW, V_FULL, 0.0, WP_FAR, 0.1)
     assert out.event == 'trigger_a2_regen'
     assert out.plan.r1 < r1_far - 1.0
+
+
+def test_trigger_a2_waits_for_persistent_new_obstacle():
+    """기본 trigger_a2_hold 0.5 s: 한 tick 깜빡인 가까운 칸(물보라)으로는 재계획 안 함,
+    0.5 s 이상 계속 보이면 재계획 (2026-11-12 영상: 재계획 평균 2.8 s 마다)."""
+    fsm = make_fsm(t_backstop=1e9, delta_r1=1.0)
+    acquire(fsm, dri_of([(8.0, 3.0)]))
+    near = dri_of([(8.0, 3.0), (4.0, -2.5)])
+    far = dri_of([(8.0, 3.0)])
+    assert fsm.step(near, BOAT, YAW, V_FULL, 0.0, WP_FAR, 0.1).event is None   # 깜빡
+    assert fsm.step(far, BOAT, YAW, V_FULL, 0.0, WP_FAR, 0.2).event is None    # 사라짐
+    assert fsm.step(near, BOAT, YAW, V_FULL, 0.0, WP_FAR, 0.3).event is None   # 다시 시작
+    assert fsm.step(near, BOAT, YAW, V_FULL, 0.0, WP_FAR, 0.6).event is None   # 0.3 s
+    out = fsm.step(near, BOAT, YAW, V_FULL, 0.0, WP_FAR, 0.85)                 # 0.55 s
+    assert out.event == 'trigger_a2_regen'
+
+
+def test_trigger_a_skips_near_reference_obstacle():
+    """기준 장애물이 trigger_a_min_r1(1.5 m)보다 가까우면 지나쳐도 재계획 안 함 — 코앞
+    장애물 옆에서 새로 만들다 ESCAPE 로 가던 것(영상 trigger_a 1 s 안 ESCAPE ×5). 백스톱이 맡음."""
+    for min_r1, expect in ((1.5, None), (0.0, 'trigger_a_regen')):
+        fsm = make_fsm(t_backstop=1e9, trigger_a_min_r1=min_r1)
+        acquire(fsm, dri_of([(4.0, 2.5)]))
+        fsm.plan.r1 = 1.2                         # 가까운 기준 장애물이었다고 둠
+        boat2 = (1.6, 0.0)                        # 진행 반경 1.6 > r1
+        out = fsm.step(dri_of([(4.0, 2.5)], boat_xy=boat2), boat2, YAW, V_FULL, 0.0,
+                       WP_FAR, 0.1)
+        assert out.event == expect, min_r1
+
+
+def test_backstop_replan_keeps_side_of_current_plan():
+    """백스톱 재계획이 지금 경로(왼쪽 우회)를 prev_plan 으로 넘겨, 좌우 비용이 같아진 장면에서도
+    왼쪽을 유지한다 (예전: 처음부터 만들어 오른쪽으로 뒤집힘)."""
+    bar = lambda y: [(4.0, y - 0.2), (4.0, y), (4.0, y + 0.2)]  # noqa: E731
+    fsm = make_fsm()
+    acquire(fsm, dri_of(bar(-0.4)), vel=(1.0, 0.0))
+    side = lambda plan: plan.samples[np.argmin(np.abs(plan.samples[:, 0] - 4.0)), 1]  # noqa: E731
+    assert side(fsm.plan) > 0.5
+    out = fsm.step(dri_of(bar(0.0)), BOAT, YAW, (1.0, 0.0), 0.0, WP_FAR, FsmParams().t_backstop + 0.1)
+    assert out.event == 'backstop_regen'
+    assert side(out.plan) > 0.5
 
 
 def test_trigger_a2_ignores_small_drop():

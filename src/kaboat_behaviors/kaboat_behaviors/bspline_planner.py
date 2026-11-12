@@ -78,6 +78,11 @@ class PlannerParams:
     # S 잔물결을 억제한다. 목표 방향과 동등하게 반영하도록 1.0.
     w_wp: float = 1.0
     w_prev: float = 1.0
+    # 재계획 때 직전 경로 쪽 유지: 후보 비용 += w_hist·|후보 방위 − 직전 경로가 같은 반지름에서
+    # 지나던 방위|. 재계획(트리거·백스톱·위반 재생성)은 매번 처음부터 만들어, 장애물 좌우
+    # 비용이 비슷하면 작은 변화(선수·물보라 칸)에도 반대쪽으로 넘어갔다 — 2026-11-12 영상
+    # 2:23.4 붐 아래 오른쪽 → 2:23.8 왼쪽 S 자. 안전 필터는 그대로라 그쪽이 막히면 넘어간다.
+    w_hist: float = 1.0
     dri_angle_slack: float = math.radians(12.0)  # 기하 최적 후보 주변 DRI 탐색 반폭
     # 제한 범위의 최소 max DRI 와 이 값 이내면 위험이 사실상 같다고 보고
     # geom_cost 로 직진성을 고른다. 안전 기준선(1.0)의 3%에 해당한다.
@@ -185,8 +190,23 @@ def _argmin_toward_wp(cost, bearings, wp_bearing) -> int:
     return int(tied[np.argmin(np.abs(bearings[tied] - wp_bearing))])
 
 
+def _plan_bearing_at(plan, boat, radius):
+    """직전 경로가 지금 배 중심 반지름 radius 원을 처음 넘는 점의 방위 — 없으면 None."""
+    if plan is None:
+        return None
+    ahead = plan.samples[max(0, int(getattr(plan, 'progress_idx', 0))):]
+    if len(ahead) == 0:
+        return None
+    d = ahead - np.asarray(boat, dtype=np.float64)
+    out = np.nonzero(np.hypot(d[:, 0], d[:, 1]) >= radius)[0]
+    if out.size == 0:
+        return None
+    q = d[out[0]]
+    return math.atan2(q[1], q[0])
+
+
 def _arc_pick(dri, origin, radius, wp_bearing, prev_pt, prev_bearing,
-              p: PlannerParams):
+              p: PlannerParams, hist_bearing: float | None = None):
     """arc 위 후보 선택 — 하드 필터 + 제한 범위 최소 DRI 근처 직진 우선.
 
     ① **직전 CP → 후보를 잇는 선분**(샘플 8점) 위 max DRI > safe_threshold 인
@@ -218,6 +238,8 @@ def _arc_pick(dri, origin, radius, wp_bearing, prev_pt, prev_bearing,
         p.w_wp * np.abs(bearings - wp_bearing)  # 부채꼴 폭 ≤ π 라 wrap 불필요
         + p.w_prev * np.abs([_wrap(b - prev_bearing) for b in bearings])
     )
+    if hist_bearing is not None and p.w_hist > 0.0:
+        geom_cost = geom_cost + p.w_hist * np.abs([_wrap(b - hist_bearing) for b in bearings])
     geom_cost[~safe] = np.inf
     geom_best = _argmin_toward_wp(geom_cost, bearings, wp_bearing)
 
@@ -243,13 +265,15 @@ PIVOT_START_MIN_ANGLE = math.radians(5.0)   # 첫 경로점이 선수와 이보�
 
 def generate(dri, boat_xy, boat_yaw: float, boat_vel_xy, waypoint_xy,
              p: PlannerParams, now_t: float = 0.0, *, goal_heading: float | None = None,
-             terminal_handle_m: float = .75) -> Plan | None:
+             terminal_handle_m: float = .75, prev_plan: Plan | None = None) -> Plan | None:
     """제어점 6개 생성 + spline 샘플링 (§3-2). search_fov 에 답이 없으면 search_fov_fallback
     으로 한 번 더 (막힐 때만 넓히기). 그래도 없으면 None.
 
     배가 거의 서 있으면(전진 < stationary_surge) p1 을 첫 경로점 쪽으로 돌린 경로를 한 번 더
-    만들어, 곡선 전체가 안전선 안이면 그것을 쓴다 (PlannerParams.stationary_surge 주석)."""
-    kw = dict(goal_heading=goal_heading, terminal_handle_m=terminal_handle_m)
+    만들어, 곡선 전체가 안전선 안이면 그것을 쓴다 (PlannerParams.stationary_surge 주석).
+    prev_plan(재계획 때 지금 경로)을 주면 후보가 그 경로 쪽을 유지하려 한다 (w_hist)."""
+    kw = dict(goal_heading=goal_heading, terminal_handle_m=terminal_handle_m,
+              prev_plan=prev_plan)
     plan = _generate_wide(dri, boat_xy, boat_yaw, boat_vel_xy, waypoint_xy, p, now_t, **kw)
     if plan is None or p.stationary_surge <= 0.0:
         return plan
@@ -303,7 +327,8 @@ def _repaired_or_none(plan, dri, p):
 
 def _generate_once(dri, boat_xy, boat_yaw: float, boat_vel_xy, waypoint_xy,
                    p: PlannerParams, now_t: float = 0.0, *, goal_heading: float | None = None,
-                   terminal_handle_m: float = .75, p1_dir: float | None = None) -> Plan | None:
+                   terminal_handle_m: float = .75, p1_dir: float | None = None,
+                   prev_plan: Plan | None = None) -> Plan | None:
     """generate 의 한 번 시도 — 부채꼴 폭은 p.search_fov.
 
     p1_dir: p1 방향 [rad]. None 이면 선수(boat_yaw). 정지한 배는 generate 가 첫 경로점 쪽을 준다.
@@ -383,7 +408,8 @@ def _generate_once(dri, boat_xy, boat_yaw: float, boat_vel_xy, waypoint_xy,
                     return None
                 bearings.append(wp_bearing)
                 break
-            picked = _arc_pick(dri, boat, r, wp_bearing, prev_pt, prev_b, p)
+            picked = _arc_pick(dri, boat, r, wp_bearing, prev_pt, prev_b, p,
+                               _plan_bearing_at(prev_plan, boat, r))
             if picked is None:
                 return None            # 안전 후보 전멸 → 호출측이 ESCAPE)
             b, prev_pt = picked

@@ -440,3 +440,47 @@ def test_blocked_front_cone_falls_back_to_wide_search():
 def test_open_water_keeps_the_narrow_search():
     plan = gen(dri_of([]), vel=V_ZERO)
     assert plan is not None and plan.search_fov == pytest.approx(math.radians(90.0))
+
+
+# ---------- 재계획 때 직전 경로 쪽 유지 (w_hist, 2026-11-12) ----------
+
+def _side(plan, x=4.0):
+    """경로가 x 지점을 지날 때의 y (+ = 왼쪽)."""
+    s = plan.samples
+    return float(s[np.argmin(np.abs(s[:, 0] - x)), 1])
+
+
+def _bar(y):
+    return [(4.0, y - 0.2), (4.0, y), (4.0, y + 0.2)]
+
+
+def _left_plan():
+    plan = generate(dri_of(_bar(-0.4)), BOAT, YAW, (1.0, 0.0), WP_FAR, PlannerParams())
+    assert _side(plan) > 0.5
+    return plan
+
+
+def test_replan_keeps_previous_side_on_near_tie():
+    """정면 장애물(좌우 비용 같음): 처음부터 만들면 오른쪽 — 장애물이 0.2 m 만 움직여도 좌우가
+    뒤집혔다(2026-11-12 영상 2:23.4 → 2:23.8). 직전 경로(왼쪽)를 주면 왼쪽 그대로, 안전."""
+    tie = dri_of(_bar(0.0))
+    p = PlannerParams()
+    assert _side(generate(tie, BOAT, YAW, (1.0, 0.0), WP_FAR, p)) < -0.5
+    kept = generate(tie, BOAT, YAW, (1.0, 0.0), WP_FAR, p, prev_plan=_left_plan())
+    assert _side(kept) > 0.5
+    assert check(kept, tie, BOAT, p) is None
+
+
+def test_replan_switches_side_when_previous_side_is_clearly_worse():
+    """장애물이 왼쪽으로 옮겨 오른쪽이 분명히 나으면 직전 경로가 왼쪽이어도 넘어간다."""
+    moved = dri_of(_bar(0.4))
+    plan = generate(moved, BOAT, YAW, (1.0, 0.0), WP_FAR, PlannerParams(), prev_plan=_left_plan())
+    assert _side(plan) < -0.5
+    assert check(plan, moved, BOAT, PlannerParams()) is None
+
+
+def test_replan_returns_straight_when_obstacle_is_gone():
+    """장애물이 경로에서 비키면 직전 우회에 묶이지 않고 직진으로 돌아온다."""
+    plan = generate(dri_of([(4.0, 3.0)]), BOAT, YAW, (1.0, 0.0), WP_FAR, PlannerParams(),
+                    prev_plan=_left_plan())
+    assert abs(_side(plan)) < 0.1

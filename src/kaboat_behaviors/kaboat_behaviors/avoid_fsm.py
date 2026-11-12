@@ -24,6 +24,7 @@ argmin)은 그 사각지대를 근거로 방향을 골라, 제자리 회전 뒤�
 """
 from collections import deque
 from dataclasses import dataclass, replace
+import inspect
 import math
 
 import numpy as np
@@ -53,7 +54,9 @@ class FsmParams:
     v_max: float = 1.4            # 📝 현재 회피 추종 상한 [m/s] (교정 전속은 v_full)
     omega_max: float = 0.52       # ✅ 실측 최대 요레이트 [rad/s] — v = ω_max/κ
     slow_radius: float = 1.5      # 목표 근접 감속 반경 [m]
-    t_backstop: float = 3.0       # 📝 재생성 트리거 (c) 주기 [s]
+    # 📝 재생성 트리거 (c) 주기 [s]. 3.0 → 5.0 (2026-11-12 영상): FOLLOW 중 재계획·수리가 평균
+    # 2.8 s(2:21~2:50 은 2.4 s)마다라 경로가 자주 갈아엎혔다. 멀쩡한 경로는 더 오래 따라간다.
+    t_backstop: float = 5.0
     d_panic: float = 2.0          # 📝 위반까지 경로거리 이 값 미만이면 즉시 ESCAPE [m]
     #   근거: 전속 1.48 에서 타력 감쇠 실측(3s 에 0.11 로) → 제동거리 ~2m + 여유 (예전 3.0).
     #   3.0 → 2.0 (2026-11-12): 붐이 추가된 회피 코스가 촘촘해 3 m 안에 장애물이 늘 있어
@@ -61,6 +64,13 @@ class FsmParams:
     #   에서는 전속보다 느려 제동거리가 짧다. 빠르게 달리는 구간에서는 여유가 없음에 주의.
     t_retry: float = 5.0          # 📝 plan 재확보/위반 교착 누적 상한 [s] → ESCAPE
     delta_r1: float = 1.0         # 📝 트리거 (a') r1 급락 판정 폭 [m]
+    # 트리거 (a) 는 기준 장애물이 이 거리 [m] 이상일 때만 — 선체 옆 물보라·바로 옆 부표(r1 < 1.5 m)를
+    # 지나는 순간 재계획하면 그 장애물이 코앞인 채로 새 경로를 만들어, 영상(2026-11-12)에서
+    # trigger_a 1 s 안에 ESCAPE 가 다섯 번 났다. 가까운 기준은 백스톱이 맡는다.
+    trigger_a_min_r1: float = 1.5
+    # 트리거 (a') 는 더 가까운 장애물이 이 시간 [s] 이상 계속 보여야 — 물보라 칸 하나의 깜빡임으로
+    # 재계획하지 않게. 0 = 즉시 (예전)
+    trigger_a2_hold: float = 0.5
     # ESCAPE 는 FOLLOW 중 기록한 궤적을 거꾸로 되짚는다 (모듈 docstring 참고).
     trail_spacing: float = 0.1       # 궤적 기록 간격 [m] — 이만큼 움직일 때마다 1점
     trail_max_length: float = 10.0   # 보관할 궤적 길이 [m] — 넘으면 오래된 점부터 버림
@@ -305,6 +315,13 @@ class AvoidFsm:
                  yaw_kp: float, yaw_kd: float, generator=None):
         self.p = planner
         self.generate = generate if generator is None else generator
+        # 재계획 때 지금 경로를 prev_plan 으로 넘길 수 있는 생성 함수인가 (w_hist — 같은 쪽 유지)
+        try:
+            params = inspect.signature(self.generate).parameters.values()
+            self._gen_takes_prev = any(
+                q.name == 'prev_plan' or q.kind is inspect.Parameter.VAR_KEYWORD for q in params)
+        except (TypeError, ValueError):
+            self._gen_takes_prev = False
         self.fsm = fsm
         self.yaw_kp = yaw_kp
         self.yaw_kd = yaw_kd
@@ -319,6 +336,7 @@ class AvoidFsm:
         self._escape_t0 = None     # ESCAPE 진입 시각 — 최소 이탈 판정
         self._escape_ok = 0        # ESCAPE 중 generate 연속 성공 tick 수
         self.escape_detail = ''    # 마지막 ESCAPE 진입 이유 (노드 로그용 — 위반 거리·막힌 시간)
+        self._a2_since = None      # 트리거 (a') 조건이 처음 참이 된 시각 — trigger_a2_hold 판정
         # 지나온 궤적 — 재활성화 때 지운다 (이전 activation 의 길은 근거가 아님)
         self.trail = Trail(self.fsm.trail_spacing, self.fsm.trail_max_length)
         self._retrace = None       # ESCAPE 되짚기 샘플 (지금 위치 → 오래된 점)
@@ -386,6 +404,14 @@ class AvoidFsm:
                                self.yaw_kp, self.yaw_kd)
         return StepOut(lin, ang, self.state, None, None)
 
+    def _regenerate(self, dri, boat_xy, yaw, vel_xy, wp_xy, now_t):
+        """FOLLOW 중 재계획 — 지금 경로를 prev_plan 으로 넘겨 같은 쪽을 유지 (w_hist).
+        생성 함수가 prev_plan 을 못 받으면(테스트용 대체 함수 등) 예전처럼."""
+        if self._gen_takes_prev:
+            return self.generate(dri, boat_xy, yaw, vel_xy, wp_xy, self.p, now_t,
+                                 prev_plan=self.plan)
+        return self.generate(dri, boat_xy, yaw, vel_xy, wp_xy, self.p, now_t)
+
     def _escape_hold(self, ev: str) -> StepOut:
         """되짚을 길이 없음 — 정지하고 generate 재시도만 (이벤트는 처음 1회)."""
         first = not self._retrace_stopped
@@ -427,17 +453,24 @@ class AvoidFsm:
             prog_r = math.hypot(boat_xy[0] - self.plan.origin[0],
                                 boat_xy[1] - self.plan.origin[1])
             r1_now = pick_ref_obstacle(dri.occ_xy, boat_xy, yaw, self.p)
-            if self.plan.r1 is not None and prog_r > self.plan.r1:
+            a2 = r1_now is not None and (self.plan.r1 is None
+                                         or r1_now < self.plan.r1 - f.delta_r1)
+            if not a2:
+                self._a2_since = None
+            elif self._a2_since is None:
+                self._a2_since = now_t
+            if (self.plan.r1 is not None and self.plan.r1 >= f.trigger_a_min_r1
+                    and prog_r > self.plan.r1):
                 trig = 'trigger_a_regen'
-            elif r1_now is not None and (self.plan.r1 is None
-                                         or r1_now < self.plan.r1 - f.delta_r1):
+            elif a2 and now_t - self._a2_since >= f.trigger_a2_hold:
                 trig = 'trigger_a2_regen'
             elif now_t - self.plan.created_t >= f.t_backstop:
                 trig = 'backstop_regen'
             if trig is not None:
-                new = self.generate(dri, boat_xy, yaw, vel_xy, wp_xy, self.p, now_t)
+                new = self._regenerate(dri, boat_xy, yaw, vel_xy, wp_xy, now_t)
                 if new is not None:
                     self.plan, ev = new, trig
+                    self._a2_since = None
         else:
             # ── 위반 사다리: repair(≤repair_max) → generate → 긴급도 분기
             for _ in range(self.p.repair_max):
@@ -449,7 +482,7 @@ class AvoidFsm:
                     self._stuck_t0 = None
                     break
             if violation is not None:
-                new = self.generate(dri, boat_xy, yaw, vel_xy, wp_xy, self.p, now_t)
+                new = self._regenerate(dri, boat_xy, yaw, vel_xy, wp_xy, now_t)
                 if new is not None:
                     self.plan, ev = new, 'violation_regen'
                     self._stuck_t0 = None
