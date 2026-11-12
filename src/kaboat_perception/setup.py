@@ -27,6 +27,7 @@ setup(
         'console_scripts': [
             'occupancy_grid = kaboat_perception.occupancy_grid:main',
             'buoy_detector = kaboat_perception.buoy_detector:main',
+            'buoy_lidar_detector = kaboat_perception.buoy_lidar_detector:main',
             'dock_mark_detector = kaboat_perception.dock_mark_detector:main',
         ],
     },
