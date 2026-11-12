@@ -372,3 +372,27 @@ def test_finite_goal_inside_obstacle_does_not_get_moved_to_a_free_arc():
     dri = dri_of([(4., 0.)])
     plan = generate(dri, BOAT, YAW, V_ZERO, (4., 0.), p)
     assert plan is None or check(plan, dri, BOAT, p) is not None
+
+
+# ---------- 막힐 때만 넓히기 (search_fov_fallback) ----------
+
+# 회피 코스처럼: 남쪽 경계(y=-2)에 붙은 붐이 정면 4 m 에서 북쪽 4.8 m(방위 50°)까지 막는다 —
+# 목표(정면 15 m) 방향 ±45° 는 다 막히고, 남쪽은 경계와 붐에 갇혀 있고, 틈은 북쪽뿐.
+BOOM = ([(4.0, float(y)) for y in np.arange(-2.0, 4.81, RES)]
+        + [(float(x), -2.0) for x in np.arange(-1.0, 4.01, RES)])
+
+
+def test_blocked_front_cone_falls_back_to_wide_search():
+    dri = dri_of(BOOM)
+    assert gen(dri, vel=V_ZERO, search_fov_fallback=0.0) is None      # 예전 동작: 계획 없음
+    plan = gen(dri, vel=V_ZERO)                                       # 기본: ±90° 로 다시 찾음
+    assert plan is not None
+    assert plan.search_fov == pytest.approx(math.pi)
+    assert check(plan, dri, BOAT, PlannerParams()) is None            # 장애물 피해 감
+    crossing = plan.samples[np.argmin(np.abs(plan.samples[:, 0] - 4.0))]
+    assert crossing[1] > 4.8                                          # 붐 끝 바깥 북쪽 틈으로
+
+
+def test_open_water_keeps_the_narrow_search():
+    plan = gen(dri_of([]), vel=V_ZERO)
+    assert plan is not None and plan.search_fov == pytest.approx(math.radians(90.0))

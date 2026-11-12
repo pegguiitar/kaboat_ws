@@ -59,6 +59,10 @@ class PlannerParams:
     # 실측돼 120°→90°로 좁힘. 부채꼴 폭만 좁아지고 중심은 여전히
     # wp_bearing — 헤딩은 이 탐색에 전혀 관여하지 않는다.
     search_fov: float = math.radians(90.0)
+    # 막힐 때만 넓히기 (2026-11-12): search_fov 안에서 안전 후보가 없으면 같은 tick 에
+    # 이 폭으로 한 번 더 찾는다. 붐이 비스듬히 통로를 막아 목표 방향 ±45° 밖으로 돌아가야
+    # 하는 회피 코스용. 평소(±45° 에 답이 있을 때)는 동작이 같다. ≤ search_fov 면 끔.
+    search_fov_fallback: float = math.radians(180.0)
     n_candidates: int = 31
     # 후보 기하 비용 가중. 먼저 이 비용의 최적 안전 후보를 찾고, 그 후보의
     # 방위 ±dri_angle_slack 안에서만 DRI 최소 후보를 찾는다. 전역 DRI argmin
@@ -109,6 +113,7 @@ class Plan:
     tail_samples: np.ndarray | None = None
     docking_phase: str = ''
     progress_idx: int = 0    # 배가 지나온 samples 진행 인덱스 — check 가 갱신(단조)
+    search_fov: float | None = None  # 이 계획을 만든 부채꼴 폭 (넓혀 만들었으면 수리도 그 폭)
 
 
 @dataclass
@@ -230,7 +235,42 @@ def _arc_pick(dri, origin, radius, wp_bearing, prev_pt, prev_bearing,
 def generate(dri, boat_xy, boat_yaw: float, boat_vel_xy, waypoint_xy,
              p: PlannerParams, now_t: float = 0.0, *, goal_heading: float | None = None,
              terminal_handle_m: float = .75) -> Plan | None:
-    """제어점 6개 생성 + spline 샘플링 (§3-2). 전진 반평면에 답이 없으면 None."""
+    """제어점 6개 생성 + spline 샘플링 (§3-2). search_fov 에 답이 없으면 search_fov_fallback
+    으로 한 번 더 (막힐 때만 넓히기). 그래도 없으면 None."""
+    plan = _generate_once(dri, boat_xy, boat_yaw, boat_vel_xy, waypoint_xy, p, now_t,
+                          goal_heading=goal_heading, terminal_handle_m=terminal_handle_m)
+    if plan is None and p.search_fov_fallback > p.search_fov:
+        plan = _generate_once(dri, boat_xy, boat_yaw, boat_vel_xy, waypoint_xy,
+                              replace(p, search_fov=p.search_fov_fallback), now_t,
+                              goal_heading=goal_heading, terminal_handle_m=terminal_handle_m)
+        # 넓은 부채꼴은 제어점이 크게 꺾여 곡선이 장애물 모서리를 질러갈 수 있다 — 수리
+        # (제어점 ±repair_dtheta 이동)를 몇 번 해 보고, 곡선 샘플 전체가 안전선 안일 때만
+        # 내보낸다 (아니면 예전처럼 계획 없음)
+        plan = _repaired_or_none(plan, dri, replace(p, search_fov=p.search_fov_fallback))
+    return plan
+
+
+FALLBACK_REPAIRS = 8   # 넓혀 만든 계획에 생성 직후 해 보는 수리 횟수 상한 (각 ms 단위)
+
+
+def _repaired_or_none(plan, dri, p):
+    if plan is None:
+        return None
+    for _ in range(FALLBACK_REPAIRS + 1):
+        bad = np.nonzero(dri.risk_at_many(plan.samples[:, 0], plan.samples[:, 1])
+                         > p.safe_threshold)[0]
+        if bad.size == 0:
+            plan.progress_idx = 0
+            return plan
+        if not repair(plan, dri, int(bad[0]), p):
+            return None
+    return None
+
+
+def _generate_once(dri, boat_xy, boat_yaw: float, boat_vel_xy, waypoint_xy,
+                   p: PlannerParams, now_t: float = 0.0, *, goal_heading: float | None = None,
+                   terminal_handle_m: float = .75) -> Plan | None:
+    """generate 의 한 번 시도 — 부채꼴 폭은 p.search_fov."""
     boat = np.asarray(boat_xy, dtype=np.float64)
     vel = np.asarray(boat_vel_xy, dtype=np.float64)
     # p1 방향 = heading, 길이 = surge(전진 성분)·t_look (§3-2).
@@ -327,7 +367,8 @@ def generate(dri, boat_xy, boat_yaw: float, boat_vel_xy, waypoint_xy,
                 origin=(float(boat[0]), float(boat[1])), r1=r1,
                 radii=radii, bearings=bearings, created_t=now_t,
                 wp_bearing=wp_bearing, spacing=spacing, goal_locked=goal_locked,
-                terminal_heading=goal_heading if heading_locked else None)
+                terminal_heading=goal_heading if heading_locked else None,
+                search_fov=p.search_fov)
 
 
 def generate_docking(dri, boat_xy, boat_yaw, boat_vel_xy, waypoints_xy, goal_heading,
@@ -426,7 +467,8 @@ def repair(plan: Plan, dri, violation_idx: int, p: PlannerParams) -> bool:
             continue                           # preserve the final marker mission goal
         for sgn in (1.0, -1.0):
             nb = plan.bearings[j] + sgn * p.repair_dtheta
-            if abs(_wrap(nb - plan.wp_bearing)) > 0.5 * p.search_fov + 1e-12:
+            fov = max(p.search_fov, plan.search_fov or 0.0)  # 넓혀 만든 계획은 그 폭까지
+            if abs(_wrap(nb - plan.wp_bearing)) > 0.5 * fov + 1e-12:
                 continue                        # arc 부채꼴 한계 (§3-3)
             cps = plan.cps.copy()
             cps[j + 2] = origin + plan.radii[j] * np.array([math.cos(nb),

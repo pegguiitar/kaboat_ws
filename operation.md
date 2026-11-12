@@ -249,6 +249,12 @@ test_avoid_outdoor start_point:=gate_entry goal_point:=gate_end   # 다른 지�
 - 목표 2 m(`goal_tolerance`) 안이면 `FINISHED`로 정지. 경로에서 1.5 m(`max_cross_track_error`) 넘게
   벗어나면 정지, 경로가 5초 넘게 없으면 후진 탈출(`allow_escape:=false`면 정지).
 - 계획은 지도(15 m) 안에서 목표 쪽으로 짧게 이어 가므로 목표가 멀어도 됩니다.
+- 목표 방향 ±45° 안에 안전한 경로가 없으면 같은 순간 ±90°로 한 번 더 찾습니다(`planner.search_fov_fallback`,
+  막힐 때만). 넓혀 만든 경로는 수리 후 곡선 전체가 안전할 때만 씁니다.
+- **가상 벽:** 회피 경기장 긴 두 변(노란 작은 부이 로프)은 `occupancy_grid`가 지도에 장애물(100)로
+  박습니다 — `src/kaboat_perception/config/virtual_walls.yaml`(위도·경도, 2026-11-12 Space 기록 #2~#5).
+  켤 때와 원점을 다시 잡을 때 지금 원점 기준으로 바꿉니다. 로그 `가상 벽 2개 — avoid_north …`.
+  끄려면 `-p virtual_walls_file:=none`. 원점 파일이 없으면 벽을 쓰지 않습니다.
 - 기록 당시 원점과 지금 원점이 다르면 시작을 거부합니다.
 
 **야외 게이트 시험** (`test_gate_outdoor`, 자율주행과 같은 `gate_follower` + `cmd_mux`, 게이트 미션 하나만)

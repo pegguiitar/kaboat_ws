@@ -4,6 +4,7 @@
        /camera/color/image_raw + /camera/depth/image_raw (정렬 뎁스) + /camera/camera_info
                                                       — 카메라 층 (cam_enabled, 색 장애물)
        /imu/data (sensor_msgs/Imu)                    — 기울기 게이팅
+       config/virtual_walls.yaml + ~/kaboat_geo_origin.yaml — 가상 벽 (안 보이는 경계 로프)
        /odom (nav_msgs/Odometry)                      — rolling window 중심
 출력   /occupancy_grid (nav_msgs/OccupancyGrid)
 
@@ -63,6 +64,7 @@ TODO(팀):
 """
 import dataclasses
 import math
+import os
 import time
 
 import cv2
@@ -78,6 +80,17 @@ import sensor_msgs_py.point_cloud2 as pc2
 
 from kaboat_perception.camera_obstacles import (
     CameraObstacleParams, color_image_rgb, depth_image_m, detect_points, visible_mask)
+from kaboat_perception.virtual_walls import load_walls, wall_mask, walls_to_local
+from kaboat_mission.mission_points import DEFAULT_ORIGIN_FILE, read_origin_file
+
+
+def _default_walls_file():
+    try:
+        from ament_index_python.packages import get_package_share_directory
+        share = get_package_share_directory('kaboat_perception')
+    except Exception:
+        return ''
+    return os.path.join(share, 'config', 'virtual_walls.yaml')
 
 L_OCC = 0.80              # 히트 셀 log-odds 증가량 (≈ logit(0.7))
 L_FREE = -0.3             # 경로(자유공간) 셀 log-odds 감소량 (≈ logit(0.43))
@@ -160,6 +173,10 @@ class OccupancyGridNode(Node):
         # 부표 가시성 손실 없음. 성능도 최악조건 0.97→0.74ms/스캔으로 오히려 빨라짐
         # (np.add.at 산발 누적 → unique+인덱싱). False 로 두면 예전 중복 누적 방식.
         # 카메라 층 (camera_obstacles.py) — 기본 끔. 켜려면 d455.launch.py (run_camera).
+        # 가상 벽 (virtual_walls.py): 위도·경도 꺾은선을 지금 원점 기준으로 바꿔 지도에 100 으로.
+        self.declare_parameter('virtual_walls_file', _default_walls_file())   # '' / none = 끔
+        self.declare_parameter('virtual_wall_thickness', 0.4)                 # 벽 두께 [m]
+        self.declare_parameter('origin_file', DEFAULT_ORIGIN_FILE)
         self.declare_parameter('cam_enabled', False)
         self.declare_parameter('cam_rate_hz', 5.0)       # 처리 상한 (카메라 15 fps 중 일부만)
         self.declare_parameter('cam_min_points', 3)      # 한 프레임에 칸당 이만큼 색 점이 있어야 히트
@@ -200,6 +217,13 @@ class OccupancyGridNode(Node):
         self.cam_min_points = int(self.get_parameter('cam_min_points').value)
         self.cam_l_occ = float(self.get_parameter('cam_l_occ').value)
         self.cam_l_free = float(self.get_parameter('cam_l_free').value)
+        self.wall_thickness = float(self.get_parameter('virtual_wall_thickness').value)
+        self.origin_file = str(self.get_parameter('origin_file').value)
+        walls_file = str(self.get_parameter('virtual_walls_file').value).strip()
+        self.walls_latlon = ({} if walls_file.lower() in ('', 'none')
+                             else load_walls(walls_file))
+        self.walls_xy = {}
+        self._origin_stamp = None
 
         self.odom = None
         self.tilted = False
@@ -222,6 +246,9 @@ class OccupancyGridNode(Node):
                 Imu, '/imu/data', self._on_imu, qos_profile_sensor_data)
 
         self.pub = self.create_publisher(OccupancyGrid, '/occupancy_grid', 1)
+        if self.walls_latlon:
+            self._reload_walls()
+            self.create_timer(1.0, self._reload_walls)      # 원점을 다시 잡으면 1 s 안에 반영
         self.cam_points_pub = None
         if self.cam_enabled:
             g = lambda n: str(self.get_parameter(n).value)
@@ -252,6 +279,32 @@ class OccupancyGridNode(Node):
                 f'선체 중심 기준 ({c.offset_x:+.2f}, {c.offset_y:+.2f}) m, 숙임 '
                 f'{c.mount_pitch_deg:.1f}°, 거리 {c.range_min:.1f}~{c.range_max:.1f} m, '
                 f'{1.0 / self.cam_period:.0f} Hz')
+
+    def _reload_walls(self):
+        """원점 파일이 바뀌면(처음 포함) 가상 벽을 그 원점 기준 x·y 로 다시 계산."""
+        path = os.path.expanduser(self.origin_file)
+        try:
+            stamp = os.stat(path).st_mtime_ns if os.path.exists(path) else None
+        except OSError:
+            stamp = None
+        if stamp == self._origin_stamp and (self.walls_xy or stamp is None):
+            return
+        self._origin_stamp = stamp
+        try:
+            origin = read_origin_file(path)
+        except ValueError as exc:
+            origin = None
+            self.get_logger().error(f'원점 파일 오류 — 가상 벽 안 씀: {exc}')
+        if origin is None:
+            if self.walls_xy or stamp is None:
+                self.get_logger().warn(f'원점 파일 없음 ({path}) — 가상 벽 안 씀')
+            self.walls_xy = {}
+            return
+        self.walls_xy = walls_to_local(self.walls_latlon, origin)
+        desc = ', '.join(f'{n} ({xy[0, 0]:.1f}, {xy[0, 1]:.1f})→({xy[-1, 0]:.1f}, {xy[-1, 1]:.1f})'
+                         for n, xy in self.walls_xy.items())
+        self.get_logger().info(f'가상 벽 {len(self.walls_xy)}개 — {desc} m, '
+                               f'두께 {self.wall_thickness:.1f} m')
 
     def _on_odom(self, msg: Odometry):
         self.odom = msg
@@ -431,6 +484,11 @@ class OccupancyGridNode(Node):
             cam = self.cam_grid > 0.0
             p = np.where(cam, np.maximum(p, 1.0 / (1.0 + np.exp(-self.cam_grid))), p)
             observed = observed | cam
+        if self.walls_xy:
+            wall = wall_mask(self.walls_xy, self.anchor, self.cells, self.resolution,
+                             self.wall_thickness)
+            p = np.where(wall, 1.0, p)
+            observed = observed | wall
         data = np.where(observed, np.rint(p * 100.0), -1.0)
 
         grid.data = data.astype(np.int8).ravel().tolist()
