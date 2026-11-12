@@ -11,8 +11,9 @@
           다음 미션 전환은 mission_manager 가 한다(완료 + station_end 2 m 안). 전환 전까지 계속 유지.
 
 부표는 공용 /occupancy_grid 가 아니라 station 전용 지도로 찾는다: /scan/level 을 목표 중심
-고정 격자에 쌓되, 빔이 지나간 칸을 깎는 양을 공용 지도의 free_ratio(기본 0.1)배로 줄여
-라이다가 앞만 보는 동안 옆·뒤로 간 부표를 잊지 않는다. 공용 지도·다른 behavior 는 그대로.
+고정 격자에 쌓되, 큰 덩어리(4칸 이상 = 부표)는 빔이 지나간 칸을 깎는 양을 공용 지도의
+free_ratio(기본 0.1)배로 줄여 라이다가 앞만 보는 동안 옆·뒤로 간 부표를 잊지 않는다. 작은
+덩어리(노이즈)는 공용 지도와 똑같이 깎는다. 공용 지도·다른 behavior 는 그대로.
 
 입력   /scan/level, /odom, /mission/goal, /mission/state
 출력   /cmd/station            주행 명령 (station.motion_enabled=false 면 0)
@@ -75,7 +76,8 @@ class StationKeeper(BehaviorBase):
         p = self.params
         self.get_logger().info(
             f'station: 유지 반경 {p.hold_radius} m · {p.hold_time} s, 부표 간격 {p.side_length} m, '
-            f'전용 지도 free_ratio {p.free_ratio}, motion_enabled={self.motion_enabled}')
+            f'전용 지도 감쇠 {p.l_free} (큰 덩어리 {p.big_min_cells}칸↑ × {p.free_ratio}), '
+            f'motion_enabled={self.motion_enabled}')
 
     def _params_from(self, prefix, cls):
         defaults = cls()

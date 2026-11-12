@@ -4,10 +4,12 @@
 안에 들어가 그 자리를 유지한다. 사각형 주변 6 m(라이다 신뢰 거리) 안에는 다른 장애물이 없다.
 
 1) StationMap — station 전용 log-odds 격자
-   공용 /occupancy_grid 는 빔이 지나간 칸을 스캔마다 L_FREE(-0.3) 깎는다. 라이다가 앞만
+   공용 /occupancy_grid 는 빔이 지나간 칸을 스캔마다 L_FREE(-0.2) 깎는다. 라이다가 앞만
    보는데 배가 사각형 안에서 흔들리면 빔이 옆·뒤 부표 위로 지나가며 부표를 지운다. 그래서
-   station 은 /scan/level 로 자기 지도를 따로 쌓고 free 감쇠에 free_ratio(기본 0.1)를 곱해
-   부표를 오래 기억한다. 공용 지도와 다른 behavior 는 그대로다.
+   station 은 /scan/level 로 자기 지도를 따로 쌓고, **큰 덩어리**(점유 칸이 big_min_cells
+   = 4칸 이상 이어진 것 = 부표)만 감쇠에 free_ratio(0.1)를 곱해 오래 기억한다. 작은 덩어리
+   (해수면 반사 등 노이즈, 보통 1~2칸)는 공용 지도와 똑같이 깎여 금방 사라진다.
+   공용 지도와 다른 behavior 는 그대로다.
    격자는 미션 목표(station_end) 중심에 고정된 정사각형이다(구역이 고정이라 rolling 불필요).
 2) find_buoys — 부표 크기 덩어리 중 목표 반경 안의 강한 순 최대 4개.
 3) estimate_center — 부표 수별 사각형 중심.
@@ -44,11 +46,14 @@ class StationParams:
     resolution: float = 0.1         # [m] 셀
     map_half_size: float = 7.0      # [m] 목표 중심 ±7 m (부표 반경 4 m + 여유)
     max_range: float = 6.0          # [m] 라이다 신뢰 거리. 이보다 먼 히트는 안 씀
-    l_occ: float = 0.8              # 히트 log-odds (공용 지도와 같음)
-    l_free: float = -0.3            # 공용 지도의 free 감쇠
-    free_ratio: float = 0.1         # station 전용 free 감쇠 비율 (−0.3 × 0.1 = −0.03/스캔)
-    l_min: float = -2.0
-    l_max: float = 6.0
+    l_occ: float = 0.8              # 히트 log-odds (공용 occupancy_grid L_OCC 와 같음)
+    l_free: float = -0.2            # free 감쇠 (공용 L_FREE 와 같음) — 작은 덩어리(노이즈)
+    free_ratio: float = 0.1         # 큰 덩어리(부표)만 감쇠 × 이 비율 (−0.2 × 0.1 = −0.02/스캔)
+    big_min_cells: int = 4          # 점유(≥ occ_logodds) 칸이 이만큼 이어지면 큰 덩어리.
+    # 지름 0.4 m 부표는 0.1 m 격자에서 4~9칸(거리 1.5~5.5 m, 흔들림 포함 시뮬 실측),
+    # 해수면 반사는 보통 1~2칸.
+    l_min: float = -2.0             # 공용(-4.5)보다 높게: 흔들려 옆 칸으로 간 부표를 빨리 다시 잡음
+    l_max: float = 8.0              # 공용 L_MAX 와 같음
     # ── 부표 ──
     occ_logodds: float = 2.0        # 이 이상인 칸만 부표 후보 (히트 3스캔)
     min_cluster_cells: int = 2
@@ -81,8 +86,7 @@ class StationParams:
     reverse_band: float = 0.3       # [m] 불감대 + 이 거리 안의 뒤쪽 목표는 후진으로
 
     def __post_init__(self):
-        floats = [v for k, v in vars(self).items()
-                  if not isinstance(v, bool) and k != 'min_cluster_cells']
+        floats = [v for v in vars(self).values() if not isinstance(v, bool)]
         if not all(math.isfinite(float(v)) for v in floats):
             raise ValueError('station parameters must be finite')
         positive = (self.resolution, self.map_half_size, self.max_range, self.l_occ,
@@ -93,7 +97,7 @@ class StationParams:
                     self.max_forward, self.max_turn, self.kp_pos, self.kp_yaw)
         if (min(positive) <= 0 or self.l_free > 0 or not 0.0 <= self.free_ratio <= 1.0
                 or self.l_min >= 0 or self.l_max <= self.occ_logodds
-                or self.min_cluster_cells < 1 or self.hold_time < 0
+                or self.min_cluster_cells < 1 or self.big_min_cells < 1 or self.hold_time < 0
                 or self.min_side >= self.side_length
                 or not 0.0 <= self.max_reverse <= 1.0 or self.max_forward > 1.0
                 or self.max_turn > 1.0 or self.kd_yaw < 0 or self.reverse_band < 0
@@ -129,7 +133,10 @@ class StationMap:
 
     def integrate_scan(self, ranges, angle_min, angle_increment, range_min, range_max,
                        lidar_xy, yaw):
-        """스캔 1장을 누적한다. 히트는 셀당 1회 l_occ, 빔 경로는 셀당 1회 l_free×free_ratio."""
+        """스캔 1장을 누적한다. 히트는 셀당 1회 l_occ, 빔 경로는 셀당 1회 l_free.
+
+        빔 경로 중 큰 덩어리(부표)에 속한 칸만 l_free × free_ratio 로 덜 깎는다.
+        """
         p = self.p
         ranges = np.asarray(ranges, dtype=np.float64)
         if ranges.size == 0:
@@ -156,12 +163,26 @@ class StationMap:
         free_flat = np.setdiff1d(self._cells(xs, ys), hit_flat, assume_unique=True)
 
         flat = self.logodds.reshape(-1)
-        flat[free_flat] += p.l_free * p.free_ratio
+        decay = np.full(free_flat.size, p.l_free, dtype=np.float32)
+        if free_flat.size and p.free_ratio < 1.0:
+            decay[self.big_mask().reshape(-1)[free_flat]] *= p.free_ratio
+        flat[free_flat] += decay
         flat[hit_flat] += p.l_occ
         np.clip(self.logodds, p.l_min, p.l_max, out=self.logodds)
         seen = self.observed.reshape(-1)
         seen[free_flat] = True
         seen[hit_flat] = True
+
+    def big_mask(self) -> np.ndarray:
+        """점유(≥ occ_logodds) 칸이 8방향으로 big_min_cells 이상 이어진 덩어리의 칸들."""
+        p = self.p
+        labels, count = ndimage.label(self.logodds >= p.occ_logodds,
+                                      structure=np.ones((3, 3), dtype=np.uint8))
+        if count == 0:
+            return np.zeros_like(self.observed)
+        big = np.bincount(labels.ravel()) >= p.big_min_cells
+        big[0] = False
+        return big[labels]
 
     def probability_percent(self) -> np.ndarray:
         """디버그 발행용 0~100 (미관측 -1), [iy, ix]."""

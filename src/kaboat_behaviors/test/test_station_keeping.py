@@ -22,8 +22,11 @@ RANGE_MAX = 20.0
 SHORE = 15.0    # 부표에 안 맞은 빔은 15 m 밖 둑에 맞는다 (무반사 inf 빔은 지도가 안 씀)
 
 
-def scan(lidar_xy, yaw, buoys, radius=BUOY_RADIUS):
-    """원 기둥 부표에 대한 2D 레이캐스트 → ranges (부표에 안 맞으면 SHORE)."""
+def scan(lidar_xy, yaw, buoys, radius=BUOY_RADIUS, noise=0.0, rng=None):
+    """원 기둥 부표에 대한 2D 레이캐스트 → ranges (부표에 안 맞으면 SHORE).
+
+    noise: 빔 중 이 비율을 0.8~6 m 무작위 거리 반사(해수면 노이즈)로 바꾼다.
+    """
     ranges = np.full(BEAMS.size, SHORE)
     ox, oy = lidar_xy
     for k, a in enumerate(BEAMS):
@@ -39,11 +42,14 @@ def scan(lidar_xy, yaw, buoys, radius=BUOY_RADIUS):
             if 0.0 < t < ranges[k]:
                 ranges[k] = t
     ranges[ranges > RANGE_MAX] = np.inf
+    if noise > 0.0:
+        flip = rng.random(BEAMS.size) < noise
+        ranges[flip] = rng.uniform(0.8, 6.0, int(flip.sum()))
     return ranges
 
 
-def add(target, lidar_xy, yaw, buoys):
-    args = (scan(lidar_xy, yaw, buoys), -FOV, BEAMS[1] - BEAMS[0], 0.05, RANGE_MAX,
+def add(target, lidar_xy, yaw, buoys, **scan_kw):
+    args = (scan(lidar_xy, yaw, buoys, **scan_kw), -FOV, BEAMS[1] - BEAMS[0], 0.05, RANGE_MAX,
             lidar_xy, yaw)
     if isinstance(target, StationMap):
         target.integrate_scan(*args)
@@ -70,22 +76,42 @@ def test_far_hits_beyond_trust_range_are_ignored():
     assert find_buoys(m) == []
 
 
-def _buoy_strength_after_misses(free_ratio, misses):
-    """부표를 포화시킨 뒤, 부표가 파도에 내려가 빔이 그 위를 지나가는 스캔을 misses 번."""
+def _buoy_after_misses(free_ratio, misses, radius=BUOY_RADIUS):
+    """물체를 포화시킨 뒤, 파도에 내려가 빔이 그 위를 지나가는 스캔을 misses 번."""
     m = StationMap(CENTER, StationParams(free_ratio=free_ratio))
     for _ in range(10):
-        add(m, CENTER, math.radians(135.0), SQUARE)       # (8.5, 1.5) 정면
-    assert len(find_buoys(m)) == 1
+        add(m, CENTER, math.radians(135.0), SQUARE, radius=radius)   # (8.5, 1.5) 정면
+    found = find_buoys(m)
     for _ in range(misses):
         add(m, CENTER, math.radians(135.0), [])
-    return find_buoys(m)
+    return found, find_buoys(m), m
 
 
-def test_station_map_keeps_buoys_that_shared_decay_would_erase():
-    # 공용 지도 감쇠(비율 1.0)면 20 스캔(2 s)에 지워지지만, station 전용(0.1)은 남는다
-    assert _buoy_strength_after_misses(1.0, 20) == []
-    assert len(_buoy_strength_after_misses(0.1, 20)) == 1
-    assert len(_buoy_strength_after_misses(0.1, 120)) == 1   # 12 s 동안 안 보여도 기억
+def test_big_cluster_decays_at_ten_percent_of_shared_rate():
+    found, _, m = _buoy_after_misses(0.1, 0)
+    assert len(found) == 1 and m.big_mask().sum() >= StationParams().big_min_cells
+    # 공용 감쇠(비율 1.0)면 40 스캔(4 s)에 지워지지만, 큰 덩어리(0.1)는 20 s 뒤에도 남는다
+    assert _buoy_after_misses(1.0, 40)[1] == []
+    assert len(_buoy_after_misses(0.1, 40)[1]) == 1
+    assert len(_buoy_after_misses(0.1, 200)[1]) == 1
+
+
+def test_small_cluster_decays_like_shared_map():
+    # 작은 물체(반지름 3 cm → 1~3칸 = 노이즈 크기)는 큰 덩어리가 아니라 공용과 같이 깎인다
+    occ = StationParams().occ_logodds
+    _, _, m = _buoy_after_misses(0.1, 0, radius=0.03)
+    assert 1 <= int((m.logodds >= occ).sum()) <= 3 and not m.big_mask().any()
+    _, _, m = _buoy_after_misses(0.1, 40, radius=0.03)
+    assert int((m.logodds >= occ).sum()) == 0
+
+
+def test_sea_clutter_alone_never_becomes_a_buoy():
+    rng = np.random.default_rng(7)
+    m = StationMap(CENTER, StationParams())
+    for k in range(300):                     # 30 s, 빔 10 % 가 무작위 반사, 배는 천천히 회전
+        add(m, CENTER, math.radians(2 * k), [], noise=0.10, rng=rng)
+        assert not m.big_mask().any()
+    assert find_buoys(m) == []
 
 
 def test_buoys_outside_search_radius_are_ignored():
@@ -175,7 +201,8 @@ WAYPOINT_PARAMS = WaypointParams(
     yaw_kp=BSPLINE_TRACK_YAW_KP, yaw_kd=BSPLINE_TRACK_YAW_KD)
 
 
-def run_mission(start_xy, start_yaw, goal_xy, seed=0, seconds=180.0, current=(0.04, 0.03)):
+def run_mission(start_xy, start_yaw, goal_xy, seed=0, seconds=180.0, current=(0.04, 0.03),
+                noise=0.05):
     rng = np.random.default_rng(seed)
     p = StationParams()
     fsm = StationFsm(goal_xy, p)
@@ -193,7 +220,7 @@ def run_mission(start_xy, start_yaw, goal_xy, seed=0, seconds=180.0, current=(0.
                for i, (bx, by) in enumerate(SQUARE)]
         seen = [b for b in bob if rng.random() > 0.3]
         lidar = (x + 0.4 * math.cos(yaw), y + 0.4 * math.sin(yaw))
-        add(fsm, lidar, yaw, seen)
+        add(fsm, lidar, yaw, seen, noise=noise, rng=rng)
         d = fsm.step((x, y), yaw, r, t)
         if not phases or phases[-1] != d.phase:
             phases.append(d.phase)
@@ -231,7 +258,10 @@ def test_closed_loop_enters_holds_and_completes(start, yaw, goal, seed, current)
     # 완료 후 10 s 더 유지해도 사각형 안 (해류에 밀려도 앵커가 붙잡는다)
     assert math.dist(final, CENTER) < P.hold_radius
     assert min_clear > 0.6                         # 부표와 부딪히지 않음 (선체 반폭 + 여유)
-    assert len(find_buoys(fsm.map)) == 4
+    buoys = find_buoys(fsm.map)
+    assert len(buoys) == 4                         # 빔 5 % 노이즈에도 가짜 부표 없음
+    assert all(min(math.hypot(b.x - bx, b.y - by) for bx, by in SQUARE) < 0.4
+               for b in buoys)
     assert fsm.center_kind == 'four'
     assert math.dist(fsm.center, CENTER) < 0.3
 
