@@ -36,7 +36,10 @@ class GateParams:
     # 수조 간격 2.0·폭 3.0 → 1.67). 한쪽에만 있는 것(게이트 앞 장애물)은 경로 검사가 맡는다.
     gate_circle_margin: float = 1.2
     min_gate_forward: float = 0.3
-    max_gate_forward: float = 9.0
+    # 쌍 후보로 볼 부표의 앞 거리 상한 [m] (배→목표 축). 9.0 → 6.0 (2026-11-12): 8 m 밖 지도
+    # 가장자리 부표로 엉뚱한 쌍을 골랐다. 게이트 간격 2.5 m 라 다음 게이트는 3~4 m 안,
+    # gate_entry 는 첫 게이트 2~3 m 앞에 찍는다.
+    max_gate_forward: float = 6.0
     max_midpoint_lateral: float = 2.5
     passed_pair_exclusion: float = 1.0
     min_pair_advance: float = 0.8

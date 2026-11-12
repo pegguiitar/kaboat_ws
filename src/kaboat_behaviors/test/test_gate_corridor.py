@@ -221,11 +221,15 @@ def test_selection_stats_explain_why_no_pair_was_chosen():
     stats = {}
     grid = gate_grid()                                   # 3쌍 (x 3·5·7, y ±1.5)
     pair = select_gate_pair(grid, (0.0, 0.0), (9.0, 0.0), [], GateParams(), stats=stats)
-    assert pair is not None and stats['posts'] == 6 and stats['ahead'] == 6
+    assert pair is not None and stats['posts'] == 6
+    assert stats['ahead'] == 4                           # 앞 창 6 m — x 7 쌍은 아직 후보 아님
+    wide = GateParams(max_gate_forward=9.0)
+    select_gate_pair(grid, (0.0, 0.0), (9.0, 0.0), [], wide, stats=stats)
+    assert stats['ahead'] == 6
     assert stats['chosen_skew_deg'] == pytest.approx(0.0, abs=1.0)
     # 세 쌍 다 보류 중 → 쌍 없음, 이유가 '통과·보류'로 잡힌다
     held = [(3.2, 0.1), (5.2, 0.1), (7.2, 0.1)]
-    assert select_gate_pair(grid, (0.0, 0.0), (9.0, 0.0), [], GateParams(),
+    assert select_gate_pair(grid, (0.0, 0.0), (9.0, 0.0), [], wide,
                             excluded_midpoints=held, stats=stats) is None
     assert stats['held'] == 3 and stats['diagonal'] >= 2
     text = describe_reasons(stats)

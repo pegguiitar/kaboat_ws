@@ -15,7 +15,7 @@ gate_follower:
     gate.max_pair_skew_deg: 35.0        # 게이트선이 다가가는 방향의 수직에서 기울어도 되는 각도 (휜 통로)
     gate.gate_circle_margin: 1.2        # 두 기둥을 지름으로 한 원 × 이 배수 안에 다른 기둥 → 대각선 오쌍으로 거름
     gate.min_gate_forward: 0.3
-    gate.max_gate_forward: 9.0
+    gate.max_gate_forward: 6.0          # 쌍 후보 부표의 앞 거리 상한 (9 → 6: 먼 지도 가장자리 오쌍 방지)
     gate.max_midpoint_lateral: 2.5
     gate.passed_pair_exclusion: 1.0
     gate.min_pair_advance: 0.8
