@@ -39,6 +39,7 @@ setup(
             'straight_line_test = kaboat_hardware.straight_line_test:main',
             'bspline_track_test = kaboat_hardware.bspline_track_test:main',
             'dock_lidar_markers = kaboat_hardware.dock_lidar_markers:main',
+            'dock_ctrl_v2 = kaboat_hardware.dock_ctrl_v2:main',
             'dock_ctrl = kaboat_hardware.dock_ctrl:main',
             'dock_marker_goal = kaboat_hardware.dock_marker_goal:main',
             'real_obstacle_avoid_test = kaboat_hardware.real_obstacle_avoid_test:main',

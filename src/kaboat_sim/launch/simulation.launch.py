@@ -149,6 +149,9 @@ def generate_launch_description():
         default_value='False',
         description='Whether to run Gazebo in headless mode (server only)'
     )
+    camera_arg = DeclareLaunchArgument(
+        'sim_camera_enabled', default_value='true',
+        description='Enable the RGBD camera used by dock YOLO')
 
     # 스폰 위치 — 기본값은 게이트 미션 시작점. 다른 미션을 검증할 때는
     # launch 파일을 복사하지 말고 이 인자를 넘긴다
@@ -168,7 +171,7 @@ def generate_launch_description():
         ]),
         launch_arguments={
             'gz_args': PythonExpression([
-                "'-s -r ' + '", world_file_path, "' if '", LaunchConfiguration('headless'), "'.lower() == 'true' else '-r ' + '", world_file_path, "'"
+                "'-s --headless-rendering -r ' + '", world_file_path, "' if '", LaunchConfiguration('headless'), "'.lower() == 'true' else '-r ' + '", world_file_path, "'"
             ])
         }.items(),
     )
@@ -182,7 +185,9 @@ def generate_launch_description():
         name='robot_state_publisher',
         output='screen',
         parameters=[{
-            'robot_description': ParameterValue(Command(['xacro ', xacro_file_path]), value_type=str),
+            'robot_description': ParameterValue(Command([
+                'xacro ', xacro_file_path, ' sim_camera_enabled:=',
+                LaunchConfiguration('sim_camera_enabled')]), value_type=str),
             'use_sim_time': True,
         }]
     )
@@ -275,6 +280,7 @@ def generate_launch_description():
 
     return LaunchDescription([
         headless_arg,
+        camera_arg,
         *spawn_args,
         odom_noise_arg,
         set_plugin_path,

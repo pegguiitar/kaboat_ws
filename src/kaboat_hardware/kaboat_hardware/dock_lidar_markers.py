@@ -15,7 +15,8 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 qos=QoSProfile(depth=1,reliability=ReliabilityPolicy.BEST_EFFORT,durability=DurabilityPolicy.VOLATILE)
 from tf2_ros import Buffer, TransformListener, TransformException
 from visualization_msgs.msg import Marker, MarkerArray
-from kaboat_behaviors.dock_lidar_wall import RayWall, RayWallParams, associate_walls
+from kaboat_behaviors.dock_lidar_wall import (RayWall, RayWallParams, WallObservation,
+    associate_walls, fit_ray_wall, intersect_ray)
 from kaboat_behaviors.slot_axis import scan_points
 
 CLASSES=('triangle','circle','square')
@@ -52,7 +53,8 @@ class DockLidarMarkers(Node):
         defaults={'marker_behind_wall_m':1.,'ray_scan_slop_s':.12,'input_timeout_s':.7,
                   'angular_window_deg':15.,'ransac_inlier_m':.06,'ransac_min_span_m':.65,
                   'ransac_min_points':12,'shared_extrapolation_m':2.,'base_frame':'base_link','target_class':'triangle',
-                  'station_normal_hint_odom':[0.,0.], 'station_history_timeout_s':1.5}
+                  'station_normal_hint_odom':[0.,0.], 'station_history_timeout_s':1.5,
+                  'scan_topic':'/scan/level'}
         for k,v in defaults.items():self.declare_parameter(k,v)
         get=lambda k:self.get_parameter(k).value
         self.target=str(get('target_class'))
@@ -92,10 +94,10 @@ class DockLidarMarkers(Node):
                                 ('normal_base',Vector3Stamped),('wall_point',PointStamped),
                                 ('marker_ground',PointStamped),('normal',Vector3Stamped)]:
                 self.pubs[c,suffix]=self.create_publisher(kind,f'/dock/lidar/{c}/{suffix}',qos)
-        # 벽선 RANSAC — 배가 수평일 때만 오는 스캔 (기운 스캔은 수면을 훑어 벽을 잘못 잡음)
-        self.create_subscription(LaserScan,'/scan/level',self._on_scan,qos)
+        self.create_subscription(LaserScan,str(get('scan_topic')),self._on_scan,qos)
         self.status_pub=self.create_publisher(String,'/dock/lidar/status',10)
         self.viz_pub=self.create_publisher(MarkerArray,'/dock/lidar/markers',qos)
+        self.direct_viz_pub=self.create_publisher(MarkerArray,'/dock/lidar/direct_markers',qos)
         self.create_timer(.1,self._tick)
 
     def _on_ray(self,c,m):
@@ -143,7 +145,7 @@ class DockLidarMarkers(Node):
                     array.markers.append(m)
             self.alias_viz[frame].publish(array)
 
-    def _publish_visuals(self,observations,stamp):
+    def _publish_visuals(self,observations,stamp,publisher=None):
         array=MarkerArray();colors={'triangle':(1.,.1,.1),'circle':(.1,1.,.1),'square':(.1,.3,1.)}
         for i,c in enumerate(CLASSES):
             observation=observations.get(c)
@@ -168,7 +170,7 @@ class DockLidarMarkers(Node):
                         m.pose.position.x,m.pose.position.y=map(float,hit);m.pose.position.z=.3
                         m.text=f'{c}: '+('shared '+observation.source if observation.shared else 'direct')
                 array.markers.append(m)
-        self.viz_pub.publish(array)
+        (publisher or self.viz_pub).publish(array)
 
     def _tick(self):
         started=time.perf_counter();now=self.get_clock().now().nanoseconds*1e-9
@@ -180,7 +182,7 @@ class DockLidarMarkers(Node):
         available=[m for m in self.scans if -.1<=now-stamp_s(m)<=self.timeout]
         scan=(min(available,key=lambda m:abs(stamp_s(m)-anchor))
               if available and anchor is not None else self.scan)
-        observations={};details={};reason='ok';world_tf=None;selection={}
+        observations={};direct_observations={};details={};direct_normals={};reason='ok';world_tf=None;selection={}
         stamp=self.get_clock().now().to_msg() if scan is None else scan.header.stamp
         try:
             if scan is None or not -.1<=now-stamp_s(scan)<=self.timeout:
@@ -231,8 +233,33 @@ class DockLidarMarkers(Node):
             if (world_tf is not None and self.previous_world_wall is not None
                     and 0<=stamp_s(scan)-self.previous_wall_stamp<=self.history_timeout):
                 previous=transform_wall(self.previous_world_wall,world_tf,inverse=True)
+            # Expose an independent current-scan RANSAC fit for each mask.
+            # Station association below remains the sole source of goal points.
+            direct_walls={}
+            for c,(origin,direction) in rays.items():
+                wall=fit_ray_wall(points,origin,direction,self.params,normal_hint=normal_hint)
+                direct_walls[c]=wall
+                if wall is None or world_tf is None:
+                    direct_normals[c]={'valid':False}
+                    continue
+                hit=intersect_ray(wall,origin,direction,self.params)
+                if hit is not None:
+                    direct_observations[c]=WallObservation(hit,wall,c,False)
+                normal=rotate([*wall.normal,0.],world_tf.rotation)[:2]
+                normal/=np.linalg.norm(normal)
+                center_odom=transform_point([*wall.center,0.],world_tf)[:2]
+                direct_normals[c]={'valid':True,'normal_odom':normal.tolist(),
+                                   'wall_center_odom':center_odom.tolist(),
+                                   'rms_m':wall.rms,'span_m':wall.span,'points':wall.points}
             observations=associate_walls(points,rays,self.params,normal_hint=normal_hint,
                                          previous_wall=previous,selection=selection)
+            # The target ray must use its own nearest measured line. A shared
+            # side-finger plane can otherwise shift the stop point several metres.
+            target_wall=direct_walls.get(self.target)
+            if target_wall is not None:
+                hit=intersect_ray(target_wall,*rays[self.target],self.params)
+                if hit is not None:
+                    observations[self.target]=WallObservation(hit,target_wall,self.target,False)
             self.last_scan=stamp_s(scan)
             self.last_pair=pair
             if observations and world_tf is not None:
@@ -257,9 +284,11 @@ class DockLidarMarkers(Node):
         except (ValueError,TransformException) as exc:reason=str(exc)
         self._publish_aliases(observations,stamp,world_tf)
         self._publish_visuals(observations,stamp)
+        self._publish_visuals(direct_observations,stamp,self.direct_viz_pub)
         self.status_pub.publish(String(data=json.dumps({'valid':bool(observations),'reason':reason,
             'scan_stamp_s':stamp_s(scan) if scan else None,'marker_behind_wall_m':self.behind,
-            'markers':details,'station_selection':selection,'processing_ms':(time.perf_counter()-started)*1000})))
+            'markers':details,'direct_normals':direct_normals,
+            'station_selection':selection,'processing_ms':(time.perf_counter()-started)*1000})))
 
 
 def main(args=None):

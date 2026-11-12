@@ -141,8 +141,8 @@ def mission_slot(name: str, states=MISSION_STATES):
 def mission_targets(store: 'PointStore', states=MISSION_STATES) -> dict:
     """<미션>_entry / <미션>_end 지점 → {미션: {'entry': [x, y, deg], 'end': [x, y]}}.
 
-    기록이 없는 미션은 결과에 없다. 한쪽만 기록된 미션이 있으면 ValueError — 끝 지점이
-    없으면 mission_params 의 다른 좌표(sim 값 등)로 달려갈 수 있어서 시작 자체를 막는다.
+    기록이 없는 미션은 결과에 없다. dock 은 LiDAR/GPS 로 종료점을 만들므로
+    dock_entry 만 기록해도 된다. 다른 미션은 entry/end 쌍이 필요하다.
     """
     found = {}
     for name, point in store.points.items():
@@ -153,6 +153,10 @@ def mission_targets(store: 'PointStore', states=MISSION_STATES) -> dict:
     for state in states:
         pair = found.get(state)
         if pair is None:
+            continue
+        if state == 'dock' and 'entry' in pair and 'end' not in pair:
+            entry = pair['entry'].pose()
+            targets[state] = {'entry': entry, 'end': entry[:2]}
             continue
         for kind, suffix in (('entry', ENTRY_SUFFIX), ('end', END_SUFFIX)):
             if kind not in pair:

@@ -26,7 +26,8 @@
         <scene>scene</scene>
         <ambient_light>0.4 0.4 0.4</ambient_light>
         <background_color>0.8 0.8 0.8</background_color>
-        <camera_pose>15.0 0.0 13.2 0 0.25 2.94</camera_pose>
+        <!-- Dock trial: boat spawns at (58,66), target wall is at x=70. -->
+        <camera_pose>55.0 66.0 6.0 0 0.45 0</camera_pose>
         <camera_clip>
           <near>0.25</near>
           <far>10000</far>
@@ -268,7 +269,7 @@
           key: "gain"
           value {
             type: DOUBLE
-            double_value: 1.7
+            double_value: 0.0
           }
         }
         params {

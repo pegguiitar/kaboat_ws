@@ -38,7 +38,7 @@ class DockSegmenter:
     def predict(self, bgr: np.ndarray) -> list[DockDetection]:
         result = self.model.predict(
             bgr, conf=self.confidence, imgsz=self.image_size,
-            device=self.device, quantize=16 if self.half else None, retina_masks=True, verbose=False)[0]
+            device=self.device, half=self.half, retina_masks=True, verbose=False)[0]
         if result.masks is None:
             return []
         height, width = bgr.shape[:2]

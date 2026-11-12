@@ -37,6 +37,16 @@ RUN wget -q https://packages.osrfoundation.org/gazebo.gpg -O /usr/share/keyrings
 # 필요하므로 이미지 레벨에서 고정해 둔다 — 매번 export 하는 걸 잊지 않도록.
 ENV GZ_VERSION=garden
 
+# Dock YOLO runs in the same ROS Python environment as cv_bridge.  Keep the
+# published image/container names unchanged; this only extends its packages.
+COPY src/kaboat_perception/requirements-yolo.txt /tmp/requirements-yolo.txt
+RUN python3 -m pip install --no-cache-dir 'packaging==24.2' \
+    && python3 -m pip install --no-cache-dir --timeout 120 --retries 5 torch torchvision \
+       --index-url https://download.pytorch.org/whl/cpu \
+    && python3 -m pip install --no-cache-dir 'numpy==1.24.4' 'opencv-python==4.10.0.84' \
+    && python3 -m pip install --no-cache-dir -r /tmp/requirements-yolo.txt \
+    && rm /tmp/requirements-yolo.txt
+
 # 3. 작업 디렉토리 설정 (컨테이너 내부 워크스페이스)
 WORKDIR /workspace/kaboat_ws
 

@@ -18,3 +18,6 @@ __pycache__/
 
 # Local CUDA Python environment
 /.venv-dock-yolo/
+
+# Local reuse of external VRX/ros_gz source trees for docking simulation.
+/docker-compose.override.yml
