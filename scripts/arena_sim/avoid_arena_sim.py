@@ -9,10 +9,12 @@
     python3 scripts/arena_sim/avoid_arena_sim.py --scenario field --seed 0 --plot out.png
 
 세계 (경기장 로컬 좌표 = odom, 원점 남서 모서리, x 동·y 북):
-  - 라이다(2030 빔, 선체 중심보다 선수 0.4 m, 뒤 120°~240° 가림)는 스캔 면 높이(기본 수면 위
-    0.14 m — 카메라 0.775 m − 라이다→카메라 0.635 m)를 지나는 물체만 본다: 흰 부표, 모서리 큰 부표.
-    붐(수면 위 0.12 m)·노란 소형 부표(0.075 m)·줄은 안 보인다 — 현장과 같은 상황.
-    --booms-visible 은 카메라 층이 붐을 완벽히 잡는다고 보고 붐을 라이다에 넣는다(상한).
+  - 라이다(2030 빔, 선체 중심보다 선수 0.4 m, 뒤 120°~240° 가림)는 흰 부표·모서리 큰 부표를 본다
+    (스캔 면 높이 기본 수면 위 0.14 m 로 자른 반지름). 노란 소형 부표·줄은 안 보인다.
+  - 붐 (--booms): lidar(기본) = 현장처럼 라이다가 붐을 잡되 잡음 — 스캔마다 붐 하나가 거리별
+    확률(부표 검출률 × --boom-detect-scale)로 보이거나 안 보이고, 보이면 0.1 m 마디마다
+    --boom-fill 확률로만 반사, 거리 잡음 --boom-range-sigma. perfect = 항상 전부 보임,
+    hidden = 안 보임(스캔 면이 붐 위로 지나가는 경우).
   - 먼 구조물(물가): 빔의 far_hit_prob 가 35 m 안팎에서 맞는다 — 맞은 빔은 지도의 빈 칸을 칠함.
   - 가상 벽: 현장처럼 경기장 둘레를 지도에 박고 짧은 두 변 가운데 3 m 만 비운다(--no-walls 로 끔).
   - 배: 현장 녹화로 잰 명령→속도 표·1차 지연·회전 이득(field_calib.json). 바람 표류 --wind.
@@ -53,7 +55,7 @@ SCENARIOS = {
 class Arena:
     """photo_arena.json → 원(부표)·선분(붐·줄) 목록. 라이다에 보이는 것과 부딪히는 것을 나눈다."""
 
-    def __init__(self, config, lidar_height, booms_visible):
+    def __init__(self, config, lidar_height, booms_mode):
         self.config = config
         self.width, self.depth = config['size']
         white, corner, boom = config['white_buoy'], config['corner'], config['boom']
@@ -79,15 +81,15 @@ class Arena:
         if lidar_height <= corner['freeboard']:
             circles += list(self.corners)
             radii += [self.corner_r] * 4
-        # 붐: 스캔 면보다 높거나(아님 0.12 m) 카메라가 잡았다고 볼 때만 — 0.1 m 간격 원 사슬
-        if booms_visible or boom['freeboard'] >= lidar_height:
-            for a, b, _ in self.booms:
-                n = max(2, int(math.ceil(np.linalg.norm(b - a) / 0.1)) + 1)
-                for t in np.linspace(0, 1, n):
-                    circles.append(a + t * (b - a))
-                    radii.append(self.boom_half)
         self.lidar_circles = np.array(circles, float).reshape(-1, 2)
         self.lidar_radii = np.array(radii, float)
+        # 붐: 0.1 m 간격 원 사슬 (붐마다 따로 — 스캔마다 붐 단위로 보임/안 보임)
+        self.booms_mode = booms_mode
+        self.boom_chains = []
+        if booms_mode != 'hidden':
+            for a, b, _ in self.booms:
+                n = max(2, int(math.ceil(np.linalg.norm(b - a) / 0.1)) + 1)
+                self.boom_chains.append(np.array([a + t * (b - a) for t in np.linspace(0, 1, n)]))
 
     def walls(self, opening):
         """현장 가상 벽과 같은 모양: 둘레 + 짧은 두 변(동·서) 가운데 opening m 비움."""
@@ -148,8 +150,9 @@ def clearances(arena, x, y, yaw):
 # ── 라이다 ─────────────────────────────────────────────────────────────
 
 class Lidar:
-    def __init__(self, arena, calib, sc, rng):
+    def __init__(self, arena, calib, sc, rng, boom_noise):
         self.arena, self.calib, self.sc, self.rng = arena, calib, sc, rng
+        self.boom_noise = boom_noise     # (검출률 배수, 마디 반사 확률, 거리 잡음 σ)
         self.inc = 2 * math.pi / N_BEAMS
         self.ang = -math.pi + np.arange(N_BEAMS) * self.inc
         rel = np.mod(np.degrees(self.ang), 360.0)
@@ -196,6 +199,7 @@ class Lidar:
             rr = rr + self.rng.normal(0, self.sc['range_sigma'], len(rr))
             idx = np.nonzero(hit)[0]
             ranges[idx] = np.minimum(ranges[idx], rr)
+        self._booms(ox, oy, dx, dy, ranges)
         if self.sc['clutter']:
             k = int(self.rng.choice(self.clutter_k, p=self.clutter_p))
             if k:
@@ -207,6 +211,36 @@ class Lidar:
         ranges[self.masked] = np.inf
         ranges[ranges < 0.4] = np.inf
         return ranges
+
+
+    def _booms(self, ox, oy, dx, dy, ranges):
+        """붐 사슬을 빔에 넣는다. lidar 모드는 붐 단위 검출률·마디 반사·거리 잡음."""
+        scale, fill, sigma = self.boom_noise
+        rad = self.arena.boom_half
+        for chain in self.arena.boom_chains:
+            d_near = float(np.min(np.hypot(chain[:, 0] - ox, chain[:, 1] - oy)))
+            if self.arena.booms_mode == 'lidar':
+                p = self.detect_prob(d_near) * scale if self.sc['detect'] else scale
+                if self.rng.random() > min(p, 1.0):
+                    continue
+                pts = chain[self.rng.random(len(chain)) < fill]
+            else:
+                pts = chain
+            for px, py in pts:
+                vx, vy = px - ox, py - oy
+                d = math.hypot(vx, vy)
+                if d < 0.3 or d > 45.0:
+                    continue
+                proj = vx * dx + vy * dy
+                perp2 = d * d - proj * proj
+                hit = (proj > 0) & (perp2 < rad * rad)
+                if not hit.any():
+                    continue
+                rr = proj[hit] - np.sqrt(np.maximum(rad * rad - perp2[hit], 0.0))
+                noise = sigma if self.arena.booms_mode == 'lidar' else self.sc['range_sigma']
+                rr = rr + self.rng.normal(0, noise, len(rr))
+                idx = np.nonzero(hit)[0]
+                ranges[idx] = np.minimum(ranges[idx], rr)
 
 
 # ── 배 ────────────────────────────────────────────────────────────────
@@ -238,8 +272,9 @@ def run(args):
     calib = json.load(open(CALIB_JSON))
     sc = SCENARIOS[args.scenario]
     rng = np.random.default_rng(args.seed)
-    arena = Arena(config, args.lidar_height, args.booms_visible)
-    lidar = Lidar(arena, calib, sc, rng)
+    arena = Arena(config, args.lidar_height, args.booms)
+    lidar = Lidar(arena, calib, sc, rng,
+                  (args.boom_detect_scale, args.boom_fill, args.boom_range_sigma))
     w, h = arena.width, arena.depth
     sx, sy, syaw = args.start if args.start else (-3.0, h / 2, 0.0)
     gx, gy = args.goal if args.goal else (w + 4.0, h / 2)
@@ -333,7 +368,7 @@ def run(args):
         hist[state] = round(hist.get(state, 0.0) + end - t, 1)
     path = np.array([(p[1], p[2]) for p in trace]) if trace else np.zeros((0, 2))
     result = {
-        'scenario': args.scenario, 'seed': args.seed, 'booms_visible': args.booms_visible,
+        'scenario': args.scenario, 'seed': args.seed, 'booms': args.booms,
         'walls': not args.no_walls, 'wind': list(args.wind),
         'finished': finished_t is not None, 'time': round(finished_t or clock[0], 1),
         'final_xy': [round(boat.x, 2), round(boat.y, 2)],
@@ -388,7 +423,7 @@ def plot(arena, path, trace, result, args, start, goal):
         cv2.polylines(img, [cv2.convexHull(np.array([px(*p) for p in hp], np.int32))], True, (255, 255, 0), 2)
     cv2.circle(img, px(*start), 5, (255, 255, 0), -1)
     cv2.drawMarker(img, px(*goal), (255, 255, 0), cv2.MARKER_STAR, 16, 2)
-    label = (f"{result['scenario']} seed {result['seed']}{' booms_visible' if result['booms_visible'] else ''}"
+    label = (f"{result['scenario']} seed {result['seed']} booms={result['booms']}"
              f" | {'FINISHED' if result['finished'] else 'NOT finished'} {result['time']} s"
              f" | contacts {result['contact_steps'] or 0}")
     cv2.putText(img, label, (8, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (240, 240, 240), 1)
@@ -402,7 +437,12 @@ def main(argv=None):
     ap.add_argument('--duration', type=float, default=240.0)
     ap.add_argument('--arena', default=ARENA_JSON)
     ap.add_argument('--lidar-height', type=float, default=0.14)
-    ap.add_argument('--booms-visible', action='store_true', help='카메라 층이 붐을 완벽히 잡는다고 봄')
+    ap.add_argument('--booms', choices=('lidar', 'perfect', 'hidden'), default='lidar',
+                    help='붐을 라이다가: lidar = 잡음 있게 잡음(현장, 기본), perfect = 항상 전부, hidden = 못 봄')
+    ap.add_argument('--boom-detect-scale', type=float, default=0.8,
+                    help='붐 스캔별 검출률 = 부표 거리별 검출률 × 이 값 (field). ideal 이면 이 값 자체')
+    ap.add_argument('--boom-fill', type=float, default=0.6, help='보인 붐에서 0.1 m 마디별 반사 확률')
+    ap.add_argument('--boom-range-sigma', type=float, default=0.05, help='붐 거리 잡음 σ [m]')
     ap.add_argument('--no-walls', action='store_true', help='가상 벽 끔')
     ap.add_argument('--wall-opening', type=float, default=3.0)
     ap.add_argument('--wind', type=float, nargs=2, default=(0.0, 0.0), metavar=('VX', 'VY'))
