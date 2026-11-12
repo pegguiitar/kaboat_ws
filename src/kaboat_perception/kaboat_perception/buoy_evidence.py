@@ -33,6 +33,8 @@
            서로 다른 시선 방향(fit_sector_deg 단위) fit_min_sectors 곳 이상에서 왔으면 r 이
            작은 것 — 그때는 여러 방향 점이 모인 것이라 중심·반지름을 함께 맞춰 r 을 정하고 ① 로. 줄이지는 않는다(점이 원 안쪽이면 호가 일부만 보인
            것일 수 있다). 상한 radius_max.
+  반지름 하한: 한 스캔 호 폭(현)은 지름보다 클 수 없으니 최근 호 폭 상위값(chord_pct)/2 로 키운다 —
+  점이 번져 원 맞추기로는 잘 안 커지는 실제 부표(gate bag 호 폭 0.4~0.6 m)도 히트가 쌓이면 커진다.
   처음 r = radius_prior. 작은 원은 실제 호보다 빨리 휘어서 호 양 끝이 원 밖으로 삐져나오므로
   중심을 옮겨도 안 맞는다 → 키우는 신호. 크게 틀리는 쪽(회피에 안전)으로만 틀린다.
   단, 함께 맞춘 원이 점에 잘 맞을 때(fit_max_rms)·중심이 크게 안 움직일 때만 키운다.
@@ -68,10 +70,17 @@ class EvidenceParams:
     l_min: float = -2.0
     l_max: float = 4.0
     tentative_timeout: float = 3.0  # 후보가 이만큼 안 잡히면 삭제 [s]
-    merge_radius: float = 1.0       # 확정 부표 병합 거리 상한 [m] — 그 안에서도 두 원이 겹칠 때만
-                                    # (중심 거리 ≤ 두 반지름 합 + merge_overlap) 합친다. 겹치는 두 부표는
-                                    # 없으니 같은 부표가 둘로 갈린 것. 1.2 m 붙은 쌍은 안 합쳐진다.
+    merge_radius: float = 1.0       # 확정 부표 병합 거리 상한 [m] — 그 안에서도 두 원이 겹치거나
+                                    # (중심 거리 ≤ 두 반지름 합 + merge_overlap) spawn_min_sep 안일 때만
+                                    # 합친다. 같은 부표가 둘로 갈린 것. 1.2 m 붙은 쌍은 안 합쳐진다.
     merge_overlap: float = 0.1      # [m]
+    spawn_min_sep: float = 1.0      # 기존 부표 중심 이 안에서는 새 부표를 만들지 않고, 확정 부표가 이 안으로
+                                    # 다가오면 합친다 [m]. 다른 방향에서 본 군집이 연결 반경 밖으로 나가 같은
+                                    # 부표가 0.5~0.9 m 간격 둘로 생겼다 (gate bag, 1.0 이면 0). 탐색 bag 의
+                                    # 붙은 초록·검정 쌍은 중심 간격 ≥ 1.37 m 라 따로 잡힌다
+    chord_window: int = 50          # 반지름 하한에 쓰는 최근 호 폭 개수
+    chord_pct: float = 80.0         # 최근 호 폭의 이 백분위 / 2 = 반지름 하한 (튀는 값 제외)
+    chord_min_count: int = 10       # 호 폭이 이만큼 모여야 하한을 씀
     pass_margin: float = 0.5        # 빔이 부표보다 이만큼 멀리/가까이서 맞아야 지나감/가림 [m]
     beam_half_width: float = 0.15   # 부표 방향 빔 창 반폭 — 부표 반폭 [m]
     min_beam_half_angle: float = math.radians(0.5)
@@ -130,6 +139,7 @@ class EvTrack:
     color_votes: Dict[str, int] = field(default_factory=dict)
     last_evidence: str = 'hit'
     radius: float = 0.2           # 원 맞추기 반지름 [m] (radius_prior 에서 시작, 키우기만)
+    chords: List[float] = field(default_factory=list)   # 최근 스캔들의 호 폭 [m] — 지름 하한
     px_red: int = 0               # 누적 창 픽셀 (usable 프레임만)
     px_green: int = 0
     px_visible: int = 0
@@ -339,6 +349,7 @@ class EvidenceTracker:
             t = by_id[tid]
             x, y, color, _s, pts = detections[i]
             self._add_points(t, pts, view)
+            self._chord_lower_bound(t)
             if t.pts is not None and len(t.pts) >= p.fit_min_points:
                 fit_track_circle(t, p)
             else:
@@ -349,9 +360,15 @@ class EvidenceTracker:
             t.last_seen = now
             t.last_evidence = 'hit'
             self._add_color(t, color)
+        existing = [(t.x, t.y) for t in self.tracks]
         for i, (x, y, color, can_spawn, pts) in enumerate(detections):
             if i in used_det or not can_spawn:
                 continue
+            m = (np.asarray(pts, dtype=float).reshape(-1, 2).mean(axis=0)
+                 if pts is not None and len(pts) else (x, y))
+            if any(math.hypot(m[0] - ex, m[1] - ey) < p.spawn_min_sep for ex, ey in existing):
+                continue                   # 기존 부표 바로 옆 — 같은 부표의 다른 면일 가능성이 크다
+            existing.append((float(m[0]), float(m[1])))   # 같은 스캔에서 쪼개진 군집 둘이 둘 다 생기지 않게
             t = EvTrack(self._next_id, float(x), float(y), p.l_hit, now, hits=1,
                         radius=p.radius_prior)
             self._add_points(t, pts, view)
@@ -423,8 +440,22 @@ class EvidenceTracker:
         else:
             ang = float('nan')
         v = np.full(len(pts), ang)
+        if view is not None and len(pts) >= 2:
+            m = pts.mean(axis=0)
+            los = np.array([m[0] - view.x, m[1] - view.y])
+            los /= max(float(np.hypot(*los)), 1e-6)
+            lateral = (pts - m) @ np.array([-los[1], los[0]])
+            t.chords = (t.chords + [float(lateral.max() - lateral.min())])[-self.p.chord_window:]
         t.pts = pts if t.pts is None else np.vstack((t.pts, pts))[-self.p.fit_max_points:]
         t.views = v if t.views is None else np.concatenate((t.views, v))[-self.p.fit_max_points:]
+
+    def _chord_lower_bound(self, t: EvTrack):
+        """호 폭(현)은 지름보다 클 수 없다 — 최근 호 폭 상위값/2 를 반지름 하한으로 (키우기만)."""
+        if len(t.chords) < self.p.chord_min_count:
+            return
+        r_lb = min(self.p.radius_max, 0.5 * float(np.percentile(t.chords, self.p.chord_pct)))
+        if r_lb > t.radius + 1e-3:
+            t.radius, t.grown = r_lb, True
 
     def _merge(self):
         conf = sorted(self.confirmed(), key=lambda t: (-t.hits, -t.L))   # 많이 잡힌 쪽을 남긴다
@@ -434,8 +465,8 @@ class EvidenceTracker:
                 continue
             for b in conf[i + 1:]:
                 d = math.hypot(a.x - b.x, a.y - b.y)
-                if (b.id in drop or d > self.p.merge_radius
-                        or d > a.radius + b.radius + self.p.merge_overlap):
+                close = max(a.radius + b.radius + self.p.merge_overlap, self.p.spawn_min_sep)
+                if b.id in drop or d > self.p.merge_radius or d > close:
                     continue
                 for c, n in b.color_votes.items():
                     a.color_votes[c] = a.color_votes.get(c, 0) + n
