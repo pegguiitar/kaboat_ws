@@ -48,6 +48,9 @@ topics=(
     /dock/waypoints /dock/avoid/goal /dock/avoid/goal_status
     /dock/status /dock/one_shot_path /dock/one_shot_gps /dock/one_shot_markers
     /dock/cmd_preview /cmd/dock
+    # 게이트 판단: 상태(WAIT·PASSED…)·고른 쌍·미리 이은 쌍·기억한 부표(MarkerArray)·경로·명령
+    # (2026-11-12 4번 시험은 이게 없어 멈춘 이유를 영상 속 터미널로 읽었다)
+    /gate/status /gate/pairs /gate/path /gate/cmd_preview /cmd/gate
 )
 
 available="$(ros2 topic list 2>/dev/null || true)"
