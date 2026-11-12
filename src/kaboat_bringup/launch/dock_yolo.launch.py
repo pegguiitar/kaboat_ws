@@ -3,8 +3,8 @@
 Base origin (hull center): lidar at (+0.4, 0, 0) m (measured 2026-11-11);
 camera_link at (-0.33, 0, +0.63) m.
 Camera relative to lidar: (-0.73, 0, +0.63) m (sensor-to-sensor, unchanged).
-Mount: pitched 10 deg down (2026-11-12, +pitch = nose down); optical TF comes from D455.
-Keep in sync with occupancy_grid cam_mount_pitch_deg (camera_obstacles.py).
+Mount: level (2026-11-12, briefly pitched 10 deg down then re-levelled; +pitch = nose down);
+optical TF comes from D455. Keep in sync with occupancy_grid cam_mount_pitch_deg (camera_obstacles.py).
 """
 
 import os
@@ -63,7 +63,7 @@ def generate_launch_description():
             package='tf2_ros', executable='static_transform_publisher',
             name='camera_mount_tf', output='screen',
             arguments=['--x', '-0.73', '--y', '0', '--z', '0.63',
-                       '--roll', '0', '--pitch', '0.174533', '--yaw', '0',   # 10° 아래로
+                       '--roll', '0', '--pitch', '0', '--yaw', '0',   # 수평 (2026-11-12 다시 맞춤)
                        '--frame-id', LaunchConfiguration('camera_parent_frame'),
                        '--child-frame-id', 'camera_link']),
         Node(

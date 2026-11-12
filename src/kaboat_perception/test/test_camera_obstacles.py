@@ -57,9 +57,10 @@ def test_back_projection_level_and_tilted():
     flat = CameraObstacleParams(height=1.0, mount_pitch_deg=0.0)
     pts = pixels_to_level([320], [240], [3.0], K, flat)
     np.testing.assert_allclose(pts[0], [flat.offset_x + 3.0, 0.0, 1.0], atol=1e-9)
-    # 10° 숙여 단 카메라(현장 기본값): 영상 가운데 행은 아래로 10° 방향
-    assert CameraObstacleParams().mount_pitch_deg == 10.0
-    pts = pixels_to_level([320], [240], [3.0], K, CameraObstacleParams(height=1.0))
+    # 현장 기본값: 수평 장착, 흘수선 위 0.775 m (2026-11-12 10° 숙임에서 되돌림)
+    assert (CameraObstacleParams().mount_pitch_deg, CameraObstacleParams().height) == (0.0, 0.775)
+    # 10° 숙여 단 카메라: 영상 가운데 행은 아래로 10° 방향
+    pts = pixels_to_level([320], [240], [3.0], K, CameraObstacleParams(height=1.0, mount_pitch_deg=10.0))
     np.testing.assert_allclose(pts[0, 2], 1.0 - 3.0 * math.sin(math.radians(10.0)), atol=1e-9)
     water = (4.67, 0.5, 0.0)
     u, v, d = _project(water, P)

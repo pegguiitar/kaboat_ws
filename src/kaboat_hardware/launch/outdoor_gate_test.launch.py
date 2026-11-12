@@ -42,7 +42,7 @@ ARGS = [
     ('required_pairs', '7', '통과할 게이트 쌍 수'),
     ('start_occupancy_grid', 'false', '지도는 run_map 으로 따로 (true 면 여기서 켬 — 따로 켠 게 없을 때만)'),
     ('cam_enabled', 'false', '카메라 층 (주황 등 낮은 색 장애물) — run_camera 필요'),
-    ('cam_height', '0.85', '흘수선에서 카메라 렌즈까지 [m] (2026-11-12 실측)'),
+    ('cam_height', '0.775', '흘수선에서 카메라 렌즈까지 [m] (2026-11-12 수평으로 다시 단 뒤 실측)'),
     ('gate_params_file', _default_gate_params(), '게이트 파라미터 yaml'),
     ('points_file', DEFAULT_POINTS_FILE, 'rec 기록 파일'),
     ('origin_file', DEFAULT_ORIGIN_FILE, 'GPS 원점 파일 (기록 당시 원점과 비교)'),
