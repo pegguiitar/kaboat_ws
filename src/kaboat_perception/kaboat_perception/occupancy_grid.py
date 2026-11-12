@@ -155,7 +155,7 @@ class OccupancyGridNode(Node):
         # A/B 실측(파도 gain0.5, 45s): 노이즈 피크≥90 비율 78→14%, 수명 0.97→0.52s,
         # 부표 가시성 손실 없음. 성능도 최악조건 0.97→0.74ms/스캔으로 오히려 빨라짐
         # (np.add.at 산발 누적 → unique+인덱싱). False 로 두면 예전 중복 누적 방식.
-        # 카메라 층 (camera_obstacles.py) — 기본 끔. 켜려면 d455.launch.py 와 cam_height 실측.
+        # 카메라 층 (camera_obstacles.py) — 기본 끔. 켜려면 d455.launch.py (run_camera).
         self.declare_parameter('cam_enabled', False)
         self.declare_parameter('cam_rate_hz', 5.0)       # 처리 상한 (카메라 15 fps 중 일부만)
         self.declare_parameter('cam_min_points', 3)      # 한 프레임에 칸당 이만큼 색 점이 있어야 히트

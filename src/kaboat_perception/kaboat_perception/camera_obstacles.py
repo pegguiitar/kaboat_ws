@@ -27,7 +27,7 @@ class CameraObstacleParams:
     # 카메라 장착 (선체 중심 기준). x·y 는 dock_yolo.launch.py 실측(라이다 +0.4 에서 -0.73).
     offset_x: float = -0.33
     offset_y: float = 0.0
-    height: float = 1.0              # 수면에서 카메라까지 [m] — ⚠ 현장 실측 필요
+    height: float = 0.85             # 흘수선에서 카메라 렌즈까지 [m] (2026-11-12 실측)
     mount_pitch_deg: float = 0.0     # 장착 숙임 (+ = 아래). 라이다와 평행 가정
     step: int = 2                    # 픽셀 건너뛰기 (640×480 → 320×240)
     range_min: float = 0.6           # D455 유효 거리 [m] — 가까우면 배 자체, 멀면 부정확

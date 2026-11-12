@@ -36,7 +36,7 @@ ARGS = [
     ('start_occupancy_grid', 'true', 'false = 이미 켠 occupancy_grid 를 씀'),
     ('grid_size', '15.0', '장애물 지도 한 변 [m]'),
     ('cam_enabled', 'false', '카메라 층 (주황 붐 등 낮은 색 장애물) — d455.launch.py 필요'),
-    ('cam_height', '1.0', '흘수선에서 카메라 렌즈까지 [m] (실측값)'),
+    ('cam_height', '0.85', '흘수선에서 카메라 렌즈까지 [m] (2026-11-12 실측)'),
     ('cam_mount_pitch_deg', '0.0', '카메라 숙임 [deg] (+ = 아래)'),
     ('cam_white', 'false', '흰색(부표)도 카메라로 — 수면 반짝임 오탐 주의'),
     ('points_file', DEFAULT_POINTS_FILE, 'rec 기록 파일'),

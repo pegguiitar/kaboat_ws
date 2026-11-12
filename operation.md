@@ -280,11 +280,12 @@ test_gate_outdoor approach:=true             # gate_entry 접근(직선, 회피 
 ```bash
 run_camera                                                         # 젯슨: D455 (= ros2 launch kaboat_bringup d455.launch.py)
 ros2 run kaboat_perception occupancy_grid --ros-args \
-    -p cam_enabled:=true -p cam_height:=1.05                       # 흘수선→렌즈 실측값 (소수점 필수)
-test_avoid_outdoor cam_enabled:=true cam_height:=1.05             # 회피 시험에서 같이 켜기
+    -p cam_enabled:=true                                           # 카메라 높이 기본 0.85 m (실측)
+test_avoid_outdoor cam_enabled:=true                              # 회피 시험에서 같이 켜기
 ```
 
-- `cam_height` = 배가 물에 뜬 상태에서 흘수선부터 카메라 렌즈 중심까지 [m]. 숙여 달았으면
+- `cam_height` = 배가 물에 뜬 상태에서 흘수선부터 카메라 렌즈 중심까지 [m], 실측 **0.85**가 기본
+  (바꾸면 `-p cam_height:=0.9`처럼 소수점 포함). 숙여 달았으면
   `cam_mount_pitch_deg`(+ = 아래). 선체 중심 기준 위치(뒤 0.33 m)는 도킹 실측값이 기본.
 - 노트북 `view_lidar`의 주황 점(`/occupancy_grid/cam_points`)이 카메라가 고른 점입니다. 붐 위에
   모이는지, 수면에 점이 흩어지지 않는지 봅니다.
