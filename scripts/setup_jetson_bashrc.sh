@@ -128,6 +128,9 @@ alias test_gate_outdoor="ros2 launch kaboat_hardware outdoor_gate_test.launch.py
 # 야외 도킹 시험: rec 기록 dock_entry 에서 one-shot 도킹 (goto dock_entry 로 세운 뒤, run_camera 필요.
 # YOLO CUDA venv 로 켬. target_class:=circle, motion_enabled:=false 면 경로만 미리보기)
 alias test_dock_outdoor='bash "$KABOAT_WS/scripts/run_dock_mission.sh"'
+# 도킹 YOLO 마스크만 확인 (run_dock_yolo.sh 를 먼저 켜 둠): 도형별 신뢰도·화면 위치·검출률,
+# 마스크 그린 영상 PNG 저장 (~/kaboat_yolo_checks). Ctrl+C 로 요약
+alias check_yolo='python3 "$KABOAT_WS/scripts/check_yolo_masks.py"'
 
 echo "🤖 [KABOAT Jetson] 환경 세팅 완료 (DOMAIN: $ROS_DOMAIN_ID | WS: ${KABOAT_WS:-미탐색})"
 echo "   - run_boat_lidar: 선체 TG-50 포함 센서/오도메트리 가동 (cal_imu 불필요, 즉시 /odom 생성)"
@@ -154,6 +157,7 @@ echo "   - test_avoid    : 실시간 장애물 회피 주행 (즉시 시작)"
 echo "   - test_avoid_outdoor : 야외 회피 avoid_entry → avoid_end (시작점 3 m·목표 방향 45° 안이면 즉시 출발)"
 echo "   - test_gate_outdoor  : 야외 게이트 7쌍 gate_entry → gate_end (즉시 출발)"
 echo "   - test_dock_outdoor  : 야외 도킹 dock_entry → 목표 슬롯 → 후진 (YOLO 결과는 rec_bag 이 저장)"
+echo "   - check_yolo    : 도킹 YOLO 마스크 확인 (run_dock_yolo.sh 먼저, 영상 PNG ~/kaboat_yolo_checks)"
 echo "   - view_position : /odom x·y·선수각·나침반 방위·GNSS 상태 실시간 표시"
 echo "   - run_zenoh     : 노트북 모니터링 브리지 가동"
 echo "   - cb / sb       : 빌드 / 환경 리로드"

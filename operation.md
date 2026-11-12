@@ -131,6 +131,7 @@ ros2 launch kaboat_hardware real_sensors.launch.py outdoor:=true rtk:=true \
 | `cal_imu` | `ros2 run kaboat_hardware calibrate_indoor_imu` | 실내 수조 IMU 정지 보정 |
 | `test_gate_outdoor` | `ros2 launch kaboat_hardware outdoor_gate_test.launch.py` | 야외 게이트 7쌍 `gate_entry` → `gate_end`, **즉시 출발**. 5절 참고 |
 | `test_dock_outdoor` | `bash scripts/run_dock_mission.sh` (= YOLO CUDA venv + `outdoor_dock_test.launch.py`) | 야외 도킹 `dock_entry` → 목표 슬롯 → 후진 3.25 m, **즉시 시작**. `run_camera` 필요. 5절 참고 |
+| `check_yolo` | `python3 scripts/check_yolo_masks.py` | 도킹 YOLO **마스크만** 확인 (뎁스·라이다 무관). `bash scripts/run_dock_yolo.sh`(D455 + YOLO, 모터 없음)를 먼저 켜 둔다. 1초마다 도형별 ✓신뢰도·화면 위치·방위각·최근 검출률, 추론 ms. 마스크 그린 영상을 5초마다 `~/kaboat_yolo_checks/날짜_시각/`에 PNG (`--save-every 0` 끔). Ctrl+C로 요약 |
 | `test_avoid_outdoor` | `ros2 launch kaboat_hardware outdoor_avoid_test.launch.py` | 야외 회피 시험 `avoid_entry` → `avoid_end`, **조건이 맞으면 즉시 출발**. 5절 참고 |
 | `test_straight` / `test_circle` / `test_bspline` / `test_station` / `test_waypoint` / `test_los` / `test_avoid` | 각 `*_test.launch.py … wait_for_start:=false` | 단독 주행 시험, **실행 즉시 출발** ([TANK_TESTS_GUIDE.md](TANK_TESTS_GUIDE.md)) |
 
@@ -309,6 +310,8 @@ test_dock_outdoor approach:=true             # dock_entry 접근(직선, 회피 
   (목표 슬롯 뒷벽 앞 3 m) → 선수 정렬 → 정지점(1 m) → 선수 유지 후진 3.25 m(3 m 이상·좌우 0.75 m 안)
   → `/mission/complete=dock` → 이탈점 2 m 안이면 `done`(정지).
 - ⚠️ SCAN에는 시간 제한이 없습니다. 마커가 안 보이면 추진 0으로 계속 기다립니다(`/dock/status`의 `detail`).
+- 도킹 전에 마스크만 따로 확인: `bash scripts/run_dock_yolo.sh`(카메라 이미 켰으면 `start_camera:=false`) →
+  다른 창에서 `check_yolo`. 세 도형이 모두 ✓이고 검출률이 높아야 SCAN을 통과합니다(신뢰도 0.55 이상 필요).
 - 도형 배치: 기본은 순서를 안 봄(화면 위치로 가운데 마커). 대회 배치를 알면
   `marker_order:=square,triangle,circle`(화면 왼쪽부터)로 확인을 켭니다.
 - 위치: 기본 `/odom`(GQ7 RTK 필터 25 Hz, 선체 중심). `position_source:=gps`는 `/gps/fix` 원시(2 Hz, 늦음).
