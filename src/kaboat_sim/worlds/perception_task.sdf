@@ -254,9 +254,10 @@
     </include>
 
 
-    <!-- Moderate waves for the photo-based arena prototype.
-         gain is a VRX wave-spectrum control, not wave height in metres.
-         Previously gain=1.7 / period=4.0; now gain=0.8 / period=5.0. -->
+    <!-- Waves: gain 0.0 (off) for the docking trial (feature/dock-real_test).
+         The photo-based avoidance arena author used gain=0.8 / period=5.0 for moderate waves —
+         set gain back to 0.8 below for wave-affected avoidance tests.
+         gain is a VRX wave-spectrum control, not wave height in metres (original 1.7 / 4.0). -->
     <plugin filename="libPublisherPlugin.so" name="vrx::PublisherPlugin">
       <message type="gz.msgs.Param" topic="/vrx/wavefield/parameters"
                every="2.0">

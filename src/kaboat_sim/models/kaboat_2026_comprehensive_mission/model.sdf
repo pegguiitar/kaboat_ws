@@ -15,7 +15,7 @@
     ===================================================================== -->
 
     <!-- Photo-based avoidance arena (approximate dimensions).
-         Local rectangle: x=5..25, y=11..24; world: x=5..25, y=71..84.
+         Local rectangle: x=5..32, y=11..24; world: x=5..32, y=71..84 (east-west 27 m = field survey 2026-11-12).
          White buoys + low red-orange booms + yellow float-rope boundary.
          Edit config/photo_arena.json and run scripts/generate_photo_arena.py.
          Fixed at the waterline: wave-following dynamics are not modelled yet. -->

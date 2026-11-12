@@ -168,7 +168,7 @@ class PhotoArenaTest(unittest.TestCase):
             return all(segment_distance((x, y), a, b) > radius + self.config['boom']['width'] / 2
                        for a, b in booms)
 
-        start, goal = (-30, 65), (240, 65)  # world (2, 77.5) -> (29, 77.5)
+        start, goal = (-30, 65), (310, 65)  # world (2, 77.5) -> (36, 77.5), 경기장 27 m (2026-11-12 실측)
         self.assertTrue(free(start))
         self.assertTrue(free(goal))
         pending, visited = deque([start]), {start}
