@@ -246,3 +246,30 @@ def test_blocked_extension_falls_back_to_the_current_gate_instead_of_dropping_it
         if node is not None:
             node.destroy_node()
         rclpy.shutdown()
+
+
+def test_pair_found_diagonal_by_a_late_post_is_dropped_and_reselected():
+    """검출이 약해 게이트 1 왼 부표가 늦게 잡히면 처음엔 게이트 1 오른·게이트 2 왼 부표를 한
+    게이트로 골랐다(대각선 검사엔 네 번째 부표가 필요) → 게이트 하나 건너뜀. 새 부표가 잡히면
+    다시 검사해 버리고 진짜 게이트 1 을 고른다 (2026-11-12 녹화 기반 시뮬 위치)."""
+    g1l, g1r, g2l, g2r = (3.38, 1.91), (2.89, -2.0), (5.65, 2.1), (4.86, -1.4)
+    rclpy.init()
+    node = None
+    try:
+        node = _ready_node([g1r, g2l, g2r])
+        node._on_goal(_goal(22.8, -5.7))
+        node._test_posts = [g1r, g2l, g2r]
+        _set_odom(node, 0.0, 1.95)
+        node.compute_cmd()
+        assert _near(node._pair.midpoint, ((g1r[0] + g2l[0]) / 2, (g1r[1] + g2l[1]) / 2))
+        node._test_posts = [g1l, g1r, g2l, g2r]
+        node._on_grid(_grid([g1l, g1r, g2l, g2r]))
+        _set_odom(node, 0.0, 1.95)
+        node.compute_cmd()                                   # 대각선 판명 → 버림
+        node.compute_cmd()                                   # 다시 고름
+        assert _near(node._pair.midpoint, ((g1l[0] + g1r[0]) / 2, (g1l[1] + g1r[1]) / 2))
+        assert node._rejected == []
+    finally:
+        if node is not None:
+            node.destroy_node()
+        rclpy.shutdown()

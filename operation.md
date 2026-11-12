@@ -340,9 +340,33 @@ test_gate_outdoor approach:=true             # gate_entry 접근(직선, 회피 
     두 부표 사이 물은 unknown(회색)으로 남습니다(앞 빔의 약 80 %가 무반사 inf). 예전엔 경로가 바로
     그 사이를 지나 `PATH_UNOBSERVED` 로 쌍을 버리고 10초 섰습니다. 이제 지금 스캔 빔이 그 점을
     지나 봤으면(더 멀리서 맞음·무반사) 관측으로 칩니다 — 6 m 안, 선수 ±110° 안만(`gate.see_through_*`).
+  - **관측 검사는 서지 않음**: 안 본 칸은 경로 앞 3 m(`gate.observed_horizon`)·LOS 앞 직선만 보고, 걸리면
+    직진을 절반(`gate.unobserved_thrust_scale`)으로 줄여 계속 갑니다(상태 `FOLLOW_GATE_n/7_SLOW`).
+    서는 건 안전 검사(경로 앞 6 m 장애물 0.5 m·DRI, `PATH_UNSAFE`/`LOOKAHEAD_UNSAFE`)와 기둥 안 보임뿐.
+  - **멈춤 줄이기**(2026-11-12, 녹화 기반 시뮬로 확인 — 아래 `scripts/gate_sim`):
+    - 기둥 보임: 두 기둥이 **각각 1초 안에 한 번** 잡히면 보임(`gate.post_visible_timeout_sec`). 예전엔
+      지금 스캔에 둘 다 — 검출이 스캔당 83~92 % 라 4번에 1번 추진 0.
+    - 막혀서 버린 쌍 보류 10 → **3초**(`gate.reject_hold_sec`).
+    - 바람에 밀려 막히면 서기 전에 **지금 자리에서 경로를 다시 그림**, 안전 검사는 이미 부표 0.5 m
+      안에 밀려 들어온 배가 "지금보다 더 가까워지지 않는" 쪽으로는 가게 풂(`gate.replan_from_here`).
+    - 고른 뒤 새로 잡힌 부표로 **대각선 오쌍**이 드러나면 바로 버리고 다시 고름(게이트 건너뜀 방지).
+    - 부표 덩어리 크기 상한 1.2 → **2.0 m**(`gate.max_cluster_extent`) — 실제 부표가 1.4~2.0 m 로 잡혀
+      x≈114 게이트를 건너뛰고 6개만 셌다. float32 해상도로 6칸(1.2 m)이 빠지던 것도 고침.
+    - 서서 기다릴 때 자리·선수각 지키기(`gate.hold_thrust_ratio`)는 넣어 두었지만 **기본 끔**
+      (시뮬에서 바람엔 좋아졌으나 잔잔할 때 첫 게이트를 놓침).
 - 녹화로 다시 돌려보기(노트북): `rec_bag` bag 의 지도·위치·스캔을 지금 코드의 `gate_follower` 에 넣어
   무엇을 골랐고 어디서 멈췄을지 봅니다(배는 녹화 궤적 그대로 — 명령은 배를 안 움직임).
   `python3 scripts/replay_gate.py <bag 폴더> --start 15:31:05 --end 15:32:40 [-p gate.max_chain_gates:=1]`
+- 녹화 기반 폐루프 시뮬(노트북, `scripts/gate_sim/`): bag 에서 잰 부표 위치·거리별 검출률·잡음·배 응답으로
+  가상 라이다·배를 만들고 실제 `occupancy_grid`·`gate_follower` 를 돌립니다 (배가 명령대로 움직임).
+  ```bash
+  python3 scripts/gate_sim/sim.py scripts/gate_sim/calib_20261112.json scripts/gate_sim/gates_20261112.json \
+      --params src/kaboat_bringup/config/gate_params.yaml --scenario wind10 --seed 0 --verbose
+  python3 scripts/gate_sim/run_matrix.py scripts/gate_sim/calib_20261112.json \
+      scripts/gate_sim/gates_20261112.json /tmp/m.jsonl --preset final --seeds 6   # 조건 8개 × 시드, 표
+  ```
+  조건: `base` `wind10`(북 0.1 m/s) `wind20` `wind20_head`(맞바람) `weak_lidar`(검출 70 %) `clutter3`
+  `start_off`(선수 25°·옆 1 m) `noisy_pose`. 새 녹화로 다시 재기: `scripts/gate_sim/calibrate.py <bag> calib.json`.
 
 **야외 도킹 시험** (`test_dock_outdoor`, 자율주행과 같은 도킹 노드 + `cmd_mux`, 도킹 미션 하나만)
 

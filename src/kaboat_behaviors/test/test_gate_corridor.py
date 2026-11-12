@@ -243,3 +243,19 @@ def test_gate_crossing_reports_point_and_offset():
     assert point[0] == pytest.approx(pair.midpoint[0], abs=1e-6)
     assert offset == pytest.approx(0.5, abs=1e-6)
     assert gate_crossing((3.4, 0.6), (2.8, 0.6), pair) is None    # 반대 방향
+
+
+def test_big_buoy_blobs_still_count_as_posts_and_float32_resolution_is_not_off_by_one():
+    """2026-11-12 녹화: 실제 게이트 부표 덩어리가 최대 2.0 m — 1.2 m 상한이면 x≈114 게이트를
+    빼서 건너뛰었다. 지도 해상도는 float32 0.2(=0.2000000030)라 6칸이 1.2 를 살짝 넘었다."""
+    from kaboat_behaviors.gate_corridor import grid_posts
+    res = float(np.float32(0.2))
+    data = np.zeros((40, 40), dtype=np.int8)
+    data[10:12, 5:12] = 100            # 7칸 = 1.4 m
+    data[30:32, 5:11] = 100            # 6칸 = 1.2 m
+    data[20:21, 2:38] = 100            # 36칸 = 7.2 m 벽
+    info = SimpleNamespace(resolution=res, width=40, height=40,
+                           origin=SimpleNamespace(position=SimpleNamespace(x=0.0, y=0.0)))
+    grid = SimpleNamespace(info=info, data=data.ravel().tolist())
+    assert len(grid_posts(grid, GateParams())) == 2                         # 벽은 뺌
+    assert len(grid_posts(grid, GateParams(max_cluster_extent=1.2))) == 1  # 6칸은 1.2 안

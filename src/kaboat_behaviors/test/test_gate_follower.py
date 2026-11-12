@@ -137,6 +137,8 @@ def test_missing_third_pair_and_stale_scan_fail_closed():
 
 
 def test_cached_gate_stops_when_one_post_disappears_from_live_scan():
+    """한 기둥이 스캔에서 빠져도 post_visible_timeout(1 초) 안이면 계속 — 부표 검출은 스캔당
+    83~92 % 라 한 스캔 빠짐마다 서면 4번에 1번 추진 0. 1 초 넘게 안 보이면 멈춘다."""
     rclpy.init()
     node = None
     try:
@@ -144,9 +146,12 @@ def test_cached_gate_stops_when_one_post_disappears_from_live_scan():
         node.compute_cmd()
         assert node._pair is not None
         node._scan_hits = np.asarray([node._pair.left])
+        node.compute_cmd()
+        assert node._status_text == 'FOLLOW_GATE_1/7'
+        node._post_seen_at[1] = time.monotonic() - 1.5      # 오른 기둥 1.5 초째 안 보임
         cmd = node.compute_cmd()
         assert node._status_text == 'GATE_POSTS_NOT_VISIBLE'
-        assert cmd.linear.x == cmd.angular.z == 0.0
+        assert cmd.linear.x == 0.0                          # 미리보기 — 명령은 안 냄
     finally:
         if node is not None:
             node.destroy_node()

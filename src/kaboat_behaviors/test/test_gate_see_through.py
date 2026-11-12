@@ -9,6 +9,7 @@ import math
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 import rclpy
 from nav_msgs.msg import OccupancyGrid
 from std_msgs.msg import String
@@ -81,11 +82,18 @@ def test_gate_with_open_water_behind_is_followed_not_dropped():
         msg.info.origin.orientation.w = 1.0
         msg.data = fake.data
         node._on_grid(msg)
+        sent = []
+        node.preview_pub.publish = sent.append
         node.compute_cmd()
         assert node._status_text == 'FOLLOW_GATE_1/7'
-        node._scan_rays = None                      # 빔 정보가 없으면 예전처럼 막힘
+        full = sent[-1].linear.x
+        assert full > 0.0
+        node._scan_rays = None                      # 빔이 안 지나 본 칸 → 서지 않고 절반으로
+        node._los_follower.reset()
         node.compute_cmd()
-        assert node._status_text == 'PATH_UNOBSERVED'
+        assert node._status_text == 'FOLLOW_GATE_1/7_SLOW'
+        assert sent[-1].linear.x == pytest.approx(full * 0.5, rel=0.05)
+        assert node._pair is not None and node._rejected == []
     finally:
         if node is not None:
             node.destroy_node()
