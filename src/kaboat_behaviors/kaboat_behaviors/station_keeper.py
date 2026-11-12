@@ -1,20 +1,44 @@
-"""station_keeper — 위치유지 behavior. 목표점 5m 이내에서 5초 유지.
+"""station_keeper — 위치유지 behavior. 부표 4개 사각형 안에 들어가 hold_time 유지.
 
-skeleton:
-  goal 을 향한 P 제어로 접근/유지하고, 5m 이내 체류 시간을 로그로 출력.
-  5m/5s 유지 달성 시 완료 신호를 보내고, mission_manager 가 목표점 5m
-  이내 조건까지 확인한 뒤 다음 미션으로 전환한다.
+경기: 약 3 m × 3 m 사각형 꼭짓점에 부표 4개(흔들림). 그 사이에 들어가 유지하면 된다.
+계산은 station_keeping.py(ROS 무의존)에 있고, 이 노드는 입출력만 맡는다.
 
-TODO(팀): 바람/파도 드리프트 보상 (heading 유지 포함 station keeping)
+  SEARCH  부표 2개 전 — /mission/goal(station_end, 사각형 중심에 기록)로 천천히 접근
+  ENTER   처음 보인 한 변(가장 가까운 부표 쌍)을 입구로 고정 → 입구 앞 정렬점 → 중심
+          (가상 앵커 제어로 주행 — 해류에 밀려 부표에 붙지 않게)
+  HOLD    중심에 가상 앵커(위치 P + 선수각 PD, 선수각은 HOLD 진입 때 방향 유지).
+          중심 hold_radius(1 m) 안에 hold_time(5 s) 연속이면 /mission/complete 1회.
+          다음 미션 전환은 mission_manager 가 한다(완료 + station_end 2 m 안). 전환 전까지 계속 유지.
+
+부표는 공용 /occupancy_grid 가 아니라 station 전용 지도로 찾는다: /scan/level 을 목표 중심
+고정 격자에 쌓되, 빔이 지나간 칸을 깎는 양을 공용 지도의 free_ratio(기본 0.1)배로 줄여
+라이다가 앞만 보는 동안 옆·뒤로 간 부표를 잊지 않는다. 공용 지도·다른 behavior 는 그대로.
+
+입력   /scan/level, /odom, /mission/goal, /mission/state
+출력   /cmd/station            주행 명령 (station.motion_enabled=false 면 0)
+       /station/cmd_preview     계산된 명령 (motion_enabled 와 무관)
+       /station/status          단계 변화 (String)
+       /station/markers         부표·중심·유지 반경·입구 (RViz, odom)
+       /station/map             station 전용 지도 (OccupancyGrid, 구독자 있을 때만)
+파라미터 station.<StationParams 필드>, station.motion_enabled, lidar_offset_x/y
 """
+import dataclasses
+import math
+import time
+
 import rclpy
-from geometry_msgs.msg import Twist
+from rclpy.qos import qos_profile_sensor_data
+from geometry_msgs.msg import Point, Twist
+from nav_msgs.msg import OccupancyGrid
+from sensor_msgs.msg import LaserScan
+from std_msgs.msg import String
+from visualization_msgs.msg import Marker, MarkerArray
 
-from .behavior_base import BehaviorBase
-from .obstacle_avoidance_utils import apply_repulsion
+from .behavior_base import BehaviorBase, yaw_from_quaternion
+from .station_keeping import StationFsm, StationParams
 
-HOLD_RADIUS = 5.0   # 규정 유지 반경 [m]
-HOLD_TIME = 5.0     # 규정 유지 시간 [s]
+GOAL_RESET_DISTANCE = 1.0   # [m] 목표가 이만큼 바뀌면 전용 지도·상태를 새로 시작
+SCAN_STALE_SEC = 2.0        # [s] /scan/level 이 이보다 오래 끊기면 경고 (지도는 유지)
 
 
 class StationKeeper(BehaviorBase):
@@ -23,35 +47,199 @@ class StationKeeper(BehaviorBase):
 
     def __init__(self):
         super().__init__()
-        self._inside_since = None
-        self._reported = False
+        self.params = self._params_from('station', StationParams)
+        self.declare_parameter('station.motion_enabled', True)
+        # 선체 라이다 장착 위치 (occupancy_grid·gate_follower 의 lidar_offset_x/y 와 같은 값)
+        self.declare_parameter('lidar_offset_x', 0.4)
+        self.declare_parameter('lidar_offset_y', 0.0)
+        self.motion_enabled = bool(self.get_parameter('station.motion_enabled').value)
+        self.lidar_offset = (float(self.get_parameter('lidar_offset_x').value),
+                             float(self.get_parameter('lidar_offset_y').value))
+        if not all(math.isfinite(v) for v in self.lidar_offset):
+            raise ValueError('lidar_offset_x/y must be finite')
 
+        self.fsm = None
+        self._fsm_at = 0.0
+        self._last_status = None
+        self._scan_at = None
+        self._last_decision = None
+
+        self.status_pub = self.create_publisher(String, '/station/status', 10)
+        self.preview_pub = self.create_publisher(Twist, '/station/cmd_preview', 10)
+        self.marker_pub = self.create_publisher(MarkerArray, '/station/markers', 1)
+        self.map_pub = self.create_publisher(OccupancyGrid, '/station/map', 1)
+        # 부표 위치는 스캔 점을 바로 쌓으므로 배가 수평일 때만 오는 /scan/level 을 받는다
+        self.create_subscription(LaserScan, '/scan/level', self._on_scan,
+                                 qos_profile_sensor_data)
+        self.create_timer(0.5, self._publish_debug)
+        p = self.params
+        self.get_logger().info(
+            f'station: 유지 반경 {p.hold_radius} m · {p.hold_time} s, 부표 간격 {p.side_length} m, '
+            f'전용 지도 free_ratio {p.free_ratio}, motion_enabled={self.motion_enabled}')
+
+    def _params_from(self, prefix, cls):
+        defaults = cls()
+        values = {}
+        for f in dataclasses.fields(cls):
+            name = f'{prefix}.{f.name}'
+            self.declare_parameter(name, getattr(defaults, f.name))
+            values[f.name] = self.get_parameter(name).value
+        return cls(**values)
+
+    # ── 활성화 ──────────────────────────────────────────
     def on_activate(self):
-        self._inside_since = None
-        self._reported = False
+        self.fsm = None
+        self._last_status = None
+        self._last_decision = None
 
+    def on_deactivate(self):
+        self.fsm = None
+        self._last_decision = None
+
+    def _status(self, text):
+        if text != self._last_status:
+            self._last_status = text
+            self.status_pub.publish(String(data=text))
+            self.get_logger().info(f'station: {text}')
+
+    # ── 스캔 → 전용 지도 ────────────────────────────────
+    def _on_scan(self, msg: LaserScan):
+        if not self.active or self.fsm is None or not self.waypoint_odom_ready():
+            return
+        pose = self.odom.pose.pose
+        yaw = yaw_from_quaternion(pose.orientation)
+        c, s = math.cos(yaw), math.sin(yaw)
+        ox, oy = self.lidar_offset
+        lidar_xy = (pose.position.x + ox * c - oy * s, pose.position.y + ox * s + oy * c)
+        self.fsm.add_scan(msg.ranges, msg.angle_min, msg.angle_increment,
+                          msg.range_min, msg.range_max, lidar_xy, yaw)
+        self._scan_at = time.monotonic()
+
+    # ── 제어 ─────────────────────────────────────────────
     def compute_cmd(self):
         if (self.goal is None or self.goal.header.frame_id != 'odom'
                 or not self.waypoint_odom_ready()):
             return Twist()
-        dist = self.distance_to_goal()
+        goal_xy = (self.goal.pose.position.x, self.goal.pose.position.y)
+        if self.fsm is None or math.dist(goal_xy, self.fsm.goal) > GOAL_RESET_DISTANCE:
+            self.fsm = StationFsm(goal_xy, self.params)
+            self._fsm_at = time.monotonic()
+            self._status(f'SEARCH — 목표 ({goal_xy[0]:+.2f}, {goal_xy[1]:+.2f}) 로 접근, 부표 탐색')
 
-        # 5m/5s 유지 완료를 보고한다 (최종 전환은 mission_manager 몫).
-        now = self.get_clock().now()
-        if dist <= HOLD_RADIUS:
-            if self._inside_since is None:
-                self._inside_since = now
-            elif not self._reported and \
-                    (now - self._inside_since).nanoseconds * 1e-9 >= HOLD_TIME:
-                self.get_logger().info(f'위치유지 달성 — {HOLD_RADIUS}m 이내 {HOLD_TIME}s 유지 완료')
-                self._reported = True
-                self.report_complete()
+        pose = self.odom.pose.pose
+        boat_xy = (pose.position.x, pose.position.y)
+        yaw = yaw_from_quaternion(pose.orientation)
+        now = self.get_clock().now().nanoseconds * 1e-9
+        d = self.fsm.step(boat_xy, yaw, self.odom.twist.twist.angular.z, now)
+        self._last_decision = d
+
+        last_scan = self._fsm_at if self._scan_at is None else max(self._scan_at, self._fsm_at)
+        if time.monotonic() - last_scan > SCAN_STALE_SEC:
+            self.get_logger().warning(
+                '/scan/level 이 끊김 — 전용 지도는 마지막 상태로 유지',
+                throttle_duration_sec=5.0)
+
+        center = ('없음' if d.center is None
+                  else f'({d.center[0]:+.2f}, {d.center[1]:+.2f}) [{d.center_kind}]')
+        # 좌표는 매 틱 흔들리므로 상태 변화 판정에는 단계·부표 수·중심 종류만 쓴다
+        # HOLD 의 앵커 세부 단계(RETURN/ALIGN/BACK)는 자주 바뀌어 아래 1 s 로그로만 본다
+        phase = d.phase if d.phase == 'HOLD' else f'{d.phase}/{d.stage}'
+        self._status(f'{phase} — 부표 {len(d.buoys)}개, 중심 {d.center_kind or "없음"}')
+        if d.phase == 'HOLD':
+            self.get_logger().info(
+                f'station HOLD/{d.stage}: 중심까지 {math.dist(boat_xy, d.center):.2f} m, '
+                f'유지 {d.hold_elapsed:.1f}/{self.params.hold_time:.1f} s, 부표 {len(d.buoys)}개',
+                throttle_duration_sec=1.0)
+        if d.completed_now:
+            self.get_logger().info(
+                f'위치유지 달성 — 중심 {self.params.hold_radius} m 이내 '
+                f'{self.params.hold_time} s 유지 (부표 {len(d.buoys)}개, 중심 {center})')
+            self.report_complete()
+
+        if d.kind == 'waypoint':
+            cmd, _ = self.waypoint(d.target[0], d.target[1], thrust_ratio=d.thrust_ratio,
+                                   slow_radius=d.slow_radius)
         else:
-            self._inside_since = None
+            cmd = Twist()
+            cmd.linear.x = float(d.linear)
+            cmd.angular.z = float(d.angular)
+            # 가상 앵커의 상한(직진·회전)이 곧 전체 스케일 — _tick 이 이 값으로 자른다
+            self._command_full_scale = (self.params.max_forward, self.params.max_turn)
+        self.preview_pub.publish(cmd)
+        return cmd if self.motion_enabled else Twist()
 
-        point = self.goal.pose.position
-        cmd, _ = self.waypoint(point.x, point.y, slow_radius=5.0)
-        return apply_repulsion(cmd, self.occupancy_grid, self.odom)
+    # ── RViz ─────────────────────────────────────────────
+    def _publish_debug(self):
+        if not self.active or self.fsm is None:
+            return
+        if self.map_pub.get_subscription_count() > 0:
+            self.map_pub.publish(self._map_msg())
+        if self._last_decision is not None:
+            self.marker_pub.publish(self._markers(self._last_decision))
+
+    def _map_msg(self):
+        m = self.fsm.map
+        grid = OccupancyGrid()
+        grid.header.stamp = self.get_clock().now().to_msg()
+        grid.header.frame_id = 'odom'
+        grid.info.resolution = float(self.params.resolution)
+        grid.info.width = m.n
+        grid.info.height = m.n
+        grid.info.origin.position.x = float(m.origin[0])
+        grid.info.origin.position.y = float(m.origin[1])
+        grid.info.origin.orientation.w = 1.0
+        grid.data = m.probability_percent().ravel().tolist()
+        return grid
+
+    def _markers(self, d):
+        stamp = self.get_clock().now().to_msg()
+        out = MarkerArray()
+        clear = Marker()
+        clear.action = Marker.DELETEALL
+        out.markers.append(clear)
+
+        def marker(ns, mid, mtype, rgba, scale):
+            mk = Marker()
+            mk.header.frame_id = 'odom'
+            mk.header.stamp = stamp
+            mk.ns, mk.id, mk.type, mk.action = ns, mid, mtype, Marker.ADD
+            mk.pose.orientation.w = 1.0
+            mk.scale.x, mk.scale.y, mk.scale.z = scale
+            mk.color.r, mk.color.g, mk.color.b, mk.color.a = rgba
+            return mk
+
+        for i, b in enumerate(d.buoys):
+            mk = marker('buoys', i, Marker.CYLINDER, (1.0, 0.3, 0.1, 0.9), (0.4, 0.4, 0.5))
+            mk.pose.position.x, mk.pose.position.y, mk.pose.position.z = b.x, b.y, 0.25
+            out.markers.append(mk)
+        if d.center is not None:
+            mk = marker('center', 0, Marker.SPHERE, (0.1, 0.9, 0.3, 0.9), (0.25, 0.25, 0.25))
+            mk.pose.position.x, mk.pose.position.y = d.center
+            out.markers.append(mk)
+            ring = marker('hold_radius', 0, Marker.LINE_STRIP, (1.0, 0.85, 0.1, 0.8),
+                          (0.04, 0.0, 0.0))
+            r = self.params.hold_radius
+            for k in range(37):
+                th = 2.0 * math.pi * k / 36
+                ring.points.append(Point(x=d.center[0] + r * math.cos(th),
+                                         y=d.center[1] + r * math.sin(th), z=0.02))
+            out.markers.append(ring)
+        if d.gate is not None:
+            line = marker('entry_gate', 0, Marker.LINE_LIST, (0.2, 0.6, 1.0, 0.9),
+                          (0.06, 0.0, 0.0))
+            mid = d.gate.midpoint
+            n = d.gate.normal
+            pre = self.params.pre_gate_distance
+            line.points = [Point(x=d.gate.a[0], y=d.gate.a[1], z=0.05),
+                           Point(x=d.gate.b[0], y=d.gate.b[1], z=0.05),
+                           Point(x=mid[0] - n[0] * pre, y=mid[1] - n[1] * pre, z=0.05),
+                           Point(x=mid[0] + n[0] * pre, y=mid[1] + n[1] * pre, z=0.05)]
+            out.markers.append(line)
+        if d.target is not None:
+            mk = marker('target', 0, Marker.SPHERE, (0.7, 0.2, 0.9, 0.9), (0.18, 0.18, 0.18))
+            mk.pose.position.x, mk.pose.position.y = d.target
+            out.markers.append(mk)
+        return out
 
 
 def main(args=None):
