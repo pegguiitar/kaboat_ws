@@ -11,7 +11,7 @@ from kaboat_perception.camera_obstacles import (
     level_rotation, pixels_to_level, visible_mask)
 
 K = (380.0, 380.0, 320.0, 240.0)       # fx, fy, cx, cy (640×480)
-P = CameraObstacleParams(height=1.0)   # 수면 위 1.0 m, 선체 중심 뒤 0.33 m
+P = CameraObstacleParams(height=1.0)   # 수면 위 1.0 m, 선체 중심 뒤 0.215 m
 
 
 def _px(rgb):
@@ -58,7 +58,8 @@ def test_back_projection_level_and_tilted():
     pts = pixels_to_level([320], [240], [3.0], K, flat)
     np.testing.assert_allclose(pts[0], [flat.offset_x + 3.0, 0.0, 1.0], atol=1e-9)
     # 현장 기본값: 수평 장착, 흘수선 위 0.775 m (2026-11-12 10° 숙임에서 되돌림)
-    assert (CameraObstacleParams().mount_pitch_deg, CameraObstacleParams().height) == (0.0, 0.775)
+    d = CameraObstacleParams()
+    assert (d.mount_pitch_deg, d.height, d.offset_x, d.offset_y) == (0.0, 0.775, -0.215, 0.0)
     # 10° 숙여 단 카메라: 영상 가운데 행은 아래로 10° 방향
     pts = pixels_to_level([320], [240], [3.0], K, CameraObstacleParams(height=1.0, mount_pitch_deg=10.0))
     np.testing.assert_allclose(pts[0, 2], 1.0 - 3.0 * math.sin(math.radians(10.0)), atol=1e-9)

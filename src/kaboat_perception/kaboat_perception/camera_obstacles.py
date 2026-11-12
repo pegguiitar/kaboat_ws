@@ -25,8 +25,9 @@ from kaboat_perception.depth_utils import depth_to_meters
 
 @dataclass
 class CameraObstacleParams:
-    # 카메라 장착 (선체 중심 기준). x·y 는 dock_yolo.launch.py 실측(라이다 +0.4 에서 -0.73).
-    offset_x: float = -0.33
+    # 카메라 장착 (선체 중심 기준). x = 라이다 +0.4 에서 뒤로 0.615 (2026-11-12 실측,
+    # dock_yolo.launch.py 카메라 TF 와 같게. 예전 -0.33 = 라이다에서 -0.73)
+    offset_x: float = -0.215
     offset_y: float = 0.0
     height: float = 0.775            # 흘수선에서 카메라 렌즈까지 [m] (2026-11-12 수평으로 다시 단 뒤 실측)
     mount_pitch_deg: float = 0.0     # 장착 숙임 (+ = 아래). 2026-11-12 10° 숙임 → 다시 수평
