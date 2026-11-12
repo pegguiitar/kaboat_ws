@@ -73,6 +73,9 @@ class StationParams:
     hold_radius: float = 1.0        # [m] 중심에서 이 안이면 '유지 중'
     hold_time: float = 5.0          # [s] 연속 유지 시간 → 완료 보고
     fallback_to_goal: bool = True   # 부표를 못 찾으면 station_end 를 중심으로 유지
+    # ── 출구 (2026-11-12): 중심(station_center)과 station_end 가 다르면 유지 후 출구로 나간다 ──
+    exit_outside: float = 1.5       # [m] 출구 쪽 변 중점에서 사각형 밖으로 이만큼 나간 경유점
+    exit_reach: float = 0.8         # [m] 경유점·출구 도착 판정
     # ── 가상 앵커 (수조 station_keeping_test 값, 상한은 LOS 직진·회전 상한) ──
     pos_deadband: float = 0.5
     yaw_deadband_deg: float = 8.0
@@ -94,7 +97,8 @@ class StationParams:
                     self.side_length, self.min_side, self.pre_gate_distance,
                     self.gate_lateral_tol, self.track_radius, self.search_slow_radius,
                     self.hold_radius, self.pos_deadband, self.yaw_deadband_deg,
-                    self.max_forward, self.max_turn, self.kp_pos, self.kp_yaw)
+                    self.max_forward, self.max_turn, self.kp_pos, self.kp_yaw,
+                    self.exit_outside, self.exit_reach)
         if (min(positive) <= 0 or self.l_free > 0 or not 0.0 <= self.free_ratio <= 1.0
                 or self.l_min >= 0 or self.l_max <= self.occ_logodds
                 or self.min_cluster_cells < 1 or self.big_min_cells < 1 or self.hold_time < 0
@@ -383,6 +387,44 @@ def anchor_command(boat_xy, yaw, yaw_rate, target_xy, hold_yaw, params: StationP
         speed = min(p.max_reverse, max(p.min_forward, p.kp_pos * dist))
         return -speed * math.cos(rev), turn(rev), 'BACK'
     return 0.0, turn(rel), 'TURN'
+
+
+# ── 5b) 출구 ─────────────────────────────────────────
+
+def exit_waypoints(buoys, center, exit_xy, params: StationParams):
+    """유지가 끝난 중심 → 출구(station_end) 경유점 [사각형 밖 경유점, 출구].
+
+    출구 방향을 가장 잘 바라보는 변(이웃한 두 부표, 간격 min_side~1.25·side_length — 대각선
+    1.41·side 는 제외)의
+    가운데를 수직으로 지나 exit_outside 만큼 밖으로 나간 뒤 출구로 간다 — 중심에서
+    출구로 곧장 가면 모서리 부표에 닿을 수 있다. 쓸 만한 변이 없으면 [출구].
+    """
+    c = np.asarray(center, dtype=float)
+    out_dir = np.asarray(exit_xy, dtype=float) - c
+    if float(np.linalg.norm(out_dir)) < 1e-6:
+        return [tuple(exit_xy)]
+    out_dir /= np.linalg.norm(out_dir)
+    pts = [np.asarray((b.x, b.y) if hasattr(b, 'x') else b, dtype=float) for b in buoys]
+    pts.sort(key=lambda q: math.atan2(q[1] - c[1], q[0] - c[0]))
+    best, best_dot = None, 0.0
+    for i in range(len(pts)):
+        a, b = pts[i], pts[(i + 1) % len(pts)]
+        if len(pts) < 2 or (len(pts) == 2 and i == 1):
+            break
+        gap = float(np.linalg.norm(b - a))
+        if not params.min_side <= gap <= 1.25 * params.side_length:
+            continue
+        mid = (a + b) / 2.0
+        normal = np.array([-(b - a)[1], (b - a)[0]]) / gap
+        if float(normal @ (mid - c)) < 0.0:
+            normal = -normal                       # 사각형 밖을 향하게
+        dot = float(normal @ out_dir)
+        if dot > best_dot:
+            best, best_dot = (mid, normal), dot
+    if best is None:
+        return [tuple(exit_xy)]
+    mid, normal = best
+    return [tuple(mid + normal * params.exit_outside), tuple(exit_xy)]
 
 
 # ── 6) 상태기계 ──────────────────────────────────────
