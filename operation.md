@@ -265,6 +265,9 @@ test_gate_outdoor approach:=true             # gate_entry 접근(직선, 회피 
 
 - 기록: `gate_entry` = 첫 게이트 앞 통로 중심(진행 방향으로 세워서), `gate_end` = 마지막 게이트 뒤
   **2~3 m** 통로 중심. 모든 쌍을 지난 뒤 `gate_end`가 4 m 안이어야 그리로 가고 2 m 안이면 완료.
+- `approach:=true` → 게이트 시작 조건: `gate_entry` **1 m 안 + 선수각 ±15° 안**을 0.5초 유지(회전 속도
+  조건 없음). 모든 미션의 시작 자세 접근(`mission_approach`)이 같은 조건. 미리보기
+  (`motion_enabled:=false`)에서는 도착 신호를 안 내서 `gate`로 넘어가지 않습니다.
 - 쌍 고르기: 두 부표를 잇는 선이 진행 방향(직전 게이트 방향, 첫 게이트는 배→`gate_end`)의 수직에서
   35° 안(`gate.max_pair_skew_deg`)이면 쌍. 통로가 휘어도 됨. 폭 1.5~7 m.
 - 상태: `ros2 topic echo /gate/status` (`FOLLOW_GATE_3/7`, `GATE_3/7_PASSED`, `WAIT_GATE_PAIR`, `COMPLETE` …).

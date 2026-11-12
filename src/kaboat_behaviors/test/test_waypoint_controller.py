@@ -129,6 +129,16 @@ class TestWaypointController(unittest.TestCase):
         self.assertEqual(settling.phase, 'SETTLING')
         self.assertGreater(settling.angular, 0.0)      # 정착 중에도 남은 오차를 계속 줄임
 
+    def test_zero_settle_yaw_rate_disables_rotation_check(self):
+        ctrl = WaypointController(WaypointParams(settle_time=0.5, settle_yaw_rate=0.0))
+        ctrl.set_goal(waypoint(5.0, 2.5, 180.0))
+        # 빠르게 돌고 있어도 헤딩 오차만 허용 범위 안이면 정착으로 본다
+        self.assertEqual(ctrl.step(5.0, 2.5, math.radians(175), 0.8, 0.0).phase,
+                         'SETTLING')
+        self.assertTrue(ctrl.step(5.0, 2.5, math.radians(175), 0.8, 0.6).reached)
+        with self.assertRaises(ValueError):
+            WaypointParams(settle_yaw_rate=-0.1)
+
     def test_thrust_ratio_caps_output_but_keeps_pd_gain(self):
         ctrl = WaypointController(WaypointParams(max_angular=1.0, yaw_kp=1.4, yaw_kd=0.16))
         small = []

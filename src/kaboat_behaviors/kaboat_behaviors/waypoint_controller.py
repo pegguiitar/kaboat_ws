@@ -70,7 +70,7 @@ class WaypointParams:
     heading_tolerance_deg: float = 8.0
     settle_time: float = 0.5
     exit_factor: float = 2.0        # ① 도착 후 이 배수의 반경을 벗어나야 다시 접근
-    settle_yaw_rate: float = 0.1    # ③ 도착 판정 시 회전 속도 상한 [rad/s]
+    settle_yaw_rate: float = 0.1    # ③ 도착 판정 시 회전 속도 상한 [rad/s], 0 = 조건 없음
 
     def __post_init__(self):
         values = tuple(vars(self).values())
@@ -81,7 +81,7 @@ class WaypointParams:
                 or self.slow_radius <= 0 or self.position_tolerance <= 0
                 or not 0 < self.heading_tolerance_deg < 180
                 or self.settle_time < 0 or self.exit_factor < 1.0
-                or self.settle_yaw_rate <= 0):
+                or self.settle_yaw_rate < 0):
             raise ValueError('invalid waypoint controller parameters')
 
 
@@ -169,7 +169,7 @@ class WaypointController:
         angular = _clamp(
             p.yaw_kp * final_error - p.yaw_kd * yaw_rate, angular_cap)
         if (abs(final_error) > math.radians(p.heading_tolerance_deg)
-                or abs(yaw_rate) > p.settle_yaw_rate):
+                or 0 < p.settle_yaw_rate < abs(yaw_rate)):
             self._inside_since = None
             return WaypointStep(0.0, angular, 'ALIGN', False,
                                 distance, final_error)
