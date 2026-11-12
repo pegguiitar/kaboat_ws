@@ -84,6 +84,8 @@ alias rec='python3 "$KABOAT_WS/scripts/rec_point.py"'
 alias list_points='python3 "$KABOAT_WS/scripts/rec_point.py" --list'
 # 주행 센서 녹화 (~/kaboat_bags/이름_날짜_시각/, Ctrl+C 로 종료). 센서를 다 켠 뒤 실행
 alias rec_bag='bash "$KABOAT_WS/scripts/record_run.sh"'
+# bag 의 카메라 영상 → mp4 (bag 폴더 안 <폴더 이름>.mp4). bag_to_mp4 rgb_153828 [--topic …] [--fps N]
+alias bag_to_mp4='python3 "$KABOAT_WS/scripts/bag_to_mp4.py"'
 # 야외 웨이포인트 1개 주행 (실행 즉시 출발, 추력 40%):
 #   goto gate_entry          rec 기록 지점 (위치 + 기록 선수각)
 #   goto 12.0 -3.5 [90]      /odom x y [선수각, 생략 = 위치만]
