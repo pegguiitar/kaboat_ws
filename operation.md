@@ -218,6 +218,8 @@ ros2 launch kaboat_bringup autonomy.launch.py \
 탐색 미션에서 멈춥니다. 빨강·초록은 우현(시계), 검정은 좌현(반시계)으로 부표 둘레 반경 2 m 를
 1.1 바퀴 돕니다. `search_end`는 목표 부표 근처(10 m 안)에 기록하세요 — 그 안의 목표 색 부표 중
 `search_end`에 가장 가까운 것을 돕니다 (주황 장애물 부표도 빨강으로 잡히므로).
+검정은 색으로 판정하지 않고 "빨강·초록이 아닌 부표 크기 물체(unknown)"에서 고릅니다 — 흰 기둥·
+심판 보트도 unknown 이 되니, 검정이 목표면 `search_end`를 검정 부표 바로 옆에 찍으세요.
 기록 지점 파일은 `mission_points_file:=<json>`으로 바꾸고, `mission_points_file:=none`이면 읽지 않습니다.
 
 **웨이포인트 1개 시험** (`goto`, 미션 스택 없이 `waypoint()` 제어기만)

@@ -163,3 +163,24 @@ def test_exit_point_steps_off_buoy_recorded_as_goal():
     x, y = f.exit_point((50, 72))
     assert (x, y) == pytest.approx((50.0, 71.5))
     assert math.dist((x, y), GOAL) < 2.0          # mission_manager 전환 반경 안
+
+
+# ---------- 검정 = unknown (소거법) ----------
+
+def test_black_target_picks_unknown_buoy():
+    # buoy_detector 는 검정을 색으로 안 낸다 — 빨강·초록 아닌 물체는 unknown
+    f = fsm('black')
+    f.update([buoy('red', 52, 70), buoy('green', 51, 71), buoy('unknown', 53, 69)], (40, 70), 0.0)
+    assert f.phase == 'ORBIT' and f.center == (53.0, 69.0) and f.direction == 'ccw'
+
+
+def test_red_target_ignores_unknown_buoy():
+    f = fsm('red')
+    assert f.update([buoy('unknown', 50.5, 70)], (40, 70), 0.0) == 'SEEK'
+
+
+def test_black_target_refines_with_unknown():
+    f = fsm('black', refine_alpha=0.5)
+    f.update([buoy('unknown', 51, 70)], (40, 70), 0.0)
+    f.update([buoy('unknown', 52, 70)], (40, 70), 0.1)
+    assert f.center == pytest.approx((51.5, 70.0))

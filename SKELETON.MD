@@ -237,7 +237,8 @@ cell 과 구분되는 "좌표 랜드마크". 극좌표는 소비자가 자기 od
   순수 FSM은 `test/test_docking_fsm.py`에서 전이·표식 유실·완료 조건을 검증한다.
 - **`search_circler.py`** + **`search_orbit.py`**(ROS 무의존): 규정 5.2(6) 탐색. `search.target_color`
   (당일 공지, launch `search_target_color:=`) 부표를 `search_end` 10 m 안에서 골라 위치를 고정하고,
-  반경 2 m 원을 LOS 로 돈다 — 빨강·초록 우현(cw), 검정 좌현(ccw). 원 띠 안에서 돈 각도가
+  반경 2 m 원을 LOS 로 돈다 — 빨강·초록 우현(cw), 검정 좌현(ccw). 검정 목표는 buoy_detector 의
+  `unknown`(빨강·초록 아닌 부표 크기 물체, 소거법)에서 고른다. 원 띠 안에서 돈 각도가
   1.1 바퀴면 완료 신호 → `search_end` 로 이동. 목표점에서 90 s 못 찾으면 포기(완료 신호).
   선회 중 회피 반발은 목표 부표 둘레 1 m 셀만 뺀다. 테스트 `test_search_orbit.py`, `test_search_circler_los.py`.
 - **`dri.py`** — 완성. `/occupancy_grid` → 위험도(DRI) 격자. 점유 셀마다 등방

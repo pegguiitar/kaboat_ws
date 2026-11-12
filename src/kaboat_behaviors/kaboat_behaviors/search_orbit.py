@@ -3,6 +3,8 @@
 규정 5.2(6) (2026-11): 사전에 주어진 색의 부표를 중심으로 원을 그리며 선회한다.
   빨강·초록 → 우현선회(시계, cw), 검정(노랑에서 바뀜) → 좌현선회(반시계, ccw).
   목표 색은 대회 당일 공지 → search.target_color 로 넣는다.
+  검정은 buoy_detector 가 색으로 판정하지 않는다 — 빨강·초록 아닌 부표 크기 물체는 'unknown'
+  으로 나오므로(소거법, BUOY_DETECTOR.md), 검정 목표는 unknown 부표에서 고른다 (MATCH_COLORS).
   기록(3구간)은 "목표부표에서 원을 그리는 선회기동 수행이 완료되는 순간"까지.
 
 단계
@@ -34,6 +36,8 @@ from typing import Optional, Tuple
 TARGET_COLORS = ('red', 'green', 'black')
 # 규정 5.2(6): 빨강·초록 우현(시계), 검정(구 노랑) 좌현(반시계)
 TURN_DIRECTION = {'red': 'cw', 'green': 'cw', 'black': 'ccw'}
+# 목표 색 → 부표맵에서 받아들일 색. 검정 = 빨강·초록 아닌 물체(unknown).
+MATCH_COLORS = {'red': ('red',), 'green': ('green',), 'black': ('unknown', 'black')}
 
 
 @dataclass(frozen=True)
@@ -110,6 +114,10 @@ class SearchFsm:
         return self.p.direction
 
     @property
+    def match(self):
+        return MATCH_COLORS[self.p.target_color]
+
+    @property
     def done(self) -> bool:
         return self.phase in ('DONE', 'GIVE_UP')
 
@@ -133,10 +141,10 @@ class SearchFsm:
         return math.hypot(xy[0] - self.goal[0], xy[1] - self.goal[1])
 
     def candidates(self, buoys):
-        """목표 색이고 목표점 target_search_radius 안 — 목표점에 가까운 순."""
+        """목표 색(MATCH_COLORS)이고 목표점 target_search_radius 안 — 목표점에 가까운 순."""
         out = []
         for b in buoys:
-            if b.color != self.p.target_color:
+            if b.color not in self.match:
                 continue
             xy = _xy(b)
             if not all(math.isfinite(v) for v in xy):
@@ -192,7 +200,7 @@ class SearchFsm:
         cx, cy = self.center
         best, best_d = None, self.p.relock_radius
         for b in buoys:
-            if b.color != self.p.target_color:
+            if b.color not in self.match:
                 continue
             xy = _xy(b)
             d = math.hypot(xy[0] - cx, xy[1] - cy)
