@@ -214,6 +214,10 @@ ros2 launch kaboat_bringup autonomy.launch.py \
 ```
 
 `dock_weights:=<.pt 절대경로>`, `dock_device:=0`(젯슨 CUDA), `mission_params_file:=<yaml>`로 바꿉니다.
+탐색 목표 부표 색(대회 당일 공지)은 **`search_target_color:=red|green|black`** 로 넣습니다 — 안 넣으면
+탐색 미션에서 멈춥니다. 빨강·초록은 우현(시계), 검정은 좌현(반시계)으로 부표 둘레 반경 2 m 를
+1.1 바퀴 돕니다. `search_end`는 목표 부표 근처(10 m 안)에 기록하세요 — 그 안의 목표 색 부표 중
+`search_end`에 가장 가까운 것을 돕니다 (주황 장애물 부표도 빨강으로 잡히므로).
 기록 지점 파일은 `mission_points_file:=<json>`으로 바꾸고, `mission_points_file:=none`이면 읽지 않습니다.
 
 **웨이포인트 1개 시험** (`goto`, 미션 스택 없이 `waypoint()` 제어기만)

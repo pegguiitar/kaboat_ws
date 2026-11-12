@@ -43,8 +43,15 @@ def generate_launch_description():
     behaviors = [
         Node(package='kaboat_behaviors', executable=exe,
              name=exe, output='screen', parameters=[common_params])
-        for exe in ['station_keeper', 'search_circler', 'obstacle_planner']
+        for exe in ['station_keeper', 'obstacle_planner']
     ]
+    # 탐색 목표 색은 대회 당일 공지 — 빨강·초록 우현(시계), 검정 좌현(반시계) 선회
+    behaviors.append(Node(
+        package='kaboat_behaviors', executable='search_circler',
+        name='search_circler', output='screen', parameters=[common_params, {
+            'search.target_color': ParameterValue(
+                LaunchConfiguration('search_target_color'), value_type=str),
+        }]))
     behaviors.append(Node(
         package='kaboat_behaviors', executable='mission_approach',
         name='mission_approach', output='screen', parameters=[common_params, {
@@ -109,6 +116,9 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'approach_motion_enabled', default_value='false',
             description='기본값 false: 미션 시작 위치/방향 접근은 미리보기만 수행'),
+        DeclareLaunchArgument(
+            'search_target_color', default_value='',
+            description="탐색 목표 부표 색 red / green / black (대회 당일 공지). '' 이면 탐색 정지"),
         DeclareLaunchArgument(
             'dock_weights', default_value=default_weights(),
             description='YOLO26n-seg 가중치 (models/best.engine 이 있으면 그것, 없으면 best.pt)'),

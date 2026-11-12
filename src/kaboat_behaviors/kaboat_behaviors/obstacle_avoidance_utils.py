@@ -24,11 +24,13 @@ GAIN = 30.0 / MAX_THRUST  # 반발 조향 게인 — steer 1 당 차동 30N (구
 OCC_THRESHOLD = 50       # 점유 확률[0~100] 이 값 이상인 셀만 장애물로 취급
 
 
-def apply_repulsion(cmd: Twist, occupancy_grid, odom) -> Twist:
+def apply_repulsion(cmd: Twist, occupancy_grid, odom, ignore=None) -> Twist:
     """주행 명령 cmd 에 격자 기반 장애물 반발 조향을 더해 돌려준다.
 
     occupancy_grid  nav_msgs/OccupancyGrid (frame_id='odom', 점유확률 0~100/-1)
     odom            nav_msgs/Odometry (현재 위치/자세) — 선체 기준 변환에 필요
+    ignore          (x, y, r) odom — 이 원 안의 셀은 장애물로 안 본다
+                    (탐색 선회 중 일부러 도는 목표 부표)
     """
     # A reached waypoint or failed odom check must remain a stop command.
     if (cmd.linear.x == 0.0 and cmd.angular.z == 0.0
@@ -55,6 +57,8 @@ def apply_repulsion(cmd: Twist, occupancy_grid, odom) -> Twist:
         # 셀 인덱스 → odom 월드 좌표 (셀 중심)
         wx = ox + (i % width + 0.5) * res
         wy = oy + (i // width + 0.5) * res
+        if ignore is not None and math.hypot(wx - ignore[0], wy - ignore[1]) <= ignore[2]:
+            continue
         # odom → 선체 기준 (전방 x, 좌측 y)
         dx, dy = wx - bx, wy - by
         lx = dx * math.cos(-yaw) - dy * math.sin(-yaw)

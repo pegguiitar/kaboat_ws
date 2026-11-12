@@ -37,21 +37,20 @@ from typing import List
 import cv2
 import numpy as np
 
+from kaboat_perception import camera_mount
 from kaboat_perception.camera_obstacles import (
     CameraObstacleParams, level_rotation, pixels_to_level)
 
 
 @dataclass
 class BuoyGeometry:
-    # ⚠️ 장착값(cam_*·lidar_offset_*)은 브랜치를 딴 시점 값 — competition 에 merge 할 때
-    # camera_obstacles·occupancy_grid 의 값으로 맞출 것 (BUOY_DETECTOR.md 표 참고).
-    # 카메라 장착 — occupancy_grid 의 cam_* (camera_obstacles) 와 같은 값이어야 한다.
-    cam_offset_x: float = -0.33
-    cam_offset_y: float = 0.0
-    cam_height: float = 0.85          # 흘수선에서 렌즈까지 [m] (2026-11-12 실측)
-    cam_mount_pitch_deg: float = 10.0  # + = 아래 (2026-11-12 10° 숙임)
+    # 카메라 장착 — camera_mount.py 실측값 (occupancy_grid 카메라 층·도킹 TF 와 같은 출처).
+    cam_offset_x: float = camera_mount.CAMERA_X
+    cam_offset_y: float = camera_mount.CAMERA_Y
+    cam_height: float = camera_mount.CAMERA_HEIGHT_ABOVE_WATER   # 흘수선에서 렌즈까지 [m]
+    cam_mount_pitch_deg: float = camera_mount.CAMERA_PITCH_DEG   # + = 아래
     # 선체 라이다 — occupancy_grid·gate_follower 의 lidar_offset_x/y 와 같은 값.
-    lidar_offset_x: float = 0.4
+    lidar_offset_x: float = camera_mount.LIDAR_X
     lidar_offset_y: float = 0.0
     # 색 (OpenCV H 0~180 — 빨강 0, 주황 15, 노랑 30, 초록 60, 청록 90, 파랑 120, 자홍 150)
     # 조명·햇빛에 색이 틀어져도 놓치지 않게 넉넉히 잡았다 — 주황은 빨강, 연두는 초록으로

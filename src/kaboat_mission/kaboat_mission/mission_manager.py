@@ -75,7 +75,7 @@ class MissionManager(Node):
         super().__init__('mission_manager', **node_kwargs)
 
         # 전환 판정 반경 [m]. 5.0 → 2.0 (2026-11-12): RTK Fixed 로 위치가 수 cm 라 좁혔다.
-        # behavior 완료 거리(gate·avoid 2.0, search 원 1.2)와 맞춘다.
+        # behavior 완료 거리(gate·avoid 2.0, search 는 선회 뒤 search_end 1.5 m)와 맞춘다.
         # dock 은 기록된 dock_end 대신 한 번 고정한 LiDAR/GPS 정박점을 쓴다.
         self.declare_parameter('transition_radius', 2.0)
         self.declare_parameter('auto_start', True)          # 켜지면 바로 첫 미션 시작
