@@ -14,7 +14,7 @@
 
 ```bash
 cd ~/Desktop/kaboat_ws/repo
-git fetch && git checkout ros_bag && git pull
+git fetch && git checkout competition && git pull   # rec_bag 은 competition 에 합쳐짐
 bash scripts/setup_jetson_bashrc.sh && source ~/.bashrc     # rec_bag 단축어 등록
 sudo apt install ros-humble-image-transport-plugins tmux    # 카메라 압축 토픽 + 끊김 방지
 ```
