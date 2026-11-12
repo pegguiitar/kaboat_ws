@@ -3,7 +3,8 @@ import math
 import numpy as np
 
 from kaboat_hardware.dock_one_shot import (
-    LocalGeo, aligned_normals, fixed_route, symmetric_markers)
+    LocalGeo, aligned_normals, fixed_route, retreat_error, retreat_route,
+    symmetric_markers)
 
 
 def test_gps_route_roundtrip_and_fixed_straight_segments():
@@ -43,3 +44,13 @@ def test_three_masks_and_independent_normals_required():
     status['direct_normals']['square']['wall_center_odom'][0] = 70.0
     status['direct_normals']['square']['valid'] = False
     assert not aligned_normals(status, 0.0)[0]
+
+
+def test_retreat_leg_keeps_bow_heading_and_exits_over_three_metres():
+    stop = np.array([69.0, 66.0])
+    samples, exit_xy = retreat_route(stop, 0.0)
+    np.testing.assert_allclose(samples[0], stop)
+    np.testing.assert_allclose(samples[-1], [65.75, 66.0])
+    np.testing.assert_allclose(exit_xy, samples[-1])
+    assert retreat_error(exit_xy, stop, 0.0) == (3.25, 0.0)
+    assert retreat_error(np.array([66.0, 66.2]), stop, 0.0)[0] == 3.0

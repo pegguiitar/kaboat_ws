@@ -7,4 +7,11 @@ if [[ -r /sys/class/drm/card1/device/vendor ]] && \
   export MESA_LOADER_DRIVER_OVERRIDE="${MESA_LOADER_DRIVER_OVERRIDE:-iris}"
 fi
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
-exec rviz2 -d "$WS/scripts/demo/dock.rviz" --ros-args -p use_sim_time:=true "$@"
+rviz_config="$WS/scripts/demo/dock.rviz"
+use_sim_time=true
+if [[ "${1:-}" == '--real' ]]; then
+  shift
+  rviz_config="$WS/scripts/demo/dock_real.rviz"
+  use_sim_time=false
+fi
+exec rviz2 -d "$rviz_config" --ros-args -p use_sim_time:="$use_sim_time" "$@"

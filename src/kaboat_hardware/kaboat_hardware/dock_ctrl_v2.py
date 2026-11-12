@@ -14,10 +14,12 @@ from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import NavSatFix
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
+from visualization_msgs.msg import Marker, MarkerArray
 
 from kaboat_behaviors.behavior_base import yaw_from_quaternion
 from kaboat_behaviors.los_controller import LosFollower, sampled_path
-from .dock_one_shot import LocalGeo, aligned_normals, fixed_route, symmetric_markers, wrap
+from .dock_one_shot import (LocalGeo, aligned_normals, fixed_route, retreat_error,
+                            retreat_route, symmetric_markers, wrap)
 
 
 def stamp(msg):
@@ -36,6 +38,7 @@ class DockCtrlV2(Node):
                     'stable_samples': 5, 'stable_duration_s': 0.8,
                     'max_turn_cmd': 0.20,
                     'approach_cmd': 0.10, 'final_cmd': 0.05,
+                    'retreat_cmd': 0.05, 'retreat_distance_m': 3.25,
                     'via_tolerance_m': 0.30, 'goal_tolerance_m': 0.25,
                     'yaw_tolerance_deg': 8.0, 'target_class': 'triangle'}
         for name, value in defaults.items():
@@ -59,6 +62,8 @@ class DockCtrlV2(Node):
         self.max_turn = float(p('max_turn_cmd'))
         self.approach_cmd = float(p('approach_cmd'))
         self.final_cmd = float(p('final_cmd'))
+        self.retreat_cmd = float(p('retreat_cmd'))
+        self.retreat_distance = float(p('retreat_distance_m'))
         self.via_tol = float(p('via_tolerance_m'))
         self.goal_tol = float(p('goal_tolerance_m'))
         self.yaw_tol = math.radians(float(p('yaw_tolerance_deg')))
@@ -69,7 +74,8 @@ class DockCtrlV2(Node):
                    (self.stage_radius, self.gps_timeout, self.odom_timeout,
                     self.perception_timeout, self.stable_duration,
                     self.max_turn, self.approach_cmd, self.final_cmd,
-                    self.via_tol, self.goal_tol, self.yaw_tol)) or self.stable_samples < 2:
+                    self.retreat_cmd, self.via_tol, self.goal_tol, self.yaw_tol)
+                   ) or not math.isfinite(self.retreat_distance) or self.retreat_distance <= 3.0 or self.stable_samples < 2:
             raise ValueError('invalid docking controller limits')
         if not self.mission_mode and self.stage_ll[0] == -999 and self.sim_stage[0] == -999:
             self.get_logger().warn('No staging waypoint: set stage_latitude/longitude before start')
@@ -107,6 +113,7 @@ class DockCtrlV2(Node):
                              durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.path_pub = self.create_publisher(Path, '/dock/one_shot_path', latched)
         self.gps_path_pub = self.create_publisher(String, '/dock/one_shot_gps', latched)
+        self.path_markers_pub = self.create_publisher(MarkerArray, '/dock/one_shot_markers', latched)
         self.create_subscription(NavSatFix, '/gps/fix', self._gps, sensor_qos)
         self.create_subscription(Odometry, '/odom', self._odom, sensor_qos)
         self.create_subscription(String, '/dock/detection_status', self._det, 10)
@@ -204,6 +211,9 @@ class DockCtrlV2(Node):
         empty_path.header.frame_id = 'odom'
         empty_path.header.stamp = self.get_clock().now().to_msg()
         self.path_pub.publish(empty_path)
+        clear = Marker()
+        clear.action = Marker.DELETEALL
+        self.path_markers_pub.publish(MarkerArray(markers=[clear]))
         self.gps_path_pub.publish(String(data=json.dumps({'one_shot': False, 'route': None})))
 
     def _on_mission_state(self, msg):
@@ -264,6 +274,29 @@ class DockCtrlV2(Node):
         return float(np.clip(1.4 * wrap(heading - yaw) - .16 * rate,
                              -self.max_turn, self.max_turn))
 
+    def _publish_route_markers(self, header):
+        markers = MarkerArray()
+        colors = ((.1, .8, 1.), (1., .7, 0.), (1., .1, .1), (.1, 1., .3))
+        for index, (label, point) in enumerate(zip(('START', 'VIA', 'DOCK', 'EXIT'), self.route_enu)):
+            x, y = point - self.route_origin_enu + self.route_origin_odom
+            for text in (False, True):
+                marker = Marker()
+                marker.header = header
+                marker.ns = 'dock_one_shot'
+                marker.id = index * 2 + int(text)
+                marker.action = Marker.ADD
+                marker.type = Marker.TEXT_VIEW_FACING if text else Marker.SPHERE
+                marker.pose.position.x, marker.pose.position.y = float(x), float(y)
+                marker.pose.position.z = .55 if text else .25
+                marker.pose.orientation.w = 1.0
+                marker.scale.x = marker.scale.y = marker.scale.z = .20 if text else .25
+                marker.color.r, marker.color.g, marker.color.b = colors[index]
+                marker.color.a = 1.0
+                if text:
+                    marker.text = label
+                markers.markers.append(marker)
+        self.path_markers_pub.publish(markers)
+
     def _route(self):
         if (self.goal is None or not self.goal.get('valid') or self.waypoints is None
                 or time.monotonic() - self.goal_received > self.perception_timeout
@@ -284,9 +317,10 @@ class DockCtrlV2(Node):
         stop = origin_enu + goal_odom - origin_odom
         try:
             first, second, heading = fixed_route(origin_enu, via, stop)
+            retreat, exit_xy = retreat_route(stop, heading, self.retreat_distance)
         except ValueError:
             return False
-        self.route_enu = (origin_enu.copy(), via, stop)
+        self.route_enu = (origin_enu.copy(), via, stop, exit_xy)
         self.route_origin_odom = origin_odom.copy()
         self.route_origin_enu = origin_enu.copy()
         self.first_plan = sampled_path(first, spacing=.1, curvatures=np.zeros(len(first)), frame_id='dock_enu')
@@ -296,7 +330,7 @@ class DockCtrlV2(Node):
         path = Path()
         path.header.frame_id = 'odom'
         path.header.stamp = self.get_clock().now().to_msg()
-        for xy in np.vstack((first, second[1:])):
+        for xy in np.vstack((first, second[1:], retreat[1:])):
             p = PoseStamped()
             p.header = path.header
             p.pose.position.x, p.pose.position.y = map(float, xy - origin_enu + origin_odom)
@@ -307,9 +341,11 @@ class DockCtrlV2(Node):
         gps_points = [dict(latitude=lat, longitude=lon)
                       for lat, lon in (self.geo.latlon(xy) for xy in self.route_enu)]
         self.fixed_gps_msg = String(data=json.dumps({'start': gps_points[0],
-            'via': gps_points[1], 'goal': gps_points[2], 'frame': 'WGS84',
+            'via': gps_points[1], 'goal': gps_points[2], 'exit': gps_points[3],
+            'frame': 'WGS84',
             'one_shot': True}))
         self.path_pub.publish(self.fixed_path_msg)
+        self._publish_route_markers(path.header)
         self.gps_path_pub.publish(self.fixed_gps_msg)
         self.last_path_pub = time.monotonic()
         return True
@@ -407,17 +443,28 @@ class DockCtrlV2(Node):
                                       thrust_ratio=self.final_cmd,
                                       turn_ratio=self.max_turn)
             if step.reached or np.linalg.norm(xy-self.route_enu[2]) <= self.goal_tol:
+                self.phase = 'REVERSE'
+                self._command(-self.retreat_cmd, self._turn(self.final_heading, yaw))
+            else:
+                self._command(step.linear, step.angular)
+            self._report(f'goal error {np.linalg.norm(xy-self.route_enu[2]):.2f}m')
+            return
+        if self.phase == 'REVERSE':
+            progress, lateral = retreat_error(xy, self.route_enu[2], self.final_heading)
+            if progress >= max(3.0, self.retreat_distance - .15) and abs(lateral) <= .75:
                 self.phase = 'COMPLETE'
                 self._command(0, 0)
                 if self.mission_mode and not self.complete_sent:
                     self.complete_pub.publish(String(data='dock'))
                     self.complete_sent = True
             else:
-                self._command(step.linear, step.angular)
-            self._report(f'goal error {np.linalg.norm(xy-self.route_enu[2]):.2f}m')
+                heading = self.final_heading + float(np.clip(.35*lateral, -.2, .2))
+                linear = -self.retreat_cmd if abs(wrap(heading-yaw)) < .4 else 0.0
+                self._command(linear, self._turn(heading, yaw))
+            self._report(f'retreat {progress:.2f}/{self.retreat_distance:.2f}m, lateral {lateral:.2f}m')
             return
-        # Keep the fixed GPS goal under small wave / residual-thrust drift.
-        goal_error = self.route_enu[2] - xy
+        # Hold the fixed exit point under small drift until the next mission takes over.
+        goal_error = self.route_enu[3] - xy
         distance = float(np.linalg.norm(goal_error))
         direction = np.array([math.cos(self.final_heading), math.sin(self.final_heading)])
         along = float(goal_error @ direction)
@@ -426,10 +473,10 @@ class DockCtrlV2(Node):
         if distance < .12 and abs(speed) < .03:
             self._command(0, 0)
         else:
-            heading = self.final_heading + float(np.clip(.5*lateral, -.2, .2))
             thrust = float(np.clip(.08*along-.12*speed, -.035, .035))
+            heading = self.final_heading + math.copysign(1.0, thrust) * float(np.clip(.5*lateral, -.2, .2))
             self._command(thrust, self._turn(heading, yaw))
-        self._report(f'holding fixed GPS goal, error {distance:.2f}m')
+        self._report(f'holding fixed GPS exit, error {distance:.2f}m')
 
 
 def main(args=None):

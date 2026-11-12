@@ -12,10 +12,12 @@
 `dock_ctrl_v2`가 이전 경로를 지우고 `SCAN`으로 시작한다. 이때 360도 회전하지
 않는다. 카메라에서 세 마커가 안정적으로 검출되고 LiDAR의 세 독립 RANSAC
 법선이 안정적으로 나올 때, 관측 법선에 맞춰 선수각을 미세 조정한다.
-안정화된 순간 GPS와 LiDAR로 시작점→경유점→정지점 LOS 경로를 **한 번만**
-고정한다. 목표 슬롯 뒷벽 앞 3 m가 경유점, 1 m가 정지점이다. 경유점에서
-정지점 방향으로 선수를 정렬하고 진입한다. 정지 후 `/mission/complete=dock`을
-보내고, 미션 매니저는 고정 경로의 최종점으로 완료를 판정한다.
+안정화된 순간 GPS와 LiDAR로 시작점→경유점→정지점→이탈점 경로를 **한 번만**
+고정한다. 목표 슬롯 뒷벽 앞 3 m가 경유점, 1 m가 정지점이다. 전진 두 구간은
+기존 LOS 제어를 사용한다. 경유점에서 정지점 방향으로 선수를 정렬하고 진입한다.
+정지점 도착 즉시 선수 방향을 유지하며 GPS 위치·방향 오차로 후진한다. 정지점에서
+3 m 이상 물러나고 횡오차가 0.75 m 이내일 때 `/mission/complete=dock`을
+보낸다. 미션 매니저는 고정 경로 마지막 점인 이탈점 근처에서 다음 미션으로 넘어간다.
 
 센서와 제어 토픽은 실선과 시뮬레이션에서 같다:
 
@@ -25,7 +27,8 @@
 /scan/raw → onboard_scan_filter → /scan/level
   → /dock/lidar/status + /dock/lidar/{class}/normal + /dock/lidar/{class}/wall_point
 /gps/fix + /odom + /dock/waypoints → dock_ctrl_v2
-  → /dock/one_shot_path + /dock/one_shot_gps + /cmd/dock
+  → /dock/one_shot_path + /dock/one_shot_gps + /dock/one_shot_markers + /cmd/dock
+/dock/status=COMPLETE → /mission/complete=dock → mission_manager
 /mission/state=dock → cmd_mux: /cmd/dock → /cmd_vel
 ```
 
@@ -110,8 +113,8 @@ cd /workspace/kaboat_ws
 ./scripts/demo/rviz_dock.sh
 ```
 
-RViz에는 세 카메라 방위, 세 RANSAC 법선, 경유·정지점, 고정 LOS **선**이
-표시된다. 상태와 측정치는 다른 터미널에서:
+RViz에는 세 카메라 방위, 세 독립 RANSAC 법선, START·VIA·DOCK·EXIT 네 점,
+후진 구간을 포함한 고정 경로 **선**이 표시된다. 상태와 측정치는 다른 터미널에서:
 
 ```bash
 ros2 topic echo /mission/state
@@ -121,6 +124,7 @@ ros2 topic echo /dock/lidar/status
 ros2 topic echo /dock/avoid/goal_status
 ros2 topic echo /dock/one_shot_gps
 ros2 topic echo /dock/one_shot_path
+ros2 topic echo /dock/one_shot_markers
 ```
 
 `/dock/one_shot_path`는 안정 조건을 만족해 경로를 고정하기 전에는 비어
@@ -148,6 +152,10 @@ LiDAR 추적용**이며, 배의 YOLO 도킹 노드용 컨테이너가 아니다.
 도킹 웨이포인트 접근 완료 후 같은 도킹 파이프라인으로 넘어간다. 실제
 구동 전 `approach_motion_enabled`, `dock_motion_enabled`와 실제 추력 드라이버
 연결을 현장 조건에 맞게 활성화한다. `use_sim_actuator`는 실선에서 `false`다.
+실선 RViz는 `./scripts/demo/rviz_dock.sh --real`로 연다. 시스템 시간,
+`odom` 고정 프레임, `base_link` 추적 시점과 `/scan/level`을 사용한다.
+YOLO의 `/dock/bearing_markers`, RANSAC의 `/dock/lidar/direct_markers`,
+네 경로점 `/dock/one_shot_markers`, 고정 경로 `/dock/one_shot_path`를 표시한다.
 
 단일 도킹 미션 시험은 같은 런치에서 `use_sim_time:=false`,
 `use_sim_actuator:=false`, 실측 `staging_x/y/angle_deg`를 넘긴다. 실선 기본
@@ -157,7 +165,7 @@ LiDAR 추적용**이며, 배의 YOLO 도킹 노드용 컨테이너가 아니다.
 
 ## 확인 상태
 
-Python 순수 로직 및 mission manager ROS 테스트 20개 통과. 새 Docker 이미지
-빌드, 전체 ROS 패키지 빌드, YOLO 실추론, Gazebo 종단 도킹 주행은 아직 검증되지
-않았다. 이미지가 빌드되면 위 명령으로 세 도형을 각각 시험하고 토픽 및
-최종 정지 오차를 기록한다.
+순수 로직 테스트와 mission manager ROS 테스트로 경로 및 미션 전환을 확인한다.
+새 Docker 이미지 빌드, 전체 ROS 패키지 빌드, YOLO 실추론, Gazebo 종단 도킹
+주행, 실선 RViz 화면은 아직 검증되지 않았다. 이미지가 준비되면 세 도형을
+각각 시험하고 이탈 거리와 토픽을 기록한다.

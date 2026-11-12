@@ -37,6 +37,10 @@ def test_dock_completion_waits_for_fixed_goal():
         pose.pose.position.x = 69.0
         pose.pose.position.y = 66.0
         path.poses.append(pose)
+        exit_pose = PoseStamped()
+        exit_pose.pose.position.x = 65.75
+        exit_pose.pose.position.y = 66.0
+        path.poses.append(exit_pose)
         node.on_dock_path(path)
         empty = Path()
         empty.header.frame_id = 'odom'
@@ -44,6 +48,10 @@ def test_dock_completion_waits_for_fixed_goal():
         assert not node.behavior_complete
         node.on_dock_path(path)
         node.on_complete(String(data='dock'))
+        node.tick()
+        assert node.phase == 'mission'  # still at the dock stop, before retreat
+        odom.pose.pose.position.x = 65.75
+        node.on_odom(odom)
         node.tick()
         assert node.phase == 'done'
     finally:

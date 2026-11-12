@@ -115,3 +115,19 @@ def fixed_route(start, via, stop, spacing=.1):
     vector = np.asarray(stop, float) - np.asarray(via, float)
     heading = math.atan2(vector[1], vector[0])
     return first, second, heading
+
+
+def retreat_route(stop, heading, distance=3.25, spacing=.1):
+    """Fix a straight reverse leg from the dock stop without turning the bow."""
+    if not math.isfinite(heading) or not math.isfinite(distance) or distance <= 3.0:
+        raise ValueError('retreat distance must exceed 3 m')
+    direction = np.array([math.cos(heading), math.sin(heading)])
+    exit_xy = np.asarray(stop, float) - distance * direction
+    return straight_samples(stop, exit_xy, spacing), exit_xy
+
+
+def retreat_error(position, stop, heading):
+    """Signed metres reversed from stop and lateral displacement from its axis."""
+    direction = np.array([math.cos(heading), math.sin(heading)])
+    delta = np.asarray(position, float) - np.asarray(stop, float)
+    return float(-delta @ direction), float(direction[0] * delta[1] - direction[1] * delta[0])
