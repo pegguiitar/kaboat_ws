@@ -61,6 +61,8 @@ def test_behind_camera_or_off_screen_is_no_vote():
     ((72, 55, 58), 2),     # 초록 공 부표 (채도 50~70, bag 실측)
     ((5, 133, 230), 1),    # 빨강 부표
     ((176, 188, 197), 1),  # 빨강 부표 (H 170+)
+    ((175, 196, 111), 1),  # 낮 gate 빨강 부표 그늘진 면 (V 111)
+    ((12, 118, 140), 0),   # 황갈색 띠 중 채도·밝기 높은 픽셀 — H 로 거름
 ])
 def test_pixel_colours_measured_at_sunset(hsv, label):
     import cv2
