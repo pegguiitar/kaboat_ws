@@ -90,7 +90,12 @@ def generate_launch_description():
              name='mission_manager', output='screen',
              parameters=[LaunchConfiguration('mission_params_file'), common_params,
                          {'points_file': ParameterValue(
-                             LaunchConfiguration('mission_points_file'), value_type=str)}]),
+                             LaunchConfiguration('mission_points_file'), value_type=str),
+                          # 미션 하나만 시험: start_state:=station single_mission:=true
+                          'start_state': ParameterValue(
+                              LaunchConfiguration('start_state'), value_type=str),
+                          'single_mission': ParameterValue(
+                              LaunchConfiguration('single_mission'), value_type=bool)}]),
     ]
 
     return LaunchDescription([
@@ -109,6 +114,12 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'mission_points_file', default_value='~/kaboat_mission_points.json',
             description='현장 rec 기록 지점 JSON — entry/end 쌍, dock_entry 단독 허용. none 이면 안 읽음'),
+        DeclareLaunchArgument(
+            'start_state', default_value='',
+            description="이 미션부터 시작 (gate / station / dock / search / avoid). '' = 처음(gate)부터"),
+        DeclareLaunchArgument(
+            'single_mission', default_value='false',
+            description='true = start_state 하나만 하고 done(정지) — 미션 하나씩 시험'),
         DeclareLaunchArgument(
             'gate_params_file', default_value=gate_params,
             description='게이트 쌍 수와 라이다/DRI 임계값 YAML'),

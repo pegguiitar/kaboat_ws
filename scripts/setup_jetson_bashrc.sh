@@ -143,6 +143,21 @@ alias test_dock_outdoor='bash "$KABOAT_WS/scripts/run_dock_mission.sh"'
 # 도킹 YOLO 마스크만 확인 (run_dock_yolo.sh 를 먼저 켜 둠): 도형별 신뢰도·화면 위치·검출률,
 # 마스크 그린 영상 PNG 저장 (~/kaboat_yolo_checks). Ctrl+C 로 요약
 alias check_yolo='python3 "$KABOAT_WS/scripts/check_yolo_masks.py"'
+# 종합 자율주행: 게이트 → 스테이션 → 도킹 → 탐색 → 회피, 전부 실제로 움직임 (센서·모터·run_map·카메라는 따로).
+#   run_autonomy search_target_color:=red dock_target_class:=circle   (뒤에 붙인 인자가 이김)
+alias run_autonomy='ros2 launch kaboat_bringup autonomy.launch.py gate_motion_enabled:=true approach_motion_enabled:=true dock_motion_enabled:=true'
+# 미션 하나만: 종합 스택 그대로, 그 미션의 _entry 로 접근 → 미션 → done(정지)
+#   test_mission station | test_mission search search_target_color:=red | test_mission dock dock_target_class:=circle
+test_mission() {
+    if [ -z "$1" ]; then
+        echo "사용: test_mission gate|station|dock|search|avoid [인자:=값 …]"
+        return 1
+    fi
+    local mission="$1"
+    shift
+    ros2 launch kaboat_bringup autonomy.launch.py start_state:="$mission" single_mission:=true \
+        gate_motion_enabled:=true approach_motion_enabled:=true dock_motion_enabled:=true "$@"
+}
 
 echo "🤖 [KABOAT Jetson] 환경 세팅 완료 (DOMAIN: $ROS_DOMAIN_ID | WS: ${KABOAT_WS:-미탐색})"
 echo "   - run_boat_lidar: 선체 TG-50 포함 센서/오도메트리 가동 (cal_imu 불필요, 즉시 /odom 생성)"
@@ -174,6 +189,8 @@ echo "   - test_tournament    : 토너먼트 회피 tournament_entry → tournam
 echo "   - test_gate_outdoor  : 야외 게이트 7쌍 gate_entry → gate_end (즉시 출발)"
 echo "   - test_dock_outdoor  : 야외 도킹 dock_entry → 목표 슬롯 → 후진 (YOLO 결과는 rec_bag 이 저장)"
 echo "   - check_yolo    : 도킹 YOLO 마스크 확인 (run_dock_yolo.sh 먼저, 영상 PNG ~/kaboat_yolo_checks)"
+echo "   - run_autonomy  : 종합 자율주행 전체 (게이트→스테이션→도킹→탐색→회피, 실제 주행). 예) search_target_color:=red"
+echo "   - test_mission 미션 : 종합 스택으로 미션 하나만 (예: test_mission station, 끝나면 정지)"
 echo "   - view_position : /odom x·y·선수각·나침반 방위·GNSS 상태 실시간 표시"
 echo "   - run_zenoh     : 노트북 모니터링 브리지 가동"
 echo "   - cb / sb       : 빌드 / 환경 리로드"

@@ -220,10 +220,19 @@ ros2 topic pub --once /start_mission  std_msgs/msg/Bool '{data: true}'    # 출�
 **자율주행 스택**
 
 ```bash
-ros2 launch kaboat_bringup autonomy.launch.py                          # 기본: gate·approach 는 미리보기만
-ros2 launch kaboat_bringup autonomy.launch.py \
-    gate_motion_enabled:=true approach_motion_enabled:=true             # 실제로 움직임
+ros2 launch kaboat_bringup autonomy.launch.py                          # 기본: gate·approach·dock 미리보기만
+run_autonomy search_target_color:=red dock_target_class:=circle        # 전체 실제 주행 (게이트→…→회피)
+test_mission station                                                   # 미션 하나만, 끝나면 done(정지)
+test_mission search search_target_color:=red
+test_mission dock dock_target_class:=circle
 ```
+
+- `run_autonomy` = `autonomy.launch.py gate_motion_enabled:=true approach_motion_enabled:=true dock_motion_enabled:=true`.
+  뒤에 붙인 인자가 이깁니다.
+- `test_mission 미션` = 같은 스택에 `start_state:=미션 single_mission:=true`를 더한 것입니다.
+  - 그 미션의 `_entry`로 접근(`mission_approach`)한 뒤 미션을 하고 `done`(정지)합니다.
+  - 미리 `goto 미션_entry`로 세워 두면 접근이 바로 끝납니다.
+- `approach_motion_enabled:=false`면 접근이 끝나지 않아 미션이 시작되지 않습니다(접근 명령은 미리보기만 나감).
 
 `dock_weights:=<.pt 절대경로>`, `dock_device:=0`(젯슨 CUDA), `mission_params_file:=<yaml>`로 바꿉니다.
 탐색 목표 부표 색(대회 당일 공지)은 **`search_target_color:=red|green|black`** 로 넣습니다 — 안 넣으면
