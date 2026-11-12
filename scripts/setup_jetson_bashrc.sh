@@ -73,10 +73,11 @@ run_gq7_rtk() {
         ntrip_password:="${NTRIP_PASS:?~/.ntrip_account 에 NTRIP_PASS 가 없음}" "$@"
 }
 alias run_geo="ros2 launch kaboat_hardware geo_origin.launch.py"
-# D455 카메라 (컬러 640×480 + 정렬 뎁스, 15 fps). occupancy_grid 카메라 층(cam_enabled)·도킹용
+# D455 카메라 (컬러 640×480 + 정렬 뎁스, 15 fps). 도킹용 (지도 카메라 층은 기본 끔)
 alias run_camera="ros2 launch kaboat_bringup d455.launch.py"
-# 장애물 지도 (라이다 + 카메라 층 + 가상 벽). 하나만 켜 두고 test_*·autonomy 가 같이 쓴다
-alias run_map="ros2 run kaboat_perception occupancy_grid --ros-args -p cam_enabled:=true"
+# 장애물 지도 (라이다 + 가상 벽, 카메라 안 씀). 하나만 켜 두고 test_*·autonomy 가 같이 쓴다
+#   뒤에 -p 이름:=값 을 붙일 수 있게 --ros-args 로 끝낸다 (카메라 층: run_map -p cam_enabled:=true)
+alias run_map="ros2 run kaboat_perception occupancy_grid --ros-args"
 
 # 미션 지점 기록 (지금 /odom 위치 → ~/kaboat_mission_points.json)
 alias run_points="ros2 run kaboat_hardware point_recorder"
@@ -141,7 +142,7 @@ echo "   - run_gq7_rtk   : 야외 GQ7 + RTK 보정 (계정 ~/.ntrip_account)"
 echo "   - run_lidar     : 야외 선체 TG-50 라이다 (CP2102 고정 경로, GQ7 먼저)"
 echo "   - run_geo       : GPS 원점 설정·위도경도→x/y 변환 (geo_origin)"
 echo "   - run_camera    : D455 카메라 (컬러 + 정렬 뎁스)"
-echo "   - run_map       : 장애물 지도 (라이다 + 카메라 층 + 가상 벽) — 하나만 켜 둠"
+echo "   - run_map       : 장애물 지도 (라이다 + 가상 벽, 카메라 안 씀) — 하나만 켜 둠"
 echo "   - run_points    : 미션 지점 기록기 (~/kaboat_mission_points.json)"
 echo "   - rec 이름      : 지금 위치(x, y, 선수각) 기록 (이름 생략 시 p1, p2 …)"
 echo "   - list_points   : 기록한 지점 보기"

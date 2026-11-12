@@ -6,7 +6,7 @@
 
 센서 배선 확인은 먼저 ``real_sensors.launch.py``를 사용한다. 이 launch는
 센서 드라이버나 실제 모터 드라이버를 자동으로 띄우지 않는다.
-지도(occupancy_grid)도 기본으로 안 띄운다 — 젯슨 ``run_map``(카메라 층 포함)으로 따로
+지도(occupancy_grid)도 기본으로 안 띄운다 — 젯슨 ``run_map``(라이다만)으로 따로
 하나만 켜 두고 시험·미션이 같이 쓴다. 여기서 켜려면 start_occupancy_grid:=true.
 """
 

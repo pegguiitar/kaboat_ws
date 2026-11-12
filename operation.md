@@ -43,7 +43,7 @@ source ~/.zshrc
 | 6 | 젯슨 터미널 5 | `run_points` | 미션 지점 기록기 |
 | 7 | 노트북 | `view_lidar` (= `rviz2 -d …/scripts/remote_monitor.rviz`) | Fixed Frame `odom`, 장애물 지도·`/scan`·배 위치 |
 | 8 | 노트북 | 배를 옮겨 가며 `rec 이름` (아래 이름 규칙) | `✓ 이름: x=… y=… 선수각 …` |
-| 9 | 젯슨 터미널 6 | `run_map` (+ 카메라 층 쓰면 `run_camera`) | 장애물 지도 — 하나만. 로그 `가상 벽 2줄 …`, `카메라 층 켜짐 …` |
+| 9 | 젯슨 터미널 6 | `run_map` | 장애물 지도 (라이다만) — 하나만. 로그 `가상 벽 2줄 …` |
 | 10 | 젯슨 터미널 7 | `ros2 launch kaboat_bringup autonomy.launch.py` | 자율주행 스택 (지도는 9번 것을 씀). 로그에 `[기록 지점] gate: 시작 … → 끝 …` |
 
 **웨이포인트 이름 규칙** — `mission_manager`가 `~/kaboat_mission_points.json`에서 이 이름만
@@ -116,8 +116,8 @@ ros2 launch kaboat_hardware real_sensors.launch.py outdoor:=true rtk:=true \
 | `run_gq7_outdoor` | `ros2 launch kaboat_hardware real_sensors.launch.py outdoor:=true` | 야외 GQ7. `gq7_outdoor.yaml` + `gq7_local_odom`(`/ekf/odometry_earth` → 원점 파일 기준 `/odom`) |
 | `run_gq7_rtk` | `real_sensors.launch.py outdoor:=true rtk:=true ntrip_username:=… ntrip_password:=…` | 야외 GQ7 + RTK 보정 + 필터 위치. 계정은 `~/.ntrip_account` |
 | `run_lidar` | `ros2 launch kaboat_hardware onboard_lidar.launch.py port:=$(_tg50_port)` | 야외 선체 TG-50 (`/scan`, `/scan/level`). GQ7 먼저. 포트는 `/dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0`(없으면 `/dev/ttyUSB0`) |
-| `run_map` | `ros2 run kaboat_perception occupancy_grid --ros-args -p cam_enabled:=true` | 장애물 지도(라이다 + 카메라 층 + 가상 벽). **하나만** 켜 두고 `test_*`·`autonomy.launch.py`가 같이 씀 (`ros2 topic info /occupancy_grid` 발행자 1) |
-| `run_camera` | `ros2 launch kaboat_bringup d455.launch.py` | D455 카메라 (컬러 640×480 + 정렬 뎁스, 15 fps). 카메라 층·도킹용. USB 3 포트 |
+| `run_map` | `ros2 run kaboat_perception occupancy_grid --ros-args` | 장애물 지도(라이다 + 가상 벽, **카메라 안 씀**). **하나만** 켜 두고 `test_*`·`autonomy.launch.py`가 같이 씀 (`ros2 topic info /occupancy_grid` 발행자 1). 뒤에 `-p 이름:=값` 붙임 — 카메라 층은 `run_map -p cam_enabled:=true` |
+| `run_camera` | `ros2 launch kaboat_bringup d455.launch.py` | D455 카메라 (컬러 640×480 + 정렬 뎁스, 15 fps). 도킹용 (지도 카메라 층은 기본 끔). USB 3 포트 |
 | `run_geo` | `ros2 launch kaboat_hardware geo_origin.launch.py` | GPS 원점 설정, 위도·경도 → x/y (`/geo/*`) |
 | `run_points` | `ros2 run kaboat_hardware point_recorder` | 미션 지점 기록기 |
 | `rec [이름]` | `python3 scripts/rec_point.py [이름]` | 지금 위치(x, y, 선수각) 기록. 이름 생략 시 `p1`, `p2` … |
@@ -340,9 +340,8 @@ test_dock_outdoor approach:=true             # dock_entry 접근(직선, 회피 
 
 ```bash
 run_camera                                                         # 젯슨: D455 (= ros2 launch kaboat_bringup d455.launch.py)
-ros2 run kaboat_perception occupancy_grid --ros-args \
-    -p cam_enabled:=true                                           # 카메라 높이 기본 0.775 m (실측)
-test_avoid_outdoor cam_enabled:=true                              # 회피 시험에서 같이 켜기
+run_map -p cam_enabled:=true                                       # 지도에 카메라 층 켜기 (run_map 기본은 라이다만)
+                                                                   # 카메라 높이 기본 0.775 m (실측)
 ```
 
 - `cam_height` = 배가 물에 뜬 상태에서 흘수선부터 카메라 렌즈 중심까지 [m], 실측 **0.775**가 기본
