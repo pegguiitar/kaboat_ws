@@ -55,6 +55,9 @@ def test_gate_parameters(mod):
     assert mod.gate_parameters(_get(mod, motion_enabled='false'))['gate.motion_enabled'] is False
     with pytest.raises(RuntimeError, match='1 이상'):
         mod.gate_parameters(_get(mod, required_pairs='0'))
+    assert mod.gate_parameters(_get(mod, los_thrust='0.25'))['gate.los_thrust_ratio'] == 0.25
+    with pytest.raises(RuntimeError, match='0~1'):
+        mod.gate_parameters(_get(mod, los_thrust='1.5'))
 
 
 def test_refuses_missing_point_or_moved_origin(mod, tmp_path):

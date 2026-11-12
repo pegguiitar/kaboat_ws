@@ -350,8 +350,10 @@ class RealObstacleAvoidTest(Node):
             return
         self.dock_waypoints=msg;self.dock_waypoints_received=time.monotonic()
 
-    def _generate_plan(self,dri,boat,yaw,vel,goal,params,now_t=0.):
-        if not self.dock_waypoints_topic:return generate(dri,boat,yaw,vel,goal,params,now_t)
+    def _generate_plan(self,dri,boat,yaw,vel,goal,params,now_t=0.,prev_plan=None):
+        # prev_plan: FSM 재계획 때 지금 경로 — 같은 쪽 유지(w_hist). 도킹 경로는 쓰지 않음
+        if not self.dock_waypoints_topic:return generate(dri,boat,yaw,vel,goal,params,now_t,
+                                                         prev_plan=prev_plan)
         msg=self.latched_dock_waypoints if self.started else self.dock_waypoints
         if msg is None:return None
         xy=np.array([[p.pose.position.x,p.pose.position.y] for p in msg.poses])
@@ -617,7 +619,8 @@ class RealObstacleAvoidTest(Node):
         cmd=Twist()
         if plan is None:return cmd
         linear,angular=follow_cmd(plan,boat,yaw,yaw_rate,goal,self.fsm_params,
-                                 BSPLINE_TRACK_YAW_KP,BSPLINE_TRACK_YAW_KD)
+                                 BSPLINE_TRACK_YAW_KP,BSPLINE_TRACK_YAW_KD,
+                                 pivot_angle=self.fsm_params.pivot_angle)   # FSM 과 같은 제자리 정렬
         if not math.isfinite(linear) or not math.isfinite(angular):raise ValueError('nonfinite preview controller output')
         limit=min(self.max_linear_cmd,self.dock_final_cmd) if self._is_final_segment(plan) else self.max_linear_cmd
         cmd.linear.x=float(np.clip(linear,-limit,limit));cmd.angular.z=float(np.clip(angular,-self.max_angular_cmd,self.max_angular_cmd))
@@ -775,9 +778,16 @@ class RealObstacleAvoidTest(Node):
                 return
 
             out = self.fsm.step(dri, boat, yaw, vel, yaw_rate, goal, now_t)
-            if out.event:
+            if out.state != getattr(self, '_last_fsm_state', 'FOLLOW'):
+                # 상태 전환(ESCAPE 진입·복귀)은 거르지 않고 이유와 함께 — 1 s throttle 에 묻혀
+                # ESCAPE 진입이 로그에 안 남은 적이 있다 (2026-11-12 영상 분석)
+                detail = self.fsm.escape_detail if out.state == 'ESCAPE' else ''
+                log = self.get_logger().warn if out.state == 'ESCAPE' else self.get_logger().info
+                log(f'[{out.state}] {out.event or ""}' + (f' — {detail}' if detail else ''))
+            elif out.event:
                 self.get_logger().info(f'[{out.state}] {out.event}',
                                        throttle_duration_sec=1.0)
+            self._last_fsm_state = out.state
             if out.state == 'ESCAPE' and not self.allow_escape:
                 self._disarm('ESCAPE requested; reverse motion disabled')
                 self._publish_debug(dri, None, goal)

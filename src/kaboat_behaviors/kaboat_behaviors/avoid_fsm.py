@@ -23,7 +23,8 @@ argmin)은 그 사각지대를 근거로 방향을 골라, 제자리 회전 뒤�
 않으므로, 그 길만 거꾸로 되짚는다.
 """
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+import inspect
 import math
 
 import numpy as np
@@ -53,7 +54,9 @@ class FsmParams:
     v_max: float = 1.4            # 📝 현재 회피 추종 상한 [m/s] (교정 전속은 v_full)
     omega_max: float = 0.52       # ✅ 실측 최대 요레이트 [rad/s] — v = ω_max/κ
     slow_radius: float = 1.5      # 목표 근접 감속 반경 [m]
-    t_backstop: float = 3.0       # 📝 재생성 트리거 (c) 주기 [s]
+    # 📝 재생성 트리거 (c) 주기 [s]. 3.0 → 5.0 (2026-11-12 영상): FOLLOW 중 재계획·수리가 평균
+    # 2.8 s(2:21~2:50 은 2.4 s)마다라 경로가 자주 갈아엎혔다. 멀쩡한 경로는 더 오래 따라간다.
+    t_backstop: float = 5.0
     d_panic: float = 2.0          # 📝 위반까지 경로거리 이 값 미만이면 즉시 ESCAPE [m]
     #   근거: 전속 1.48 에서 타력 감쇠 실측(3s 에 0.11 로) → 제동거리 ~2m + 여유 (예전 3.0).
     #   3.0 → 2.0 (2026-11-12): 붐이 추가된 회피 코스가 촘촘해 3 m 안에 장애물이 늘 있어
@@ -61,6 +64,13 @@ class FsmParams:
     #   에서는 전속보다 느려 제동거리가 짧다. 빠르게 달리는 구간에서는 여유가 없음에 주의.
     t_retry: float = 5.0          # 📝 plan 재확보/위반 교착 누적 상한 [s] → ESCAPE
     delta_r1: float = 1.0         # 📝 트리거 (a') r1 급락 판정 폭 [m]
+    # 트리거 (a) 는 기준 장애물이 이 거리 [m] 이상일 때만 — 선체 옆 물보라·바로 옆 부표(r1 < 1.5 m)를
+    # 지나는 순간 재계획하면 그 장애물이 코앞인 채로 새 경로를 만들어, 영상(2026-11-12)에서
+    # trigger_a 1 s 안에 ESCAPE 가 다섯 번 났다. 가까운 기준은 백스톱이 맡는다.
+    trigger_a_min_r1: float = 1.5
+    # 트리거 (a') 는 더 가까운 장애물이 이 시간 [s] 이상 계속 보여야 — 물보라 칸 하나의 깜빡임으로
+    # 재계획하지 않게. 0 = 즉시 (예전)
+    trigger_a2_hold: float = 0.5
     # ESCAPE 는 FOLLOW 중 기록한 궤적을 거꾸로 되짚는다 (모듈 docstring 참고).
     trail_spacing: float = 0.1       # 궤적 기록 간격 [m] — 이만큼 움직일 때마다 1점
     trail_max_length: float = 10.0   # 보관할 궤적 길이 [m] — 넘으면 오래된 점부터 버림
@@ -70,6 +80,23 @@ class FsmParams:
     # 실물 cmd_full(0.23) 기준 0.04 밖에 안 나와 수조에서 배가 움직이지 않았다
     # (2026-11-06 실물 튜닝, 수조 테스트에 ESCAPE 를 켜면서 0.1 로 정함).
     escape_thrust: float = 0.1
+    # 제자리 정렬: 선수가 다음 목표점(lookahead) 방향에서 이 각도 [rad] 넘게 벗어나면 전진 0 —
+    # 먼저 제자리 회전으로 정렬한 뒤 나간다. 예전 규칙(>60° 에서 0.3·v_max 저속 전진)은 12~60°
+    # 오차에서 전진하며 도는 동안 벽 쪽으로 밀렸다. 정지한 배는 경로가 첫 경로점 쪽으로 곧게
+    # 시작하므로(PlannerParams.stationary_surge) 출발 때 이 각도를 자주 넘는다 (2026-11-12).
+    # 회피 FSM 만 쓴다 — LOS·B-spline 시험의 follow_cmd 는 예전 규칙 그대로.
+    pivot_angle: float = math.radians(35.0)
+    # 멈춤 확인 [s]: d_panic 위반(수리·재생성 실패)이 걸리면 바로 후진하지 않고 전진·회전 0 으로
+    # 멈춘 채 이만큼 매 tick 다시 본다 — 풀리면 FOLLOW, 계속되면 ESCAPE. 2026-11-12 영상 분석:
+    # 선수 물보라는 짧은 것 0.1~0.4 s(지도에서 걸러짐), ESCAPE 를 낸 것은 시작부터 1.0~1.7 s 였고
+    # 새로 보인 실제 부유물·부표도 1.7~2.7 s 찍혀 "찍힌 시간"만으론 못 가른다. 그래서 장애물 판단을
+    # 늦추는 대신 멈춘 채 확인 — 실제 장애물이어도 전진하지 않아 안전 (0.7 m/s 에서 타력 ≈0.4 m,
+    # d_panic 2 m 안). 물보라 칸은 빔이 지나가면 스캔마다 0.3 씩 깎여 보통 0.3~1 s 에 95 아래.
+    # 1.5 s: 감속하는 동안(배가 미끄러지는 동안 물보라가 계속)까지 덮어야 한다 — 감사 시뮬레이션
+    # (물보라 모델 180 s): 0 s ESCAPE 38~45 번·못 나감, 1.0 s 25~36 번·못 나감, 1.5·2.0 s 0 번·도착.
+    # 물보라 없는 붐·벽 장면은 0~2 s 모두 같은 결과. 0 = 즉시 ESCAPE (예전).
+    # 예전 "ESCAPE 전 1.5 s 지속 확인"은 그동안 계속 달려서 뺐었다(AVOIDANCE.MD) — 이건 멈춘 채 확인
+    escape_confirm_t: float = 1.5
     escape_min_t: float = 3.0     # 📝 최소 이탈 시간 [s] — 즉시 복귀 채터링 차단
     escape_n_ok: int = 5          # 📝 복귀 조건: generate 연속 성공 tick 수
     # v_full 을 내는 추력 명령 = 회피 **전진** 출력 비율. 회피 노드는 이 값을 전진
@@ -115,8 +142,8 @@ def speed_to_cmd(v: float, p: FsmParams) -> float:
 
 
 def follow_cmd(plan: Plan | SampledPlan, boat_xy, yaw: float, yaw_rate: float, wp_xy,
-               fsm: FsmParams, yaw_kp: float, yaw_kd: float
-               ) -> tuple[float, float]:
+               fsm: FsmParams, yaw_kp: float, yaw_kd: float,
+               pivot_angle: float | None = None) -> tuple[float, float]:
     """경로 추종 명령 (linear_x, angular_z) — PD 조향 + 곡률 feedforward 감속.
 
     조향은 공통 waypoint 와 같은 PD(게인도 노드가 같은 값 주입), 목표점만
@@ -125,7 +152,9 @@ def follow_cmd(plan: Plan | SampledPlan, boat_xy, yaw: float, yaw_rate: float, w
     1.1m/s에서도 0.47뿐인데 경로는 κ 0.9~1.2가 필요해(실측) 조향만으론
     물리적으로 못 따라간다.
     heading 오차 비례 감속 항은 v1 제외 — 위치 waypoint 의 이산 규칙(오차 >60°
-    면 저속)만 재사용한다 (제자리 급회전 = 전복 위험 차단, SKELETON §6).
+    면 저속)만 재사용한다 (제자리 급회전 = 전복 위험 차단, SKELETON §6 — sim 소형선 기준).
+    pivot_angle 을 주면(회피 FSM, 2026-11-12) 오차가 그 각도를 넘을 때 전진 0 — 실물은
+    텔레옵에서도 제자리 회전(좌 −·우 +)을 쓴다. None 이면 예전 규칙.
     """
     boat = np.asarray(boat_xy, dtype=np.float64)
     closed = isinstance(plan, SampledPlan) and plan.closed
@@ -171,11 +200,14 @@ def follow_cmd(plan: Plan | SampledPlan, boat_xy, yaw: float, yaw_rate: float, w
             vx=float(v * direction[0] / norm),
             vy=float(v * direction[1] / norm),
         )
-    out = control_velocity(
-        desired, yaw, yaw_rate, _controller_params(fsm, yaw_kp, yaw_kd),
-        # 기존 순서: 큰 오차 속도캡 후 waypoint 감속. 두 조건이 동시에
-        # 걸려도 refactor 전과 같은 명령이 되도록 캡에도 wp_scale을 적용한다.
-        turn_speed_limit=0.3 * fsm.v_max * wp_scale)
+    params = _controller_params(fsm, yaw_kp, yaw_kd)
+    # 기존 순서: 큰 오차 속도캡 후 waypoint 감속. 두 조건이 동시에
+    # 걸려도 refactor 전과 같은 명령이 되도록 캡에도 wp_scale을 적용한다.
+    turn_limit = 0.3 * fsm.v_max * wp_scale
+    if pivot_angle is not None:
+        params = replace(params, turn_slow_angle=pivot_angle)
+        turn_limit = 0.0              # 오차 > pivot_angle → 전진 0, 제자리 회전으로 정렬
+    out = control_velocity(desired, yaw, yaw_rate, params, turn_speed_limit=turn_limit)
     return out.linear_x, out.angular_z
 
 
@@ -294,6 +326,13 @@ class AvoidFsm:
                  yaw_kp: float, yaw_kd: float, generator=None):
         self.p = planner
         self.generate = generate if generator is None else generator
+        # 재계획 때 지금 경로를 prev_plan 으로 넘길 수 있는 생성 함수인가 (w_hist — 같은 쪽 유지)
+        try:
+            params = inspect.signature(self.generate).parameters.values()
+            self._gen_takes_prev = any(
+                q.name == 'prev_plan' or q.kind is inspect.Parameter.VAR_KEYWORD for q in params)
+        except (TypeError, ValueError):
+            self._gen_takes_prev = False
         self.fsm = fsm
         self.yaw_kp = yaw_kp
         self.yaw_kd = yaw_kd
@@ -305,8 +344,11 @@ class AvoidFsm:
         self.plan: Plan | None = None
         self._no_plan_t0 = None    # plan 부재가 시작된 시각 — t_retry 판정
         self._stuck_t0 = None      # 위반 미해소(수리·재생성 다 실패) 시작 시각
+        self._panic_t0 = None      # 멈춤 확인(escape_confirm_t) 시작 시각
         self._escape_t0 = None     # ESCAPE 진입 시각 — 최소 이탈 판정
         self._escape_ok = 0        # ESCAPE 중 generate 연속 성공 tick 수
+        self.escape_detail = ''    # 마지막 ESCAPE 진입 이유 (노드 로그용 — 위반 거리·막힌 시간)
+        self._a2_since = None      # 트리거 (a') 조건이 처음 참이 된 시각 — trigger_a2_hold 판정
         # 지나온 궤적 — 재활성화 때 지운다 (이전 activation 의 길은 근거가 아님)
         self.trail = Trail(self.fsm.trail_spacing, self.fsm.trail_max_length)
         self._retrace = None       # ESCAPE 되짚기 샘플 (지금 위치 → 오래된 점)
@@ -325,10 +367,12 @@ class AvoidFsm:
         return self._follow_tick(dri, boat_xy, yaw, vel_xy, yaw_rate,
                                  wp_xy, now_t)
 
-    def _enter_escape(self, now_t: float, ev: str, boat_xy) -> StepOut:
+    def _enter_escape(self, now_t: float, ev: str, boat_xy, detail: str = '') -> StepOut:
         self.state = 'ESCAPE'
+        self.escape_detail = detail
         self.plan = None           # ESCAPE 는 plan 없이 산다 — 복귀 시 새로
         self._escape_t0 = now_t
+        self._panic_t0 = None
         self._escape_ok = 0
         self._no_plan_t0 = self._stuck_t0 = None
         # 진입 순간 위치 → 최신 점 → … → 가장 오래된 점. 없으면 None (정지)
@@ -373,6 +417,14 @@ class AvoidFsm:
                                self.yaw_kp, self.yaw_kd)
         return StepOut(lin, ang, self.state, None, None)
 
+    def _regenerate(self, dri, boat_xy, yaw, vel_xy, wp_xy, now_t):
+        """FOLLOW 중 재계획 — 지금 경로를 prev_plan 으로 넘겨 같은 쪽을 유지 (w_hist).
+        생성 함수가 prev_plan 을 못 받으면(테스트용 대체 함수 등) 예전처럼."""
+        if self._gen_takes_prev:
+            return self.generate(dri, boat_xy, yaw, vel_xy, wp_xy, self.p, now_t,
+                                 prev_plan=self.plan)
+        return self.generate(dri, boat_xy, yaw, vel_xy, wp_xy, self.p, now_t)
+
     def _escape_hold(self, ev: str) -> StepOut:
         """되짚을 길이 없음 — 정지하고 generate 재시도만 (이벤트는 처음 1회)."""
         first = not self._retrace_stopped
@@ -393,7 +445,9 @@ class AvoidFsm:
             if self._no_plan_t0 is None:
                 self._no_plan_t0 = now_t
             if now_t - self._no_plan_t0 > f.t_retry:
-                return self._enter_escape(now_t, 'escape_no_plan', boat_xy)
+                return self._enter_escape(
+                    now_t, 'escape_no_plan', boat_xy,
+                    f'경로 없음 {now_t - self._no_plan_t0:.1f} s (t_retry {f.t_retry:.1f} s)')
             return StepOut(0.0, 0.0, self.state, None, 'generate_none')
 
         ev = None
@@ -401,7 +455,7 @@ class AvoidFsm:
         violation = check(self.plan, dri, boat_xy, self.p)   # progress 갱신 겸용
 
         if violation is None:
-            self._stuck_t0 = None
+            self._stuck_t0 = self._panic_t0 = None
             # ── 재생성 트리거 (generate ≤ 1회/tick, None 이면 기존 유지 —
             # 아직 check 통과 중이라 안전 구멍 아님):
             #  (a)  진행 반경 > 저장 r1 — 기준 장애물 통과
@@ -412,17 +466,24 @@ class AvoidFsm:
             prog_r = math.hypot(boat_xy[0] - self.plan.origin[0],
                                 boat_xy[1] - self.plan.origin[1])
             r1_now = pick_ref_obstacle(dri.occ_xy, boat_xy, yaw, self.p)
-            if self.plan.r1 is not None and prog_r > self.plan.r1:
+            a2 = r1_now is not None and (self.plan.r1 is None
+                                         or r1_now < self.plan.r1 - f.delta_r1)
+            if not a2:
+                self._a2_since = None
+            elif self._a2_since is None:
+                self._a2_since = now_t
+            if (self.plan.r1 is not None and self.plan.r1 >= f.trigger_a_min_r1
+                    and prog_r > self.plan.r1):
                 trig = 'trigger_a_regen'
-            elif r1_now is not None and (self.plan.r1 is None
-                                         or r1_now < self.plan.r1 - f.delta_r1):
+            elif a2 and now_t - self._a2_since >= f.trigger_a2_hold:
                 trig = 'trigger_a2_regen'
             elif now_t - self.plan.created_t >= f.t_backstop:
                 trig = 'backstop_regen'
             if trig is not None:
-                new = self.generate(dri, boat_xy, yaw, vel_xy, wp_xy, self.p, now_t)
+                new = self._regenerate(dri, boat_xy, yaw, vel_xy, wp_xy, now_t)
                 if new is not None:
                     self.plan, ev = new, trig
+                    self._a2_since = None
         else:
             # ── 위반 사다리: repair(≤repair_max) → generate → 긴급도 분기
             for _ in range(self.p.repair_max):
@@ -431,25 +492,40 @@ class AvoidFsm:
                 violation = check(self.plan, dri, boat_xy, self.p)
                 if violation is None:
                     ev = 'violation_repaired'
-                    self._stuck_t0 = None
+                    self._stuck_t0 = self._panic_t0 = None
                     break
             if violation is not None:
-                new = self.generate(dri, boat_xy, yaw, vel_xy, wp_xy, self.p, now_t)
+                new = self._regenerate(dri, boat_xy, yaw, vel_xy, wp_xy, now_t)
                 if new is not None:
                     self.plan, ev = new, 'violation_regen'
-                    self._stuck_t0 = None
+                    self._stuck_t0 = self._panic_t0 = None
                 else:
                     # 수리도 재생성도 실패 — 남은 여유(거리+누적 시간)로 분기
                     if self._stuck_t0 is None:
                         self._stuck_t0 = now_t
                     d_viol = (violation - self.plan.progress_idx) * self.plan.spacing
-                    if (d_viol < f.d_panic
-                            or now_t - self._stuck_t0 > f.t_retry):
-                        return self._enter_escape(now_t, 'escape_panic', boat_xy)
+                    stuck = now_t - self._stuck_t0
+                    if d_viol < f.d_panic or stuck > f.t_retry:
+                        held = 0.0
+                        if d_viol < f.d_panic and stuck <= f.t_retry and f.escape_confirm_t > 0.0:
+                            # 멈춤 확인: 바로 후진하지 않고 멈춘 채 escape_confirm_t 동안 매 tick
+                            # 다시 본다 — 그 사이 위반이 풀리면(물보라 칸이 깎임) FOLLOW 계속
+                            first = self._panic_t0 is None
+                            if first:
+                                self._panic_t0 = now_t
+                            held = now_t - self._panic_t0
+                            if held < f.escape_confirm_t:
+                                return StepOut(0.0, 0.0, self.state, self.plan,
+                                               'panic_hold' if first else None)
+                        return self._enter_escape(
+                            now_t, 'escape_panic', boat_xy,
+                            f'경로상 위반까지 {d_viol:.2f} m (d_panic {f.d_panic:.1f} m), '
+                            f'멈춘 채 {held:.1f} s 확인, 수리·재생성 실패 {stuck:.1f} s')
+                    self._panic_t0 = None
                     ev, slow = 'violation_wait', True   # 감속 + 다음 tick 재시도
 
         lin, ang = follow_cmd(self.plan, boat_xy, yaw, yaw_rate, wp_xy,
-                              f, self.yaw_kp, self.yaw_kd)
+                              f, self.yaw_kp, self.yaw_kd, pivot_angle=f.pivot_angle)
         if slow:
             # 위반 지점까지는 안전(check 가 보장) — 기어가며 수리 기회를 번다
             lin = min(lin, speed_to_cmd(f.v_min, f))

@@ -97,12 +97,56 @@ def test_radii_monotone_in_r7_fallback():
 
 # ---------- (ii) 정지 상태 p1 퇴화 방지 ----------
 
-def test_stationary_p1_uses_heading_and_min_dist():
-    """v≈0 이면 p1 = p0 + p1_min_dist·heading — 스플라인 접선이 살아있어야 한다."""
-    plan = gen(dri_of([(4.0, 0.0)]), vel=V_ZERO)
+def test_stationary_p1_uses_heading_and_min_dist_when_switched_off():
+    """stationary_surge=0 (예전 규칙): v≈0 이면 p1 = p0 + p1_min_dist·heading."""
+    plan = gen(dri_of([(4.0, 0.0)]), vel=V_ZERO, stationary_surge=0.0)
     p = PlannerParams()
     assert np.allclose(plan.cps[1], [p.p1_min_dist, 0.0], atol=1e-9)
     assert np.all(np.isfinite(plan.samples))
+
+
+def test_stationary_p1_points_to_first_path_point():
+    """서 있는 배(전진 < stationary_surge)는 제자리 회전이 되므로 p1 을 첫 경로점(p2) 쪽에 —
+    경로가 선수로 직진했다 꺾이지 않고 곧게 시작한다 (2026-11-12)."""
+    dri = dri_of([(4.0, 0.0)])
+    plan = gen(dri, vel=V_ZERO)
+    p = PlannerParams()
+    d1, d2 = plan.cps[1] - plan.cps[0], plan.cps[2] - plan.cps[0]
+    b1, b2 = math.atan2(d1[1], d1[0]), math.atan2(d2[1], d2[0])
+    assert abs(b1) > math.radians(5.0)                  # 선수(0°)가 아님
+    assert abs(math.remainder(b1 - b2, 2 * math.pi)) < math.radians(10.0)
+    assert p1_len(plan) == pytest.approx(p.p1_min_dist)
+    assert check(plan, dri, BOAT, p) is None
+
+
+def test_moving_p1_still_follows_heading():
+    """움직이는 중(전진 ≥ stationary_surge)이면 예전처럼 p1 = heading — 관성 접선 유지."""
+    plan = gen(dri_of([(4.0, 0.0)]), vel=(0.8, 0.0))
+    d1 = plan.cps[1] - plan.cps[0]
+    assert d1[0] > 0 and abs(d1[1]) < 1e-9
+
+
+def _boom_ahead(open_side):
+    """2026-11-12 영상 2:22~2:50 재현: 배 앞 2.7 m 붐 줄, 한쪽 끝(±1.4 m 밖)만 열림."""
+    ys = np.round(np.arange(-1.4, 6.01, 0.1), 2)
+    return [(2.7, -y if open_side == 'left' else y) for y in ys]
+
+
+@pytest.mark.parametrize('open_side', ['left', 'right'])
+def test_stationary_in_front_of_boom_starts_straight_toward_gap(open_side):
+    """예전: 선수로 1 m → 40°+ 꺾임(반지름 ≈1.3 m), check 위반 → 전진 7 %·회전 31 % 로 제자리.
+    지금: 경로가 열린 쪽으로 곧게 시작 (앞 2 m 반지름 > 3 m), check 무위반."""
+    from kaboat_behaviors.bspline_planner import curvature_ahead
+    dri = dri_of(_boom_ahead(open_side))
+    p = PlannerParams()
+    old = gen(dri, vel=V_ZERO, stationary_surge=0.0)
+    assert curvature_ahead(old, 2.0) > 0.6
+    plan = gen(dri, vel=V_ZERO)
+    d1 = plan.cps[1] - plan.cps[0]
+    start = math.degrees(math.atan2(d1[1], d1[0]))
+    assert (start > 30.0) if open_side == 'left' else (start < -30.0)
+    assert curvature_ahead(plan, 2.0) < 1.0 / 3.0
+    assert check(plan, dri, BOAT, p) is None
 
 
 def test_p1_direction_is_heading_not_velocity():
@@ -396,3 +440,47 @@ def test_blocked_front_cone_falls_back_to_wide_search():
 def test_open_water_keeps_the_narrow_search():
     plan = gen(dri_of([]), vel=V_ZERO)
     assert plan is not None and plan.search_fov == pytest.approx(math.radians(90.0))
+
+
+# ---------- 재계획 때 직전 경로 쪽 유지 (w_hist, 2026-11-12) ----------
+
+def _side(plan, x=4.0):
+    """경로가 x 지점을 지날 때의 y (+ = 왼쪽)."""
+    s = plan.samples
+    return float(s[np.argmin(np.abs(s[:, 0] - x)), 1])
+
+
+def _bar(y):
+    return [(4.0, y - 0.2), (4.0, y), (4.0, y + 0.2)]
+
+
+def _left_plan():
+    plan = generate(dri_of(_bar(-0.4)), BOAT, YAW, (1.0, 0.0), WP_FAR, PlannerParams())
+    assert _side(plan) > 0.5
+    return plan
+
+
+def test_replan_keeps_previous_side_on_near_tie():
+    """정면 장애물(좌우 비용 같음): 처음부터 만들면 오른쪽 — 장애물이 0.2 m 만 움직여도 좌우가
+    뒤집혔다(2026-11-12 영상 2:23.4 → 2:23.8). 직전 경로(왼쪽)를 주면 왼쪽 그대로, 안전."""
+    tie = dri_of(_bar(0.0))
+    p = PlannerParams()
+    assert _side(generate(tie, BOAT, YAW, (1.0, 0.0), WP_FAR, p)) < -0.5
+    kept = generate(tie, BOAT, YAW, (1.0, 0.0), WP_FAR, p, prev_plan=_left_plan())
+    assert _side(kept) > 0.5
+    assert check(kept, tie, BOAT, p) is None
+
+
+def test_replan_switches_side_when_previous_side_is_clearly_worse():
+    """장애물이 왼쪽으로 옮겨 오른쪽이 분명히 나으면 직전 경로가 왼쪽이어도 넘어간다."""
+    moved = dri_of(_bar(0.4))
+    plan = generate(moved, BOAT, YAW, (1.0, 0.0), WP_FAR, PlannerParams(), prev_plan=_left_plan())
+    assert _side(plan) < -0.5
+    assert check(plan, moved, BOAT, PlannerParams()) is None
+
+
+def test_replan_returns_straight_when_obstacle_is_gone():
+    """장애물이 경로에서 비키면 직전 우회에 묶이지 않고 직진으로 돌아온다."""
+    plan = generate(dri_of([(4.0, 3.0)]), BOAT, YAW, (1.0, 0.0), WP_FAR, PlannerParams(),
+                    prev_plan=_left_plan())
+    assert abs(_side(plan)) < 0.1

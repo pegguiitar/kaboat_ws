@@ -13,6 +13,9 @@ OSRF VRX 오픈소스 기반 WAM-V 선박의 통합 자율주행 알고리즘 �
 > 서로 다른 핫스팟에서 젯슨 토픽을 노트북 RViz로 확인하는 절차는
 > **[COMMANDS_GUIDE.md](COMMANDS_GUIDE.md)** 를 참고하세요.
 
+사진 기반 새 회피 경기장(흰 부표, 낮은 연결 장애물, 입·출구)과 파도 설정은
+[docs/NEW_ARENA.md](docs/NEW_ARENA.md)를 참고하세요.
+
 ---
 
 ## 📋 1. 개발 환경 요구사항

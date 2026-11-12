@@ -107,3 +107,11 @@ def test_pick_topic():
     with pytest.raises(SystemExit, match='영상 토픽이 없음'):
         b2m.pick_topic({'/odom': ('nav_msgs/msg/Odometry', 3)})
     assert b2m.fps_of(1, 0.0) == 15.0
+    rec_bag = {   # 2026-11-12 rec_bag 실제 토픽 이름 — 뎁스가 이름순으로 앞이어도 컬러를 골라야 함
+        '/camera/camera/aligned_depth_to_color/image_raw/compressedDepth':
+            ('sensor_msgs/msg/CompressedImage', 22809),
+        '/camera/camera/color/image_raw/compressed': ('sensor_msgs/msg/CompressedImage', 22756),
+        '/dock/debug_image': ('sensor_msgs/msg/Image', 2078)}
+    assert b2m.pick_topic(rec_bag) == '/camera/camera/color/image_raw/compressed'
+    del rec_bag['/camera/camera/color/image_raw/compressed']
+    assert b2m.pick_topic(rec_bag) == '/dock/debug_image'

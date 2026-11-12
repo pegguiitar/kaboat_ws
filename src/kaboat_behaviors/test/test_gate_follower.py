@@ -72,19 +72,25 @@ def _ready_node(posts=None):
     return node
 
 
-def _follow_current_gate(node):
+def _follow_current_gate(node, step=4):
+    """지금 경로를 따라 배를 옮기다 통과 개수가 하나 늘면 멈춘다.
+
+    게이트 사슬은 경로가 다음 게이트까지 이어져 있어(통과해도 경로가 안 끊김) 경로 끝이
+    아니라 통과 개수로 본다. 경로가 중간에 바뀌면(다음 게이트를 이어 붙임) 새 경로를 따른다.
+    """
+    start = len(node._passed_midpoints)
     cmd = node.compute_cmd()  # acquire path
     assert cmd.linear.x == 0.0  # preview does not drive /cmd/gate
     assert node._path is not None
-    samples = node._path.samples.copy()
-    for x, y in samples[::4]:
-        _set_odom(node, x, y)
-        node.compute_cmd()
-        if node._path is None:
+    for _ in range(2000):
+        path = node._path
+        if path is None or len(node._passed_midpoints) > start:
             return
-    x, y = samples[-1]
-    _set_odom(node, x, y)
-    node.compute_cmd()
+        boat = np.array([node.odom.pose.pose.position.x, node.odom.pose.pose.position.y])
+        nearest = int(np.argmin(np.linalg.norm(path.samples - boat, axis=1)))
+        _set_odom(node, *path.samples[min(nearest + step, len(path.samples) - 1)])
+        node.compute_cmd()
+    raise AssertionError('게이트를 통과하지 못함')
 
 
 def test_three_pairs_pass_before_completion_and_output_stays_preview_only():

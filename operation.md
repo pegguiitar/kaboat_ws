@@ -46,6 +46,12 @@ source ~/.zshrc
 | 9 | 젯슨 터미널 6 | `run_map` | 장애물 지도 (라이다만) — 하나만. 로그 `가상 벽 2줄 …` |
 | 10 | 젯슨 터미널 7 | `ros2 launch kaboat_bringup autonomy.launch.py` | 자율주행 스택 (지도는 9번 것을 씀). 로그에 `[기록 지점] gate: 시작 … → 끝 …` |
 
+**한 번에 켜기:** 3~6·9번(GQ7은 RTK)과 `run_camera`는 `run_sensors_motors` 하나로 켤 수 있습니다 — tmux 세션
+`boat`에 창 하나씩(0 gq7, 1 lidar, 2 motor, 3 points, 4 map, 5 camera), 라이다는 `/imu/data`가 나온 뒤.
+`Ctrl+B` 숫자로 창 이동, `Ctrl+B d`로 빠져나와도 계속 돌고 다시 `run_sensors_motors`로 붙습니다. 한 창만
+Ctrl+C로 끄고 ↑ Enter로 다시 켤 수 있습니다. 전부 끄기 `stop_sensors_motors`. `run_zenoh`는 따로 켭니다.
+tmux가 없으면 `sudo apt install tmux`.
+
 **웨이포인트 이름 규칙** — `mission_manager`가 `~/kaboat_mission_points.json`에서 이 이름만
 자동으로 읽어 `mission_params.yaml` 좌표를 덮어씁니다.
 
@@ -120,6 +126,8 @@ ros2 launch kaboat_hardware real_sensors.launch.py outdoor:=true rtk:=true \
 | `run_camera` | `ros2 launch kaboat_bringup d455.launch.py` | D455 카메라 (컬러 640×480 + 정렬 뎁스, 15 fps). 도킹용 (지도 카메라 층은 기본 끔). USB 3 포트 |
 | `run_geo` | `ros2 launch kaboat_hardware geo_origin.launch.py` | GPS 원점 설정, 위도·경도 → x/y (`/geo/*`) |
 | `run_points` | `ros2 run kaboat_hardware point_recorder` | 미션 지점 기록기 |
+| `run_sensors_motors` | `bash scripts/run_sensors_motors.sh` | `run_gq7_rtk`·`run_lidar`(`/imu/data` 뒤)·`run_motor`·`run_points`·`run_map`·`run_camera`를 tmux 세션 `boat`에 창 하나씩 (0~5, `Ctrl+B` 숫자로 이동). 이미 켜져 있으면 붙기만. `run_zenoh`는 따로. tmux 필요 (`sudo apt install tmux`) |
+| `stop_sensors_motors` | `bash scripts/run_sensors_motors.sh stop` | 위 세션 모든 창에 Ctrl+C(카메라 → GQ7 순) → 다 꺼지면 세션 닫기 |
 | `rec [이름]` | `python3 scripts/rec_point.py [이름]` | 지금 위치(x, y, 선수각) 기록. 이름 생략 시 `p1`, `p2` … |
 | `list_points` | `python3 scripts/rec_point.py --list` | 기록한 지점 보기 |
 | `rec_bag [이름]` | `bash scripts/record_run.sh [이름]` | 주행 센서 rosbag 녹화 → `~/kaboat_bags/이름_날짜_시각/`. **센서를 다 켠 뒤** 실행, **Ctrl+C로 종료**(창을 그냥 닫지 말 것). 카메라는 압축 토픽(약 4~5 MB/s, 20분 ≈ 6 GB), 압축 토픽이 없으면 원본 + zstd(20분 ≈ 15~18 GB). 남은 용량 10 GB 미만이면 시작 안 함. 2 GB마다 파일 분할. 자세한 사용법 [ROSBAG_GUIDE.md](ROSBAG_GUIDE.md) |
@@ -311,13 +319,29 @@ test_gate_outdoor approach:=true             # gate_entry 접근(직선, 회피 
 
 - 기록: `gate_entry` = 첫 게이트 앞 통로 중심(진행 방향으로 세워서), `gate_end` = 마지막 게이트 뒤
   **2~3 m** 통로 중심. 모든 쌍을 지난 뒤 `gate_end`가 4 m 안이어야 그리로 가고 2 m 안이면 완료.
-- 추력: 게이트 통과(LOS) 직진 상한 **0.4**(약 1675 µs, `gate.los_thrust_ratio`)·회전 0.31.
+- 추력: 게이트 통과(LOS) 직진 상한 **0.3**(약 1637 µs, `gate.los_thrust_ratio`)·회전 0.31. 0.4(1675 µs)는
+  실측 약 1.0 m/s 로 간격 3~4 m 게이트에 빨라 내림. 현장에서 바꿔 보기: `test_gate_outdoor los_thrust:=0.25`.
 - `approach:=true` → 게이트 시작 조건: `gate_entry` **1 m 안 + 선수각 ±15° 안**을 0.5초 유지(회전 속도
   조건 없음). 모든 미션의 시작 자세 접근(`mission_approach`)이 같은 조건. 미리보기
   (`motion_enabled:=false`)에서는 도착 신호를 안 내서 `gate`로 넘어가지 않습니다.
 - 쌍 고르기: 두 부표를 잇는 선이 진행 방향(직전 게이트 방향, 첫 게이트는 배→`gate_end`)의 수직에서
   35° 안(`gate.max_pair_skew_deg`)이면 쌍. 통로가 휘어도 됨. 폭 1.5~7 m.
 - 상태: `ros2 topic echo /gate/status` (`FOLLOW_GATE_3/7`, `GATE_3/7_PASSED`, `WAIT_GATE_PAIR`, `COMPLETE` …).
+- **게이트 사슬**(2026-11-12): 지도에서 3번 잡힌 부표는 기억해 두고, 지금 게이트 **다음 게이트를 미리**
+  골라 경로를 중점들로 이어 둡니다(최대 3개, `gate.max_chain_gates`). 지금 게이트를 기둥 사이로 지나면
+  경로를 새로 만들지 않고 바로 다음 게이트로 넘어갑니다. 로그 `게이트 4/7 미리 잡음 — … 앞 게이트에서
+  앞 3.5 m·옆 -1.3 m`, `기둥 사이 통과 — 이어 둔 다음 게이트로`. 예전처럼 하나씩: `-p gate.max_chain_gates:=1`.
+  - RViz `/gate/pairs`: 지금 게이트 주황 공(중점 초록), **미리 이은 게이트 노란 공**, 기억한 부표 흰 기둥
+    (확정 전 회색). 기억은 4 m 안에 들어온 뒤 1초 넘게 안 잡히면 지웁니다(물보라·반사).
+  - 안전·관측 검사는 경로 앞 6 m(`gate.check_horizon`)까지만 — 사슬 끝은 지도 창 밖일 수 있어서.
+    이은 부분이 검사에 걸리면 지금 게이트를 버리지 않고 지금 게이트만 가는 경로로 줄입니다.
+  - **빔이 지나 본 물은 관측으로 침**: 지도는 맞은 빔만 free 로 칠해서, 뒤에 맞을 게 없는 게이트
+    두 부표 사이 물은 unknown(회색)으로 남습니다(앞 빔의 약 80 %가 무반사 inf). 예전엔 경로가 바로
+    그 사이를 지나 `PATH_UNOBSERVED` 로 쌍을 버리고 10초 섰습니다. 이제 지금 스캔 빔이 그 점을
+    지나 봤으면(더 멀리서 맞음·무반사) 관측으로 칩니다 — 6 m 안, 선수 ±110° 안만(`gate.see_through_*`).
+- 녹화로 다시 돌려보기(노트북): `rec_bag` bag 의 지도·위치·스캔을 지금 코드의 `gate_follower` 에 넣어
+  무엇을 골랐고 어디서 멈췄을지 봅니다(배는 녹화 궤적 그대로 — 명령은 배를 안 움직임).
+  `python3 scripts/replay_gate.py <bag 폴더> --start 15:31:05 --end 15:32:40 [-p gate.max_chain_gates:=1]`
 
 **야외 도킹 시험** (`test_dock_outdoor`, 자율주행과 같은 도킹 노드 + `cmd_mux`, 도킹 미션 하나만)
 

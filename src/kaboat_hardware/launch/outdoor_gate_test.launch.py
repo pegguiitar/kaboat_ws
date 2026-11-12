@@ -40,6 +40,7 @@ ARGS = [
     ('motion_enabled', 'true', 'false = 미리보기 (모터 명령 안 냄)'),
     ('approach', 'false', 'true = gate_entry 까지 접근부터 (직선, 회피 없음)'),
     ('required_pairs', '7', '통과할 게이트 쌍 수'),
+    ('los_thrust', '', "게이트 통과 직진 상한 0~1 ('' = gate_params.yaml 값 0.3)"),
     ('start_occupancy_grid', 'false', '지도는 run_map 으로 따로 (true 면 여기서 켬 — 따로 켠 게 없을 때만)'),
     ('cam_enabled', 'false', '카메라 층 (주황 등 낮은 색 장애물) — run_camera 필요'),
     ('cam_height', '0.775', '흘수선에서 카메라 렌즈까지 [m] (2026-11-12 수평으로 다시 단 뒤 실측)'),
@@ -93,8 +94,14 @@ def gate_parameters(get) -> dict:
     pairs = _number(get('required_pairs'), 'required_pairs', int)
     if pairs < 1:
         raise RuntimeError('required_pairs:= 는 1 이상')
-    return {'gate.motion_enabled': _bool(get('motion_enabled'), 'motion_enabled'),
-            'gate.required_pairs': pairs, 'use_sim_time': False}
+    params = {'gate.motion_enabled': _bool(get('motion_enabled'), 'motion_enabled'),
+              'gate.required_pairs': pairs, 'use_sim_time': False}
+    if get('los_thrust') != '':
+        thrust = _number(get('los_thrust'), 'los_thrust')
+        if not 0.0 <= thrust <= 1.0:
+            raise RuntimeError('los_thrust:= 는 0~1')
+        params['gate.los_thrust_ratio'] = thrust
+    return params
 
 
 def _actions(context):

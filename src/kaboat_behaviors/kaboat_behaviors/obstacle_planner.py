@@ -110,9 +110,16 @@ class ObstaclePlanner(BehaviorBase):
         dri = build_dri(self.occupancy_grid, (pos.x, pos.y), yaw, self.dri_params)
         out = self.fsm.step(dri, (pos.x, pos.y), yaw, vel, tw.angular.z,
                             wp, now_t)
-        if out.event is not None:
+        if out.state != getattr(self, '_last_fsm_state', 'FOLLOW'):
+            # 상태 전환(ESCAPE 진입·복귀)은 거르지 않고 이유와 함께 — 1 s throttle 에 묻혀
+            # ESCAPE 진입이 로그에 안 남은 적이 있다 (2026-11-12 영상 분석)
+            detail = self.fsm.escape_detail if out.state == 'ESCAPE' else ''
+            log = self.get_logger().warn if out.state == 'ESCAPE' else self.get_logger().info
+            log(f'[{out.state}] {out.event or ""}' + (f' — {detail}' if detail else ''))
+        elif out.event is not None:
             self.get_logger().info(f'[{out.state}] {out.event}',
                                    throttle_duration_sec=1.0)
+        self._last_fsm_state = out.state
         self._publish_debug(out.plan, dri)
         cmd.linear.x = out.linear_x
         cmd.angular.z = out.angular_z
