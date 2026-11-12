@@ -20,7 +20,7 @@ def make_state(color, buoys, boat=(45.0, 70.0)):
     calls = []
     state = SimpleNamespace(
         goal=goal, odom=odom, occupancy_grid=None, buoys=buoys,
-        params=SearchParams(target_color=color), fsm=None,
+        params=SearchParams(target_color=color, lock_confirm_sec=0.0), fsm=None,
         _circle_path=None, _circle_center=None, _last_status=None,
         _los_follower=SimpleNamespace(reset=lambda: None),
         max_linear=0.1, _command_full_scale=None, calls=calls,

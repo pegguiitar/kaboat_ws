@@ -20,10 +20,12 @@
   GIVE_UP  SEEK 에서 목표점에 도착하고 give_up_sec 동안 못 찾음 — 완료 신호를 내고 다음
            미션으로 넘긴다 (탐색 점수는 없지만 15분 제한 안에 회피를 하러 간다).
 
-목표 부표 고정: buoy_detector 부표맵은 확정 부표를 시야 밖에서도 유지하지만, 보여야 하는
-  자리에서 놓치면 지우고 색 투표가 뒤집힐 수도 있다. 선회 도중 중심이 사라지거나 바뀌면
-  안 되므로 고른 부표 위치는 여기서 기억한다. 같은 색 부표가 고정 위치 relock_radius
-  안에 있으면 그쪽으로 조금씩(refine_alpha) 보정한다.
+목표 부표 고정: 부표 검출 노드(buoy_lidar_detector)는 배에서 멀어진 부표를 지우고 색이 잠깐씩
+  바뀔 수도 있다. 선회 도중 중심이 사라지거나 바뀌면 안 되므로 고른 부표 위치는 여기서 기억한다.
+  고정할 때 검출 노드의 부표 ID 를 기억해 그 ID 로만 조금씩(refine_alpha) 보정하고, ID 가
+  사라지면 relock_radius(0.6 m) 안 같은 색 부표를 이어받는다 — 1.2 m 붙은 초록·검정 쌍에서
+  옆 부표로 끌려가지 않게. 고정한 부표가 목표 아닌 빨강·초록으로 분명히 바뀌면 고정을 풀고
+  다시 찾는다. 목표 색이 lock_confirm_sec(1 s) 이어진 부표만 고른다.
 후보: 목표 색 부표 중 탐색 목표점에서 target_search_radius 안, 목표점에 가장 가까운 것.
   각도를 쌓기 시작하기 전에는 목표점에 switch_margin 이상 더 가까운 후보가 나오면 바꾼다
   — 경기장 주황 부표는 buoy_detector 에서 빨강으로 나오므로(BUOY_DETECTOR.md), 멀리서
@@ -47,7 +49,11 @@ class SearchParams:
     orbit_band: float = 1.0           # 원에서 이만큼 안쪽·바깥에 있을 때만 선회 각도를 센다 [m]
     laps: float = 1.1                 # 완료 바퀴 수 — 한 바퀴 + 36° 여유 (원이 확실히 닫히게)
     target_search_radius: float = 10.0  # 탐색 목표점에서 이 안의 부표만 후보 [m]
-    relock_radius: float = 1.5        # 고정 위치 이 안의 같은 색 부표 = 같은 부표 [m]
+    relock_radius: float = 0.6        # 고정한 부표 ID 가 사라지면 이 안의 같은 색 부표를 이어받음 [m]
+                                      # (1.2 m 붙은 초록·검정 쌍보다 작게 — 예전 1.5 는 옆 부표로 끌려갔다)
+    lock_confirm_sec: float = 1.0     # 목표 색이 이만큼 이어진 부표만 고른다 — 검출 노드는 카메라
+                                      # 근거가 적을 때 일단 unknown 으로 내서, 검정 목표가 색이 덜
+                                      # 정해진 초록·빨강 부표를 잡지 않게
     refine_alpha: float = 0.2         # 다시 보일 때 고정 위치 보정 비율 (tick 당)
     recenter_distance: float = 0.3    # 고정 위치가 이만큼 바뀌면 원 경로를 다시 만든다 [m]
     switch_margin: float = 2.0        # 목표점에 이만큼 더 가까운 후보가 나오면 바꾼다 [m]
@@ -108,6 +114,9 @@ class SearchFsm:
         self._prev_theta = None
         self._scan_since = None
         self.switches = 0
+        self.locked_id = None     # 고정한 부표의 검출 노드 ID (없으면 위치로만)
+        self.unlocks = 0
+        self._match_since = {}    # 부표 키 → 목표 색으로 처음 보인 시각
 
     @property
     def direction(self) -> str:
@@ -140,9 +149,10 @@ class SearchFsm:
     def _dist_goal(self, xy) -> float:
         return math.hypot(xy[0] - self.goal[0], xy[1] - self.goal[1])
 
-    def candidates(self, buoys):
-        """목표 색(MATCH_COLORS)이고 목표점 target_search_radius 안 — 목표점에 가까운 순."""
-        out = []
+    def candidates(self, buoys, now: Optional[float] = None):
+        """목표 색(MATCH_COLORS)이고 목표점 target_search_radius 안 — 목표점에 가까운 순
+        [(xy, id)]. now 를 주면 목표 색이 lock_confirm_sec 이상 이어진 부표만."""
+        out, seen = [], set()
         for b in buoys:
             if b.color not in self.match:
                 continue
@@ -150,43 +160,63 @@ class SearchFsm:
             if not all(math.isfinite(v) for v in xy):
                 continue
             d = self._dist_goal(xy)
-            if d <= self.p.target_search_radius:
-                out.append((d, xy))
+            if d > self.p.target_search_radius:
+                continue
+            bid = getattr(b, 'id', None)
+            key = bid if bid is not None else (round(xy[0] * 2), round(xy[1] * 2))
+            seen.add(key)
+            if now is not None:
+                first = self._match_since.setdefault(key, now)
+                if now - first < self.p.lock_confirm_sec:
+                    continue
+            out.append((d, xy, bid))
+        if now is not None:
+            self._match_since = {k: v for k, v in self._match_since.items() if k in seen}
         out.sort(key=lambda t: t[0])
-        return [xy for _, xy in out]
+        return [(xy, bid) for _, xy, bid in out]
 
     def update(self, buoys, boat_xy, now: float) -> str:
         if self.done:
             return self.phase
-        cands = self.candidates(buoys)
+        cands = self.candidates(buoys, now)
+        if self.center is not None and not self._refine(buoys):
+            self._unlock()                 # 고정한 부표가 목표 아닌 색으로 바뀜 — 다시 찾기
         if self.center is None:
             if cands:
-                self._lock(cands[0])
+                self._lock(*cands[0])
             else:
                 self._seek(boat_xy, now)
                 return self.phase
-        else:
-            self._refine(buoys)
-            if not self.counting and cands:
-                best = cands[0]
-                far_from_lock = math.dist(best, self.center) > self.p.relock_radius
-                closer = (self._dist_goal(best) + self.p.switch_margin
-                          < self._dist_goal(self.center))
-                if far_from_lock and closer:
-                    self._lock(best)
-                    self.switches += 1
+        elif not self.counting and cands:
+            best, bid = cands[0]
+            far_from_lock = math.dist(best, self.center) > self.p.relock_radius
+            closer = (self._dist_goal(best) + self.p.switch_margin
+                      < self._dist_goal(self.center))
+            if far_from_lock and closer:
+                self._lock(best, bid)
+                self.switches += 1
         self._sweep(boat_xy)
         if self.swept >= self.p.laps * 2.0 * math.pi:
             self.phase = 'DONE'
         return self.phase
 
     # ── 내부 ──────────────────────────────────────────────
-    def _lock(self, xy):
+    def _lock(self, xy, bid=None):
         self.center = (float(xy[0]), float(xy[1]))
+        self.locked_id = bid
         self.phase = 'ORBIT'
         self.swept = 0.0
         self.counting = False
         self._prev_theta = None
+
+    def _unlock(self):
+        self.center = None
+        self.locked_id = None
+        self.phase = 'SEEK'
+        self.swept = 0.0
+        self.counting = False
+        self._prev_theta = None
+        self.unlocks += 1
 
     def _seek(self, boat_xy, now):
         if self._dist_goal(boat_xy) > self.p.arrive_radius:
@@ -196,19 +226,33 @@ class SearchFsm:
         elif now - self._scan_since >= self.p.give_up_sec:
             self.phase = 'GIVE_UP'
 
-    def _refine(self, buoys):
+    def _refine(self, buoys) -> bool:
+        """고정 위치 보정. 고정한 ID 의 부표가 있으면 그것만 따라가고(색이 잠깐 바뀌어도),
+        목표 아닌 빨강·초록으로 바뀌었으면 False (고정 풀기). ID 가 없으면 relock_radius 안
+        같은 색 부표를 이어받는다."""
         cx, cy = self.center
-        best, best_d = None, self.p.relock_radius
-        for b in buoys:
-            if b.color not in self.match:
-                continue
-            xy = _xy(b)
-            d = math.hypot(xy[0] - cx, xy[1] - cy)
-            if d <= best_d:
-                best, best_d = xy, d
+        best = None
+        if self.locked_id is not None:
+            for b in buoys:
+                if getattr(b, 'id', None) == self.locked_id:
+                    if b.color in ('red', 'green') and b.color not in self.match:
+                        return False
+                    best = _xy(b)
+                    break
+        if best is None:
+            best_d = self.p.relock_radius
+            for b in buoys:
+                if b.color not in self.match:
+                    continue
+                xy = _xy(b)
+                d = math.hypot(xy[0] - cx, xy[1] - cy)
+                if d <= best_d:
+                    best, best_d = xy, d
+                    self.locked_id = getattr(b, 'id', self.locked_id)
         if best is not None:
             a = self.p.refine_alpha
             self.center = ((1.0 - a) * cx + a * best[0], (1.0 - a) * cy + a * best[1])
+        return True
 
     def _sweep(self, boat_xy):
         dx, dy = boat_xy[0] - self.center[0], boat_xy[1] - self.center[1]

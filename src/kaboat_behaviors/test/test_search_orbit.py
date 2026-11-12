@@ -9,11 +9,12 @@ from kaboat_behaviors.search_orbit import SearchFsm, SearchParams
 GOAL = (50.0, 70.0)
 
 
-def buoy(color, x, y):
-    return SimpleNamespace(color=color, position=SimpleNamespace(x=x, y=y))
+def buoy(color, x, y, bid=None):
+    return SimpleNamespace(color=color, position=SimpleNamespace(x=x, y=y), id=bid)
 
 
 def fsm(color='red', **kw):
+    kw.setdefault('lock_confirm_sec', 0.0)   # 기존 시나리오는 바로 고정
     return SearchFsm(SearchParams(target_color=color, **kw), GOAL)
 
 
@@ -90,14 +91,24 @@ def test_lock_survives_buoy_leaving_map():
 
 
 def test_refine_moves_center_towards_reobserved_buoy():
+    # 같은 검출 ID 의 부표가 다시 보이면 그쪽으로 보정 (ID 를 따라가므로 1 m 움직여도)
     f = fsm('red', refine_alpha=0.5)
-    f.update([buoy('red', 51, 70)], (40, 70), 0.0)
-    f.update([buoy('red', 52, 70)], (40, 70), 0.1)
+    f.update([buoy('red', 51, 70, 3)], (40, 70), 0.0)
+    f.update([buoy('red', 52, 70, 3)], (40, 70), 0.1)
     assert f.center == pytest.approx((51.5, 70.0))
 
 
+def test_refine_without_id_only_within_relock_radius():
+    f = fsm('red', refine_alpha=0.5, relock_radius=0.6)
+    f.update([buoy('red', 51, 70)], (40, 70), 0.0)
+    f.update([buoy('red', 51.4, 70)], (40, 70), 0.1)      # 0.4 m — 이어받음
+    assert f.center == pytest.approx((51.2, 70.0))
+    f.update([buoy('red', 52.4, 70)], (40, 70), 0.2)      # 1.2 m — 옆 부표, 안 끌려감
+    assert f.center == pytest.approx((51.2, 70.0))
+
+
 def test_refine_ignores_other_colour_and_far_buoys():
-    f = fsm('red', relock_radius=1.5)
+    f = fsm('red', relock_radius=1.5)                  # 위치로 이어받는 반경만 시험
     f.update([buoy('red', 51, 70)], (40, 70), 0.0)
     f.update([buoy('green', 51.5, 70), buoy('red', 54, 70)], (40, 70), 0.1)
     assert f.center == (51.0, 70.0)
@@ -181,6 +192,42 @@ def test_red_target_ignores_unknown_buoy():
 
 def test_black_target_refines_with_unknown():
     f = fsm('black', refine_alpha=0.5)
-    f.update([buoy('unknown', 51, 70)], (40, 70), 0.0)
-    f.update([buoy('unknown', 52, 70)], (40, 70), 0.1)
+    f.update([buoy('unknown', 51, 70, 4)], (40, 70), 0.0)
+    f.update([buoy('unknown', 52, 70, 4)], (40, 70), 0.1)
     assert f.center == pytest.approx((51.5, 70.0))
+
+
+# ---------- 검출 노드 ID·색 안정성 ----------
+
+def test_lock_follows_detector_id_not_neighbour():
+    # 검정(unknown) 목표 id 5 를 고정 — 1.2 m 옆 초록 공(id 6)이 잠깐 unknown 이 돼도 끌려가지 않는다
+    f = fsm('black', refine_alpha=0.5)
+    f.update([buoy('unknown', 51.0, 70.0, 5), buoy('green', 52.2, 70.0, 6)], (40, 70), 0.0)
+    for k in range(10):
+        f.update([buoy('unknown', 51.0, 70.0, 5), buoy('unknown', 51.5, 70.0, 6)], (40, 70), 0.1 * k)
+    assert f.center == pytest.approx((51.0, 70.0)) and f.locked_id == 5
+
+
+def test_lock_released_when_target_turns_out_wrong_colour():
+    # 검정 목표로 unknown(id 5) 을 잡았는데 카메라 근거가 쌓여 초록으로 확정 → 고정 풀고 다시 찾음
+    f = fsm('black')
+    f.update([buoy('unknown', 51.0, 70.0, 5)], (40, 70), 0.0)
+    assert f.phase == 'ORBIT'
+    f.update([buoy('green', 51.0, 70.0, 5), buoy('unknown', 53.0, 70.0, 7)], (40, 70), 0.1)
+    assert f.unlocks == 1 and f.locked_id == 7 and f.center == (53.0, 70.0)
+
+
+def test_colour_must_hold_before_locking():
+    f = SearchFsm(SearchParams(target_color='black', lock_confirm_sec=1.0), GOAL)
+    assert f.update([buoy('unknown', 51.0, 70.0, 5)], (40, 70), 0.0) == 'SEEK'
+    assert f.update([buoy('unknown', 51.0, 70.0, 5)], (40, 70), 0.5) == 'SEEK'
+    assert f.update([buoy('unknown', 51.0, 70.0, 5)], (40, 70), 1.1) == 'ORBIT'
+
+
+def test_colour_flicker_restarts_confirm_clock():
+    f = SearchFsm(SearchParams(target_color='black', lock_confirm_sec=1.0), GOAL)
+    f.update([buoy('unknown', 51.0, 70.0, 5)], (40, 70), 0.0)
+    f.update([buoy('green', 51.0, 70.0, 5)], (40, 70), 0.6)    # 색이 바뀜 — 시계 다시
+    f.update([buoy('unknown', 51.0, 70.0, 5)], (40, 70), 0.8)
+    assert f.update([buoy('unknown', 51.0, 70.0, 5)], (40, 70), 1.5) == 'SEEK'
+    assert f.update([buoy('unknown', 51.0, 70.0, 5)], (40, 70), 1.9) == 'ORBIT'

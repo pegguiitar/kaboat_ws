@@ -40,6 +40,7 @@ MARKER_RGB = {'red': (1.0, 0.1, 0.1), 'green': (0.1, 0.9, 0.2), 'black': (0.2, 0
 class SearchCircler(BehaviorBase):
     STATE_NAME = 'search'
     CMD_TOPIC = '/cmd/search'
+    USES_BUOYS = True    # 활성일 때만 /detections/buoys 구독 → 그동안만 부표 검출 노드가 돈다
 
     def __init__(self):
         super().__init__()

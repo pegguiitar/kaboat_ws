@@ -35,8 +35,9 @@ def generate_launch_description():
         Node(package='kaboat_perception', executable='occupancy_grid',
              name='occupancy_grid', output='screen', parameters=[common_params],
              condition=IfCondition(LaunchConfiguration('start_occupancy_grid'))),
-        Node(package='kaboat_perception', executable='buoy_detector',
-             name='buoy_detector', output='screen', parameters=[common_params]),
+        # 부표 지도 — 라이다 = 있음·위치, 카메라 RGB = 색. 구독자(탐색 활성 중)가 있을 때만 계산.
+        Node(package='kaboat_perception', executable='buoy_lidar_detector',
+             name='buoy_lidar_detector', output='screen', parameters=[common_params]),
         # 도킹(YOLO·라이다 RANSAC·one-shot 경로)은 아래 docking_nodes — outdoor_dock_test 와 같은 구성
     ]
 

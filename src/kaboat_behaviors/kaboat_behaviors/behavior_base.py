@@ -2,8 +2,10 @@
 
 모든 behavior 노드가 상속한다. 하는 일:
   - /mission/state 구독 → 자기 state 일 때만 active
-  - 공유 데이터 버스 구독: /mission/goal, /odom, /detections/buoys,
-    /occupancy_grid
+  - 공유 데이터 버스 구독: /mission/goal, /odom, /occupancy_grid
+    /detections/buoys 는 USES_BUOYS = True 인 behavior 만, 자기 state 가 활성일 때만 구독한다 —
+    부표 검출 노드(buoy_lidar_detector)는 구독자가 있을 때만 계산하므로, 부표가 필요 없는
+    미션 동안은 쉰다. 지금은 탐색(search)만. gate 가 쓰게 되면 USES_BUOYS 만 켜면 된다.
     (v5 의 "공유 버스" = 모든 behavior 가 함께 구독하는 이 표준 토픽 묶음.
      장애물 표현은 v5 대로 /occupancy_grid 단독 — 회피는 이 격자를 소비한다.
      도킹 전용 /detections/dock_marks 는 docking_ctrl 만 따로 구독한다)
@@ -70,6 +72,7 @@ class BehaviorBase(Node):
 
     STATE_NAME = ''   # 예: 'gate' — /mission/state 가 이 값일 때만 active
     CMD_TOPIC = ''    # 예: '/cmd/gate'
+    USES_BUOYS = False  # True 면 활성일 때만 /detections/buoys 구독
 
     def __init__(self):
         super().__init__(f'{self.STATE_NAME}_behavior')
@@ -105,7 +108,7 @@ class BehaviorBase(Node):
         self.create_subscription(PoseStamped, '/mission/goal', self._on_goal, latched)
 
         self.create_subscription(Odometry, '/odom', self._on_odom, 10)
-        self.create_subscription(BuoyArray, '/detections/buoys', self._on_buoys, 10)
+        self._buoy_sub = None     # USES_BUOYS — 활성일 때만 (_set_buoy_subscription)
         self.create_subscription(OccupancyGrid, '/occupancy_grid', self._on_grid, 1)
 
         self.cmd_pub = self.create_publisher(Twist, self.CMD_TOPIC, 10)
@@ -130,10 +133,12 @@ class BehaviorBase(Node):
             self.goal = None
             self._waypoint_controller.reset()
             self._los_follower.reset()
+            self._set_buoy_subscription(True)
             self.on_activate()
         elif was_active and not is_active:
             self._waypoint_controller.reset()
             self._los_follower.reset()
+            self._set_buoy_subscription(False)
             self.on_deactivate()
 
     def _on_goal(self, msg: PoseStamped):
@@ -142,6 +147,19 @@ class BehaviorBase(Node):
     def _on_odom(self, msg: Odometry):
         self.odom = msg
         self._last_odom_received = time.monotonic()
+
+    def _set_buoy_subscription(self, on: bool):
+        """USES_BUOYS behavior 만 — 활성일 때 /detections/buoys 를 구독하고 비활성이면 끊는다."""
+        if not self.USES_BUOYS:
+            return
+        if on and self._buoy_sub is None:
+            self.buoys = []
+            self._buoy_sub = self.create_subscription(
+                BuoyArray, '/detections/buoys', self._on_buoys, 10)
+        elif not on and self._buoy_sub is not None:
+            self.destroy_subscription(self._buoy_sub)
+            self._buoy_sub = None
+            self.buoys = []
 
     def _on_buoys(self, msg: BuoyArray):
         self.buoys = list(msg.buoys)

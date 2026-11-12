@@ -1,6 +1,8 @@
 """buoy_lidar_detector — 라이다 중심 부표 검출 (라이다 = 있음·위치, 카메라 RGB = 색).
 
-buoy_detector(카메라 프레임 중심, 뎁스 경로)를 대신할 후보. 윤슬·반사에서 뎁스가 크게 튀어
+buoy_detector(카메라 프레임 중심, 뎁스 경로)를 대신한다 (autonomy.launch.py).
+결과를 보는 쪽(/detections/buoys·마커·디버그 영상 구독자)이 있을 때만 계산한다 — 대회 스택에서는
+탐색 behavior 가 search 상태일 때만 구독하므로 그동안만 돈다. 윤슬·반사에서 뎁스가 크게 튀어
 (2026-11-12 현장) 뎁스는 쓰지 않는다. 계산은 순수 모듈에 있다:
   buoy_localize   lidar_points / lidar_clusters — 원시 스캔 → 부표 크기 군집 (선체 프레임)
   buoy_color      군집 → 영상 창 → 색 표 (가림·판정 불가는 표 없음)
@@ -69,7 +71,9 @@ class BuoyLidarDetector(Node):
         # 2026-11-12 bag: 진짜 부표는 빔 8~21개·폭 0.2~0.33 m, 가짜는 빔 2개·폭 1~6 cm.
         self.declare_parameter('cand_min_beams', 3)
         self.declare_parameter('cand_min_width', 0.1)
-        self.declare_parameter('cand_min_range', 2.0)
+        # 1.5 m — 탐색 선회(반경 2 m)에서 라이다~부표 표면이 1.6~1.8 m 라 2.0 이면 선회 중 목표가
+        # 빠졌다. 배 옆 물보라·선수파 hit 는 1.0~1.4 m (2026-11-12 bag) 라 계속 걸러진다.
+        self.declare_parameter('cand_min_range', 1.5)
         # 보는 거리 — 이보다 먼 군집은 안 씀 (먼 부표는 빔이 적고 물가·배가 섞임). evidence.max_range 와 같게.
         self.declare_parameter('cand_max_range', 15.0)
         self.geom = BuoyGeometry()
@@ -92,6 +96,7 @@ class BuoyLidarDetector(Node):
         self.label = None       # (t, label)
         self.roll = self.pitch = 0.0
         self.last_votes = []
+        self._was_wanted = None
 
         g = lambda n: self.get_parameter(n).value  # noqa: E731
         self.create_subscription(LaserScan, g('scan_topic'), self._on_scan, qos_profile_sensor_data)
@@ -159,7 +164,21 @@ class BuoyLidarDetector(Node):
         return (a[1] + w * (b[1] - a[1]), a[2] + w * (b[2] - a[2]), a[3] + w * dyaw)
 
     # ── 메인 (스캔마다) ───────────────────────────────────
+    def _wanted(self) -> bool:
+        """누가 결과를 보고 있나 — /detections/buoys(탐색 behavior 는 활성일 때만 구독), RViz 마커,
+        디버그 영상. 아무도 없으면 계산하지 않는다."""
+        return (self.pub.get_subscription_count() > 0
+                or self.marker_pub.get_subscription_count() > 0
+                or self.debug_pub.get_subscription_count() > 0)
+
     def _on_scan(self, s: LaserScan):
+        wanted = self._wanted()
+        if wanted != self._was_wanted:
+            self._was_wanted = wanted
+            self.get_logger().info('구독자 있음 — 부표 검출 시작' if wanted
+                                   else '구독자 없음 — 부표 검출 쉼')
+        if not wanted:
+            return
         t = _stamp(s.header)
         pose = self._pose_at(t)
         if pose is None:
