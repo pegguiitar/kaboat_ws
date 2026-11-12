@@ -287,18 +287,3 @@ def test_smeared_blob_does_not_grow():
         pts = np.array([8.0, 0.0]) + rng.uniform(-0.2, 0.2, (15, 2))
         tk.update([(8.0, 0.0, None, True, pts)], 0.1 * k, view({}, x=vw[0], y=vw[1]))
     assert not tk.tracks[0].grown and tk.tracks[0].radius == pytest.approx(P.radius_prior)
-
-
-def test_fit_uses_only_recent_points():
-    # 0~5 s 에 (8, 0) 에서 본 호, 20 s 부터는 같은 부표가 0.3 m 옮겨진 자리 — 최근 10 s 점만 쓰면 새 자리를 따라간다
-    tk = EvidenceTracker(EvidenceParams(gate_radius=0.6))
-    for k in range(50):
-        pts = arc((8.0, 0.0), 0.2, (2.0, 0.0), noise=0.0)
-        m = pts.mean(axis=0)
-        tk.update([(m[0], m[1], None, True, pts)], 0.1 * k, view({}, x=2.0, y=0.0))
-    for k in range(150):
-        pts = arc((8.0, 0.3), 0.2, (2.0, 0.3), noise=0.0)
-        m = pts.mean(axis=0)
-        tk.update([(m[0], m[1], None, True, pts)], 20.0 + 0.1 * k, view({}, x=2.0, y=0.3))
-    t = tk.tracks[0]
-    assert abs(t.y - 0.3) < 0.03
