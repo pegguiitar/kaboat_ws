@@ -233,6 +233,11 @@ def lidar_clusters(points, g: BuoyGeometry, angle_inc=0.0):
 
     angle_inc = 스캔 각분해능 [rad] — 먼 부표는 빔 몇 개뿐이라 폭을 빔 한 칸만큼 보정.
     """
+    return [(center, r, len(cl)) for cl, center, r in lidar_cluster_points(points, g, angle_inc)]
+
+
+def lidar_cluster_points(points, g: BuoyGeometry, angle_inc=0.0):
+    """lidar_clusters 와 같은 군집 — [(군집 점 N×2, 중심, 반지름)] (점까지 필요할 때)."""
     if points is None or len(points) == 0:
         return []
     origin = np.array([g.lidar_offset_x, g.lidar_offset_y])
@@ -243,7 +248,7 @@ def lidar_clusters(points, g: BuoyGeometry, angle_inc=0.0):
             continue
         pad = float(np.hypot(*(cl.mean(axis=0) - origin))) * abs(angle_inc)
         center, r = surface_center(cl, origin, g, pad=pad)
-        out.append((center, r, len(cl)))
+        out.append((cl, center, r))
     return out
 
 

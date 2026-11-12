@@ -31,7 +31,7 @@ from visualization_msgs.msg import Marker, MarkerArray
 from kaboat_msgs.msg import Buoy, BuoyArray
 from kaboat_perception.buoy_color import ColorParams, classify_colors, vote_colors
 from kaboat_perception.buoy_evidence import EvidenceParams, EvidenceTracker, LidarView
-from kaboat_perception.buoy_localize import BuoyGeometry, lidar_clusters, lidar_points
+from kaboat_perception.buoy_localize import BuoyGeometry, lidar_cluster_points, lidar_points
 
 RGB = {'red': (1.0, 0.15, 0.15), 'green': (0.1, 0.9, 0.2), 'unknown': (0.15, 0.15, 0.15),
        'unseen': (0.55, 0.55, 0.85)}
@@ -160,12 +160,13 @@ class BuoyLidarDetector(Node):
         if pose is None:
             return
         g = self.geom
-        clusters = [(xy, r, n) for xy, r, n in lidar_clusters(
-                        lidar_points(s.ranges, s.angle_min, s.angle_increment,
-                                     s.range_min, s.range_max, g), g, s.angle_increment)
-                    if n >= self.cand_min_beams and 2.0 * r >= self.cand_min_width
-                    and math.hypot(xy[0] - g.lidar_offset_x, xy[1] - g.lidar_offset_y)
-                    >= self.cand_min_range]
+        found = [(xy, r, cl) for cl, xy, r in lidar_cluster_points(
+                     lidar_points(s.ranges, s.angle_min, s.angle_increment,
+                                  s.range_min, s.range_max, g), g, s.angle_increment)
+                 if len(cl) >= self.cand_min_beams and 2.0 * r >= self.cand_min_width
+                 and math.hypot(xy[0] - g.lidar_offset_x, xy[1] - g.lidar_offset_y)
+                 >= self.cand_min_range]
+        clusters = [(xy, r, len(cl)) for xy, r, cl in found]
         px, py, yaw = pose
         c, sn = math.cos(yaw), math.sin(yaw)
         world = [(px + c * x - sn * y, py + sn * x + c * y) for (x, y), _r, _n in clusters]
@@ -193,8 +194,10 @@ class BuoyLidarDetector(Node):
         spawn = [abs(math.atan2(y, x - cam_x)) <= self.spawn_half_fov
                  and math.hypot(x - cam_x, y) <= self.spawn_max_range
                  for (x, y), _r, _n in clusters]
-        conf = self.tracker.update([(x, y, v, ok, r) for (x, y), v, ok, (_xy, r, _n)
-                                    in zip(world, votes, spawn, clusters)], t, view)
+        rot = np.array([[c, -sn], [sn, c]])
+        world_pts = [cl @ rot.T + np.array([px, py]) for _xy, _r, cl in found]
+        conf = self.tracker.update([(x, y, v, ok, wp) for (x, y), v, ok, wp
+                                    in zip(world, votes, spawn, world_pts)], t, view)
         self._publish(s.header.stamp, conf)
         self._publish_markers(s.header.stamp)
         if self.debug_pub.get_subscription_count() > 0 and self.image is not None:
@@ -232,8 +235,8 @@ class BuoyLidarDetector(Node):
             m.type, m.action = Marker.CYLINDER, Marker.ADD
             m.pose.position.x, m.pose.position.y, m.pose.position.z = tr.x, tr.y, 0.3
             m.pose.orientation.w = 1.0
-            # 지름 = 라이다 군집 반지름 평균 × 2 (모르면 0.5 m)
-            m.scale.x = m.scale.y = min(max(2.0 * tr.radius, 0.1), 1.5) if tr.radius > 0 else 0.5
+            # 지름 = 원 맞추기 반지름 × 2 (사전값에서 시작, 점이 원 밖에 찍히면 커짐)
+            m.scale.x = m.scale.y = 2.0 * tr.radius
             m.scale.z = 0.6
             m.color.r, m.color.g, m.color.b = r, gg, b
             m.color.a = 1.0 if tr.confirmed else 0.35
@@ -247,7 +250,9 @@ class BuoyLidarDetector(Node):
             txt.scale.z = 0.35
             txt.color.r = txt.color.g = txt.color.b = txt.color.a = 1.0
             votes = ' '.join(f'{k[0]}{v}' for k, v in sorted(tr.color_votes.items()))
-            txt.text = (f'#{tr.id} {tr.color} d={2 * tr.radius:.2f}m p={tr.probability:.2f} {tr.last_evidence}'
+            n_pts = 0 if tr.pts is None else len(tr.pts)
+            txt.text = (f'#{tr.id} {tr.color} r={tr.radius:.2f}{"" if tr.grown else "(prior)"} '
+                        f'pts={n_pts} p={tr.probability:.2f} {tr.last_evidence}'
                         f'{" CONF" if tr.confirmed else ""} [{votes}]')
             arr.markers.append(txt)
         self.marker_pub.publish(arr)

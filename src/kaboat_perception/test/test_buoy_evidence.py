@@ -159,8 +159,43 @@ def test_time_jump_back_resets():
     assert tk.tracks == []
 
 
-def test_radius_averaged_from_clusters():
+# ---------- 원 맞추기 (반지름 고정 이동 → 안 맞으면 키움) ----------
+
+def arc(center, r, viewer, half_deg=60.0, noise=0.01, rng=None):
+    """viewer 에서 본 원의 앞면 호 점 (가장자리 half_deg 까지만 보임)."""
+    rng = rng or np.random.default_rng(0)
+    c = np.asarray(center, float)
+    los = math.atan2(viewer[1] - c[1], viewer[0] - c[0])
+    a = los + np.radians(np.linspace(-half_deg, half_deg, 15))
+    pts = np.column_stack((c[0] + r * np.cos(a), c[1] + r * np.sin(a)))
+    return pts + rng.normal(0, noise, pts.shape)
+
+
+def run_arcs(true_r, viewers, center=(8.0, 0.0)):
     tk = EvidenceTracker(P)
-    for k, r in enumerate([0.2, 0.3, 0.3, 0.3]):
-        tk.update([(8.0, 0.0, None, True, r)], 0.1 * k)
-    assert 0.2 < tk.confirmed()[0].radius < 0.3
+    rng = np.random.default_rng(1)
+    for k, vw in enumerate(viewers):
+        pts = arc(center, true_r, vw, rng=rng)
+        m = pts.mean(axis=0)
+        tk.update([(m[0], m[1], None, True, pts)], 0.1 * k, view({}, x=vw[0], y=vw[1]))
+    return tk.tracks[0]
+
+
+PASS_BY = [(x, -6.0) for x in np.linspace(0.0, 16.0, 40)]   # 옆을 지나가며 여러 방향
+
+
+def test_radius_grows_to_true_size_when_seen_from_many_directions():
+    t = run_arcs(0.3, PASS_BY)
+    assert t.grown and t.radius == pytest.approx(0.3, abs=0.04)
+    assert math.hypot(t.x - 8.0, t.y) < 0.04
+
+
+def test_radius_never_shrinks_below_prior():
+    t = run_arcs(0.12, PASS_BY)
+    assert not t.grown and t.radius == pytest.approx(P.radius_prior)
+    assert math.hypot(t.x - 8.0, t.y) < 0.1
+
+
+def test_one_direction_only_does_not_grow():
+    t = run_arcs(0.3, [(2.0, 0.0)] * 40)
+    assert not t.grown and t.radius == pytest.approx(P.radius_prior)
