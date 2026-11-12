@@ -17,6 +17,11 @@ FIELD = [((35.18483600, 128.56659630), (136.197, -4.747)),
          ((35.18490760, 128.56660160), (136.679, 3.196)),
          ((35.18494360, 128.56632130), (111.149, 7.190)),
          ((35.18486010, 128.56631160), (110.265, -2.074))]
+# 토너먼트 경기장: 같은 날 16:47~16:49 gps_mark_logger #1~#4 (CSV x, y)
+TOURNAMENT = [((35.18467100, 128.56513170), (2.797, -23.054)),
+              ((35.18460040, 128.56520860), (9.801, -30.887)),
+              ((35.18475700, 128.56544660), (31.479, -13.513)),
+              ((35.18483400, 128.56537370), (24.839, -4.970))]
 
 
 def test_matches_field_gps_log_and_geo_local():
@@ -32,7 +37,7 @@ def test_matches_field_gps_log_and_geo_local():
 def test_shipped_config_is_the_avoid_arena_with_two_entrances():
     assert load_walls(CONFIG) == {}
     arenas = load_arenas(CONFIG)
-    assert set(arenas) == {'avoid'}
+    assert set(arenas) == {'avoid', 'tournament'}
     corners = [latlon_to_local(lat, lon, ORIGIN) for lat, lon in arenas['avoid']['corners']]
     np.testing.assert_allclose(corners, [xy for _, xy in FIELD], atol=0.01)   # #2 #3 #4 #5
     assert arenas['avoid']['openings'] == {0: 3.0, 2: 3.0}                   # 짧은 두 변
@@ -77,7 +82,8 @@ def _shipped(offset=0.6):
 
 def test_shipped_long_sides_move_outward_by_sixty_centimetres():
     walls = _shipped()
-    assert set(walls) == {'avoid_0', 'avoid_1'}       # 입구 2곳으로 나뉜 둘레 두 줄
+    # 경기장마다 입구 2곳으로 나뉜 둘레 두 줄
+    assert set(walls) == {'avoid_0', 'avoid_1', 'tournament_0', 'tournament_1'}
 
     def y_at(a, b, x):
         return a[1] + (x - a[0]) / (b[0] - a[0]) * (b[1] - a[1])
@@ -238,3 +244,28 @@ def test_node_leaves_the_entrance_open(tmp_path):
     finally:
         node.destroy_node()
         rclpy.shutdown()
+
+
+def test_shipped_tournament_arena_is_the_field_rectangle():
+    arena = load_arenas(CONFIG)['tournament']
+    corners = np.array([latlon_to_local(lat, lon, ORIGIN) for lat, lon in arena['corners']])
+    np.testing.assert_allclose(corners, [xy for _, xy in TOURNAMENT], atol=0.01)
+    assert arena['openings'] == {0: 3.0, 2: 3.0}                         # 짧은 두 변
+    sides = [np.linalg.norm(corners[(i + 1) % 4] - corners[i]) for i in range(4)]
+    np.testing.assert_allclose(sides, [10.51, 27.78, 10.82, 28.51], atol=0.01)   # 약 10.7 × 28.1 m
+
+
+def test_tournament_walls_long_sides_closed_short_sides_open_three_metres():
+    walls = _shipped()
+    a, b = walls['tournament_0'], walls['tournament_1']
+    raw = [latlon_to_local(lat, lon, ORIGIN) for lat, lon in load_arenas(CONFIG)['tournament']['corners']]
+    corners = offset_polygon(raw, 0.6)
+    # 바깥으로 0.6 m: 넓힌 둘레 변이 원래 변보다 1.2 m 길다 (양 끝 0.6 m 씩)
+    grown = [np.linalg.norm(corners[(i + 1) % 4] - corners[i]) for i in range(4)]
+    raw_sides = [np.linalg.norm(np.subtract(raw[(i + 1) % 4], raw[i])) for i in range(4)]
+    np.testing.assert_allclose(np.subtract(grown, raw_sides), 1.2, atol=.05)
+    # 각 줄 = 짧은 변 토막 → 긴 변 → 짧은 변 토막, 두 줄 사이 틈은 짧은 변 가운데 3 m
+    assert len(a) == len(b) == 4
+    for gap, (i, j) in (((a[0], b[-1]), (0, 1)), ((a[-1], b[0]), (2, 3))):
+        assert np.linalg.norm(gap[0] - gap[1]) == pytest.approx(3.0, abs=1e-6)
+        np.testing.assert_allclose((gap[0] + gap[1]) / 2, (corners[i] + corners[j]) / 2, atol=1e-6)

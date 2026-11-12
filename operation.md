@@ -291,6 +291,13 @@ test_avoid_outdoor start_point:=gate_entry goal_point:=gate_end   # 다른 지�
 `tournament_end`입니다. 종합 미션(`mission_manager`)은 이 두 이름을 읽지 않습니다 — 그래서 `rec` 할 때
 `(미션 이름 규칙 아님 …)`이 붙어 나오는 게 정상입니다.
 
+**가상 벽:** 토너먼트 경기장 둘레도 `virtual_walls.yaml`의 `arenas.tournament`에 들어 있어 `run_map`이
+회피 경기장과 함께 칠합니다.
+- 경기장 크기: 약 10.7 × 28.1 m 직사각형이고, 긴 변은 남서–북동입니다. 2026-11-12 Space 기록 #1~#4입니다.
+- 벽 모양: 긴 두 변은 전부 벽, 짧은 두 변(남서 끝·북동 끝)은 가운데 3 m만 비웁니다.
+- 바깥 오프셋: 0.6 m(`virtual_wall_outward_offset`)는 회피 경기장과 같습니다.
+- 반영: `virtual_walls.yaml`을 바꾸면 젯슨에서 `cb` 후 `run_map`을 다시 켭니다(설치 폴더의 설정은 복사본).
+
 ```bash
 rec tournament_entry                             # 0) 노트북: 경기장 입구에 진행 방향으로 세우고 기록
 rec tournament_end                               #    도착(목표) 지점에서 기록
