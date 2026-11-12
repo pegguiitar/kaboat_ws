@@ -51,10 +51,17 @@ def test_behind_camera_or_off_screen_is_no_vote():
     assert [v.color for v in votes] == [None, None]
 
 
-def test_dark_green_and_magenta_tint_pixels():
-    # 해 질 녘 초록 몸통 (H 35, S 91, V 58) 은 초록, 렌즈 보라 번짐 (H 156, S 135) 은 색 없음
+@pytest.mark.parametrize('hsv, label', [
+    ((52, 88, 34), 2),     # 초록 부표 짙은 몸통 (2026-11-12 bag)
+    ((55, 100, 120), 2),   # 초록 뚜껑
+    ((36, 75, 50), 0),     # 부표 옆 올리브색 물 — 초록 아님
+    ((17, 75, 106), 0),    # 초록 부표 옆면 황갈색 띠 — 빨강 아님
+    ((148, 110, 40), 0),   # 검정 부표 (보라 번짐)
+    ((156, 135, 99), 0),   # 렌즈 보라 번짐 물
+    ((5, 133, 230), 1),    # 빨강 부표
+    ((176, 188, 197), 1),  # 빨강 부표 (H 170+)
+])
+def test_pixel_colours_measured_at_sunset(hsv, label):
     import cv2
-    hsv = np.array([[[35, 91, 58], [156, 135, 99], [10, 200, 220]]], dtype=np.uint8)
-    bgr = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
-    lab = classify_colors(np.repeat(np.repeat(bgr, 2, 0), 2, 1), P)
-    assert lab[0].tolist() == [2, 0, 1]
+    bgr = cv2.cvtColor(np.array([[hsv]], dtype=np.uint8), cv2.COLOR_HSV2BGR)
+    assert classify_colors(np.repeat(np.repeat(bgr, 2, 0), 2, 1), P)[0, 0] == label

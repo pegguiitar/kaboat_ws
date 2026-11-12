@@ -41,7 +41,8 @@ TIME_JUMP_BACK = 1.0   # [s] 이보다 거꾸로 가면 리셋
 
 @dataclass(frozen=True)
 class EvidenceParams:
-    gate_radius: float = 1.5        # 군집 ↔ 부표 연결 최대 거리 [m]
+    gate_radius: float = 1.0        # 군집 ↔ 부표 연결 최대 거리 [m] (부표는 고정 — 1.5 는 배를 따라
+                                    # 움직이는 수면 hit 를 한 부표로 끌고 다녔다)
     ema_alpha: float = 0.3          # 위치 평활 (새 관측 가중치)
     l_hit: float = 0.8              # 라이다 군집 연결 1회
     l_free_rate: float = -2.0       # 빔이 부표 자리를 지나감 [/s]
@@ -80,6 +81,7 @@ class EvTrack:
     hits: int = 0
     color_votes: Dict[str, int] = field(default_factory=dict)
     last_evidence: str = 'hit'
+    radius: float = 0.0           # 라이다 군집 반지름 평균 [m] (0 = 모름)
 
     @property
     def color(self) -> str:
@@ -136,17 +138,18 @@ class EvidenceTracker:
 
     def update(self, detections: Sequence[Tuple], now: float,
                view: Optional[LidarView] = None) -> List[EvTrack]:
-        """detections = [(x, y, 색 표 또는 None[, can_spawn=True])] (전역), view = 이 스캔 (없으면 깎지 않음)."""
+        """detections = [(x, y, 색 표 또는 None[, can_spawn=True[, 반지름]])] (전역),
+        view = 이 스캔 (없으면 깎지 않음)."""
         p = self.p
         if self._last_now is not None and now < self._last_now - TIME_JUMP_BACK:
             self.reset()
-        detections = [d if len(d) == 4 else (*d, True) for d in detections]
+        detections = [(*d, True, 0.0)[:5] if len(d) == 3 else (*d, 0.0)[:5] for d in detections]
         dt = 0.0 if self._last_now is None else min(max(now - self._last_now, 0.0), MAX_STEP)
         self._last_now = now
 
         # ① 연결 — 가까운 쌍부터 1:1
         pairs = []
-        for i, (x, y, _c, _s) in enumerate(detections):
+        for i, (x, y, _c, _s, _r) in enumerate(detections):
             for t in self.tracks:
                 d = math.hypot(t.x - x, t.y - y)
                 if d <= p.gate_radius:
@@ -160,19 +163,21 @@ class EvidenceTracker:
             used_det.add(i)
             used_trk.add(tid)
             t = by_id[tid]
-            x, y, color, _s = detections[i]
+            x, y, color, _s, r = detections[i]
             t.x += p.ema_alpha * (x - t.x)
             t.y += p.ema_alpha * (y - t.y)
+            if r > 0.0:
+                t.radius = r if t.radius <= 0.0 else t.radius + p.ema_alpha * (r - t.radius)
             t.L = min(p.l_max, t.L + p.l_hit)
             t.hits += 1
             t.last_seen = now
             t.last_evidence = 'hit'
             if color is not None:
                 t.color_votes[color] = t.color_votes.get(color, 0) + 1
-        for i, (x, y, color, can_spawn) in enumerate(detections):
+        for i, (x, y, color, can_spawn, r) in enumerate(detections):
             if i in used_det or not can_spawn:
                 continue
-            t = EvTrack(self._next_id, float(x), float(y), p.l_hit, now, hits=1)
+            t = EvTrack(self._next_id, float(x), float(y), p.l_hit, now, hits=1, radius=float(r))
             if color is not None:
                 t.color_votes[color] = 1
             self._next_id += 1

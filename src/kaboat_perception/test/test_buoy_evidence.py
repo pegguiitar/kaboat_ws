@@ -157,3 +157,10 @@ def test_time_jump_back_resets():
     tk.update([], 100.0)
     tk.update([], 5.0)                               # 95 s 거꾸로
     assert tk.tracks == []
+
+
+def test_radius_averaged_from_clusters():
+    tk = EvidenceTracker(P)
+    for k, r in enumerate([0.2, 0.3, 0.3, 0.3]):
+        tk.update([(8.0, 0.0, None, True, r)], 0.1 * k)
+    assert 0.2 < tk.confirmed()[0].radius < 0.3

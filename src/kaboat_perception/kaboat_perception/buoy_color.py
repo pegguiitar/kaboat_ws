@@ -13,10 +13,14 @@
                    부표가 가려진 동안 unknown 표에 묻히지 않게 (2026-11-12 영상: 검정 뒤 초록이
                    1초 정도만 보임).
 
-픽셀 색 (OpenCV H 0~180): 채도 S ≥ s_min 이고 밝기 V ≥ v_min 이면 H 로 빨강·초록.
-  v_min 35 — 해 질 녘 초록 부표 몸통이 V≈58 의 어두운 올리브(H≈35)라 예전 70 으로는
-  초록 표가 7 % 뿐이었다. red_h_min 170 — D455 화면 오른쪽 아래 보라색 번짐(H≈150~165)이
-  빨강으로 잡히지 않게 (예전 155). 주황(H≈10~20)은 빨강으로 들어간다.
+픽셀 색 (OpenCV H 0~180) — 2026-11-12 해 질 녘 bag 에서 부표 픽셀을 직접 재서 정했다:
+  빨강  H ≤ 20 또는 ≥ 170, S ≥ 110, V ≥ 150. 진짜 빨강 부표는 S 120~190·V 200 이상인데,
+        초록 부표 옆면의 햇빛 받은 황갈색 띠(H 12~22, S≈75, V≈106)가 예전 기준(S 60, V 35)
+        으로는 빨강 표가 되어 초록 부표를 빨강으로 잡았다. H ≥ 170 은 D455 화면 오른쪽 아래
+        보라 번짐(H 145~165)을 피한다. 주황(H 10~20, 밝음)은 빨강으로 들어간다.
+  초록  45 ≤ H ≤ 89, S ≥ 60, V ≥ 20. 초록 부표는 뚜껑과 짙은 초록 몸통(H 46~65, V≈34)인데,
+        부표 옆 올리브색 물(H 26~45)이 예전 하한 30 으로는 초록 표가 됐다.
+  검정 부표(V≈40, 보라 번짐 H≈148)는 둘 다 아니라 unknown.
 """
 import math
 from dataclasses import dataclass
@@ -31,12 +35,14 @@ from kaboat_perception.buoy_localize import BuoyGeometry, level_to_pixel
 @dataclass(frozen=True)
 class ColorParams:
     step: int = 2                 # 픽셀 건너뛰기 (640×480 → 320×240)
-    s_min: int = 60               # 이보다 채도 낮으면(흰·회색·윤슬) 색 없음
-    v_min: int = 35               # 이보다 어두우면 색 없음
-    red_h_max: int = 25           # 빨강: H ≤ red_h_max 또는 H ≥ red_h_min (주황 포함)
+    red_h_max: int = 20           # 빨강: H ≤ red_h_max 또는 H ≥ red_h_min (주황 포함)
     red_h_min: int = 170
-    green_h_min: int = 30         # 초록: green_h_min ≤ H ≤ green_h_max (연두 포함)
+    red_s_min: int = 110          # 빨강은 진하고
+    red_v_min: int = 150          # 밝아야 — 황갈색 띠(S≈75, V≈106)는 빨강 아님
+    green_h_min: int = 45         # 초록: green_h_min ≤ H ≤ green_h_max — 올리브 물(H < 45) 제외
     green_h_max: int = 89
+    green_s_min: int = 60         # 이보다 채도 낮으면(흰·회색·윤슬) 초록 아님
+    green_v_min: int = 20         # 짙은 초록 몸통(V≈34)도 초록
     window_top: float = 0.6       # 창 윗변 — 수면 위 높이 [m]
     min_half_width: float = 0.15  # 창 반폭 하한 [m] (라이다 반지름이 작게 나올 때)
     min_visible_px: int = 20      # 가림·화면 밖을 빼고 이만큼 보여야 판정 (step 후 픽셀)
@@ -59,10 +65,11 @@ def classify_colors(bgr, p: ColorParams):
     s = max(1, int(p.step))
     hsv = cv2.cvtColor(np.ascontiguousarray(bgr[::s, ::s]), cv2.COLOR_BGR2HSV)
     h, sat, val = hsv[..., 0], hsv[..., 1], hsv[..., 2]
-    colored = (sat >= p.s_min) & (val >= p.v_min)
     label = np.zeros(h.shape, dtype=np.uint8)
-    label[colored & ((h <= p.red_h_max) | (h >= p.red_h_min))] = 1
-    label[colored & (h >= p.green_h_min) & (h <= p.green_h_max)] = 2
+    label[(sat >= p.red_s_min) & (val >= p.red_v_min)
+          & ((h <= p.red_h_max) | (h >= p.red_h_min))] = 1
+    label[(sat >= p.green_s_min) & (val >= p.green_v_min)
+          & (h >= p.green_h_min) & (h <= p.green_h_max)] = 2
     return label
 
 

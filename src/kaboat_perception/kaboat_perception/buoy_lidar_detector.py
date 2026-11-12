@@ -61,6 +61,11 @@ class BuoyLidarDetector(Node):
         # 새 부표는 카메라 시야 안·이 거리 안 라이다 군집에서만 만든다 (옆·뒤 물가·기둥 제외)
         self.declare_parameter('spawn_half_fov_deg', 45.0)
         self.declare_parameter('spawn_max_range', 20.0)
+        # 부표 후보가 될 라이다 군집 — 수면·물보라·선수파 hit(빔 2개, 폭 몇 cm, 배 옆 1~1.5 m)를 거른다.
+        # 2026-11-12 bag: 진짜 부표는 빔 8~21개·폭 0.2~0.33 m, 가짜는 빔 2개·폭 1~6 cm.
+        self.declare_parameter('cand_min_beams', 3)
+        self.declare_parameter('cand_min_width', 0.1)
+        self.declare_parameter('cand_min_range', 2.0)
         self.geom = BuoyGeometry()
         self.cp = self._params_from('color', ColorParams)
         self.ep = self._params_from('evidence', EvidenceParams)
@@ -69,6 +74,9 @@ class BuoyLidarDetector(Node):
         self.publish_unseen = bool(self.get_parameter('publish_unseen').value)
         self.spawn_half_fov = math.radians(float(self.get_parameter('spawn_half_fov_deg').value))
         self.spawn_max_range = float(self.get_parameter('spawn_max_range').value)
+        self.cand_min_beams = int(self.get_parameter('cand_min_beams').value)
+        self.cand_min_width = float(self.get_parameter('cand_min_width').value)
+        self.cand_min_range = float(self.get_parameter('cand_min_range').value)
 
         self.poses = collections.deque(maxlen=400)   # (t, x, y, yaw)
         self.K = None
@@ -149,8 +157,12 @@ class BuoyLidarDetector(Node):
         if pose is None:
             return
         g = self.geom
-        clusters = lidar_clusters(lidar_points(s.ranges, s.angle_min, s.angle_increment,
-                                               s.range_min, s.range_max, g), g, s.angle_increment)
+        clusters = [(xy, r, n) for xy, r, n in lidar_clusters(
+                        lidar_points(s.ranges, s.angle_min, s.angle_increment,
+                                     s.range_min, s.range_max, g), g, s.angle_increment)
+                    if n >= self.cand_min_beams and 2.0 * r >= self.cand_min_width
+                    and math.hypot(xy[0] - g.lidar_offset_x, xy[1] - g.lidar_offset_y)
+                    >= self.cand_min_range]
         px, py, yaw = pose
         c, sn = math.cos(yaw), math.sin(yaw)
         world = [(px + c * x - sn * y, py + sn * x + c * y) for (x, y), _r, _n in clusters]
@@ -178,8 +190,8 @@ class BuoyLidarDetector(Node):
         spawn = [abs(math.atan2(y, x - cam_x)) <= self.spawn_half_fov
                  and math.hypot(x - cam_x, y) <= self.spawn_max_range
                  for (x, y), _r, _n in clusters]
-        conf = self.tracker.update([(x, y, v, ok) for (x, y), v, ok in zip(world, votes, spawn)],
-                                   t, view)
+        conf = self.tracker.update([(x, y, v, ok, r) for (x, y), v, ok, (_xy, r, _n)
+                                    in zip(world, votes, spawn, clusters)], t, view)
         self._publish(s.header.stamp, conf)
         self._publish_markers(s.header.stamp)
         if self.debug_pub.get_subscription_count() > 0 and self.image is not None:
@@ -215,7 +227,8 @@ class BuoyLidarDetector(Node):
             m.type, m.action = Marker.CYLINDER, Marker.ADD
             m.pose.position.x, m.pose.position.y, m.pose.position.z = tr.x, tr.y, 0.3
             m.pose.orientation.w = 1.0
-            m.scale.x = m.scale.y = 0.5
+            # 지름 = 라이다 군집 반지름 평균 × 2 (모르면 0.5 m)
+            m.scale.x = m.scale.y = min(max(2.0 * tr.radius, 0.1), 1.5) if tr.radius > 0 else 0.5
             m.scale.z = 0.6
             m.color.r, m.color.g, m.color.b = r, gg, b
             m.color.a = 1.0 if tr.confirmed else 0.35
@@ -229,7 +242,7 @@ class BuoyLidarDetector(Node):
             txt.scale.z = 0.35
             txt.color.r = txt.color.g = txt.color.b = txt.color.a = 1.0
             votes = ' '.join(f'{k[0]}{v}' for k, v in sorted(tr.color_votes.items()))
-            txt.text = (f'#{tr.id} {tr.color} p={tr.probability:.2f} {tr.last_evidence}'
+            txt.text = (f'#{tr.id} {tr.color} d={2 * tr.radius:.2f}m p={tr.probability:.2f} {tr.last_evidence}'
                         f'{" CONF" if tr.confirmed else ""} [{votes}]')
             arr.markers.append(txt)
         self.marker_pub.publish(arr)
