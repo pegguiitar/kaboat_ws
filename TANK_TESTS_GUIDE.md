@@ -307,7 +307,7 @@ ros2 topic echo /los_test/status
 ```
 
 - RViz: `rviz_tank los` / `rviz_tank los_circle`, Path `/los_test/path`.
-- **제어 상수:** LOS 시험과 게이트·탐색 미션의 공통 `los()`는 **수조 회피 SOTA**와 같은 값을 씁니다(2026-11-09): 직진 `thrust_ratio` 0.25(전진 기준·상한), 회전 상한 `turn_ratio` 0.31, 요 PD 1.4/0.16, lookahead 0.8 m, 20Hz. 값은 [`los_controller.py`](src/kaboat_behaviors/kaboat_behaviors/los_controller.py)의 `LOS_*`·`BSPLINE_TRACK_YAW_*` 상수 한 곳에서 정하고, 런치 기본값도 이 상수를 읽습니다(예전엔 런치에 kp 1.2가 따로 적혀 있었음). `bspline_track_test`(1.5/0.15, lookahead 1.0)와는 다릅니다.
+- **제어 상수:** LOS 시험과 게이트·탐색 미션의 공통 `los()`는 **수조 회피 SOTA**와 같은 값을 씁니다(2026-11-09): 직진 `thrust_ratio` 0.25(전진 기준·상한), 회전 상한 `turn_ratio` 0.31, 요 PD 1.4/0.16, lookahead 0.8 m, 20Hz. 값은 [`los_controller.py`](src/kaboat_behaviors/kaboat_behaviors/los_controller.py)의 `LOS_*`·`BSPLINE_TRACK_YAW_*` 상수 한 곳에서 정하고, 런치 기본값도 이 상수를 읽습니다(예전엔 런치에 kp 1.2가 따로 적혀 있었음). `bspline_track_test`(1.5/0.15, lookahead 1.0)와는 다릅니다. 단 게이트 미션의 직진만 야외 바람 때문에 0.4(`gate.los_thrust_ratio`, 2026-11-12)이고, 수조 미션 가드의 전진 상한 0.30에 잘립니다.
 - 수조 밖으로 나가는 경로는 시작 시 거부됩니다.
 
 ## 9. 장애물 회피 미리보기

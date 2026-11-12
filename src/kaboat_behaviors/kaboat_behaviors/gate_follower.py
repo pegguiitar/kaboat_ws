@@ -18,12 +18,14 @@ from std_msgs.msg import String
 from visualization_msgs.msg import Marker, MarkerArray
 
 from .behavior_base import BehaviorBase, yaw_from_quaternion
-from .los_controller import LOS_FORWARD_RATIO, LOS_TURN_RATIO
+from .los_controller import LOS_TURN_RATIO
 from .dri import DriParams, build_dri
 from .gate_corridor import (
     GateParams, crossed_gate, lookahead_chord_safe, make_gate_path,
     pair_observed, path_safe, points_observed, points_safe, scan_hits_world,
     select_gate_pair)
+
+GATE_LOS_THRUST_RATIO = 0.4   # 게이트 통과(LOS) 직진 상한 — config/gate_params.yaml 과 같게
 
 
 class GateFollower(BehaviorBase):
@@ -35,9 +37,10 @@ class GateFollower(BehaviorBase):
         self.gate_params = self._params_from('gate', GateParams)
         self.dri_params = self._params_from('dri', DriParams)
         self.declare_parameter('gate.thrust_ratio', 0.5)       # waypoint(접근) 구간
-        # LOS 경로 추종 구간: 수조 회피 SOTA 와 같은 직진 0.25·회전 0.31 상한
-        # (2026-11-09, 이전엔 둘 다 0.3). 요 게인·lookahead 도 공용 LOS SOTA 값.
-        self.declare_parameter('gate.los_thrust_ratio', LOS_FORWARD_RATIO)
+        # LOS 경로 추종 구간: 직진 0.4·회전 0.31 상한. 직진은 야외 바람 때문에 공용 LOS
+        # SOTA 0.25(약 1619 µs)에서 0.4(약 1675 µs, goto 기본과 같음)로 올림(2026-11-12).
+        # 회전 상한·요 게인·lookahead 는 공용 LOS SOTA 값 그대로.
+        self.declare_parameter('gate.los_thrust_ratio', GATE_LOS_THRUST_RATIO)
         self.declare_parameter('gate.los_turn_ratio', LOS_TURN_RATIO)
         self.declare_parameter('gate.motion_enabled', False)
         # 선체 라이다 장착 위치(occupancy_grid 의 lidar_offset_x/y 와 같은 값,

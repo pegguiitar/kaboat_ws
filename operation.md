@@ -265,6 +265,7 @@ test_gate_outdoor approach:=true             # gate_entry 접근(직선, 회피 
 
 - 기록: `gate_entry` = 첫 게이트 앞 통로 중심(진행 방향으로 세워서), `gate_end` = 마지막 게이트 뒤
   **2~3 m** 통로 중심. 모든 쌍을 지난 뒤 `gate_end`가 4 m 안이어야 그리로 가고 2 m 안이면 완료.
+- 추력: 게이트 통과(LOS) 직진 상한 **0.4**(약 1675 µs, `gate.los_thrust_ratio`)·회전 0.31.
 - `approach:=true` → 게이트 시작 조건: `gate_entry` **1 m 안 + 선수각 ±15° 안**을 0.5초 유지(회전 속도
   조건 없음). 모든 미션의 시작 자세 접근(`mission_approach`)이 같은 조건. 미리보기
   (`motion_enabled:=false`)에서는 도착 신호를 안 내서 `gate`로 넘어가지 않습니다.
