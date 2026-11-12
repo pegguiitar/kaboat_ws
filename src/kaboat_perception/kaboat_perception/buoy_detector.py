@@ -1,4 +1,4 @@
-"""buoy_detector — 부표 검출 + 빨강/초록 이진 판정 → 전역 부표맵 (탐색·게이트용, 학습 불필요)
+"""buoy_detector — 부표 검출 + 색 판정(빨강/초록/검정) → 전역 부표맵 (탐색·게이트용, 학습 불필요)
 
 입력   /camera/color/image_raw (sensor_msgs/Image)   — RGB 원본, 색 판정
        /camera/depth/image_raw (sensor_msgs/Image)    — 정렬 뎁스 (6 m 이내만 사용)
@@ -8,12 +8,12 @@
        /odom (nav_msgs/Odometry)                      — ④ 전역 투영 · ⑤ 추적 시간축
 출력   /detections/buoys (kaboat_msgs/BuoyArray, frame_id="odom")
 
-**출력은 점유지도(cell)와 다른 좌표 랜드마크다** — 색(red|green)·정체성(id)·전역(odom)
+**출력은 점유지도(cell)와 다른 좌표 랜드마크다** — 색(red|green|black)·정체성(id)·전역(odom)
 **중심** 좌표를 갖는 점 목록. 그래서 behavior 는 "빨간 부표는 월드 (x,y)에 있다"를
 직접 알고, 자기 odom 으로 상대 기하를 다시 계산한다.
 
 파이프라인 — 매 프레임 (계산은 buoy_localize.py 순수 모듈):
-  ① classify_pixels()  물체 픽셀(채도 있고 물·하늘색 아님) + 빨강/초록 이진 판정
+  ① classify_pixels()  물체 픽셀(검정, 또는 채도 있고 물·하늘색 아님) + 픽셀 색 라벨
   ② depth_buoys()      6 m 이내 — 물체 픽셀 → 3D → 수면 위만(반사상 제거) → 수평 덩어리
        fuse_with_lidar()   → 색 다수결, 근처 라이다 군집과 위치 융합 (camera_obstacles 방식)
   ③ lidar_buoys()      ② 로 안 잡힌 라이다 군집 (6 m 너머 등) → 영상에 투영한 창의 색 다수결
@@ -112,7 +112,7 @@ class BuoyDetector(Node):
         self.create_subscription(Odometry, '/odom', self._on_odom, 10)
 
         self.get_logger().info(
-            'buoy_detector 시작 (빨강/초록 이진 판정, 뎁스 ≤ '
+            'buoy_detector 시작 (빨강/초록/검정, 뎁스 ≤ '
             f'{self.geom.depth_max:.1f} m + 라이다 융합, 반지름 ≤ {self.geom.max_radius:.2f} m) '
             '→ /detections/buoys')
 
@@ -176,13 +176,13 @@ class BuoyDetector(Node):
             scan.range_min, scan.range_max, self.geom), self.geom, scan.angle_increment)
         cam = camera_xy(K, self.geom, roll, pitch)
 
-        obj, red = classify_pixels(frame, self.geom)                        # ①
+        obj, label = classify_pixels(frame, self.geom)                      # ①
         fixes = []
         if depth is not None:                                               # ② 6 m 이내
             fixes = [fuse_with_lidar(f, clusters, cam, self.geom)
-                     for f in depth_buoys(obj, red, depth, K, self.geom, roll, pitch)]
-        fixes += lidar_buoys(clusters, obj, red, K, self.geom, roll, pitch,  # ③ 나머지
-                             skip=fixes)
+                     for f in depth_buoys(obj, label, depth, K, self.geom, roll, pitch)]
+        fixes += lidar_buoys(clusters, obj, label, K, self.geom, roll, pitch,  # ③ 나머지
+                             skip=fixes, depth_m=depth)
 
         detections = []
         for f in fixes:
@@ -225,6 +225,7 @@ class BuoyDetector(Node):
     def _publish_viz(self, tracks):
         """부표맵을 RViz MarkerArray 로 — 색 구 + id 텍스트 (frame=odom)."""
         rgb = {'red': (1.0, 0.1, 0.1), 'green': (0.1, 0.9, 0.2),
+               'black': (0.15, 0.15, 0.15),
                'unknown': (0.6, 0.6, 0.6)}
         marks = MarkerArray()
         clear = Marker()             # 이전 프레임 잔상 제거 (prune 된 부표 지우기)
