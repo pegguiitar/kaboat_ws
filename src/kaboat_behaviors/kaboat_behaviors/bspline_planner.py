@@ -14,18 +14,23 @@
   넓은 부채꼴이면 p2 가 헤딩 기준 거의 정반대까지 뽑혀 배가 옆/뒤로 도는
   것처럼 보이는 사례가 실측됐기 때문 — 부채꼴 중심은 여전히 wp_bearing 이라
   헤딩 자체는 탐색에 관여 안 하고, 폭만 좁혀 최악의 이탈각을 줄인 것.
-  안전은 **하드 필터**: DRI > safe_threshold 후보는 제거한다. 생존자
-  중 먼저 방위 비용 최적점 주변(dri_angle_slack)으로 탐색 범위를 제한한 뒤,
-  그 안에서 선분 최대 DRI 최저값과 risk_straight_slack 이내인 후보를 추린다.
-  거의 같은 위험이면 그중 방위 비용이 가장 낮은 후보를 골라 직진성을
+  후보 고르기는 **하드 필터**: 직전 제어점→후보 선분의 DRI > safe_threshold·gen_margin
+  후보는 제거한다. 생존자 중 먼저 방위 비용 최적점 주변(dri_angle_slack)으로 탐색
+  범위를 제한한 뒤, 그 안에서 선분 최대 DRI 최저값과 risk_straight_slack 이내인 후보를
+  추린다. 거의 같은 위험이면 그중 방위 비용이 가장 낮은 후보를 골라 직진성을
   회복한다. 전역 최소 DRI 를 바로 고르지 않으므로 빈 바다로 과도하게
-  우회하지 않으면서 경계에 붙는 경로도 피한다. 어떤 arc 든 생존자가 없으면
-  None — 전진 반평면에 답이 없다는 뜻이고, 그 답은 ESCAPE(후진)다.
+  우회하지 않으면서 경계에 붙는 경로도 피한다.
+  안전 판정은 **완성 곡선**으로 한다 (2026-11-12): 선분은 곡선의 근사라 곡선이 모서리를
+  질러가거나 배→p1 구간이 비어, 예전엔 무작위 장면 6 % 가 check() 위반 경로였다. 이제
+  다 고른 곡선을 check() 와 같은 선으로 검사하고, 위반이면 그 지점을 움직이는 arc 로
+  되돌아가 옆 후보로 바꾼다. 최저 비용 곡선이 안전하면 예전과 같은 경로다. 안전한
+  곡선이 없으면 None — 전진 반평면에 답이 없다는 뜻이고, 그 답은 ESCAPE(후진)다.
 
   t_look=1.0s 는 실측 전속 1.48 m/s 기준 재산출값(§3-2) — 5.0s 초안은
   p1 이 7.4m 로 튀어 스플라인이 나갔다 되돌아오는 첨점을 만들었다.
 """
 from dataclasses import dataclass, field, replace
+from functools import lru_cache
 import math
 
 import numpy as np
@@ -147,15 +152,28 @@ def _wrap(a):
 _KNOTS = np.array([0, 0, 0, 0, 1 / 3, 2 / 3, 1, 1, 1, 1], dtype=np.float64)
 
 
-def _sample_spline(cps: np.ndarray, spacing: float) -> np.ndarray:
-    """spline 을 조밀 평가 후 호길이 등간격으로 재샘플 (끝점 포함)."""
-    dense = np.asarray(BSpline(_KNOTS, cps, 3)(np.linspace(0.0, 1.0, 300)))
-    seg = np.hypot(*np.diff(dense, axis=0).T)
-    cum = np.concatenate([[0.0], np.cumsum(seg)])
+_U_DENSE = np.linspace(0.0, 1.0, 300)
+_BASIS = BSpline(_KNOTS, np.eye(6), 3)   # 매개변수 u → 제어점 6개의 가중치
+
+
+def _dense_spline(cps: np.ndarray):
+    """(조밀 곡선 300점, 누적 호길이)."""
+    dense = np.asarray(BSpline(_KNOTS, cps, 3)(_U_DENSE))
+    cum = np.concatenate([[0.0], np.cumsum(np.hypot(*np.diff(dense, axis=0).T))])
+    return dense, cum
+
+
+def _resample(dense, cum, spacing):
+    """조밀 곡선 → 호길이 등간격 샘플 (끝점 포함). 샘플 i 의 호길이 = i·spacing."""
     targets = np.arange(0.0, cum[-1], spacing)
     xs = np.interp(targets, cum, dense[:, 0])
     ys = np.interp(targets, cum, dense[:, 1])
     return np.vstack([np.stack([xs, ys], axis=1), dense[-1:]])
+
+
+def _sample_spline(cps: np.ndarray, spacing: float) -> np.ndarray:
+    """spline 을 조밀 평가 후 호길이 등간격으로 재샘플 (끝점 포함)."""
+    return _resample(*_dense_spline(cps), spacing)
 
 
 def pick_ref_obstacle(occ_xy, boat, yaw, p: PlannerParams):
@@ -205,62 +223,119 @@ def _plan_bearing_at(plan, boat, radius):
     return math.atan2(q[1], q[0])
 
 
-def _arc_pick(dri, origin, radius, wp_bearing, prev_pt, prev_bearing,
-              p: PlannerParams, hist_bearing: float | None = None):
-    """arc 위 후보 선택 — 하드 필터 + 제한 범위 최소 DRI 근처 직진 우선.
+# ── 되돌아가기 (2026-11-12) ── 무작위 1500 장면 감사에서 예전 생성은 6 %(82 개)가 check()
+# 위반 경로였다 (현만 보고 곡선은 안 봄). 지금은 완성 곡선을 검사하고 위반이면 되돌아간다.
+RANKED_PER_ARC = 5      # arc 마다 시도하는 후보 수 (1위 + 양옆으로 비킨 4개)
+RANK_GAP = math.radians(6.0)   # 다음 순위 후보는 앞 순위들과 이 각도 이상 떨어진 것
+# _generate_once 1회에 그려 검사하는 곡선 수 상한. 성공한 시도의 99 % 가 곡선 5개 이하, 최대 12개.
+MAX_CURVES = 12
+# generate() 1회의 작업 상한 = arc 후보 순위 계산 + 곡선 그리기 횟수 (각 노트북 ~0.2 ms).
+# 정지한 배가 사방이 막히면 시작 방향 13개 × 부채꼴 2개를 다 훑느라 270 ms 까지 걸렸다 —
+# FSM 은 경로 없음·ESCAPE 동안 매 tick(0.1 s) generate 하므로 최악 시간을 묶는다.
+# 무작위 1500 장면 (노트북): 80 → 경로 없음 34·최대 23~27 ms, 120 → 같은 34·최대 33 ms
+# (예전 생성: 경로 없음 55 + 위반 82, 최대 22 ms).
+WORK_BUDGET = 80
 
-    ① **직전 CP → 후보를 잇는 선분**(샘플 8점) 위 max DRI > safe_threshold 인
-       후보 제거 (창 밖 inf 도 자연 탈락). 후보 점 하나만 보면 점은 거품
-       밖인데 거기까지 가는 스플라인이 거품을 가로지르는 구멍이 남는다 —
-       가장 단순한 장면(정면 4m 장애물 1개)에서 위험 1.55 스침으로 실측.
-       선분은 스플라인 현(chord)의 근사지만 점 하나보다 훨씬 정직하다.
-    ② 생존자 중 w_wp·|wp방위차| + w_prev·|직전CP방위차| 가 최소인 기준
-       후보를 찾고, 그 방위 ±dri_angle_slack 로 탐색 범위를 제한
+
+class _Budget:
+    """generate() 1회가 나눠 쓰는 작업 횟수."""
+
+    def __init__(self, n):
+        self.left = n
+
+    def spend(self):
+        self.left -= 1
+
+
+_CHORD_TS = np.linspace(0.125, 1.0, 8)[:, None, None]
+
+
+def _chord_risk(dri, start, ends):
+    """start → 각 끝점 직선 위 최대 위험 (8점, start 자신 제외).
+
+    후보 고르기용 근사일 뿐 — 안전 판정은 완성 곡선 검사가 한다. 0.1 m 간격으로 촘촘히
+    보면 무작위 1500 장면 중 55 % 경로가 바뀌고(현장에서 맞춘 gen_margin 0.93 은 8점 기준),
+    p1 이 위험 칸 안이라 현 시작이 막혀도 곡선은 안전한 장면 15 개를 잃었다 (2026-11-12)."""
+    ends = np.atleast_2d(ends)
+    seg = start[None, None, :] + _CHORD_TS * (ends[None, :, :] - start[None, None, :])
+    return dri.risk_at_many(seg[..., 0].ravel(), seg[..., 1].ravel()).reshape(8, -1).max(axis=0)
+
+
+@lru_cache(maxsize=8)
+def _fan(fov: float, n: int) -> np.ndarray:
+    """후보 방위 오프셋 −fov/2 … +fov/2 (n 개, 등간격)."""
+    out = np.linspace(-0.5 * fov, 0.5 * fov, n)
+    out.flags.writeable = False
+    return out
+
+
+def _arc_ranked(dri, origin, radius, wp_bearing, prev_pt, prev_bearing,
+                p: PlannerParams, hist_bearing: float | None = None, k: int = 1):
+    """arc 위 후보 순위 — 하드 필터 + 제한 범위 최소 DRI 근처 직진 우선. [(방위, 점)] 최대 k 개.
+
+    ① **직전 CP → 후보를 잇는 선분**(8점, _chord_risk) 위 max DRI > safe_threshold·gen_margin
+       인 후보 제거 (창 밖 inf 도 자연 탈락). 후보 점 하나만 보면 점은 거품 밖인데 거기까지
+       가는 곡선이 거품을 가로지르는 구멍이 남는다 (정면 4 m 장애물 1개에서 위험 1.55 스침).
+       선분도 곡선의 근사라 곡선이 모서리를 질러갈 수 있다 — 그건 완성 곡선 검사가 잡는다.
+    ② 생존자 중 w_wp·|wp방위차| + w_prev·|직전CP방위차| (+ w_hist·|직전 경로 방위차|)
+       가 최소인 기준 후보를 찾고, 그 방위 ±dri_angle_slack 로 탐색 범위를 제한
     ③ 제한 범위의 선분 max DRI 최저값 + risk_straight_slack 이내 후보 중
-       기하 비용 argmin
+       기하 비용 argmin = 1위
     ②③ 모두 비용 동점이면 wp 방위에 가까운 후보 (_argmin_toward_wp)
-    생존자 없으면 None — 호출측(generate)이 전체를 None 으로 (→ ESCAPE).
+    2위 이하 = 1위 양옆으로 RANK_GAP 이상 비킨 안전 후보 (가까운 것부터) — generate 가
+    완성 곡선이 위반일 때 되돌아가 쓴다. 생존자 없으면 [] → 호출측이 한 arc 앞으로.
     """
-    half = 0.5 * p.search_fov
-    bearings = wp_bearing + np.linspace(-half, half, p.n_candidates)
+    bearings = wp_bearing + _fan(p.search_fov, p.n_candidates)
     cands = np.stack([origin[0] + radius * np.cos(bearings),
                       origin[1] + radius * np.sin(bearings)], axis=1)
-    # t=0(직전 CP 자신)은 제외 — 이미 직전 단계에서 판정된 점이다
-    ts = np.linspace(0.125, 1.0, 8)[:, None, None]
-    seg = prev_pt[None, None, :] + ts * (cands[None, :, :] - prev_pt[None, None, :])
-    risks = dri.risk_at_many(seg[..., 0].ravel(),
-                             seg[..., 1].ravel()).reshape(8, -1)
-    seg_risk = risks.max(axis=0)
-    safe = seg_risk <= p.safe_threshold * p.gen_margin
-    if not np.any(safe):
-        return None
-    geom_cost = (
+    seg_risk = _chord_risk(dri, np.asarray(prev_pt, dtype=np.float64), cands)
+    avail = seg_risk <= p.safe_threshold * p.gen_margin
+    geom = (
         p.w_wp * np.abs(bearings - wp_bearing)  # 부채꼴 폭 ≤ π 라 wrap 불필요
-        + p.w_prev * np.abs([_wrap(b - prev_bearing) for b in bearings])
+        + p.w_prev * np.abs(_wrap(bearings - prev_bearing))
     )
     if hist_bearing is not None and p.w_hist > 0.0:
-        geom_cost = geom_cost + p.w_hist * np.abs([_wrap(b - hist_bearing) for b in bearings])
-    geom_cost[~safe] = np.inf
+        geom = geom + p.w_hist * np.abs(_wrap(bearings - hist_bearing))
+    if not np.any(avail):
+        return []
+    geom_cost = np.where(avail, geom, np.inf)
     geom_best = _argmin_toward_wp(geom_cost, bearings, wp_bearing)
-
     # 전역 DRI 최소를 택하면 밭 밖의 0 지대로 과도하게 우회할 수 있으므로,
     # 기하 최적 안전 후보 주변으로만 범위를 제한한다.
-    near_geom_best = np.abs(
-        [_wrap(b - bearings[geom_best]) for b in bearings]
-    ) <= p.dri_angle_slack + 1e-12
-    allowed = safe & near_geom_best
-
+    allowed = avail & (np.abs(_wrap(bearings - bearings[geom_best]))
+                       <= p.dri_angle_slack + 1e-12)
     min_risk = float(np.min(seg_risk[allowed]))
-    near_min_risk = allowed & (
-        seg_risk <= min_risk + p.risk_straight_slack + 1e-12
-    )
-    straight_cost = geom_cost.copy()
-    straight_cost[~near_min_risk] = np.inf
-    i = _argmin_toward_wp(straight_cost, bearings, wp_bearing)
-    return float(bearings[i]), cands[i]
+    near_min_risk = allowed & (seg_risk <= min_risk + p.risk_straight_slack + 1e-12)
+    first = _argmin_toward_wp(np.where(near_min_risk, geom_cost, np.inf), bearings, wp_bearing)
+    picked = [first]
+    if k > 1:
+        # 2위 이하 = 1위 옆으로 RANK_GAP 씩 비킨 안전 후보 (가까운 것부터, 같은 거리면 현 위험
+        # 낮은 쪽). 완성 곡선 위반은 대개 곡선이 꺾이는 곳에서 모서리를 질러가서다 — 제어점을
+        # 조금 비키면 풀린다. 부채꼴 아무 데서나 다음 후보를 고르면 붐 반대쪽으로 갔다 돌아오는
+        # U 자 경로가 났다. 후보가 등간격이라 각도 대신 인덱스 차로 센다.
+        gap = max(1, math.ceil(RANK_GAP / (p.search_fov / (p.n_candidates - 1)) - 1e-9))
+        ok, risk = avail.tolist(), seg_risk.tolist()
+        for i in sorted(range(len(ok)), key=lambda i: (abs(i - first), risk[i])):
+            if len(picked) >= k:
+                break
+            if ok[i] and all(abs(i - q) >= gap for q in picked):
+                picked.append(i)
+    return [(float(bearings[i]), cands[i]) for i in picked]
+
+
+def _arc_pick(dri, origin, radius, wp_bearing, prev_pt, prev_bearing,
+              p: PlannerParams, hist_bearing: float | None = None):
+    """_arc_ranked 의 1위 (방위, 점) — 생존자 없으면 None."""
+    ranked = _arc_ranked(dri, origin, radius, wp_bearing, prev_pt, prev_bearing, p,
+                         hist_bearing, k=1)
+    return ranked[0] if ranked else None
 
 
 PIVOT_START_MIN_ANGLE = math.radians(5.0)   # 첫 경로점이 선수와 이보다 가까우면 p1 그대로
+PIVOT_SCAN_STEP = math.radians(15.0)        # 정지 배 1차 생성 실패 시 p1 방향을 훑는 간격
+# 훑을 때 이 거리 [m] 까지 시작 방향 직선이 위험선 위면 그 방향은 건너뛴다 — 곡선의 첫 부분은
+# 시작 접선을 거의 따라가므로(0.3 m 에서 벗어남 ~수 cm) 거기가 막힌 방향은 곡선도 막힌다
+PIVOT_CLEAR = 0.3
 
 
 def generate(dri, boat_xy, boat_yaw: float, boat_vel_xy, waypoint_xy,
@@ -269,70 +344,95 @@ def generate(dri, boat_xy, boat_yaw: float, boat_vel_xy, waypoint_xy,
     """제어점 6개 생성 + spline 샘플링 (§3-2). search_fov 에 답이 없으면 search_fov_fallback
     으로 한 번 더 (막힐 때만 넓히기). 그래도 없으면 None.
 
-    배가 거의 서 있으면(전진 < stationary_surge) p1 을 첫 경로점 쪽으로 돌린 경로를 한 번 더
-    만들어, 곡선 전체가 안전선 안이면 그것을 쓴다 (PlannerParams.stationary_surge 주석).
+    내보내는 경로는 곡선 샘플 전체가 safe_threshold 이하 — check() 를 통과한다 (_generate_once).
+
+    배가 거의 서 있으면(전진 < stationary_surge) 제자리 회전으로 시작 방향을 바꿀 수 있다:
+      · 경로가 있으면 p1 을 첫 경로점 쪽으로 돌린 경로를 한 번 더 만들어 쓴다
+        (PlannerParams.stationary_surge 주석)
+      · 선수 방향으로는 경로가 없으면(배 → p1 이 막힘 등) p1 방향을 waypoint 방위 ±90° 안에서
+        PIVOT_SCAN_STEP 간격으로 waypoint 에 가까운 순서로 훑는다 — 2026-11-12 감사: 붐 바로
+        앞에 선 배가 선수 쪽 1 m 만 보고 경로 없음 → ESCAPE 를 되풀이했다.
     prev_plan(재계획 때 지금 경로)을 주면 후보가 그 경로 쪽을 유지하려 한다 (w_hist)."""
     kw = dict(goal_heading=goal_heading, terminal_handle_m=terminal_handle_m,
-              prev_plan=prev_plan)
-    plan = _generate_wide(dri, boat_xy, boat_yaw, boat_vel_xy, waypoint_xy, p, now_t, **kw)
-    if plan is None or p.stationary_surge <= 0.0:
+              prev_plan=prev_plan, budget=_Budget(WORK_BUDGET))
+    args = (dri, boat_xy, boat_yaw, boat_vel_xy, waypoint_xy, p, now_t)
+    plan = _generate_wide(*args, **kw)
+    if p.stationary_surge <= 0.0:
         return plan
     hdg = np.array([math.cos(boat_yaw), math.sin(boat_yaw)])
     if float(np.asarray(boat_vel_xy, dtype=np.float64) @ hdg) >= p.stationary_surge:
         return plan
+    if plan is not None:
+        return _pivot_start(plan, args, kw)
+    wp_bearing = math.atan2(waypoint_xy[1] - boat_xy[1], waypoint_xy[0] - boat_xy[0])
+    n = int(round(0.5 * p.search_fov_fallback / PIVOT_SCAN_STEP))
+    dirs = [_wrap(wp_bearing + s * k * PIVOT_SCAN_STEP) for k in range(n + 1) for s in (1, -1)
+            if k > 0 or s > 0]
+    dirs.sort(key=lambda d: (round(abs(_wrap(d - wp_bearing)), 9), abs(_wrap(d - boat_yaw))))
+    boat = np.asarray(boat_xy, dtype=np.float64)
+    ss = np.linspace(0.1, PIVOT_CLEAR, 3)
+    for d in dirs:
+        if abs(_wrap(d - boat_yaw)) < PIVOT_START_MIN_ANGLE:
+            continue                       # 선수 방향은 위에서 이미 해 봤다
+        if np.any(dri.risk_at_many(boat[0] + ss * math.cos(d), boat[1] + ss * math.sin(d))
+                  > p.safe_threshold):
+            continue                       # 시작부터 막힌 방향 — 작업 상한을 안 쓴다
+        # 훑기는 방향마다 최저 비용 곡선 하나만 (되돌아가기 없음) — 실패한 방향마다
+        # 되돌아가기를 하면 방향 하나에 상한의 절반(~40)을 써서 2~3 방향 만에 상한이 찼다
+        alt = _generate_wide(*args, p1_dir=d, ranked=1, **kw)
+        if alt is not None:
+            return _pivot_start(alt, args, kw, d)
+        if kw['budget'].left <= 0:
+            break                          # 작업 상한 — 다음 tick 에 다시
+    return None
+
+
+def _pivot_start(plan, args, kw, p1_dir=None):
+    """p1 을 첫 경로점(p2) 쪽으로 돌린 경로 — 안 되면 받은 plan 그대로."""
+    boat_xy, boat_yaw = args[1], args[2]
     first = plan.cps[2] - np.asarray(boat_xy, dtype=np.float64)
     start_dir = math.atan2(first[1], first[0])
-    if abs(_wrap(start_dir - boat_yaw)) < PIVOT_START_MIN_ANGLE:
+    now_dir = boat_yaw if p1_dir is None else p1_dir
+    if abs(_wrap(start_dir - now_dir)) < PIVOT_START_MIN_ANGLE:
         return plan
-    alt = _generate_wide(dri, boat_xy, boat_yaw, boat_vel_xy, waypoint_xy, p, now_t,
-                         p1_dir=start_dir, **kw)
-    if alt is None or np.any(dri.risk_at_many(alt.samples[:, 0], alt.samples[:, 1])
-                             > p.safe_threshold):
-        return plan
-    return alt
+    alt = _generate_wide(*args, p1_dir=start_dir, **kw)
+    return plan if alt is None else alt
 
 
 def _generate_wide(dri, boat_xy, boat_yaw, boat_vel_xy, waypoint_xy, p, now_t,
-                   p1_dir=None, **kw):
-    """search_fov 로 생성, 없으면 search_fov_fallback 으로 한 번 더 (+ 수리 확인)."""
+                   p1_dir=None, budget=None, ranked=RANKED_PER_ARC, **kw):
+    """search_fov 로 생성, 없으면 search_fov_fallback 으로 한 번 더.
+    넓은 부채꼴은 제어점이 크게 꺾여 곡선이 장애물 모서리를 질러가기 쉽지만, 완성 곡선
+    검사·되돌아가기(_generate_once)가 그런 곡선을 내보내지 않는다.
+    기본 부채꼴은 남은 작업 상한의 절반까지만 — 막다른 arc 를 되돌아가며 상한을 다 써서
+    넓은 부채꼴은 돌아 보지도 못한 장면이 있었다 (1500 장면 중 예전엔 안전 경로를 냈는데
+    지금 못 내는 장면 3 → 1, 정지 배 훑기를 가볍게 한 뒤 0)."""
+    budget = _Budget(WORK_BUDGET) if budget is None else budget
+    wide = p.search_fov_fallback > p.search_fov
+    share = _Budget(budget.left // 2 if wide else budget.left)
+    given = share.left
     plan = _generate_once(dri, boat_xy, boat_yaw, boat_vel_xy, waypoint_xy, p, now_t,
-                          p1_dir=p1_dir, **kw)
-    if plan is None and p.search_fov_fallback > p.search_fov:
+                          p1_dir=p1_dir, budget=share, ranked=ranked, **kw)
+    budget.left -= given - share.left
+    if plan is None and wide:
         plan = _generate_once(dri, boat_xy, boat_yaw, boat_vel_xy, waypoint_xy,
                               replace(p, search_fov=p.search_fov_fallback), now_t,
-                              p1_dir=p1_dir, **kw)
-        # 넓은 부채꼴은 제어점이 크게 꺾여 곡선이 장애물 모서리를 질러갈 수 있다 — 수리
-        # (제어점 ±repair_dtheta 이동)를 몇 번 해 보고, 곡선 샘플 전체가 안전선 안일 때만
-        # 내보낸다 (아니면 예전처럼 계획 없음)
-        plan = _repaired_or_none(plan, dri, replace(p, search_fov=p.search_fov_fallback))
+                              p1_dir=p1_dir, budget=budget, ranked=ranked, **kw)
     return plan
-
-
-FALLBACK_REPAIRS = 8   # 넓혀 만든 계획에 생성 직후 해 보는 수리 횟수 상한 (각 ms 단위)
-
-
-def _repaired_or_none(plan, dri, p):
-    if plan is None:
-        return None
-    for _ in range(FALLBACK_REPAIRS + 1):
-        bad = np.nonzero(dri.risk_at_many(plan.samples[:, 0], plan.samples[:, 1])
-                         > p.safe_threshold)[0]
-        if bad.size == 0:
-            plan.progress_idx = 0
-            return plan
-        if not repair(plan, dri, int(bad[0]), p):
-            return None
-    return None
 
 
 def _generate_once(dri, boat_xy, boat_yaw: float, boat_vel_xy, waypoint_xy,
                    p: PlannerParams, now_t: float = 0.0, *, goal_heading: float | None = None,
                    terminal_handle_m: float = .75, p1_dir: float | None = None,
-                   prev_plan: Plan | None = None) -> Plan | None:
+                   prev_plan: Plan | None = None, budget: _Budget | None = None,
+                   ranked: int = RANKED_PER_ARC) -> Plan | None:
     """generate 의 한 번 시도 — 부채꼴 폭은 p.search_fov.
 
     p1_dir: p1 방향 [rad]. None 이면 선수(boat_yaw). 정지한 배는 generate 가 첫 경로점 쪽을 준다.
+    budget: generate() 1회가 나눠 쓰는 작업 상한 (WORK_BUDGET). 다 쓰면 None.
+    ranked: arc 마다 시도할 후보 수 (1 = 되돌아가기 없이 최저 비용 곡선만 검사).
     """
+    budget = _Budget(WORK_BUDGET) if budget is None else budget
     boat = np.asarray(boat_xy, dtype=np.float64)
     vel = np.asarray(boat_vel_xy, dtype=np.float64)
     # p1 방향 = heading, 길이 = surge(전진 성분)·t_look (§3-2).
@@ -388,52 +488,101 @@ def _generate_once(dri, boat_xy, boat_yaw: float, boat_vel_xy, waypoint_xy,
     # 키우면 이 부등식이 깨질 수 있음(arc 4개 고정) — 그때 재검토.
     # r1 은 Plan.r1 로 저장만 하고 재생성 트리거 (a) 전용으로 쓴다.
     radii = [p1_len + k * (r_end - p1_len) / 4.0 for k in (1, 2, 3, 4)]
-    if r1 is None:
-        bearings = [wp_bearing] * 4   # R7 — 전방 부채꼴에 장애물 없음, 직선
-    else:
-        bearings = []
-        prev_pt = p1                  # 선분 필터의 시작점 사슬: p1 → p2 → …
-        prev_b = p1_yaw               # 첫 arc 의 연속성 기준 = p1 방향 (보통 heading)
-        for j, r in enumerate(radii):
-            if heading_locked and j==2:
-                segment=np.linspace(prev_pt,terminal_control,16)
-                if np.any(dri.risk_at_many(segment[:,0],segment[:,1])>p.safe_threshold*p.gen_margin):return None
-                prev_pt=terminal_control
-                bearings.append(math.atan2(prev_pt[1]-boat[1],prev_pt[0]-boat[0]))
-                continue
-            if goal_locked and j == 3:
-                segment = np.linspace(prev_pt, wp, 16)
-                risk = dri.risk_at_many(segment[:, 0], segment[:, 1])
-                if np.any(risk > p.safe_threshold * p.gen_margin):
-                    return None
-                bearings.append(wp_bearing)
-                break
-            picked = _arc_pick(dri, boat, r, wp_bearing, prev_pt, prev_b, p,
-                               _plan_bearing_at(prev_plan, boat, r))
-            if picked is None:
-                return None            # 안전 후보 전멸 → 호출측이 ESCAPE)
-            b, prev_pt = picked
-            bearings.append(b)
-            prev_b = b
-
-    cps = np.vstack([boat, p1]
-                    + [boat + r * np.array([math.cos(b), math.sin(b)])
-                       for r, b in zip(radii, bearings)])
-    if goal_locked:
-        cps[-1] = wp
-    if heading_locked:
-        cps[-2]=terminal_control
-        radii[-2]=float(np.linalg.norm(terminal_control-boat))
-        bearings[-2]=math.atan2(terminal_control[1]-boat[1],terminal_control[0]-boat[0])
     spacing = 0.5 * res
-    samples=_sample_spline(cps,spacing)
-    if heading_locked and np.any(dri.risk_at_many(samples[:,0],samples[:,1])>p.safe_threshold*p.gen_margin):return None
-    return Plan(cps=cps, samples=samples,
-                origin=(float(boat[0]), float(boat[1])), r1=r1,
-                radii=radii, bearings=bearings, created_t=now_t,
-                wp_bearing=wp_bearing, spacing=spacing, goal_locked=goal_locked,
-                terminal_heading=goal_heading if heading_locked else None,
-                search_fov=p.search_fov)
+    gen_limit = p.safe_threshold * p.gen_margin
+    # 완성 곡선 합격선 = check() 와 같은 safe_threshold (도킹 마지막 정렬은 예전대로 gen_margin)
+    curve_limit = gen_limit if heading_locked else p.safe_threshold
+
+    # 배 → p1 구간은 직선이 아니라 완성 곡선 검사(finish)가 본다 — 예전엔 선분 사슬이 p1 에서
+    # 시작해 이 구간을 아무도 안 봤다 (2026-11-12 감사: 정지한 배 정면 0.7 m 장애물 칸을 지나는
+    # 경로를 그대로 냈다). 배 → p1 직선으로 거르면 안 된다: 곡선은 p1 을 지나지 않고 p2 쪽으로
+    # 일찍 휘므로, p1 이 위험 칸 안이어도 곡선은 안전한 경우가 무작위 1500 장면 중 21 개였다.
+    # 배 자리부터 위험선 위면(장애물 ~0.6 m 안) 어떤 곡선도 첫 샘플에서 걸린다 — 바로 None.
+    if dri.risk_at(float(boat[0]), float(boat[1])) > curve_limit:
+        return None
+
+    def finish(choice):
+        """p2~p5 [(방위, 점)] → (Plan, None, None). 곡선 위반이면 (None, 첫 위반 샘플, 호길이 표)."""
+        cps = np.vstack([boat, p1] + [pt for _, pt in choice])
+        dense, cum = _dense_spline(cps)
+        samples = _resample(dense, cum, spacing)
+        bad = np.nonzero(dri.risk_at_many(samples[:, 0], samples[:, 1]) > curve_limit)[0]
+        if bad.size:
+            return None, int(bad[0]), cum
+        rr = list(radii)
+        if heading_locked:
+            rr[2] = float(np.linalg.norm(terminal_control - boat))
+        return Plan(cps=cps, samples=samples,
+                    origin=(float(boat[0]), float(boat[1])), r1=r1,
+                    radii=rr, bearings=[b for b, _ in choice], created_t=now_t,
+                    wp_bearing=wp_bearing, spacing=spacing, goal_locked=goal_locked,
+                    terminal_heading=goal_heading if heading_locked else None,
+                    search_fov=p.search_fov), None, None
+
+    def fixed_choice(pt):
+        return (math.atan2(pt[1] - boat[1], pt[0] - boat[0]), pt)
+
+    if r1 is None:
+        # R7 — 전방 부채꼴(±bearing_max)에 장애물 없음: waypoint 쪽 직선. 곡선 검사를 통과할
+        # 때만 — 선수 뒤쪽 waypoint 로 돌아가는 곡선은 부채꼴 밖 장애물을 지날 수 있다
+        straight = [(wp_bearing, boat + r * np.array([math.cos(wp_bearing), math.sin(wp_bearing)]))
+                    for r in radii]
+        if goal_locked:
+            straight[3] = (wp_bearing, wp)
+        if heading_locked:
+            straight[2] = fixed_choice(terminal_control)
+        budget.spend()
+        plan, _, _ = finish(straight)
+        if plan is not None:
+            return plan
+
+    # 제어점 고르기 + 되돌아가기. 각 arc 는 _arc_ranked 순위대로 시도하고, 완성 곡선이
+    # 위반이면 그 위반 지점의 곡선을 가장 크게 움직이는 arc(기저 가중치 최대)의 다음 순위로
+    # 바꿔 뒤 arc 를 다시 고른다. 다음 순위가 없으면 한 arc 앞으로. 최저 비용 곡선이 안전하면
+    # 예전과 같은 경로다. 곡선 MAX_CURVES 개 안에 없으면 None (→ 호출측이 넓히기/ESCAPE).
+    hist = [_plan_bearing_at(prev_plan, boat, r) for r in radii]
+    opts = [None] * 4                  # arc j 의 [(방위, 점)] 순위 — 앞 arc 가 바뀌면 다시 계산
+    idx = [0] * 4
+
+    def options(j):
+        prev_pt, prev_b = (p1, p1_yaw) if j == 0 else (opts[j - 1][idx[j - 1]][1],
+                                                       opts[j - 1][idx[j - 1]][0])
+        if goal_locked and j == 3:     # 마커 목표 — 고르는 것 없이 직선 검사만
+            return [(wp_bearing, wp)] if _chord_risk(dri, prev_pt, wp)[0] <= gen_limit else []
+        if heading_locked and j == 2:  # 도킹 정렬점 — 같은 식
+            ok = _chord_risk(dri, prev_pt, terminal_control)[0] <= gen_limit
+            return [fixed_choice(terminal_control)] if ok else []
+        budget.spend()
+        return _arc_ranked(dri, boat, radii[j], wp_bearing, prev_pt, prev_b, p, hist[j],
+                           k=ranked)
+
+    j = curves = 0
+    while True:
+        while j < 4:                   # 앞으로 채우기
+            if budget.left <= 0:
+                return None
+            if opts[j] is None:
+                opts[j] = options(j)
+            if idx[j] < len(opts[j]):
+                j += 1
+                continue
+            opts[j], idx[j] = None, 0  # 이 arc 후보 소진 → 한 arc 앞의 다음 순위
+            j -= 1
+            if j < 0:
+                return None            # 안전 후보 전멸 → 호출측이 넓히기/ESCAPE
+            idx[j] += 1
+        budget.spend()
+        plan, bad, cum = finish([opts[q][idx[q]] for q in range(4)])
+        if plan is not None:
+            return plan
+        curves += 1
+        if curves >= MAX_CURVES:
+            return None
+        u = float(np.interp(bad * spacing, cum, _U_DENSE))
+        j = int(np.argmax(_BASIS(u)[2:]))          # 위반 지점을 가장 크게 움직이는 arc
+        for q in range(j + 1, 4):
+            opts[q], idx[q] = None, 0
+        idx[j] += 1
 
 
 def generate_docking(dri, boat_xy, boat_yaw, boat_vel_xy, waypoints_xy, goal_heading,

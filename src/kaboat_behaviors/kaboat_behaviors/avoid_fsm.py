@@ -391,7 +391,7 @@ class AvoidFsm:
         generate 만 재시도한다 — 선미 사각지대(라이다 120°)로 근거 없이
         후진하지 않는다."""
         f = self.fsm
-        new = self.generate(dri, boat_xy, yaw, vel_xy, wp_xy, self.p, now_t)
+        new = self._new_plan(dri, boat_xy, yaw, vel_xy, wp_xy, now_t)
         self._escape_ok = self._escape_ok + 1 if new is not None else 0
         if self._retrace is not None:
             self._retrace_idx = retrace_progress(
@@ -421,9 +421,18 @@ class AvoidFsm:
         """FOLLOW 중 재계획 — 지금 경로를 prev_plan 으로 넘겨 같은 쪽을 유지 (w_hist).
         생성 함수가 prev_plan 을 못 받으면(테스트용 대체 함수 등) 예전처럼."""
         if self._gen_takes_prev:
-            return self.generate(dri, boat_xy, yaw, vel_xy, wp_xy, self.p, now_t,
-                                 prev_plan=self.plan)
-        return self.generate(dri, boat_xy, yaw, vel_xy, wp_xy, self.p, now_t)
+            return self._new_plan(dri, boat_xy, yaw, vel_xy, wp_xy, now_t, prev_plan=self.plan)
+        return self._new_plan(dri, boat_xy, yaw, vel_xy, wp_xy, now_t)
+
+    def _new_plan(self, dri, boat_xy, yaw, vel_xy, wp_xy, now_t, **kw):
+        """generate 결과를 같은 tick check() 에 통과할 때만 쓴다 — 아니면 None (생성 실패와 같음).
+        2026-11-12 감사: 위반 재생성·트리거·백스톱·ESCAPE 복귀가 새 경로를 검사 없이 채택해,
+        생성기가 낸 위반 경로(무작위 장면 6 %)를 배가 그대로 따라갔다. bspline_planner.generate 는
+        이제 위반 경로를 내지 않지만, 대체 생성 함수(도킹 등)까지 같은 선으로 막는다."""
+        new = self.generate(dri, boat_xy, yaw, vel_xy, wp_xy, self.p, now_t, **kw)
+        if new is not None and check(new, dri, boat_xy, self.p) is not None:
+            return None
+        return new
 
     def _escape_hold(self, ev: str) -> StepOut:
         """되짚을 길이 없음 — 정지하고 generate 재시도만 (이벤트는 처음 1회)."""
@@ -438,7 +447,7 @@ class AvoidFsm:
         # ── plan 없음 (활성화 직후 포함): 정지 + 확보 시도, t_retry → ESCAPE.
         # 성공해도 이번 tick 은 정지 — 추종은 다음 tick 부터 (§4 흐름 그대로).
         if self.plan is None:
-            self.plan = self.generate(dri, boat_xy, yaw, vel_xy, wp_xy, self.p, now_t)
+            self.plan = self._new_plan(dri, boat_xy, yaw, vel_xy, wp_xy, now_t)
             if self.plan is not None:
                 self._no_plan_t0 = None
                 return StepOut(0.0, 0.0, self.state, self.plan, 'plan_acquired')

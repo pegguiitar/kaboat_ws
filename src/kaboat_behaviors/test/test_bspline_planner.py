@@ -484,3 +484,110 @@ def test_replan_returns_straight_when_obstacle_is_gone():
     plan = generate(dri_of([(4.0, 3.0)]), BOAT, YAW, (1.0, 0.0), WP_FAR, PlannerParams(),
                     prev_plan=_left_plan())
     assert abs(_side(plan)) < 0.1
+
+
+# ---------- 완성 곡선 검사 + 되돌아가기 (2026-11-12) ----------
+
+def _random_scene(rng):
+    """감사 장면: 배 앞 1.8~5 m 의 비스듬한 붐(2~8 m) + 부표 0~4개, 선수 ±34°, 목표 20~60 m."""
+    cx, cy = rng.uniform(1.8, 5.0), rng.uniform(-2.0, 2.0)
+    ang = rng.uniform(-1.2, 1.2) + math.pi / 2
+    half = 0.5 * rng.uniform(2.0, 8.0)
+    occ = [(cx + t * math.cos(ang), cy + t * math.sin(ang))
+           for t in np.arange(-half, half + 1e-9, 0.1)]
+    occ += [(rng.uniform(-1.0, 7.0), rng.uniform(-5.0, 5.0)) for _ in range(rng.integers(0, 5))]
+    return occ, rng.uniform(-0.6, 0.6), (rng.uniform(20.0, 60.0), rng.uniform(-15.0, 15.0))
+
+
+def _count_curves(monkeypatch):
+    import kaboat_behaviors.bspline_planner as bp
+    n = [0]
+    orig = bp._dense_spline
+
+    def counted(cps):
+        n[0] += 1
+        return orig(cps)
+    monkeypatch.setattr(bp, '_dense_spline', counted)
+    return n
+
+
+def test_generated_path_always_passes_check_in_random_scenes(monkeypatch):
+    """예전 생성은 제어점 사이 선분만 보고 곡선은 안 봐서, 만들자마자 check() 위반인 경로를
+    냈다 (감사 1500 장면 중 82 개 — 이 100 장면에선 14 개). 이제 완성 곡선을 검사하고 위반이면
+    되돌아가 옆 후보로 바꾸므로 생성 경로는 위반이 없다. 움직이는 배(제자리 회전 시작 없음)라
+    곡선을 2개 이상 그린 장면 = 첫 곡선이 위반이라 되돌아가기로 구한 장면."""
+    curves = _count_curves(monkeypatch)
+    p = PlannerParams()
+    rng = np.random.default_rng(3)
+    plans = rescued = 0
+    for _ in range(100):
+        occ, yaw, wp = _random_scene(rng)
+        dri = dri_of(occ, yaw=yaw)
+        curves[0] = 0
+        plan = generate(dri, BOAT, yaw, (0.8 * math.cos(yaw), 0.8 * math.sin(yaw)), wp, p)
+        if plan is None:
+            continue
+        plans += 1
+        rescued += curves[0] > 1
+        assert check(plan, dri, BOAT, p) is None
+    assert plans >= 90 and rescued >= 10, (plans, rescued)
+
+
+def test_stationary_cell_dead_ahead_starts_sideways():
+    """정지한 배 정면 0.7 m 에 점유 칸 하나 (물보라·부표). 예전: 배 → p1(선수 1 m) 구간을 아무도
+    안 봐서 칸을 0.01 m 로 지나는 경로를 냈고, FSM 이 위반 재생성을 검사 없이 채택해 그대로
+    전진했다 (폐루프 최소 거리 0.06 m). 지금: 제자리 회전으로 옆으로 시작, 칸에서 0.45 m 이상."""
+    occ = [(0.7, 0.0)]
+    dri = dri_of(occ)
+    p = PlannerParams()
+    plan = gen(dri, vel=V_ZERO, wp=(40.0, 0.0))
+    assert plan is not None and check(plan, dri, BOAT, p) is None
+    d1 = plan.cps[1] - plan.cps[0]
+    assert abs(math.degrees(math.atan2(d1[1], d1[0]))) >= 45.0
+    assert np.min(np.hypot(*(plan.samples - np.array(occ[0])).T)) > 0.45
+
+
+def test_moving_into_cell_dead_ahead_has_no_path():
+    """같은 칸에 0.5 m/s 로 다가가는 중 — 선수 접선을 못 바꾸니 안전 곡선이 없다 → None
+    (예전엔 칸을 지나는 경로). FSM 은 멈춘 채 확인 → ESCAPE."""
+    dri = dri_of([(0.7, 0.0)])
+    assert gen(dri, vel=(0.5, 0.0), wp=(40.0, 0.0)) is None
+
+
+def test_boat_inside_risk_bubble_gives_none_without_search(monkeypatch):
+    """배 자리부터 위험선 위(장애물 ~0.6 m 안) — 어떤 곡선도 첫 샘플에서 걸리므로 곡선을
+    그려 보지도 않고 None."""
+    curves = _count_curves(monkeypatch)
+    dri = dri_of([(0.3, 0.0)])
+    assert dri.risk_at(0.0, 0.0) > PlannerParams().safe_threshold
+    assert gen(dri, vel=V_ZERO) is None and gen(dri) is None
+    assert curves[0] == 0
+
+
+def test_surrounded_stationary_boat_work_is_bounded(monkeypatch):
+    """사방이 막힌 정지 배: 시작 방향 13개 × 부채꼴 2개를 다 훑으면 270 ms 까지 걸렸다 — FSM 은
+    경로 없음·ESCAPE 동안 매 tick generate 하므로 작업(후보 순위 + 곡선)을 WORK_BUDGET 으로 묶는다."""
+    import kaboat_behaviors.bspline_planner as bp
+    work = [0]
+    for name in ('_dense_spline', '_arc_ranked'):
+        orig = getattr(bp, name)
+
+        def counted(*a, _orig=orig, **k):
+            work[0] += 1
+            return _orig(*a, **k)
+        monkeypatch.setattr(bp, name, counted)
+    ring = [(2.5 * math.cos(a), 2.5 * math.sin(a)) for a in np.linspace(-math.pi, math.pi, 80)]
+    assert gen(dri_of(ring), vel=V_ZERO) is None
+    assert 0 < work[0] <= bp.WORK_BUDGET + 1
+
+
+def test_backtracking_alternatives_are_next_to_the_first_pick():
+    """되돌아갈 때 쓰는 2위 이하 후보는 1위 양옆으로 RANK_GAP 씩 비킨 것 — 부채꼴 아무 데서나
+    고르면 붐 반대쪽으로 갔다 돌아오는 U 자 경로(곡률 5.7)가 났다."""
+    from kaboat_behaviors.bspline_planner import RANK_GAP, _arc_ranked
+    p = PlannerParams()
+    ranked = _arc_ranked(dri_of([]), np.zeros(2), 3.0, 0.0, np.array([1.0, 0.0]), 0.0, p, k=5)
+    offs = sorted(round(math.degrees(b - ranked[0][0])) for b, _ in ranked[1:])
+    gap = round(math.degrees(RANK_GAP))
+    assert ranked[0][0] == pytest.approx(0.0)
+    assert offs == [-2 * gap, -gap, gap, 2 * gap]
