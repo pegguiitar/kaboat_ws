@@ -13,10 +13,10 @@ base_link→카메라 TF 를 안 띄우고, `cam_height` 는 흘수선 기준이
 
 | buoy_detector 파라미터 (`BuoyGeometry`) | 이 브랜치 값 | 기준 (competition) | 2026-11-12 오후 competition 값 |
 |---|---|---|---|
-| `cam_offset_x` | -0.33 | `camera_obstacles.py` `CameraObstacleParams.offset_x` (occupancy_grid 카메라 층 `cam_offset_x`) | -0.33 |
+| `cam_offset_x` | ~~-0.33~~ → **-0.215** (2026-11-12 반영) | `camera_obstacles.py` `CameraObstacleParams.offset_x` (occupancy_grid 카메라 층 `cam_offset_x`) | **-0.215** (`camera_mount.py`: 라이다 0.4 − 0.615, 2026-11-12 실측) |
 | `cam_offset_y` | 0.0 | 〃 `offset_y` | 0.0 |
-| `cam_height` | **0.85** | 〃 `height` | **0.775** (다시 수평으로 단 뒤 실측) |
-| `cam_mount_pitch_deg` | **10.0** | 〃 `mount_pitch_deg` | **0.0** (10° 숙임 → 다시 수평) |
+| `cam_height` | ~~0.85~~ → **0.775** (반영) | 〃 `height` | **0.775** (다시 수평으로 단 뒤 실측) |
+| `cam_mount_pitch_deg` | ~~10.0~~ → **0.0** (반영) | 〃 `mount_pitch_deg` | **0.0** (10° 숙임 → 다시 수평) |
 | `lidar_offset_x` | 0.4 | `occupancy_grid.py` `lidar_offset_x` (= `gate_follower`·`station_keeper`·`odom_tf_broadcaster`·launch 의 base_link→라이다 TF) | 0.4 |
 | `lidar_offset_y` | 0.0 | 〃 `lidar_offset_y` | 0.0 |
 

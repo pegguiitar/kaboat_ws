@@ -43,13 +43,12 @@ from kaboat_perception.camera_obstacles import (
 
 @dataclass
 class BuoyGeometry:
-    # ⚠️ 장착값(cam_*·lidar_offset_*)은 브랜치를 딴 시점 값 — competition 에 merge 할 때
-    # camera_obstacles·occupancy_grid 의 값으로 맞출 것 (BUOY_DETECTOR.md 표 참고).
-    # 카메라 장착 — occupancy_grid 의 cam_* (camera_obstacles) 와 같은 값이어야 한다.
-    cam_offset_x: float = -0.33
+    # 카메라 장착 — competition 의 camera_mount.py 실측값 (2026-11-12 오후, 다시 수평 장착).
+    # competition 에 merge 하면 camera_mount.CAMERA_* 를 import 해서 쓰도록 바꿀 것.
+    cam_offset_x: float = -0.215      # 선체 중심 기준 (라이다 0.4 − 0.615)
     cam_offset_y: float = 0.0
-    cam_height: float = 0.85          # 흘수선에서 렌즈까지 [m] (2026-11-12 실측)
-    cam_mount_pitch_deg: float = 10.0  # + = 아래 (2026-11-12 10° 숙임)
+    cam_height: float = 0.775         # 흘수선에서 렌즈까지 [m]
+    cam_mount_pitch_deg: float = 0.0  # + = 아래 (수평)
     # 선체 라이다 — occupancy_grid·gate_follower 의 lidar_offset_x/y 와 같은 값.
     lidar_offset_x: float = 0.4
     lidar_offset_y: float = 0.0
