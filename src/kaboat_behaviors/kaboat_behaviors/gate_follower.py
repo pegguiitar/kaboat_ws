@@ -2,6 +2,12 @@
 
 Each aperture supplies a mandatory centre crossing. The free-form obstacle
 avoidance planner is not used because it can route around a gate.
+
+게이트 사슬 (2026-11-12): 지도 부표 덩어리를 기억(gate_memory.PostMemory)해 두고, 지금
+게이트(사슬 첫 칸) 다음 게이트를 그 기억으로 미리 골라 경로를 배 → 중점들 → 마지막 게이트
+뒤로 이어 둔다(max_chain_gates 까지). 지금 게이트를 기둥 사이로 지나면 경로를 새로 만들지
+않고 바로 다음 칸으로 넘어간다. 다음 게이트를 못 찾거나 이은 경로가 검사에 걸리면 예전처럼
+게이트 하나씩 간다.
 """
 
 import dataclasses
@@ -21,15 +27,17 @@ from .behavior_base import BehaviorBase, yaw_from_quaternion
 from .los_controller import LOS_TURN_RATIO
 from .dri import DriParams, build_dri
 from .gate_corridor import (
-    GateParams, describe_reasons, gate_crossing, lookahead_chord_safe, make_gate_path,
-    pair_observed, path_safe, points_observed, points_safe, scan_hits_world,
-    select_gate_pair)
+    GateParams, describe_reasons, gate_crossing, grid_posts, lookahead_chord_safe,
+    make_chain_path, make_gate_path, next_gate_after, pair_observed, path_ahead, path_safe,
+    points_observed_or_seen, points_safe, scan_hits_world, scan_rays,
+    select_gate_pair_from_posts)
+from .gate_memory import PostMemory
 
 
 def _xy(point) -> str:
     return f'({point[0]:.2f}, {point[1]:.2f})'
 
-GATE_LOS_THRUST_RATIO = 0.4   # 게이트 통과(LOS) 직진 상한 — config/gate_params.yaml 과 같게
+GATE_LOS_THRUST_RATIO = 0.3   # 게이트 통과(LOS) 직진 상한 — config/gate_params.yaml 과 같게
 
 
 class GateFollower(BehaviorBase):
@@ -41,8 +49,10 @@ class GateFollower(BehaviorBase):
         self.gate_params = self._params_from('gate', GateParams)
         self.dri_params = self._params_from('dri', DriParams)
         self.declare_parameter('gate.thrust_ratio', 0.5)       # waypoint(접근) 구간
-        # LOS 경로 추종 구간: 직진 0.4·회전 0.31 상한. 직진은 야외 바람 때문에 공용 LOS
-        # SOTA 0.25(약 1619 µs)에서 0.4(약 1675 µs, goto 기본과 같음)로 올림(2026-11-12).
+        # LOS 경로 추종 구간: 직진 0.3·회전 0.31 상한. 직진은 야외 바람 때문에 공용 LOS
+        # SOTA 0.25(약 1619 µs)에서 0.4(약 1675 µs)로 올렸다가(2026-11-12 오전) 0.3(약 1637 µs)
+        # 으로 내림(2026-11-12 오후): 0.4 는 실측 약 1.0 m/s 라 간격 3~4 m 게이트 사이가 3~4초 —
+        # 옆으로 어긋난 다음 게이트로 S 자로 옮기기에 빠름.
         # 회전 상한·요 게인·lookahead 는 공용 LOS SOTA 값 그대로.
         self.declare_parameter('gate.los_thrust_ratio', GATE_LOS_THRUST_RATIO)
         self.declare_parameter('gate.los_turn_ratio', LOS_TURN_RATIO)
@@ -92,6 +102,7 @@ class GateFollower(BehaviorBase):
 
         self._scan_at = None
         self._scan_hits = None
+        self._scan_rays = None       # 지금 스캔 빔 — 지도 unknown 칸을 빔이 지나 봤는지
         self._grid_at = None
         self._pair = None
         self._path = None
@@ -102,6 +113,14 @@ class GateFollower(BehaviorBase):
         self._status_text = None
         self._stall_since = None
         self._rejected = []          # [(midpoint, 다시 후보가 되는 시각)]
+        self._chain = []             # 미리 고른 게이트들 — [0] 이 지금 게이트(_pair)
+        self._memory_grid = None     # 기억에 마지막으로 넣은 지도 메시지
+        self._extend_block_until = 0.0   # 이은 경로가 검사에 걸려 줄인 뒤 잠깐 다시 잇지 않음
+        p = self.gate_params
+        self._memory = PostMemory(
+            match_radius=p.memory_match_radius, confirm_hits=p.memory_confirm_hits,
+            forget_sec=p.memory_forget_sec, recheck_range=p.memory_recheck_range,
+            prune_range=p.memory_prune_range)
 
         self.path_pub = self.create_publisher(Path, '/gate/path', 1)
         self.pair_pub = self.create_publisher(MarkerArray, '/gate/pairs', 1)
@@ -115,7 +134,8 @@ class GateFollower(BehaviorBase):
             f'thrust_ratio={self.thrust_ratio:.2f}, '
             f'los_thrust_ratio={self.los_thrust_ratio:.2f}, '
             f'los_turn_ratio={self.los_turn_ratio:.2f}, '
-            f'motion_enabled={self.motion_enabled}')
+            f'motion_enabled={self.motion_enabled}, 게이트 사슬 {p.max_chain_gates}개, '
+            f'부표 기억 {p.memory_confirm_hits}번 잡히면 확정')
 
     def _params_from(self, prefix, cls):
         defaults = cls()
@@ -136,6 +156,10 @@ class GateFollower(BehaviorBase):
         self._status_text = None
         self._stall_since = None
         self._rejected = []
+        self._chain = []
+        self._memory.reset()
+        self._memory_grid = None
+        self._extend_block_until = 0.0
 
     def on_deactivate(self):
         self._pair = None
@@ -143,6 +167,7 @@ class GateFollower(BehaviorBase):
         self._previous_xy = None
         self._crossed = False
         self._stall_since = None
+        self._chain = []
 
     def _on_grid(self, msg: OccupancyGrid):
         super()._on_grid(msg)
@@ -157,6 +182,9 @@ class GateFollower(BehaviorBase):
             if len(hits) == 0:
                 return
             self._scan_hits = hits
+            self._scan_rays = scan_rays(
+                msg, (pose.position.x, pose.position.y),
+                yaw_from_quaternion(pose.orientation), self.lidar_offset)
             self._scan_at = time.monotonic()
 
     def _status(self, value):
@@ -181,6 +209,7 @@ class GateFollower(BehaviorBase):
     def _drop_pair(self):
         self._pair = None
         self._path = None
+        self._chain = []
         self._previous_xy = None
         self._crossed = False
         self._stall_since = None
@@ -194,7 +223,7 @@ class GateFollower(BehaviorBase):
         return bool(np.any(np.sum((hits - np.asarray(post)) ** 2, axis=1)
                            <= self.gate_params.scan_match_radius ** 2))
 
-    def _mark_passed(self, how='경로 끝 도달'):
+    def _record_pass(self, how):
         n = len(self._passed_midpoints) + 1
         crossing = getattr(self, '_crossing', None)
         self.get_logger().info(
@@ -203,9 +232,70 @@ class GateFollower(BehaviorBase):
             f'{_xy(crossing) if crossing is not None else "없음"}')
         self._passed_midpoints.append(self._pair.midpoint)
         self._passed_directions.append(self._pair.direction)
+
+    def _mark_passed(self, how='경로 끝 도달'):
+        self._record_pass(how)
         self._drop_pair()
         passed = len(self._passed_midpoints)
         self._status(f'GATE_{passed}/{self.gate_params.required_pairs}_PASSED')
+
+    def _set_current(self, pair):
+        """사슬의 다음 칸을 지금 게이트로 — 경로·LOS 진행은 그대로 둔다."""
+        self._pair = pair
+        self._crossed = False
+        self._crossing = None
+        self._stall_since = None
+
+    def _advance_chain(self, boat):
+        """사슬 안에서 지금 게이트를 기둥 사이로 지남 → 통과로 세고 바로 다음 칸으로."""
+        self._record_pass('기둥 사이 통과 — 이어 둔 다음 게이트로')
+        self._chain.pop(0)
+        self._set_current(self._chain[0])
+        self._previous_xy = boat
+
+    def _extend_chain(self, boat, dri, grid, posts, goal):
+        """기억한 부표로 사슬 끝 게이트의 다음 게이트를 미리 골라 경로를 이어 둔다.
+
+        지금 게이트를 이미 지났으면(경로 끝 1 m 를 가는 중) 그 게이트는 통과로 세고 배에서
+        다음 게이트로 바로 잇는다. 이은 경로가 검사(앞 check_horizon m)에 걸리면 잇지 않는다.
+        """
+        p = self.gate_params
+        if (self._pair is None or not self._chain
+                or time.monotonic() < self._extend_block_until
+                or len(self._chain) - int(self._crossed) >= p.max_chain_gates
+                or len(self._passed_midpoints) + len(self._chain) >= p.required_pairs):
+            return False
+        last = self._chain[-1]
+        before = [*self._passed_midpoints, *(q.midpoint for q in self._chain[:-1])]
+        nxt = next_gate_after(posts, last, goal, before, p,
+                              excluded_midpoints=[m for m, _ in self._rejected])
+        if nxt is None:
+            return False
+        chain = [*self._chain[1:], nxt] if self._crossed else [*self._chain, nxt]
+        path = make_chain_path(boat, chain, p)
+        ahead = path_ahead(path, 0, p.check_horizon)
+        if not (points_safe(dri, ahead, p)
+                and points_observed_or_seen(grid, ahead, self._scan_rays, p)):
+            self.get_logger().info(
+                f'gate: 다음 게이트 {_xy(nxt.midpoint)} 는 찾았지만 이은 경로가 검사에 걸려 '
+                f'아직 안 이음 (배 {_xy(boat)})', throttle_duration_sec=1.0)
+            return False
+        shift = np.asarray(nxt.midpoint) - np.asarray(last.midpoint)
+        d = np.asarray(last.direction)
+        self.get_logger().info(
+            f'gate: 게이트 {len(self._passed_midpoints) + len(self._chain) + 1}/'
+            f'{p.required_pairs} 미리 잡음 — 왼 {_xy(nxt.left)}, 오 {_xy(nxt.right)}, '
+            f'중점 {_xy(nxt.midpoint)}, 폭 {nxt.width:.2f} m, 앞 게이트에서 앞 '
+            f'{float(shift @ d):.1f} m·옆 {float(shift @ np.array([-d[1], d[0]])):+.1f} m; '
+            f'배 {_xy(boat)}, 사슬 {len(chain)}개')
+        if self._crossed:
+            self._record_pass('기둥 사이 통과 — 다음 게이트로 바로 이음')
+            self._set_current(chain[0])
+            self._previous_xy = boat
+        self._chain = chain
+        self._path = path
+        self._los_follower.reset()   # 새 경로 — 진행 위치를 옛 경로 번호로 검사하지 않게
+        return True
 
     def _stall(self, reason, now):
         """같은 쌍으로 진행 못 함 — replan_timeout 넘게 이어지면 쌍을 놓고 다시 고른다.
@@ -275,7 +365,44 @@ class GateFollower(BehaviorBase):
                 marker.color.g = 1.0 if i == 2 else 0.3
                 marker.color.r = 0.1 if i == 2 else 1.0
                 marks.markers.append(marker)
+        # 미리 이어 둔 다음 게이트들 — 노란 공 (중점은 조금 작게)
+        for k, pair in enumerate(self._chain[1:]):
+            for i, point in enumerate((pair.left, pair.right, pair.midpoint)):
+                marks.markers.append(self._sphere(
+                    path.header, 'gate_chain', 3 * k + i, point,
+                    0.2 if i == 2 else 0.3, (1.0, 0.85, 0.1)))
+        # 기억한 부표 — 확정 흰 기둥, 확정 전 회색 (/gate/pairs 에 같이 냄, RViz 설정 그대로)
+        for i, post in enumerate(self._memory.posts):
+            marker = Marker()
+            marker.header = path.header
+            marker.ns, marker.id = 'gate_memory', i
+            marker.type, marker.action = Marker.CYLINDER, Marker.ADD
+            marker.pose.position.x = float(post.xy[0])
+            marker.pose.position.y = float(post.xy[1])
+            marker.pose.position.z = 0.1
+            marker.pose.orientation.w = 1.0
+            marker.scale.x = marker.scale.y = 0.25
+            marker.scale.z = 0.2
+            shade = 1.0 if post.confirmed else 0.5
+            marker.color.r = marker.color.g = marker.color.b = shade
+            marker.color.a = 0.8
+            marks.markers.append(marker)
         self.pair_pub.publish(marks)
+
+    @staticmethod
+    def _sphere(header, ns, marker_id, point, size, rgb):
+        marker = Marker()
+        marker.header = header
+        marker.ns, marker.id = ns, marker_id
+        marker.type, marker.action = Marker.SPHERE, Marker.ADD
+        marker.pose.position.x = float(point[0])
+        marker.pose.position.y = float(point[1])
+        marker.pose.position.z = 0.3
+        marker.pose.orientation.w = 1.0
+        marker.scale.x = marker.scale.y = marker.scale.z = size
+        marker.color.r, marker.color.g, marker.color.b = rgb
+        marker.color.a = 1.0
+        return marker
 
     def _goal_leg_safe(self, dri, grid, boat_xy, goal_xy):
         dx = goal_xy[0] - boat_xy[0]
@@ -289,7 +416,7 @@ class GateFollower(BehaviorBase):
                    boat_xy[1] + t * dy / max(distance, 1e-9))
                   for t in (length * k / (n - 1) for k in range(n))]
         return (points_safe(dri, points, self.gate_params)
-                and points_observed(grid, points))
+                and points_observed_or_seen(grid, points, self._scan_rays, self.gate_params))
 
     def compute_cmd(self):
         now = time.monotonic()
@@ -313,6 +440,11 @@ class GateFollower(BehaviorBase):
         goal = (self.goal.pose.position.x, self.goal.pose.position.y)
         yaw = yaw_from_quaternion(pose.orientation)
         dri = build_dri(grid, boat, yaw, self.dri_params)
+        current = grid_posts(grid, self.gate_params)
+        if grid is not self._memory_grid:          # 새 지도가 왔을 때만 한 번 잡힌 것으로 센다
+            self._memory.update(current, now, boat)
+            self._memory_grid = grid
+        posts = self._memory.with_current(current)
 
         if len(self._passed_midpoints) >= self.gate_params.required_pairs:
             if self.distance_to_goal() <= 2.0:
@@ -331,8 +463,8 @@ class GateFollower(BehaviorBase):
         if self._path is None:
             self._rejected = [(m, until) for m, until in self._rejected if until > now]
             stats = {}
-            pair = select_gate_pair(
-                grid, boat, goal, self._passed_midpoints, self.gate_params,
+            pair = select_gate_pair_from_posts(
+                posts, boat, goal, self._passed_midpoints, self.gate_params,
                 excluded_midpoints=[m for m, _ in self._rejected],
                 last_direction=(self._passed_directions[-1]
                                 if self._passed_directions else None),
@@ -361,6 +493,7 @@ class GateFollower(BehaviorBase):
                 f'{describe_reasons(stats)}')
             self._crossing = None
             self._pair = pair
+            self._chain = [pair]
             self._path = make_gate_path(boat, pair, self.gate_params)
             self._previous_xy = boat
             self._crossed = False
@@ -369,6 +502,45 @@ class GateFollower(BehaviorBase):
 
         # 통과 판정을 기둥 보임 확인보다 먼저 한다 — 중심이 선을 넘는 순간 기둥이
         # 라이다 뒤쪽 가림 구간에 들어가도 통과를 놓치지 않게.
+        self._check_crossing(boat)
+        # 다음 게이트를 기억한 부표로 미리 골라 경로를 이어 둔다 (게이트 사슬, max_chain_gates 까지)
+        while self._extend_chain(boat, dri, grid, posts, goal):
+            pass
+        if self._crossed and len(self._chain) > 1:
+            self._advance_chain(boat)
+
+        if (not self._crossed
+                and self._gate_ahead(boat) > self.visibility_release
+                and not pair_observed(self._pair, self._scan_hits,
+                                     self.gate_params)):
+            return self._stall('GATE_POSTS_NOT_VISIBLE', now)
+
+        problem = self._path_problem(dri, grid)
+        if problem is not None and len(self._chain) > 1:
+            # 미리 이은 부분이 걸림 — 지금 게이트를 버리지 말고 지금 게이트만 가는 경로로 줄인다
+            self.get_logger().info(
+                f'gate: 이은 경로 {problem} — 다음 게이트 이음 풀고 게이트 '
+                f'{len(self._passed_midpoints) + 1} 만 감 (배 {_xy(boat)})')
+            self._chain = self._chain[:1]
+            self._path = make_gate_path(boat, self._pair, self.gate_params)
+            self._los_follower.reset()
+            self._extend_block_until = now + 1.0
+            problem = self._path_problem(dri, grid)
+        if problem is not None:
+            return self._stall(problem, now)
+        return self._follow(boat, dri, grid, now)
+
+    def _path_problem(self, dri, grid):
+        progress = self._los_follower.progress_idx or 0
+        horizon = self.gate_params.check_horizon
+        if not path_safe(dri, self._path, self.gate_params, progress, horizon):
+            return 'PATH_UNSAFE'
+        if not points_observed_or_seen(grid, path_ahead(self._path, progress, horizon),
+                                       self._scan_rays, self.gate_params):
+            return 'PATH_UNOBSERVED'
+        return None
+
+    def _check_crossing(self, boat):
         if not self._crossed and self._previous_xy is not None:
             hit = gate_crossing(self._previous_xy, boat, self._pair)
             if hit is not None:
@@ -383,23 +555,13 @@ class GateFollower(BehaviorBase):
                     self._crossing = point
         self._previous_xy = boat
 
-        if (not self._crossed
-                and self._gate_ahead(boat) > self.visibility_release
-                and not pair_observed(self._pair, self._scan_hits,
-                                     self.gate_params)):
-            return self._stall('GATE_POSTS_NOT_VISIBLE', now)
-
-        progress = self._los_follower.progress_idx or 0
-        if not path_safe(dri, self._path, self.gate_params, progress):
-            return self._stall('PATH_UNSAFE', now)
-        if not points_observed(
-                grid, self._path.samples[max(0, progress - 2):]):
-            return self._stall('PATH_UNOBSERVED', now)
+    def _follow(self, boat, dri, grid, now):
         cmd, reached = self.los(self._path, self.los_thrust_ratio, self.los_turn_ratio)
         progress = self._los_follower.progress_idx or 0
         if not lookahead_chord_safe(
                 dri, boat, self._path, progress,
-                self._los_follower.params.lookahead, self.gate_params, grid):
+                self._los_follower.params.lookahead, self.gate_params, grid,
+                self._scan_rays):
             return self._stall('LOOKAHEAD_UNSAFE', now)
 
         if reached:

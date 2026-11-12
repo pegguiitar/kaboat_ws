@@ -5,7 +5,7 @@ gate_follower:
     # 경로 명령은 기본적으로 미리보기만 발행한다.
     gate.motion_enabled: false
     gate.thrust_ratio: 0.5              # waypoint(첫 게이트 접근) 구간
-    gate.los_thrust_ratio: 0.4          # LOS 경로 추종 구간 직진 — 야외 바람 대응 0.25 → 0.4 (2026-11-12)
+    gate.los_thrust_ratio: 0.3          # LOS 경로 추종 구간 직진 — 0.25 → 0.4(바람) → 0.3 (2026-11-12, 0.4 = 실측 1.0 m/s 라 빠름)
     gate.los_turn_ratio: 0.31           # LOS 경로 추종 구간 회전 상한 — 수조 회피 SOTA
     gate.occ_threshold: 95
     gate.min_cluster_cells: 2
@@ -35,3 +35,18 @@ gate_follower:
     # 같은 쌍으로 이 시간 넘게 못 가면 쌍을 버리고 다시 고름 (넘었으면 통과 인정)
     gate.replan_timeout_sec: 2.0
     gate.reject_hold_sec: 10.0          # 버린 쌍을 후보에서 빼 두는 시간
+    # 게이트 사슬 (2026-11-12): 다음 게이트를 기억한 부표로 미리 골라 경로를 중점들로 이어 둔다.
+    # 1 이면 미리 잇지 않음(지금 게이트를 지나는 순간 다음 쌍을 고름).
+    gate.max_chain_gates: 3
+    gate.check_horizon: 6.0             # 경로 안전·관측 검사 길이 [m] (사슬 끝은 지도 창 밖일 수 있음)
+    # 부표 기억: 0.7 m 안이면 같은 부표, 지도에서 3번 잡히면 확정. 4 m 안(볼 수 있는 거리)에
+    # 들어온 뒤 1초 넘게 안 잡히면 지움(물보라·반사), 배에서 15 m 넘으면 버림.
+    gate.memory_match_radius: 0.7
+    gate.memory_confirm_hits: 3
+    gate.memory_forget_sec: 1.0
+    gate.memory_recheck_range: 4.0
+    gate.memory_prune_range: 15.0
+    # 지도가 unknown 이어도 지금 스캔 빔이 지나 본 점(더 멀리서 맞음·무반사 inf)은 관측으로 침.
+    # 게이트 두 부표 사이 물은 뒤에 맞을 게 없어 지도에 unknown 으로 남아 PATH_UNOBSERVED 로 멈췄다.
+    gate.see_through_range: 6.0             # 이 거리 [m] 안만
+    gate.see_through_max_bearing_deg: 110.0 # 선수 기준 ±각도 (뒤 120°~240° 는 선체 가림 마스크)
