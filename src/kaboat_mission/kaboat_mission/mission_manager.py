@@ -11,6 +11,7 @@
   1) 현재 미션 behavior 가 /mission/complete 로 자기 state 이름을 발행하고
   2) |현재위치(/odom) − 현재 미션 목표좌표| ≤ transition_radius(기본 2.0m — RTK, 2026-11-12. 예전 5.0)
   두 조건을 모두 만족하면 다음 state 로 전이한다.
+  dock 은 경로 고정 뒤 /dock/one_shot_path 마지막 점을 미션 목표로 사용한다.
 
 발행   /mission/state (String, latched)  — cmd_mux 와 모든 behavior 가 구독
        /mission/goal  (PoseStamped, latched) — 현재 미션의 목표좌표
@@ -28,7 +29,7 @@
   <미션>_end   → waypoints.<미션>
 으로 mission_params 값을 덮어쓴다(kaboat_mission/mission_points.py). 시작 거부(노드 종료):
   - 파일이 깨졌거나, 기록 당시 원점이 지금 원점 파일(origin_file)과 다를 때
-  - 한 미션의 _entry 와 _end 중 하나만 있을 때
+  - 한 미션의 _entry 와 _end 중 하나만 있을 때 (dock_entry 단독은 허용)
 파일이 없으면 mission_params 값 그대로. points_file 이 '' 또는 none 이면 읽지 않는다(수조 런치).
 
 단일 미션 테스트:
@@ -50,7 +51,7 @@ from rclpy.qos import QoSProfile, DurabilityPolicy
 
 from std_msgs.msg import String, Bool
 from geometry_msgs.msg import PoseStamped
-from nav_msgs.msg import Odometry
+from nav_msgs.msg import Odometry, Path
 
 from kaboat_mission.mission_points import (
     DEFAULT_ORIGIN_FILE, DEFAULT_POINTS_FILE, MISSION_STATES, PointStore,
@@ -74,8 +75,8 @@ class MissionManager(Node):
         super().__init__('mission_manager', **node_kwargs)
 
         # 전환 판정 반경 [m]. 5.0 → 2.0 (2026-11-12): RTK Fixed 로 위치가 수 cm 라 좁혔다.
-        # behavior 완료 거리(gate·avoid 2.0, search 원 1.2)와 맞고, dock_end 는 정박 위치
-        # 2 m 안에 기록해야 한다.
+        # behavior 완료 거리(gate·avoid 2.0, search 원 1.2)와 맞춘다.
+        # dock 은 기록된 dock_end 대신 한 번 고정한 LiDAR/GPS 정박점을 쓴다.
         self.declare_parameter('transition_radius', 2.0)
         self.declare_parameter('auto_start', True)          # 켜지면 바로 첫 미션 시작
         self.declare_parameter('start_state', '')            # 단일 미션 테스트용 시작 지점
@@ -111,6 +112,7 @@ class MissionManager(Node):
                 raise ValueError(f'entry_waypoints.{name} must be [x, y, angle_deg]')
 
         self.odom = None
+        self.dock_route_goal = None
         # 완료 신호가 웨이포인트 도착보다 먼저 와도 잃지 않고 기억한다.
         self.behavior_complete = False
         self.phase = 'idle'
@@ -138,6 +140,7 @@ class MissionManager(Node):
 
         self.create_subscription(Odometry, '/odom', self.on_odom, 10)
         self.create_subscription(String, '/mission/complete', self.on_complete, 10)
+        self.create_subscription(Path, '/dock/one_shot_path', self.on_dock_path, latched)
         self.create_timer(0.2, self.tick)  # 5Hz 판정
 
         wp_str = ', '.join(f"{n}({w[0]:.0f},{w[1]:.0f})" for n, w in self.waypoints.items())
@@ -232,6 +235,8 @@ class MissionManager(Node):
     def start_mission(self):
         self.phase = 'mission'
         state = MISSION_ORDER[self.idx]
+        if state == 'dock':
+            self.dock_route_goal = None
         self.set_state(state)
         self.publish_mission_goal()
         wp = self.waypoints[state]
@@ -239,7 +244,9 @@ class MissionManager(Node):
             f"미션 [{self.idx+1}/{len(MISSION_ORDER)}] '{state}' 시작 — 목표 ({wp[0]}, {wp[1]})")
 
     def publish_mission_goal(self):
-        wp = self.waypoints[MISSION_ORDER[self.idx]]
+        state = MISSION_ORDER[self.idx]
+        wp = (self.dock_route_goal if state == 'dock' and self.dock_route_goal is not None
+              else self.waypoints[state])
         self.pub_goal.publish(self._pose(*wp))
 
     def set_state(self, state: str):
@@ -255,6 +262,16 @@ class MissionManager(Node):
     # ── behavior 완료 + 전환 반경 판정 ────────────────
     def on_odom(self, msg: Odometry):
         self.odom = msg
+
+    def on_dock_path(self, msg: Path):
+        if msg.header.frame_id == 'odom' and msg.poses:
+            point = msg.poses[-1].pose.position
+            if math.isfinite(point.x) and math.isfinite(point.y):
+                self.dock_route_goal = [point.x, point.y]
+        elif msg.header.frame_id == 'odom':
+            self.dock_route_goal = None
+            if self.phase == 'mission' and MISSION_ORDER[self.idx] == 'dock':
+                self.behavior_complete = False
 
     def on_complete(self, msg: String):
         if not (0 <= self.idx < len(MISSION_ORDER)):
@@ -288,7 +305,10 @@ class MissionManager(Node):
         self.publish_mission_goal()
         if self.odom is None:
             return
-        wp = self.waypoints[MISSION_ORDER[self.idx]]
+        state = MISSION_ORDER[self.idx]
+        if state == 'dock' and self.dock_route_goal is None:
+            return
+        wp = self.dock_route_goal if state == 'dock' else self.waypoints[state]
         dx = wp[0] - self.odom.pose.pose.position.x
         dy = wp[1] - self.odom.pose.pose.position.y
         inside_waypoint = math.hypot(dx, dy) <= self.radius

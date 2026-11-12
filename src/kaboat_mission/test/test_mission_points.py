@@ -121,6 +121,11 @@ def test_mission_targets_pairs_entry_and_end():
     assert mission_targets(PointStore()) == {}
 
 
+def test_dock_entry_alone_uses_sensor_generated_goal():
+    targets = mission_targets(_store(dock_entry=(4.0, 1.0, 180.0)))
+    assert targets['dock'] == {'entry': [4.0, 1.0, 180.0], 'end': [4.0, 1.0]}
+
+
 def test_mission_targets_refuses_half_pair():
     with pytest.raises(ValueError, match='gate_end'):
         mission_targets(_store(gate_entry=(1.0, 2.0, 90.0)))

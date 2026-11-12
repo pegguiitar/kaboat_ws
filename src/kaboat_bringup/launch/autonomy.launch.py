@@ -25,6 +25,8 @@ def generate_launch_description():
     bringup_share = get_package_share_directory('kaboat_bringup')
     mission_params = os.path.join(bringup_share, 'config', 'mission_params.yaml')
     gate_params = os.path.join(bringup_share, 'config', 'gate_params.yaml')
+    dock_weights = os.path.join(get_package_share_directory('kaboat_perception'),
+                                'models', 'best.pt')
 
     use_sim_time_value = LaunchConfiguration('use_sim_time')
     common_params = {'use_sim_time': use_sim_time_value}
@@ -33,6 +35,7 @@ def generate_launch_description():
         'weights': LaunchConfiguration('dock_weights'),
         'target_class': LaunchConfiguration('dock_target_class'),
         'device': LaunchConfiguration('dock_device'),
+        'base_frame': LaunchConfiguration('dock_base_frame'),
     }
 
     perception = [
@@ -62,13 +65,38 @@ def generate_launch_description():
             'gate.motion_enabled': ParameterValue(
                 LaunchConfiguration('gate_motion_enabled'), value_type=bool),
         }]))
-    behaviors.append(Node(
-        package='kaboat_behaviors', executable='docking_ctrl',
-        name='docking_ctrl', output='screen',
-        parameters=[common_params, LaunchConfiguration('slot_config'), {
-            'dock.motion_enabled': ParameterValue(
-                LaunchConfiguration('dock_motion_enabled'), value_type=bool),
-        }]))
+    behaviors.extend([
+        Node(package='kaboat_hardware', executable='dock_lidar_markers',
+             name='dock_lidar_markers', output='screen', parameters=[common_params, {
+                 'target_class': LaunchConfiguration('dock_target_class'),
+                 'base_frame': LaunchConfiguration('dock_base_frame'),
+                 'marker_behind_wall_m': 0.0,
+                 'input_timeout_s': 2.0,
+             }]),
+        Node(package='kaboat_hardware', executable='dock_marker_goal',
+             name='dock_marker_goal', output='screen', parameters=[common_params, {
+                 'target_class': LaunchConfiguration('dock_target_class'),
+                 'tank_bounds': [-1000000.0, -1000000.0, 1000000.0, 1000000.0],
+                 'dock_stop_distance_m': 1.0,
+                 'approach_extra_m': 2.0,
+                 'marker_timeout_s': 2.0,
+                 'adaptive_entry_enabled': False,
+             }]),
+        Node(package='kaboat_hardware', executable='dock_ctrl_v2',
+             name='dock_ctrl_v2', output='screen', parameters=[common_params, {
+                 'mission_mode': True,
+                 'target_class': LaunchConfiguration('dock_target_class'),
+                 'drive_enabled': ParameterValue(
+                     LaunchConfiguration('dock_motion_enabled'), value_type=bool),
+                 'approach_cmd': ParameterValue(
+                     LaunchConfiguration('dock_approach_cmd'), value_type=float),
+                 'final_cmd': ParameterValue(
+                     LaunchConfiguration('dock_final_cmd'), value_type=float),
+                 'gps_timeout_s': 2.0,
+                 'odom_timeout_s': 2.0,
+                 'perception_timeout_s': 2.0,
+             }]),
+    ])
 
     control = [
         Node(package='kaboat_control', executable='cmd_mux',
@@ -102,7 +130,7 @@ def generate_launch_description():
             description='미션 목표 좌표 YAML; 수조 시험에서는 실측 좌표 파일 지정'),
         DeclareLaunchArgument(
             'mission_points_file', default_value='~/kaboat_mission_points.json',
-            description='현장 rec 기록 지점 JSON — <미션>_entry/_end 가 YAML 좌표를 덮어씀. none 이면 안 읽음'),
+            description='현장 rec 기록 지점 JSON — entry/end 쌍, dock_entry 단독 허용. none 이면 안 읽음'),
         DeclareLaunchArgument(
             'gate_params_file', default_value=gate_params,
             description='게이트 쌍 수와 라이다/DRI 임계값 YAML'),
@@ -113,18 +141,21 @@ def generate_launch_description():
             'approach_motion_enabled', default_value='false',
             description='기본값 false: 미션 시작 위치/방향 접근은 미리보기만 수행'),
         DeclareLaunchArgument(
-            'dock_weights', default_value='',
-            description='검증된 YOLO26n-seg .pt 절대 경로; 비워두면 검출 fail-closed'),
+            'dock_weights', default_value=dock_weights,
+            description='YOLO26n-seg .pt 절대 경로'),
         DeclareLaunchArgument(
             'dock_target_class', default_value='triangle',
             description='triangle / circle / square'),
         DeclareLaunchArgument(
             'dock_device', default_value='cpu',
             description='Ultralytics device: cpu 또는 Jetson CUDA 0'),
+        DeclareLaunchArgument('dock_base_frame', default_value='base_link'),
+        DeclareLaunchArgument('dock_approach_cmd', default_value='0.10'),
+        DeclareLaunchArgument('dock_final_cmd', default_value='0.05'),
         DeclareLaunchArgument(
             'slot_config',
             default_value=os.path.join(bringup_share, 'config', 'dock_slot.yaml'),
-            description='도킹 슬롯·선체 치수 YAML; 슬롯 크기 값은 이 파일에서만 정한다'),
+            description='이전 CLI 호환용. one-shot RANSAC 도킹에서는 사용하지 않음'),
         DeclareLaunchArgument(
             'dock_motion_enabled', default_value='false',
             description='기본값 false; TF/오프셋/안전 검증 후에만 true'),
