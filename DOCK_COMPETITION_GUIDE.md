@@ -1,6 +1,7 @@
 # competition 기반 도킹 통합 실행 가이드
 
-기준: `origin/competition` → `feature/dock-real_test`. 기존 Docker 이미지 태그
+기준: `origin/competition` → `feature/dock-real_test`. 아래 Docker 절차는 **Gazebo
+시뮬레이션 컨테이너 전용**이다. 기존 Docker 이미지 태그
 `ghcr.io/pegguiitar/kaboat_ws:latest`, 컨테이너 이름 `kaboat_sim_container`,
 `docker compose` 명령은 유지한다. Dockerfile에 CPU PyTorch와 YOLO 의존성만 추가했다.
 
@@ -33,7 +34,7 @@
 `onboard_scan_filter`, `/odom` 및 TF를 실행하며 도킹 런치에
 `use_sim_actuator:=true`를 넘겨 `/cmd_vel`을 Gazebo 추력으로 바꾼다.
 
-## 최초 이미지 및 워크스페이스 준비
+## 시뮬레이션 전용 이미지 및 워크스페이스 준비
 
 다른 Gazebo/YOLO 컨테이너를 종료하고 메모리 여유를 확인한 뒤 **호스트에서**:
 
@@ -129,6 +130,16 @@ ros2 topic echo /dock/one_shot_path
 긴급 중단은 `ros2 service call /dock/stop std_srvs/srv/Trigger {}`이다.
 
 ## 실선 적용
+
+실제 배의 Jetson 실행에는 VRX, `ros_gz`, Gazebo Garden, 시뮬레이션 Docker
+이미지가 필요 없다. 저장소의 `Dockerfile.lidar`/`kaboat_lidar`는 **노트북 외벽
+LiDAR 추적용**이며, 배의 YOLO 도킹 노드용 컨테이너가 아니다. 그러므로
+그 이미지에도 VRX나 YOLO를 추가하지 않는다. Jetson에는 기존 ROS 2 Humble
+환경에서 `kaboat_msgs`, `kaboat_behaviors`, `kaboat_perception`,
+`kaboat_hardware`, `kaboat_control`, `kaboat_mission`, `kaboat_bringup`을
+빌드하고, Jetson에 맞는 PyTorch와 `requirements-yolo.txt`의 Ultralytics를
+같은 Python 환경에 설치한다. `python3 -c 'import torch, ultralytics'`로
+먼저 확인한다.
 
 센서와 위치추정 bringup 후 `/gps/fix`, `/odom`, `/scan/level`, 카메라 토픽,
 `odom→base_link` TF를 확인한다. 현장 기준 원점을 설정하고 `rec` 도구로
