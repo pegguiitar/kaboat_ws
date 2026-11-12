@@ -51,8 +51,9 @@ behavior 의 회피가 공유하는 지도를 만든다. v5 설계상 장애물 
   스캔 그 칸을 free 로 깎아 지워 버리므로 층을 나눴다. cam_grid 는 카메라가 지금
   볼 수 있는 칸(시야·거리 안)에서만 색 점이 없을 때 감쇠하고, 시야 밖 칸은 그대로
   둔다(옆으로 지나간 붐을 잊지 않게). 발행 확률 = max(라이다, 카메라).
-  한 프레임 오탐은 0.8(≈69) 이라 DRI 문턱 95 에 못 미치고, 같은 칸이 4프레임
-  (5 Hz 에서 0.8 s) 이어져야 장애물이 된다.
+  한 프레임 오탐은 1.0(≈73) 이라 DRI 문턱 95 에 못 미치고, 같은 칸이 3프레임
+  (10 Hz 에서 0.3 s) 이어져야 장애물이 된다. 보이는데 없는 프레임은 -0.4 라, 칸이 유지되려면
+  처리 프레임의 약 29%(0.4/1.4) 이상에서 잡혀야 한다.
 
 TODO(팀):
   1) decay(노후 셀 확률의 점진적 감쇠) — 현재는 window 밖으로 나갈 때만
@@ -184,9 +185,10 @@ class OccupancyGridNode(Node):
         self.declare_parameter('virtual_wall_outward_offset', 0.6)
         self.declare_parameter('origin_file', DEFAULT_ORIGIN_FILE)
         self.declare_parameter('cam_enabled', False)
-        self.declare_parameter('cam_rate_hz', 5.0)       # 처리 상한 (카메라 15 fps 중 일부만)
+        # 처리 상한 (카메라 15 fps 중 일부만). 5 → 10 Hz (2026-11-12 현장: 붐이 가끔만 잡혀 기회를 늘림)
+        self.declare_parameter('cam_rate_hz', 10.0)
         self.declare_parameter('cam_min_points', 3)      # 한 프레임에 칸당 이만큼 색 점이 있어야 히트
-        self.declare_parameter('cam_l_occ', 0.8)         # 히트 log-odds (라이다 L_OCC 와 같게)
+        self.declare_parameter('cam_l_occ', 1.0)         # 히트 log-odds. 0.8 → 1.0 (2026-11-12) — 3프레임에 문턱
         self.declare_parameter('cam_l_free', -0.4)       # 보이는데 색 점 없는 칸 감쇠
         self.declare_parameter('cam_color_topic', '/camera/color/image_raw')
         self.declare_parameter('cam_depth_topic', '/camera/depth/image_raw')

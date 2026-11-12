@@ -69,6 +69,18 @@ def test_camera_boom_survives_lidar_and_decays_only_when_seen(node):
     assert _value_at(node, 3.1, 0.1) < 95
 
 
+def test_camera_defaults_ten_hz_and_three_frames_make_an_obstacle(node):
+    # 2026-11-12 현장: 붐이 가끔만 잡혀 5 Hz → 10 Hz, 히트 0.8 → 1.0 (감쇠 -0.4·칸당 3점은 그대로)
+    assert node.cam_period == pytest.approx(0.1)
+    assert (node.cam_l_occ, node.cam_l_free, node.cam_min_points) == (1.0, -0.4, 3)
+    _set_pose(node)
+    for _ in range(2):
+        node._add_camera_points(BOOM)
+    assert _value_at(node, 3.1, 0.1) < 95                    # 2프레임은 아직 문턱 아래
+    node._add_camera_points(BOOM)
+    assert _value_at(node, 3.1, 0.1) >= 95                   # 3프레임(10 Hz 에서 0.3 s)이면 장애물
+
+
 def test_camera_topics_use_best_effort_so_realsense_connects(node):
     from rclpy.qos import ReliabilityPolicy
     subs = {s.topic_name: s.qos_profile.reliability for s in node.subscriptions}
