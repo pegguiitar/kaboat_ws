@@ -1,4 +1,4 @@
-"""buoy_detector ⑤ 라이다 교차확인: 오래된 /scan/level 로는 확인하지 않고 통과."""
+"""buoy_detector ④ 라이다 중심: 오래된 /scan/level 은 안 쓰고 depth 로만 위치를 잡는다."""
 
 import math
 from types import SimpleNamespace
@@ -31,13 +31,12 @@ def _detector(scan, age_sec, max_age=0.3):
         get_clock=lambda: SimpleNamespace(now=lambda: now))
 
 
-def test_fresh_scan_confirms_or_rejects():
-    fresh = _detector(_scan_with_hit_ahead(), age_sec=0.05)
-    assert BuoyDetector._lidar_ok(fresh, 0.0, 5.0)          # 정면 5 m 에 반사 있음
-    assert not BuoyDetector._lidar_ok(fresh, 1.0, 5.0)      # 그 방위엔 반사 없음 → 거부
+def test_fresh_scan_is_used():
+    scan = _scan_with_hit_ahead()
+    assert BuoyDetector._fresh_scan(_detector(scan, age_sec=0.05)) is scan
 
 
-def test_stale_or_missing_scan_skips_check():
+def test_stale_or_missing_scan_is_skipped():
     stale = _detector(_scan_with_hit_ahead(), age_sec=1.0)  # 배가 기울어 /scan/level 끊김
-    assert BuoyDetector._lidar_ok(stale, 1.0, 5.0)
-    assert BuoyDetector._lidar_ok(_detector(None, 0.0), 1.0, 5.0)
+    assert BuoyDetector._fresh_scan(stale) is None
+    assert BuoyDetector._fresh_scan(_detector(None, 0.0)) is None

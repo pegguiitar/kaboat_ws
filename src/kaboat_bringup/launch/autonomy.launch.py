@@ -35,7 +35,8 @@ def generate_launch_description():
         Node(package='kaboat_perception', executable='occupancy_grid',
              name='occupancy_grid', output='screen', parameters=[common_params],
              condition=IfCondition(LaunchConfiguration('start_occupancy_grid'))),
-        # buoy_detector 는 대회 스택에서 끔 — search_circler 는 부표 없이 제자리 탐색 선회만 한다.
+        Node(package='kaboat_perception', executable='buoy_detector',
+             name='buoy_detector', output='screen', parameters=[common_params]),
         # 도킹(YOLO·라이다 RANSAC·one-shot 경로)은 아래 docking_nodes — outdoor_dock_test 와 같은 구성
     ]
 
