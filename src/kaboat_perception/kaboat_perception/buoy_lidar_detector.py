@@ -58,6 +58,8 @@ class BuoyLidarDetector(Node):
         self.declare_parameter('image_max_age', 0.2)   # [s] 스캔과 이만큼 넘게 차이 나면 색 표 안 넣음
         # 카메라에 한 번도 안 찍힌 확정 부표(unseen)도 내보낼지 — 기본은 안 냄 (검정=unknown 오염 방지)
         self.declare_parameter('publish_unseen', False)
+        # RViz 마커에 확정 전 후보도 그릴지 — 기본은 확정만 (후보가 부표처럼 보여 헷갈림)
+        self.declare_parameter('show_tentative', False)
         # 새 부표는 카메라 시야 안·이 거리 안 라이다 군집에서만 만든다 (옆·뒤 물가·기둥 제외)
         self.declare_parameter('spawn_half_fov_deg', 45.0)
         self.declare_parameter('spawn_max_range', 20.0)
@@ -72,6 +74,7 @@ class BuoyLidarDetector(Node):
         self.tracker = EvidenceTracker(self.ep)
         self.image_max_age = float(self.get_parameter('image_max_age').value)
         self.publish_unseen = bool(self.get_parameter('publish_unseen').value)
+        self.show_tentative = bool(self.get_parameter('show_tentative').value)
         self.spawn_half_fov = math.radians(float(self.get_parameter('spawn_half_fov_deg').value))
         self.spawn_max_range = float(self.get_parameter('spawn_max_range').value)
         self.cand_min_beams = int(self.get_parameter('cand_min_beams').value)
@@ -220,6 +223,8 @@ class BuoyLidarDetector(Node):
         clear.action = Marker.DELETEALL
         arr.markers.append(clear)
         for tr in self.tracker.tracks:
+            if not tr.confirmed and not self.show_tentative:
+                continue
             r, gg, b = RGB.get(tr.color, RGB['unknown'])
             m = Marker()
             m.header.frame_id, m.header.stamp = 'odom', stamp
