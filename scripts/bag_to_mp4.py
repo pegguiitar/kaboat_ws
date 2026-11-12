@@ -18,7 +18,9 @@ import numpy as np
 import yaml
 
 IMAGE_TYPES = ('sensor_msgs/msg/Image', 'sensor_msgs/msg/CompressedImage')
-PREFERRED = ('/camera/color/image_raw', '/camera/color/image_raw/compressed')
+PREFERRED = ('/camera/color/image_raw', '/camera/color/image_raw/compressed',
+             # rec_bag: d455 런치의 SetRemap 이 image_transport 하위 토픽은 안 바꿔 이 이름으로 남음
+             '/camera/camera/color/image_raw', '/camera/camera/color/image_raw/compressed')
 
 
 def bag_info(bag):
@@ -43,7 +45,7 @@ def pick_topic(topics, wanted=None):
             return name
     if not images:
         raise SystemExit(f'영상 토픽이 없음. 기록된 토픽: {sorted(topics)}')
-    return sorted(images)[0]
+    return min(images, key=lambda name: ('depth' in name.lower(), name))   # 뎁스는 맨 뒤
 
 
 def fps_of(count, duration, default=15.0):
