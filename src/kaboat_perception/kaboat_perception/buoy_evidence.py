@@ -27,7 +27,8 @@
 
 위치·크기 (원 맞추기): 한 스캔의 호 폭으로는 지름을 알 수 없다 — 호가 몇 도 찍혔는지
   모르니(가장자리는 빔이 비스듬해 반사가 끊김) 폭은 늘 지름보다 작다. 그래서 부표마다
-  연결된 군집의 점을 전역(odom) 좌표로 모은다 (부표는 고정, 위치는 RTK). 새로 잡힐 때마다
+  연결된 군집의 점을 전역(odom) 좌표로 모은다 (부표는 고정, 위치는 RTK). 맞추기에는 최근
+  fit_window_sec(10 s) 안의 점만 쓴다. 새로 잡힐 때마다
     ① 이동  반지름 r 을 고정하고 중심만 움직여 점들에 맞춘다 (반지름 고정 원 맞추기).
     ② 키움  그래도 원 바깥으로 fit_out_tol 넘게 벗어난 점이 fit_out_frac 이상이고, 그 점들이
            서로 다른 시선 방향(fit_sector_deg 단위) fit_min_sectors 곳 이상에서 왔으면 r 이
@@ -83,7 +84,12 @@ class EvidenceParams:
     radius_prior: float = 0.2       # 처음 반지름 [m] — 작게 시작 (줄이지 않으므로)
     radius_max: float = 0.75        # 반지름 상한 [m] (지름 1.5 m)
     fit_min_points: int = 10        # 이만큼 점이 모이면 원 맞추기로 중심을 잡는다
-    fit_max_points: int = 600       # 부표마다 보관하는 점 (오래된 것부터 버림)
+    fit_max_points: int = 6000      # 부표마다 보관하는 점 (오래된 것부터 버림) — 10 s 분량이 들어가게.
+                                    # 예전 600 은 부표 하나가 스캔마다 10~20 점이라 1.2~1.6 s 분량뿐이었다
+    fit_window_sec: float = 10.0    # 원 맞추기에는 최근 이만큼의 점 — 1.5 s 보다 길게 모아 번짐을 평균하고,
+                                    # 계류 부표가 조금씩 움직여도 따라가게. 2026-11-12 bag 중심 흔들림 RMS:
+                                    # 초록 0.092 → 0.031, 검정 0.079 → 0.024, 빨강 0.116 → 0.080 m
+                                    # (5 s 는 빨강이 0.208 로 나빠지고 20 s 는 0.121)
     fit_out_tol: float = 0.05       # 원 바깥으로 이만큼 넘게 벗어나야 '안 맞음' [m] (라이다 오차 이상)
     fit_out_frac: float = 0.2       # 벗어난 점 비율이 이 이상이면 키움
     fit_sector_deg: float = 30.0    # 시선 방향 구간 [deg]
@@ -137,6 +143,7 @@ class EvTrack:
     grown: bool = False           # 반지름이 사전값에서 커졌나 (점이 원 밖에 찍혀서)
     pts: Optional[np.ndarray] = None    # 모은 점 N×2 (전역)
     views: Optional[np.ndarray] = None  # 점마다 시선 방향 [rad] (라이다 원점 → 군집), NaN = 모름
+    times: Optional[np.ndarray] = None  # 점마다 찍힌 시각 [s]
 
     @property
     def color(self) -> str:
@@ -235,9 +242,15 @@ def _fit_behind(pts, views, c, r, p: EvidenceParams):
     return c1
 
 
-def fit_track_circle(t: 'EvTrack', p: EvidenceParams):
-    """① 이동 ② 안 맞으면 키움 — t.x, t.y, t.radius, t.grown 갱신."""
+def fit_track_circle(t: 'EvTrack', p: EvidenceParams, now: Optional[float] = None):
+    """① 이동 ② 안 맞으면 키움 — t.x, t.y, t.radius, t.grown 갱신. now 가 있으면 최근
+    fit_window_sec 의 점만 쓰고, 그 점이 fit_min_points 보다 적으면 이번엔 갱신하지 않는다."""
     pts, views = t.pts, t.views
+    if now is not None and t.times is not None:
+        recent = t.times >= now - p.fit_window_sec
+        if recent.sum() < p.fit_min_points:
+            return
+        pts, views = pts[recent], views[recent]
     c = np.array([t.x, t.y])
     r = t.radius
     for _ in range(6):
@@ -338,9 +351,9 @@ class EvidenceTracker:
             used_trk.add(tid)
             t = by_id[tid]
             x, y, color, _s, pts = detections[i]
-            self._add_points(t, pts, view)
+            self._add_points(t, pts, view, now)
             if t.pts is not None and len(t.pts) >= p.fit_min_points:
-                fit_track_circle(t, p)
+                fit_track_circle(t, p, now)
             else:
                 t.x += p.ema_alpha * (x - t.x)
                 t.y += p.ema_alpha * (y - t.y)
@@ -354,7 +367,7 @@ class EvidenceTracker:
                 continue
             t = EvTrack(self._next_id, float(x), float(y), p.l_hit, now, hits=1,
                         radius=p.radius_prior)
-            self._add_points(t, pts, view)
+            self._add_points(t, pts, view, now)
             t.px_params = (p.px_min_frac, p.px_dominance, p.px_min_visible)
             self._add_color(t, color)
             self._next_id += 1
@@ -413,7 +426,7 @@ class EvidenceTracker:
             return abs(math.hypot(m[0] - t.x, m[1] - t.y) - t.radius)
         return math.hypot(t.x - x, t.y - y)
 
-    def _add_points(self, t: EvTrack, pts, view: Optional[LidarView]):
+    def _add_points(self, t: EvTrack, pts, view: Optional[LidarView], now: float):
         if pts is None or len(pts) == 0:
             return
         pts = np.asarray(pts, dtype=float).reshape(-1, 2)
@@ -423,8 +436,10 @@ class EvidenceTracker:
         else:
             ang = float('nan')
         v = np.full(len(pts), ang)
+        tm = np.full(len(pts), float(now))
         t.pts = pts if t.pts is None else np.vstack((t.pts, pts))[-self.p.fit_max_points:]
         t.views = v if t.views is None else np.concatenate((t.views, v))[-self.p.fit_max_points:]
+        t.times = tm if t.times is None else np.concatenate((t.times, tm))[-self.p.fit_max_points:]
 
     def _merge(self):
         conf = sorted(self.confirmed(), key=lambda t: (-t.hits, -t.L))   # 많이 잡힌 쪽을 남긴다
@@ -446,6 +461,8 @@ class EvidenceTracker:
                     a.pts = b.pts if a.pts is None else np.vstack((a.pts, b.pts))[-self.p.fit_max_points:]
                     a.views = (b.views if a.views is None
                                else np.concatenate((a.views, b.views))[-self.p.fit_max_points:])
+                    a.times = (b.times if a.times is None
+                               else np.concatenate((a.times, b.times))[-self.p.fit_max_points:])
                 a.hits += b.hits
                 a.L = max(a.L, b.L)
                 drop.add(b.id)
