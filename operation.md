@@ -46,6 +46,12 @@ source ~/.zshrc
 | 9 | 젯슨 터미널 6 | `run_map` | 장애물 지도 (라이다만) — 하나만. 로그 `가상 벽 2줄 …` |
 | 10 | 젯슨 터미널 7 | `ros2 launch kaboat_bringup autonomy.launch.py` | 자율주행 스택 (지도는 9번 것을 씀). 로그에 `[기록 지점] gate: 시작 … → 끝 …` |
 
+**한 번에 켜기:** 3~6·9번(GQ7은 RTK)과 `run_camera`는 `run_sensors_motors` 하나로 켤 수 있습니다 — tmux 세션
+`boat`에 창 하나씩(0 gq7, 1 lidar, 2 motor, 3 points, 4 map, 5 camera), 라이다는 `/imu/data`가 나온 뒤.
+`Ctrl+B` 숫자로 창 이동, `Ctrl+B d`로 빠져나와도 계속 돌고 다시 `run_sensors_motors`로 붙습니다. 한 창만
+Ctrl+C로 끄고 ↑ Enter로 다시 켤 수 있습니다. 전부 끄기 `stop_sensors_motors`. `run_zenoh`는 따로 켭니다.
+tmux가 없으면 `sudo apt install tmux`.
+
 **웨이포인트 이름 규칙** — `mission_manager`가 `~/kaboat_mission_points.json`에서 이 이름만
 자동으로 읽어 `mission_params.yaml` 좌표를 덮어씁니다.
 
@@ -120,6 +126,8 @@ ros2 launch kaboat_hardware real_sensors.launch.py outdoor:=true rtk:=true \
 | `run_camera` | `ros2 launch kaboat_bringup d455.launch.py` | D455 카메라 (컬러 640×480 + 정렬 뎁스, 15 fps). 도킹용 (지도 카메라 층은 기본 끔). USB 3 포트 |
 | `run_geo` | `ros2 launch kaboat_hardware geo_origin.launch.py` | GPS 원점 설정, 위도·경도 → x/y (`/geo/*`) |
 | `run_points` | `ros2 run kaboat_hardware point_recorder` | 미션 지점 기록기 |
+| `run_sensors_motors` | `bash scripts/run_sensors_motors.sh` | `run_gq7_rtk`·`run_lidar`(`/imu/data` 뒤)·`run_motor`·`run_points`·`run_map`·`run_camera`를 tmux 세션 `boat`에 창 하나씩 (0~5, `Ctrl+B` 숫자로 이동). 이미 켜져 있으면 붙기만. `run_zenoh`는 따로. tmux 필요 (`sudo apt install tmux`) |
+| `stop_sensors_motors` | `bash scripts/run_sensors_motors.sh stop` | 위 세션 모든 창에 Ctrl+C(카메라 → GQ7 순) → 다 꺼지면 세션 닫기 |
 | `rec [이름]` | `python3 scripts/rec_point.py [이름]` | 지금 위치(x, y, 선수각) 기록. 이름 생략 시 `p1`, `p2` … |
 | `list_points` | `python3 scripts/rec_point.py --list` | 기록한 지점 보기 |
 | `rec_bag [이름]` | `bash scripts/record_run.sh [이름]` | 주행 센서 rosbag 녹화 → `~/kaboat_bags/이름_날짜_시각/`. **센서를 다 켠 뒤** 실행, **Ctrl+C로 종료**(창을 그냥 닫지 말 것). 카메라는 압축 토픽(약 4~5 MB/s, 20분 ≈ 6 GB), 압축 토픽이 없으면 원본 + zstd(20분 ≈ 15~18 GB). 남은 용량 10 GB 미만이면 시작 안 함. 2 GB마다 파일 분할. 자세한 사용법 [ROSBAG_GUIDE.md](ROSBAG_GUIDE.md) |

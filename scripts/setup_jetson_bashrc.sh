@@ -81,6 +81,11 @@ alias run_map="ros2 run kaboat_perception occupancy_grid --ros-args"
 
 # 미션 지점 기록 (지금 /odom 위치 → ~/kaboat_mission_points.json)
 alias run_points="ros2 run kaboat_hardware point_recorder"
+# 한 번에: run_gq7_rtk → (/imu/data 뒤) run_lidar, run_motor, run_points, run_map, run_camera 를
+#   tmux 세션 boat 에 창 하나씩 (Ctrl+B 숫자로 이동, Ctrl+B d 빠져나오기). run_zenoh 는 따로.
+#   이미 켜져 있으면 붙기만. 끄기 stop_sensors_motors (모든 창 Ctrl+C → 세션 닫기)
+alias run_sensors_motors='bash "$KABOAT_WS/scripts/run_sensors_motors.sh"'
+alias stop_sensors_motors='bash "$KABOAT_WS/scripts/run_sensors_motors.sh" stop'
 alias rec='python3 "$KABOAT_WS/scripts/rec_point.py"'
 alias list_points='python3 "$KABOAT_WS/scripts/rec_point.py" --list'
 # 주행 센서 녹화 (~/kaboat_bags/이름_날짜_시각/, Ctrl+C 로 종료). 센서를 다 켠 뒤 실행
@@ -146,6 +151,8 @@ echo "   - run_geo       : GPS 원점 설정·위도경도→x/y 변환 (geo_ori
 echo "   - run_camera    : D455 카메라 (컬러 + 정렬 뎁스)"
 echo "   - run_map       : 장애물 지도 (라이다 + 가상 벽, 카메라 안 씀) — 하나만 켜 둠"
 echo "   - run_points    : 미션 지점 기록기 (~/kaboat_mission_points.json)"
+echo "   - run_sensors_motors : GQ7(RTK)·라이다·모터·지점·지도·카메라 한 번에 (tmux 창 0~5, zenoh 는 따로)"
+echo "   - stop_sensors_motors: 위 세션 전부 Ctrl+C 후 닫기"
 echo "   - rec 이름      : 지금 위치(x, y, 선수각) 기록 (이름 생략 시 p1, p2 …)"
 echo "   - list_points   : 기록한 지점 보기"
 echo "   - rec_bag [이름] : 주행 센서 rosbag 녹화 (~/kaboat_bags, Ctrl+C 로 종료)"
