@@ -257,6 +257,9 @@ test_avoid_outdoor start_point:=gate_entry goal_point:=gate_end   # 다른 지�
   박습니다 — `src/kaboat_perception/config/virtual_walls.yaml`(위도·경도, 2026-11-12 Space 기록 #2~#5).
   켤 때와 원점을 다시 잡을 때 지금 원점 기준으로 바꿉니다. 로그 `가상 벽 2개 — avoid_north …`.
   끄려면 `-p virtual_walls_file:=none`. 원점 파일이 없으면 벽을 쓰지 않습니다.
+  기록 지점이 부표 안쪽이라 벽이 안쪽에 잡혀서, 각 벽을 경기장 바깥쪽으로 **0.6 m** 밀고
+  (`virtual_wall_outward_offset`, 0 = 기록 위치 그대로) 두께 **0.3 m**(`virtual_wall_thickness`,
+  칸 0.2 m 라 1칸)로 칠합니다. 예) `run_map -p virtual_wall_outward_offset:=0.8`.
 - 기록 당시 원점과 지금 원점이 다르면 시작을 거부합니다.
 
 **야외 게이트 시험** (`test_gate_outdoor`, 자율주행과 같은 `gate_follower` + `cmd_mux`, 게이트 미션 하나만)

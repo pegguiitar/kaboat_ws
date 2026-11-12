@@ -64,6 +64,29 @@ def walls_to_local(walls, origin):
             for name, pts in walls.items()}
 
 
+def offset_outward(walls_xy, distance):
+    """각 벽을 경기장 가운데(모든 벽 점의 평균)에서 멀어지는 쪽으로 distance [m] 평행 이동.
+
+    벽 방향(처음 점 → 끝 점)의 수직으로 벽 전체를 민다 — 직선(두 점) 벽 기준. 기록 지점은
+    배를 부표 안쪽 옆에 대고 찍어서 벽이 실제 로프보다 안쪽에 잡힌다(2026-11-12 현장 RViz).
+    가운데가 벽 선 위라 바깥을 정할 수 없는 벽(벽이 하나뿐 등)은 그대로 둔다.
+    """
+    if not walls_xy or distance == 0.0:
+        return dict(walls_xy)
+    center = np.vstack(list(walls_xy.values())).mean(axis=0)
+    shifted = {}
+    for name, xy in walls_xy.items():
+        direction = xy[-1] - xy[0]
+        length = float(np.hypot(*direction))
+        if length < 1e-9:
+            shifted[name] = xy
+            continue
+        normal = np.array([-direction[1], direction[0]]) / length
+        side = float((xy.mean(axis=0) - center) @ normal)
+        shifted[name] = xy if abs(side) < 1e-6 else xy + math.copysign(distance, side) * normal
+    return shifted
+
+
 def wall_mask(walls_xy, anchor, cells, resolution, thickness):
     """rolling window(anchor = 배열 (0,0) 칸의 전역 칸 번호)에 벽 꺾은선을 칠한 [iy, ix] bool."""
     mask = np.zeros((cells, cells), np.uint8)

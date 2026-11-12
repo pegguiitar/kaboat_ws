@@ -80,7 +80,8 @@ import sensor_msgs_py.point_cloud2 as pc2
 
 from kaboat_perception.camera_obstacles import (
     CameraObstacleParams, color_image_rgb, depth_image_m, detect_points, visible_mask)
-from kaboat_perception.virtual_walls import load_walls, wall_mask, walls_to_local
+from kaboat_perception.virtual_walls import (
+    load_walls, offset_outward, wall_mask, walls_to_local)
 from kaboat_mission.mission_points import DEFAULT_ORIGIN_FILE, read_origin_file
 
 
@@ -175,7 +176,11 @@ class OccupancyGridNode(Node):
         # 카메라 층 (camera_obstacles.py) — 기본 끔. 켜려면 d455.launch.py (run_camera).
         # 가상 벽 (virtual_walls.py): 위도·경도 꺾은선을 지금 원점 기준으로 바꿔 지도에 100 으로.
         self.declare_parameter('virtual_walls_file', _default_walls_file())   # '' / none = 끔
-        self.declare_parameter('virtual_wall_thickness', 0.4)                 # 벽 두께 [m]
+        # 벽 두께 [m]. 칸이 0.2 m 라 0.3 은 1칸(0.2 m)으로 칠해진다 (0.4 → 0.3, 2026-11-12)
+        self.declare_parameter('virtual_wall_thickness', 0.3)
+        # 벽을 경기장 바깥쪽으로 미는 거리 [m]. 기록 지점이 부표 안쪽이라 벽이 안쪽에 잡혔다
+        # (2026-11-12 현장 RViz). 0 = 기록 위치 그대로
+        self.declare_parameter('virtual_wall_outward_offset', 0.6)
         self.declare_parameter('origin_file', DEFAULT_ORIGIN_FILE)
         self.declare_parameter('cam_enabled', False)
         self.declare_parameter('cam_rate_hz', 5.0)       # 처리 상한 (카메라 15 fps 중 일부만)
@@ -218,6 +223,9 @@ class OccupancyGridNode(Node):
         self.cam_l_occ = float(self.get_parameter('cam_l_occ').value)
         self.cam_l_free = float(self.get_parameter('cam_l_free').value)
         self.wall_thickness = float(self.get_parameter('virtual_wall_thickness').value)
+        self.wall_offset = float(self.get_parameter('virtual_wall_outward_offset').value)
+        if not math.isfinite(self.wall_offset):
+            raise ValueError('virtual_wall_outward_offset must be finite')
         self.origin_file = str(self.get_parameter('origin_file').value)
         walls_file = str(self.get_parameter('virtual_walls_file').value).strip()
         self.walls_latlon = ({} if walls_file.lower() in ('', 'none')
@@ -300,11 +308,14 @@ class OccupancyGridNode(Node):
                 self.get_logger().warn(f'원점 파일 없음 ({path}) — 가상 벽 안 씀')
             self.walls_xy = {}
             return
-        self.walls_xy = walls_to_local(self.walls_latlon, origin)
+        self.walls_xy = offset_outward(walls_to_local(self.walls_latlon, origin),
+                                       self.wall_offset)
         desc = ', '.join(f'{n} ({xy[0, 0]:.1f}, {xy[0, 1]:.1f})→({xy[-1, 0]:.1f}, {xy[-1, 1]:.1f})'
                          for n, xy in self.walls_xy.items())
         self.get_logger().info(f'가상 벽 {len(self.walls_xy)}개 — {desc} m, '
-                               f'두께 {self.wall_thickness:.1f} m')
+                               f'바깥으로 {self.wall_offset:.2f} m 밂, 두께 {self.wall_thickness:.1f} m')
+        if self.wall_offset and len(self.walls_xy) < 2:
+            self.get_logger().warn('가상 벽이 하나라 바깥 방향을 정할 수 없음 — 기록 위치 그대로')
 
     def _on_odom(self, msg: Odometry):
         self.odom = msg

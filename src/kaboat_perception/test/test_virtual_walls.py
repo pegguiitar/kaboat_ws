@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from kaboat_perception.virtual_walls import (
-    latlon_to_local, load_walls, wall_mask, walls_to_local)
+    latlon_to_local, load_walls, offset_outward, wall_mask, walls_to_local)
 
 HERE = os.path.dirname(__file__)
 CONFIG = os.path.join(HERE, '..', 'config', 'virtual_walls.yaml')
@@ -55,6 +55,37 @@ def test_mask_draws_only_inside_the_window():
     assert not wall_mask(far, (-37, -37), 75, 0.2, 0.4).any()
 
 
+def test_offset_pushes_each_wall_away_from_the_arena_centre():
+    # 방향을 서로 반대로 적은 동서 벽 두 개 (y = +4, -4) → 바깥으로 0.6 m
+    walls = {'n': np.array([[0.0, 4.0], [20.0, 4.0]]),
+             's': np.array([[20.0, -4.0], [0.0, -4.0]])}
+    out = offset_outward(walls, 0.6)
+    np.testing.assert_allclose(out['n'][:, 1], [4.6, 4.6])
+    np.testing.assert_allclose(out['s'][:, 1], [-4.6, -4.6])
+    np.testing.assert_allclose(out['n'][:, 0], [0.0, 20.0])          # 벽 방향으로는 안 움직임
+    np.testing.assert_allclose(offset_outward(walls, 0.0)['n'], walls['n'])
+    single = {'n': walls['n']}                                        # 바깥을 정할 수 없음
+    np.testing.assert_allclose(offset_outward(single, 0.6)['n'], walls['n'])
+
+
+def test_shipped_walls_move_outward_by_sixty_centimetres():
+    xy = offset_outward(walls_to_local(load_walls(CONFIG), ORIGIN), 0.6)
+
+    def y_at(line, x):
+        (x0, y0), (x1, y1) = line
+        return y0 + (x - x0) / (x1 - x0) * (y1 - y0)
+
+    # x = 123 에서 북쪽 벽 5.34 → 약 5.95, 남쪽 벽 -3.39 → 약 -3.99 (수직 0.6 m, 벽이 조금 기울어짐)
+    assert y_at(xy['avoid_north'], 123.0) == pytest.approx(5.947, abs=0.01)
+    assert y_at(xy['avoid_south'], 123.0) == pytest.approx(-3.990, abs=0.01)
+
+
+def test_thickness_point_three_is_one_cell():
+    walls = {'w': np.array([[-20.0, 1.0], [20.0, 1.0]])}
+    mask = wall_mask(walls, anchor=(-37, -37), cells=75, resolution=0.2, thickness=0.3)
+    assert mask.any(axis=1).sum() == 1                            # 칸 0.2 m → 0.3 은 1칸
+
+
 def _node_with(tmp_path, origin=ORIGIN, extra=()):
     import rclpy
     from nav_msgs.msg import Odometry
@@ -84,21 +115,28 @@ def _value(node, x, y):
     return g.data[iy * g.info.width + ix]
 
 
+def _wall_near(node, x, y):
+    """1칸 두께 벽은 선 위치가 칸 경계에서 한 칸 어긋날 수 있어 ±1칸 안을 본다."""
+    return max(_value(node, x, y + d) for d in (-0.2, 0.0, 0.2)) == 100
+
+
 def test_node_publishes_walls_and_follows_the_origin(tmp_path):
     import rclpy
     node, origin_file = _node_with(tmp_path)
     try:
-        # 북쪽 벽은 x=123 에서 y ≈ 3.196 + (123-136.679)/(111.149-136.679)·(7.190-3.196) = 5.34
-        assert _value(node, 123.0, 5.34) == 100
+        assert node.wall_thickness == 0.3 and node.wall_offset == 0.6
+        # 북쪽 벽: 기록 위치 x=123 에서 y ≈ 5.34 → 바깥으로 0.6 m 밀어 약 5.95
+        assert _wall_near(node, 123.0, 5.95)
+        assert _value(node, 123.0, 5.34) == -1                    # 예전(기록) 위치는 이제 벽 아님
         assert _value(node, 123.0, 2.0) == -1                     # 통로 가운데는 그대로 (미관측)
-        assert _value(node, 123.0, -3.4) == 100                   # 남쪽 벽
+        assert _wall_near(node, 123.0, -3.99)                     # 남쪽 벽 (-3.39 → 약 -3.99)
         # 원점을 북쪽으로 10 m 옮겨 다시 잡으면 벽이 지금 원점 기준으로 내려온다
         moved = (ORIGIN[0] + 10.0 / 111195.0, ORIGIN[1], ORIGIN[2])
         origin_file.write_text(f'origin_lat: {moved[0]}\norigin_lon: {moved[1]}\n'
                                f'origin_alt: {moved[2]}\n')
         os.utime(origin_file, ns=(1, 1))                          # mtime 확실히 바뀜
         node._reload_walls()
-        assert _value(node, 123.0, -4.66) == 100
+        assert _wall_near(node, 123.0, -4.05)
     finally:
         node.destroy_node()
         rclpy.shutdown()
