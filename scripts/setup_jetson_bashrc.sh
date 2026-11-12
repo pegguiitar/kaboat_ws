@@ -126,6 +126,8 @@ alias test_los="ros2 launch kaboat_hardware los_path_test.launch.py path_kind:=b
 alias test_avoid="ros2 launch kaboat_hardware real_obstacle_avoid_test.launch.py drive_enabled:=true wait_for_start:=false"
 # 야외 회피 시험: rec 기록 avoid_entry → avoid_end (goto avoid_entry 로 세운 뒤. drive_enabled:=false 면 미리보기)
 alias test_avoid_outdoor="ros2 launch kaboat_hardware outdoor_avoid_test.launch.py"
+# 토너먼트 회피 (종합 미션과 별개 경기장): rec 기록 tournament_entry → tournament_end. 인자는 test_avoid_outdoor 와 같음
+alias test_tournament="ros2 launch kaboat_hardware outdoor_tournament_test.launch.py"
 # 야외 게이트 시험: rec 기록 gate_entry → gate_end, 7쌍 (goto gate_entry 로 세운 뒤. motion_enabled:=false 면 미리보기)
 alias test_gate_outdoor="ros2 launch kaboat_hardware outdoor_gate_test.launch.py"
 # 야외 도킹 시험: rec 기록 dock_entry 에서 one-shot 도킹 (goto dock_entry 로 세운 뒤, run_camera 필요.
@@ -158,6 +160,7 @@ echo "   - test_waypoint : 5개 웨이포인트 순차 주행 (출력 30%, 즉�
 echo "   - test_los      : LOS 경로 추종 테스트 (SOTA 직진 0.25·회전 0.31, 즉시 시작)"
 echo "   - test_avoid    : 실시간 장애물 회피 주행 (즉시 시작)"
 echo "   - test_avoid_outdoor : 야외 회피 avoid_entry → avoid_end (시작점 3 m·목표 방향 45° 안이면 즉시 출발)"
+echo "   - test_tournament    : 토너먼트 회피 tournament_entry → tournament_end (test_avoid_outdoor 와 같은 조건)"
 echo "   - test_gate_outdoor  : 야외 게이트 7쌍 gate_entry → gate_end (즉시 출발)"
 echo "   - test_dock_outdoor  : 야외 도킹 dock_entry → 목표 슬롯 → 후진 (YOLO 결과는 rec_bag 이 저장)"
 echo "   - check_yolo    : 도킹 YOLO 마스크 확인 (run_dock_yolo.sh 먼저, 영상 PNG ~/kaboat_yolo_checks)"

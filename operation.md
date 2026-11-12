@@ -134,6 +134,7 @@ ros2 launch kaboat_hardware real_sensors.launch.py outdoor:=true rtk:=true \
 | `test_dock_outdoor` | `bash scripts/run_dock_mission.sh` (= YOLO CUDA venv + `outdoor_dock_test.launch.py`) | 야외 도킹 `dock_entry` → 목표 슬롯 → 후진 3.25 m, **즉시 시작**. `run_camera` 필요. 5절 참고 |
 | `check_yolo` | `python3 scripts/check_yolo_masks.py` | 도킹 YOLO **마스크만** 확인 (뎁스·라이다 무관). `bash scripts/run_dock_yolo.sh`(D455 + YOLO, 모터 없음)를 먼저 켜 둔다. 1초마다 도형별 ✓신뢰도·화면 위치·방위각·최근 검출률, 추론 ms. 마스크 그린 영상을 5초마다 `~/kaboat_yolo_checks/날짜_시각/`에 PNG (`--save-every 0` 끔). Ctrl+C로 요약 |
 | `test_avoid_outdoor` | `ros2 launch kaboat_hardware outdoor_avoid_test.launch.py` | 야외 회피 시험 `avoid_entry` → `avoid_end`, **조건이 맞으면 즉시 출발**. 5절 참고 |
+| `test_tournament` | `ros2 launch kaboat_hardware outdoor_tournament_test.launch.py` | 토너먼트 회피(종합 미션과 별개 경기장) `tournament_entry` → `tournament_end`. `test_avoid_outdoor`와 같은 노드·조건·인자, **조건이 맞으면 즉시 출발**. 5절 참고 |
 | `test_straight` / `test_circle` / `test_bspline` / `test_station` / `test_waypoint` / `test_los` / `test_avoid` | 각 `*_test.launch.py … wait_for_start:=false` | 단독 주행 시험, **실행 즉시 출발** ([TANK_TESTS_GUIDE.md](TANK_TESTS_GUIDE.md)) |
 
 ---
@@ -268,6 +269,26 @@ test_avoid_outdoor start_point:=gate_entry goal_point:=gate_end   # 다른 지�
   (`virtual_wall_thickness`, 칸 0.2 m 라 1칸)로 칠합니다. 예) `run_map -p virtual_wall_outward_offset:=0.8`.
   3 m 입구에서 회피 계획이 지날 수 있는 폭은 약 2 m (DRI 1.116 이하).
 - 기록 당시 원점과 지금 원점이 다르면 시작을 거부합니다.
+
+**토너먼트 회피 시험** (`test_tournament`, 종합 자율 미션과 별개로 따로 하는 회피 경기장)
+
+위 야외 회피 시험과 같은 노드·출발 조건·인자이고, 시작·목표 지점 이름만 `tournament_entry` →
+`tournament_end`입니다. 종합 미션(`mission_manager`)은 이 두 이름을 읽지 않습니다 — 그래서 `rec` 할 때
+`(미션 이름 규칙 아님 …)`이 붙어 나오는 게 정상입니다.
+
+```bash
+rec tournament_entry                             # 0) 노트북: 경기장 입구에 진행 방향으로 세우고 기록
+rec tournament_end                               #    도착(목표) 지점에서 기록
+goto tournament_entry                            # 1) 시작점에 기록 선수각으로 세움 → REACHED 후 Ctrl+C
+test_tournament drive_enabled:=false             # 2) 미리보기: RViz /real_avoid_test/path 에 경로
+test_tournament                                  # 3) 실제 주행: 출발 조건이 맞으면 바로 출발
+```
+
+- 출발 조건(3 m·45°), 목표 2 m, 경로 이탈 1.5 m 정지, 후진 탈출은 `test_avoid_outdoor`와 같고 같은 인자로
+  바꿉니다. 예) `test_tournament max_cross_track_error:=2.5`.
+- 상태: `ros2 topic echo /real_avoid_test/status`.
+- **가상 벽은 회피 경기장(`arenas.avoid`)만 있습니다.** 토너먼트 경기장 둘레 로프(라이다에 안 잡힘)는
+  아직 지도에 없습니다. 두 경기장이 가까워 회피 경기장 벽이 지도에 걸리면 `run_map -p virtual_walls_file:=none`.
 
 **야외 게이트 시험** (`test_gate_outdoor`, 자율주행과 같은 `gate_follower` + `cmd_mux`, 게이트 미션 하나만)
 
