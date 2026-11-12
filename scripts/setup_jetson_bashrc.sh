@@ -82,6 +82,8 @@ alias run_map="ros2 run kaboat_perception occupancy_grid --ros-args -p cam_enabl
 alias run_points="ros2 run kaboat_hardware point_recorder"
 alias rec='python3 "$KABOAT_WS/scripts/rec_point.py"'
 alias list_points='python3 "$KABOAT_WS/scripts/rec_point.py" --list'
+# 주행 센서 녹화 (~/kaboat_bags/이름_날짜_시각/, Ctrl+C 로 종료). 센서를 다 켠 뒤 실행
+alias rec_bag='bash "$KABOAT_WS/scripts/record_run.sh"'
 # 야외 웨이포인트 1개 주행 (실행 즉시 출발, 추력 40%):
 #   goto gate_entry          rec 기록 지점 (위치 + 기록 선수각)
 #   goto 12.0 -3.5 [90]      /odom x y [선수각, 생략 = 위치만]
@@ -135,6 +137,7 @@ echo "   - run_map       : 장애물 지도 (라이다 + 카메라 층 + 가상 
 echo "   - run_points    : 미션 지점 기록기 (~/kaboat_mission_points.json)"
 echo "   - rec 이름      : 지금 위치(x, y, 선수각) 기록 (이름 생략 시 p1, p2 …)"
 echo "   - list_points   : 기록한 지점 보기"
+echo "   - rec_bag [이름] : 주행 센서 rosbag 녹화 (~/kaboat_bags, Ctrl+C 로 종료)"
 echo "   - goto 지점|x y [각도] : 야외 웨이포인트 1개 주행 (즉시 출발 40%, motion_enabled:=false 면 미리보기)"
 echo "   - run_motor     : 모터 제어기 가동"
 echo "   - cal_imu       : [선택] IMU 정지 수동 보정 (수조 라이다 Truth 모드에서는 생략 가능)"
