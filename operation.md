@@ -120,7 +120,7 @@ ros2 launch kaboat_hardware real_sensors.launch.py outdoor:=true rtk:=true \
 | `run_points` | `ros2 run kaboat_hardware point_recorder` | 미션 지점 기록기 |
 | `rec [이름]` | `python3 scripts/rec_point.py [이름]` | 지금 위치(x, y, 선수각) 기록. 이름 생략 시 `p1`, `p2` … |
 | `list_points` | `python3 scripts/rec_point.py --list` | 기록한 지점 보기 |
-| `rec_bag [이름]` | `bash scripts/record_run.sh [이름]` | 주행 센서 rosbag 녹화 → `~/kaboat_bags/이름_날짜_시각/`. **센서를 다 켠 뒤** 실행, **Ctrl+C로 종료**(창을 그냥 닫지 말 것). 카메라는 압축 토픽(약 4~5 MB/s, 20분 ≈ 6 GB), 압축 토픽이 없으면 원본 + zstd(20분 ≈ 15~18 GB). 남은 용량 10 GB 미만이면 시작 안 함. 2 GB마다 파일 분할 |
+| `rec_bag [이름]` | `bash scripts/record_run.sh [이름]` | 주행 센서 rosbag 녹화 → `~/kaboat_bags/이름_날짜_시각/`. **센서를 다 켠 뒤** 실행, **Ctrl+C로 종료**(창을 그냥 닫지 말 것). 카메라는 압축 토픽(약 4~5 MB/s, 20분 ≈ 6 GB), 압축 토픽이 없으면 원본 + zstd(20분 ≈ 15~18 GB). 남은 용량 10 GB 미만이면 시작 안 함. 2 GB마다 파일 분할. 자세한 사용법 [ROSBAG_GUIDE.md](ROSBAG_GUIDE.md) |
 | `goto 지점` / `goto x y [각도]` | `ros2 launch kaboat_hardware outdoor_waypoint.launch.py point:=지점` (또는 `x:= y:= angle:=`) | 야외 웨이포인트 1개 주행, **실행 즉시 출발**(추력 40%). 5절 참고 |
 | `run_motor` | `ros2 launch kaboat_hardware thrusters.launch.py hardware_type:=serial port:=/dev/ttyCH341USB0 allow_port_scan:=false` | 아두이노(CH340) 모터 드라이버 + `gps_mark_logger` |
 | `view_pitch` | `python3 scripts/view_roll_pitch.py` | 롤/피치와 스캔 차단 상태 |
