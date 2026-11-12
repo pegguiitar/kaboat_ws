@@ -91,3 +91,23 @@ GUI에서 회피 구역의 world `(15, 77.5)` 부근을 본다.
 이 환경에서는 SDFormat 검사와 로컬 Gazebo Fortress 서버의 새 모델 단독
 100스텝 로딩을 확인했다. 전체 Garden/VRX 배·파도·카메라 통합 실행은
 아직 검증하지 않았다(로컬에 해당 시뮬레이션 이미지와 VRX 소스가 없음).
+
+## Gazebo 없이 폐루프 회피 시험 (`scripts/arena_sim/avoid_arena_sim.py`)
+
+이 경기장 구조(`photo_arena.json`)로 가상 라이다·배를 만들고 **실제 노드 클래스**
+(`occupancy_grid` + 가상 벽, `real_obstacle_avoid_test` = `test_avoid_outdoor` 와 같은
+`outdoor_avoid_test.yaml`)를 가짜 시계로 돌린다. 노트북에서 1회 수십 초.
+
+```bash
+source /opt/ros/jazzy/setup.bash && source install/setup.bash
+export ROS_DOMAIN_ID=91 ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
+export PYTHONPATH=src/kaboat_hardware:src/kaboat_behaviors:src/kaboat_perception:src/kaboat_mission:$PYTHONPATH
+python3 scripts/arena_sim/avoid_arena_sim.py --scenario field --seed 0 --plot out.png
+python3 scripts/arena_sim/avoid_arena_sim.py --scenario field --booms-visible --wind -0.1 0 -p dri.sigma:=0.5
+```
+
+- 라이다 스캔 면은 수면 위 0.14 m(현장 실측 환산) — 흰 부표·모서리 부표만 보이고 붐(0.12 m)·
+  노란 소형 부표·줄은 안 보인다. `--booms-visible` 은 카메라 층이 붐을 완벽히 잡는다고 본 상한.
+- `--scenario ideal`(항상 보임) / `field`(2026-11-12 게이트 녹화로 잰 거리별 검출률·배 근처 잡음·
+  위치 잡음). 배 응답(명령→속도·회전)도 같은 녹화로 잰 값(`scripts/arena_sim/field_calib.json`).
+- 선체 1.1 × 0.8 m 사각형이 부표·붐·줄과 겹치면 충돌로 센다(물리적으로 막지는 않음).
