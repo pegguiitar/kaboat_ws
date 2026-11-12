@@ -96,6 +96,41 @@ depth 법선은 쓰지 않는다. YOLO+depth가 준 표식 위치(`/dock/marker_
   등)은 슬롯 크기가 아니라 동작·안전 튜닝 값이라 `DockParams` 기본값에 둔다.
   슬롯 폭이 크게 달라지면 간격 임계값이 적절한지 같이 확인한다.
 
+## 젯슨 YOLO 가상환경
+
+젯슨의 CUDA PyTorch·Ultralytics 는 시스템 Python 이 아니라 레포 안 가상환경
+`.venv-dock-yolo` 에만 있다. 2026-11-12 젯슨(Orin)에서 확인한 구성:
+
+| 항목 | 값 |
+|---|---|
+| 기반 | `/usr/bin` Python 3.10.12, `include-system-site-packages = true` (ROS 패키지도 보임) |
+| PyTorch | `2.5.0a0+872d972e41.nv24.08` (NVIDIA JetPack 6 빌드), `cuda True`, `Orin` |
+| Ultralytics | `8.4.110` (`src/kaboat_perception/requirements-yolo.txt`) |
+| NumPy / OpenCV | `1.26.4` (ROS Humble `cv_bridge` 때문에 1.x 필수) / `4.11.0` |
+| 추가 라이브러리 | `site-packages/nvidia/cusparselt/lib/libcusparseLt.so.0` — PyTorch 가 이걸 `LD_LIBRARY_PATH` 에서 찾음 |
+
+ROS 노드는 시스템 `python3` 로 돌므로 실행할 때 이 가상환경의 `site-packages` 를 `PYTHONPATH` 앞에,
+`cusparselt/lib` 를 `LD_LIBRARY_PATH` 앞에 둬야 한다(`LD_LIBRARY_PATH` 는 프로세스가 시작할 때만 읽힘).
+
+- `run_dock_yolo.sh`·`run_dock_mission.sh`(`test_dock_outdoor`)는 스크립트에서 맞추고 CUDA 를 확인한다.
+- `autonomy.launch.py`·`outdoor_dock_test.launch.py` 의 도킹 노드(`kaboat_perception/dock_nodes.py`)는
+  런치가 `KABOAT_YOLO_ENV` → `$KABOAT_WS/.venv-dock-yolo` → 설치 경로의 워크스페이스 순으로 가상환경을
+  찾아 **검출기 노드에만** 붙인다. 못 찾으면 시작 로그에 `⚠️ [dock] YOLO 가상환경 … 못 찾음`.
+
+확인 명령 (젯슨, 레포에서):
+
+```bash
+V=$PWD/.venv-dock-yolo
+export LD_LIBRARY_PATH=$V/lib/python3.10/site-packages/nvidia/cusparselt/lib:$LD_LIBRARY_PATH
+$V/bin/python -c "import torch, ultralytics, numpy, cv2; print(torch.__version__, torch.cuda.is_available(), ultralytics.__version__, numpy.__version__)"
+source /opt/ros/humble/setup.bash
+PYTHONPATH=$V/lib/python3.10/site-packages:$PYTHONPATH python3 -c "import cv_bridge, torch, ultralytics; print('ok')"
+```
+
+`LD_LIBRARY_PATH` 없이 import 하면 `libcusparseLt.so.0: cannot open shared object file` 가 난다(정상 —
+위처럼 경로를 넣으면 됨). 가상환경을 다시 만들 수 있게 잘 되는 젯슨에서
+`$V/bin/python -m pip freeze > src/kaboat_perception/requirements-jetson-freeze.txt` 로 목록을 남겨 둔다.
+
 ## 첫 배선 점검: 모터 비활성
 
 ROS 2 Humble 환경에서 `kaboat_msgs`, `kaboat_perception`, `kaboat_behaviors`,

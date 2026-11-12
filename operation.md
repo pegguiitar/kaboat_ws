@@ -320,8 +320,10 @@ test_dock_outdoor approach:=true             # dock_entry 접근(직선, 회피 
 - 상태: `ros2 topic echo /dock/status` (`phase`: `SCAN` → `TO_VIA` → `ALIGN_VIA` → `TO_GOAL` → `REVERSE` →
   `COMPLETE`), YOLO `/dock/detection_status`, 라이다 `/dock/lidar/status`. RViz `bash scripts/demo/rviz_dock.sh --real`.
 - 전체 미션(`autonomy.launch.py`)의 도킹도 같은 노드(`kaboat_perception/dock_nodes.py`)라 같은 인자
-  (`dock_target_class`, `dock_marker_order`, `dock_retreat_cmd` …)를 받습니다. YOLO 때문에 젯슨에서는
-  `run_dock_mission.sh`처럼 venv 환경(PYTHONPATH)을 맞춘 터미널에서 켭니다.
+  (`dock_target_class`, `dock_marker_order`, `dock_retreat_cmd` …)를 받습니다. 그냥 `ros2 launch`로 켜도
+  됩니다 — 런치가 젯슨 YOLO 가상환경(`.venv-dock-yolo`)을 찾아 **검출기 노드에만** `PYTHONPATH`·
+  `LD_LIBRARY_PATH`(libcusparseLt)를 붙입니다. 못 찾으면 시작할 때 `⚠️ [dock] YOLO 가상환경 … 못 찾음`이
+  나오고 검출을 안 합니다. 가상환경 확인은 [DOCKING_YOLO.md](DOCKING_YOLO.md) "젯슨 YOLO 가상환경".
 
 **카메라 층 — 라이다가 놓치는 낮은 색 장애물** (주황 붐 등, `occupancy_grid` 의 `cam_enabled`, 기본 끔)
 
