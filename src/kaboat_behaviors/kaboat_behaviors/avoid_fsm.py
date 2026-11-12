@@ -86,6 +86,17 @@ class FsmParams:
     # 시작하므로(PlannerParams.stationary_surge) 출발 때 이 각도를 자주 넘는다 (2026-11-12).
     # 회피 FSM 만 쓴다 — LOS·B-spline 시험의 follow_cmd 는 예전 규칙 그대로.
     pivot_angle: float = math.radians(35.0)
+    # 멈춤 확인 [s]: d_panic 위반(수리·재생성 실패)이 걸리면 바로 후진하지 않고 전진·회전 0 으로
+    # 멈춘 채 이만큼 매 tick 다시 본다 — 풀리면 FOLLOW, 계속되면 ESCAPE. 2026-11-12 영상 분석:
+    # 선수 물보라는 짧은 것 0.1~0.4 s(지도에서 걸러짐), ESCAPE 를 낸 것은 시작부터 1.0~1.7 s 였고
+    # 새로 보인 실제 부유물·부표도 1.7~2.7 s 찍혀 "찍힌 시간"만으론 못 가른다. 그래서 장애물 판단을
+    # 늦추는 대신 멈춘 채 확인 — 실제 장애물이어도 전진하지 않아 안전 (0.7 m/s 에서 타력 ≈0.4 m,
+    # d_panic 2 m 안). 물보라 칸은 빔이 지나가면 스캔마다 0.3 씩 깎여 보통 0.3~1 s 에 95 아래.
+    # 1.5 s: 감속하는 동안(배가 미끄러지는 동안 물보라가 계속)까지 덮어야 한다 — 감사 시뮬레이션
+    # (물보라 모델 180 s): 0 s ESCAPE 38~45 번·못 나감, 1.0 s 25~36 번·못 나감, 1.5·2.0 s 0 번·도착.
+    # 물보라 없는 붐·벽 장면은 0~2 s 모두 같은 결과. 0 = 즉시 ESCAPE (예전).
+    # 예전 "ESCAPE 전 1.5 s 지속 확인"은 그동안 계속 달려서 뺐었다(AVOIDANCE.MD) — 이건 멈춘 채 확인
+    escape_confirm_t: float = 1.5
     escape_min_t: float = 3.0     # 📝 최소 이탈 시간 [s] — 즉시 복귀 채터링 차단
     escape_n_ok: int = 5          # 📝 복귀 조건: generate 연속 성공 tick 수
     # v_full 을 내는 추력 명령 = 회피 **전진** 출력 비율. 회피 노드는 이 값을 전진
@@ -333,6 +344,7 @@ class AvoidFsm:
         self.plan: Plan | None = None
         self._no_plan_t0 = None    # plan 부재가 시작된 시각 — t_retry 판정
         self._stuck_t0 = None      # 위반 미해소(수리·재생성 다 실패) 시작 시각
+        self._panic_t0 = None      # 멈춤 확인(escape_confirm_t) 시작 시각
         self._escape_t0 = None     # ESCAPE 진입 시각 — 최소 이탈 판정
         self._escape_ok = 0        # ESCAPE 중 generate 연속 성공 tick 수
         self.escape_detail = ''    # 마지막 ESCAPE 진입 이유 (노드 로그용 — 위반 거리·막힌 시간)
@@ -360,6 +372,7 @@ class AvoidFsm:
         self.escape_detail = detail
         self.plan = None           # ESCAPE 는 plan 없이 산다 — 복귀 시 새로
         self._escape_t0 = now_t
+        self._panic_t0 = None
         self._escape_ok = 0
         self._no_plan_t0 = self._stuck_t0 = None
         # 진입 순간 위치 → 최신 점 → … → 가장 오래된 점. 없으면 None (정지)
@@ -442,7 +455,7 @@ class AvoidFsm:
         violation = check(self.plan, dri, boat_xy, self.p)   # progress 갱신 겸용
 
         if violation is None:
-            self._stuck_t0 = None
+            self._stuck_t0 = self._panic_t0 = None
             # ── 재생성 트리거 (generate ≤ 1회/tick, None 이면 기존 유지 —
             # 아직 check 통과 중이라 안전 구멍 아님):
             #  (a)  진행 반경 > 저장 r1 — 기준 장애물 통과
@@ -479,24 +492,36 @@ class AvoidFsm:
                 violation = check(self.plan, dri, boat_xy, self.p)
                 if violation is None:
                     ev = 'violation_repaired'
-                    self._stuck_t0 = None
+                    self._stuck_t0 = self._panic_t0 = None
                     break
             if violation is not None:
                 new = self._regenerate(dri, boat_xy, yaw, vel_xy, wp_xy, now_t)
                 if new is not None:
                     self.plan, ev = new, 'violation_regen'
-                    self._stuck_t0 = None
+                    self._stuck_t0 = self._panic_t0 = None
                 else:
                     # 수리도 재생성도 실패 — 남은 여유(거리+누적 시간)로 분기
                     if self._stuck_t0 is None:
                         self._stuck_t0 = now_t
                     d_viol = (violation - self.plan.progress_idx) * self.plan.spacing
-                    if (d_viol < f.d_panic
-                            or now_t - self._stuck_t0 > f.t_retry):
+                    stuck = now_t - self._stuck_t0
+                    if d_viol < f.d_panic or stuck > f.t_retry:
+                        held = 0.0
+                        if d_viol < f.d_panic and stuck <= f.t_retry and f.escape_confirm_t > 0.0:
+                            # 멈춤 확인: 바로 후진하지 않고 멈춘 채 escape_confirm_t 동안 매 tick
+                            # 다시 본다 — 그 사이 위반이 풀리면(물보라 칸이 깎임) FOLLOW 계속
+                            first = self._panic_t0 is None
+                            if first:
+                                self._panic_t0 = now_t
+                            held = now_t - self._panic_t0
+                            if held < f.escape_confirm_t:
+                                return StepOut(0.0, 0.0, self.state, self.plan,
+                                               'panic_hold' if first else None)
                         return self._enter_escape(
                             now_t, 'escape_panic', boat_xy,
                             f'경로상 위반까지 {d_viol:.2f} m (d_panic {f.d_panic:.1f} m), '
-                            f'수리·재생성 실패 {now_t - self._stuck_t0:.1f} s')
+                            f'멈춘 채 {held:.1f} s 확인, 수리·재생성 실패 {stuck:.1f} s')
+                    self._panic_t0 = None
                     ev, slow = 'violation_wait', True   # 감속 + 다음 tick 재시도
 
         lin, ang = follow_cmd(self.plan, boat_xy, yaw, yaw_rate, wp_xy,

@@ -334,9 +334,38 @@ def test_violation_wait_slows_when_margin_left():
         assert out.event in ('violation_regen', 'escape_panic')
 
 
-def test_escape_on_close_violation():
-    """위반이 d_panic 안 — 즉시 ESCAPE (여유 없음)."""
+def test_panic_holds_still_then_escapes_when_violation_persists():
+    """기본 escape_confirm_t 1.5 s: d_panic 위반이 걸리면 바로 후진하지 않고 전진·회전 0 으로
+    멈춘 채 확인 — 1.5 s 넘게 그대로면 ESCAPE (2026-11-12 물보라 ESCAPE 대책)."""
     fsm = make_fsm(t_backstop=1e9, d_panic=3.0)
+    assert fsm.fsm.escape_confirm_t == 1.5
+    acquire(fsm, dri_of([]))
+    out = fsm.step(dri_of(WALL), BOAT, YAW, V_FULL, 0.0, WP_FAR, 0.1)
+    assert out.state == 'FOLLOW' and out.event == 'panic_hold'
+    assert (out.linear_x, out.angular_z) == (0.0, 0.0)
+    out = fsm.step(dri_of(WALL), BOAT, YAW, (0.3, 0.0), 0.0, WP_FAR, 1.2)
+    assert out.state == 'FOLLOW' and out.event is None and out.linear_x == 0.0
+    out = fsm.step(dri_of(WALL), BOAT, YAW, (0.0, 0.0), 0.0, WP_FAR, 1.7)
+    assert out.state == 'ESCAPE' and out.event == 'escape_panic'
+    assert '멈춘 채 1.6 s 확인' in fsm.escape_detail
+
+
+def test_panic_hold_resumes_follow_when_violation_clears():
+    """멈춰 있는 사이 장애물(물보라 칸)이 사라지면 ESCAPE 없이 FOLLOW 계속, 다시 걸리면 새로 센다."""
+    fsm = make_fsm(t_backstop=1e9, d_panic=3.0)
+    acquire(fsm, dri_of([]))
+    assert fsm.step(dri_of(WALL), BOAT, YAW, V_FULL, 0.0, WP_FAR, 0.1).event == 'panic_hold'
+    out = fsm.step(dri_of([]), BOAT, YAW, (0.3, 0.0), 0.0, WP_FAR, 0.5)   # 물보라 사라짐
+    assert out.state == 'FOLLOW' and out.linear_x > 0.0
+    out = fsm.step(dri_of(WALL), BOAT, YAW, V_FULL, 0.0, WP_FAR, 0.8)      # 다시 걸림 → 새 확인
+    assert out.state == 'FOLLOW' and out.event == 'panic_hold'
+    out = fsm.step(dri_of(WALL), BOAT, YAW, (0.0, 0.0), 0.0, WP_FAR, 1.4)  # 0.6 s — 아직 확인 중
+    assert out.state == 'FOLLOW' and out.linear_x == 0.0
+
+
+def test_escape_on_close_violation():
+    """escape_confirm_t=0 (예전): 위반이 d_panic 안 — 즉시 ESCAPE (여유 없음)."""
+    fsm = make_fsm(t_backstop=1e9, d_panic=3.0, escape_confirm_t=0.0)
     acquire(fsm, dri_of([]))
     out = fsm.step(dri_of(WALL), BOAT, YAW, V_FULL, 0.0, WP_FAR, 0.1)
     assert out.state == 'ESCAPE' and out.event == 'escape_panic'
@@ -385,7 +414,7 @@ def enter_escape(fsm, trail=STRAIGHT_TRAIL):
 
 def test_escape_backs_up():
     """ESCAPE tick — 후진 명령(lin<0). 진입 tick(전이)만 정지."""
-    fsm = make_fsm(t_backstop=1e9, d_panic=3.0)
+    fsm = make_fsm(t_backstop=1e9, d_panic=3.0, escape_confirm_t=0.0)
     enter_escape(fsm)
     out = fsm.step(dri_of(WALL), BOAT, YAW, V_FULL, 0.0, WP_FAR, 0.2)
     assert out.state == 'ESCAPE' and out.linear_x < 0.0
@@ -393,7 +422,7 @@ def test_escape_backs_up():
 
 def test_escape_reverse_output_is_escape_thrust():
     """후진 출력은 속도 곡선이 아니라 escape_thrust 그대로 (실물에서 0.04 로 안 움직이던 문제)."""
-    fsm = make_fsm(t_backstop=1e9, d_panic=3.0)
+    fsm = make_fsm(t_backstop=1e9, d_panic=3.0, escape_confirm_t=0.0)
     enter_escape(fsm)
     out = fsm.step(dri_of(WALL), BOAT, YAW, V_FULL, 0.0, WP_FAR, 0.2)
     assert out.state == 'ESCAPE'
@@ -403,7 +432,7 @@ def test_escape_reverse_output_is_escape_thrust():
 
 def test_escape_straight_trail_backs_straight():
     """직선으로 왔으면 선미가 이미 지나온 길을 향한다 — 조향 0."""
-    fsm = make_fsm(t_backstop=1e9, d_panic=3.0)
+    fsm = make_fsm(t_backstop=1e9, d_panic=3.0, escape_confirm_t=0.0)
     enter_escape(fsm)
     out = fsm.step(dri_of(WALL), BOAT, YAW, V_FULL, 0.0, WP_FAR, 0.2)
     assert out.angular_z == pytest.approx(0.0, abs=1e-9)
@@ -413,7 +442,7 @@ def test_escape_follows_trail_not_dri():
     """좌후방에서 대각선으로 왔다 — 뒤쪽 DRI 와 무관하게 선미를 그 길(-135°)로 돌린다.
     yaw=0 → 선미 π, 오차 = wrap(-3π/4 − π) = +π/4 → ang > 0.
     정후방(π)에 장애물을 둬도(예전 argmin 이면 피했을 방향과 무관) 같은 답이다."""
-    fsm = make_fsm(t_backstop=1e9, d_panic=3.0)
+    fsm = make_fsm(t_backstop=1e9, d_panic=3.0, escape_confirm_t=0.0)
     diagonal = [(-d / math.sqrt(2.0), -d / math.sqrt(2.0))
                 for d in np.arange(3.0, -0.0001, -0.1)]
     enter_escape(fsm, trail=diagonal)
@@ -424,7 +453,7 @@ def test_escape_follows_trail_not_dri():
 
 def test_escape_without_trail_holds_still():
     """궤적이 없으면(활성화 직후 포위 등) 선미 사각지대로 후진하지 않고 정지."""
-    fsm = make_fsm(t_backstop=1e9, d_panic=3.0)
+    fsm = make_fsm(t_backstop=1e9, d_panic=3.0, escape_confirm_t=0.0)
     enter_escape(fsm, trail=[])
     out = fsm.step(dri_of(WALL), BOAT, YAW, V_FULL, 0.0, WP_FAR, 0.2)
     assert out.state == 'ESCAPE' and out.event == 'escape_no_trail'
@@ -436,7 +465,7 @@ def test_escape_without_trail_holds_still():
 
 def test_escape_stops_at_trail_end():
     """궤적 가장 오래된 점까지 되짚었으면 정지한 채로 generate 만 재시도."""
-    fsm = make_fsm(t_backstop=1e9, d_panic=3.0)
+    fsm = make_fsm(t_backstop=1e9, d_panic=3.0, escape_confirm_t=0.0)
     enter_escape(fsm)
     fsm.step(dri_of(WALL), BOAT, YAW, V_FULL, 0.0, WP_FAR, 0.2)   # 되짚기 시작
     t, out, events = 0.3, None, []
@@ -452,7 +481,7 @@ def test_escape_stops_at_trail_end():
 
 def test_trail_records_only_in_follow():
     """FOLLOW tick 은 위치를 기록하고, ESCAPE 중(되짚는 중)엔 기록하지 않는다."""
-    fsm = make_fsm(t_backstop=1e9, d_panic=3.0)
+    fsm = make_fsm(t_backstop=1e9, d_panic=3.0, escape_confirm_t=0.0)
     for i, x in enumerate(np.arange(-1.0, 0.0001, 0.2)):
         fsm.step(dri_of([], boat_xy=(x, 0.0)), (x, 0.0), YAW, V_FULL, 0.0,
                  WP_FAR, 0.1 * i)
@@ -488,7 +517,7 @@ def test_reset_clears_trail():
 
 def test_escape_recovery_drops_retraced_part():
     """복귀하면 이미 되짚은(최신) 구간은 버리고 남은 오래된 길만 둔다."""
-    fsm = make_fsm(t_backstop=1e9, d_panic=3.0, escape_min_t=0.0, escape_n_ok=1)
+    fsm = make_fsm(t_backstop=1e9, d_panic=3.0, escape_confirm_t=0.0, escape_min_t=0.0, escape_n_ok=1)
     enter_escape(fsm)
     boat = (-1.0, 0.0)                                # 1 m 되짚은 지점
     out = fsm.step(dri_of([], boat_xy=boat), boat, YAW, V_FULL, 0.0, WP_FAR, 0.2)
@@ -500,7 +529,7 @@ def test_escape_recovery_drops_retraced_part():
 
 def test_escape_no_chatter_before_min_time():
     """진입 직후 전방이 열려도 최소 이탈 시간 전엔 복귀하지 않는다."""
-    fsm = make_fsm(t_backstop=1e9, d_panic=3.0, escape_min_t=3.0, escape_n_ok=5)
+    fsm = make_fsm(t_backstop=1e9, d_panic=3.0, escape_confirm_t=0.0, escape_min_t=3.0, escape_n_ok=5)
     enter_escape(fsm)                                  # t=0.1 진입
     out = fsm.step(dri_of([]), BOAT, YAW, V_FULL, 0.0, WP_FAR, 0.2)
     assert out.state == 'ESCAPE' and out.event is None
@@ -508,7 +537,7 @@ def test_escape_no_chatter_before_min_time():
 
 def test_escape_recovers_after_min_time_and_streak():
     """최소 이탈 + 연속 성공 충족 → FOLLOW 복귀 (새 plan 보유)."""
-    fsm = make_fsm(t_backstop=1e9, d_panic=3.0, escape_min_t=1.0, escape_n_ok=3)
+    fsm = make_fsm(t_backstop=1e9, d_panic=3.0, escape_confirm_t=0.0, escape_min_t=1.0, escape_n_ok=3)
     enter_escape(fsm)                                  # t=0.1 진입
     open_dri = dri_of([])
     t, out = 0.2, None
@@ -523,7 +552,7 @@ def test_escape_recovers_after_min_time_and_streak():
 
 def test_escape_streak_resets_on_failure():
     """성공-실패-성공 은 연속이 아니다 — 실패가 카운터를 리셋한다."""
-    fsm = make_fsm(t_backstop=1e9, d_panic=3.0, escape_min_t=0.0, escape_n_ok=2)
+    fsm = make_fsm(t_backstop=1e9, d_panic=3.0, escape_confirm_t=0.0, escape_min_t=0.0, escape_n_ok=2)
     enter_escape(fsm)
     open_dri, wall_dri = dri_of([]), dri_of(WALL)
     fsm.step(open_dri, BOAT, YAW, V_FULL, 0.0, WP_FAR, 0.2)   # 성공 1
