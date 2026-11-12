@@ -64,14 +64,14 @@ class BuoyLidarDetector(Node):
         # 배가 부표를 옆으로 지나가는 일이 많아, 카메라 정면에서만 만들면 점유지도보다 10~20 s
         # 늦었다 (2026-11-12 bag). 카메라에 안 찍힌 건 unseen 이라 /detections/buoys 로 안 나간다.
         self.declare_parameter('spawn_half_fov_deg', 180.0)
-        self.declare_parameter('spawn_max_range', 20.0)
+        self.declare_parameter('spawn_max_range', 15.0)
         # 부표 후보가 될 라이다 군집 — 수면·물보라·선수파 hit(빔 2개, 폭 몇 cm, 배 옆 1~1.5 m)를 거른다.
         # 2026-11-12 bag: 진짜 부표는 빔 8~21개·폭 0.2~0.33 m, 가짜는 빔 2개·폭 1~6 cm.
         self.declare_parameter('cand_min_beams', 3)
         self.declare_parameter('cand_min_width', 0.1)
         self.declare_parameter('cand_min_range', 2.0)
-        # 거리 clamp — 이보다 먼 군집은 안 씀 (먼 부표는 빔이 적고 물가·배가 섞임). evidence.max_range 와 같게.
-        self.declare_parameter('cand_max_range', 10.0)
+        # 보는 거리 — 이보다 먼 군집은 안 씀 (먼 부표는 빔이 적고 물가·배가 섞임). evidence.max_range 와 같게.
+        self.declare_parameter('cand_max_range', 15.0)
         self.geom = BuoyGeometry()
         self.cp = self._params_from('color', ColorParams)
         self.ep = self._params_from('evidence', EvidenceParams)

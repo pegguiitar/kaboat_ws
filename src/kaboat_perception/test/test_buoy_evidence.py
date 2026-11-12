@@ -120,11 +120,18 @@ def test_unknown_votes_make_unknown():
 
 # ---------- 병합 ----------
 
-def test_close_confirmed_tracks_merge():
-    tk = EvidenceTracker(EvidenceParams(gate_radius=0.3))
+def test_overlapping_confirmed_tracks_merge():
+    tk = EvidenceTracker(EvidenceParams(gate_radius=0.1))
     for k in range(4):
-        tk.update([(8.0, 0.0, 'red'), (8.5, 0.0, 'red')], 0.1 * k)
+        tk.update([(8.0, 0.0, 'red'), (8.4, 0.0, 'red')], 0.1 * k)   # 0.4 ≤ 0.2 + 0.2 + 0.1
     assert len(tk.confirmed()) == 1
+
+
+def test_adjacent_pair_never_merges():
+    tk = EvidenceTracker(EvidenceParams(gate_radius=0.1))
+    for k in range(4):
+        tk.update([(8.0, 0.0, 'green'), (8.9, 0.0, None)], 0.1 * k)   # 0.9 m — 원이 안 겹침
+    assert len(tk.confirmed()) == 2
 
 
 def test_never_seen_by_camera_is_unseen_not_unknown():
@@ -202,7 +209,7 @@ def test_one_direction_only_does_not_grow():
 
 
 def test_far_track_not_freed_beyond_max_range():
-    tk = EvidenceTracker(EvidenceParams(max_range=10.0))
+    tk = EvidenceTracker(EvidenceParams(max_range=10.0, forget_range=30.0))
     for k in range(6):
         tk.update([(12.0, 0.0, None)], 0.1 * k)
     run(tk, view({0: 20.0}), 10.0)                   # 12 m 부표 자리를 빔이 지나가도
@@ -268,5 +275,15 @@ def test_red_needs_dominance_over_green():
 
 def test_buoy_forgotten_when_boat_far_away():
     tk = confirmed_at(8.0)
-    tk.update([], 1.0, view({}, x=-10.0, y=0.0))     # 배(라이다)가 18 m 떨어짐
+    tk.update([], 1.0, view({}, x=-10.0, y=0.0))     # 배(라이다)가 18 m 떨어짐 (> 17)
     assert tk.tracks == []
+
+
+def test_smeared_blob_does_not_grow():
+    # 스캔 번짐으로 0.4 m 두께 덩어리가 된 점 — 원호가 아니니 키우지 않는다
+    rng = np.random.default_rng(3)
+    tk = EvidenceTracker(P)
+    for k, vw in enumerate(PASS_BY):
+        pts = np.array([8.0, 0.0]) + rng.uniform(-0.2, 0.2, (15, 2))
+        tk.update([(8.0, 0.0, None, True, pts)], 0.1 * k, view({}, x=vw[0], y=vw[1]))
+    assert not tk.tracks[0].grown and tk.tracks[0].radius == pytest.approx(P.radius_prior)

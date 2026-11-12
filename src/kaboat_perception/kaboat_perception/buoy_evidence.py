@@ -17,7 +17,7 @@
   새 부표는 호출자가 허락한 검출(can_spawn — 노드는 20 m 안)에서만 만든다.
   옆·뒤의 물가·다리 기둥·정박 배가 부표가 되지 않게. 이미 있는 부표는 어느 방향 검출로든 갱신.
   시간이 1 s 넘게 거꾸로 가면(bag 반복 재생·시계 재설정) 처음부터 다시 시작한다.
-  배에서 forget_range(15 m) 넘게 멀어진 부표는 지운다 — 점유지도가 배 주변 창 밖을 버리듯.
+  배에서 forget_range(17 m) 넘게 멀어진 부표는 지운다 — 점유지도가 배 주변 창 밖을 버리듯.
   확정 부표 둘이 merge_radius 안이면 L 큰 쪽으로 합친다.
 
 색: 프레임별 표 ('red' | 'green' | 'unknown', None 은 표 없음). 빨강·초록 중 많은 쪽이
@@ -58,9 +58,8 @@ TIME_JUMP_BACK = 1.0   # [s] 이보다 거꾸로 가면 리셋
 
 @dataclass(frozen=True)
 class EvidenceParams:
-    gate_radius: float = 0.7        # 군집 ↔ 부표 연결 최대 거리 [m] (부표는 고정 — 1.5 는 배를 따라
-                                    # 움직이는 수면 hit 를 한 부표로 끌고 다녔고, 1.0 은 1.2 m 붙은
-                                    # 초록·검정 쌍을 섞었다. 스캔 간 중심 흔들림 RMS ≈ 0.15 m)
+    gate_radius: float = 0.5        # 군집 점 평균 ↔ 부표 원 둘레 연결 최대 거리 [m] (스캔 번짐 RMS ≈ 0.15 m
+                                    # 의 3배. 크게 잡으면 원이 커질 때 1.2 m 옆 부표 점까지 붙었다)
     ema_alpha: float = 0.3          # 위치 평활 (새 관측 가중치)
     l_hit: float = 0.8              # 라이다 군집 연결 1회
     l_free_rate: float = -2.0       # 빔이 부표 자리를 지나감 [/s]
@@ -69,13 +68,17 @@ class EvidenceParams:
     l_min: float = -2.0
     l_max: float = 4.0
     tentative_timeout: float = 3.0  # 후보가 이만큼 안 잡히면 삭제 [s]
-    merge_radius: float = 1.0       # 확정 부표 병합 거리 [m] — 스캔 번짐으로 한 부표가 둘로 갈린 것 합침
-                                    # (1.2 m 붙은 초록·검정 쌍보다는 작게)
+    merge_radius: float = 1.0       # 확정 부표 병합 거리 상한 [m] — 그 안에서도 두 원이 겹칠 때만
+                                    # (중심 거리 ≤ 두 반지름 합 + merge_overlap) 합친다. 겹치는 두 부표는
+                                    # 없으니 같은 부표가 둘로 갈린 것. 1.2 m 붙은 쌍은 안 합쳐진다.
+    merge_overlap: float = 0.1      # [m]
     pass_margin: float = 0.5        # 빔이 부표보다 이만큼 멀리/가까이서 맞아야 지나감/가림 [m]
     beam_half_width: float = 0.15   # 부표 방향 빔 창 반폭 — 부표 반폭 [m]
     min_beam_half_angle: float = math.radians(0.5)
-    max_range: float = 10.0         # 라이다 원점에서 이보다 먼 부표는 깎지 않음 (노드는 군집도 이 안만) [m]
-    forget_range: float = 15.0      # 라이다 원점에서 이보다 멀어진 부표는 지움 — 점유지도 창처럼 배 주변만 [m]
+    max_range: float = 15.0         # 보는 거리 — 라이다 원점에서 이보다 먼 부표는 깎지 않음
+                                    # (노드는 군집도 이 안만, cand_max_range) [m]
+    forget_range: float = 17.0      # 이보다 멀어진 부표는 지움 — 점유지도 창처럼 배 주변만. 보는 거리보다
+                                    # 조금 크게: 경계에서 생겼다 지워졌다 깜빡이지 않게 [m]
     # 원 맞추기
     radius_prior: float = 0.2       # 처음 반지름 [m] — 작게 시작 (줄이지 않으므로)
     radius_max: float = 0.75        # 반지름 상한 [m] (지름 1.5 m)
@@ -86,6 +89,9 @@ class EvidenceParams:
     fit_sector_deg: float = 30.0    # 시선 방향 구간 [deg]
     fit_min_sectors: int = 3        # 벗어난 점이 이만큼 다른 시선 구간에서 와야 키움 (3 = 60° 넘게 돌아가며 봄)
     fit_max_rms: float = 0.08       # 키울 때 함께 맞춘 원의 잔차 RMS 상한 [m] — 넘으면 번짐이라 안 키움
+    fit_min_on_frac: float = 0.7    # 키울 때 전체 점의 이 비율 이상이 새 원 둘레 fit_out_tol 안에 있어야 함 —
+                                    # 번진 점 덩어리(두께 0.3~0.4 m)는 큰 원이 가장자리만 스쳐도 RMS 가
+                                    # 작게 나와 0.46 m 까지 커졌다 (2026-11-12 초록 공 부표)
     fit_max_shift: float = 0.3      # 키울 때 중심이 이보다 많이 움직이면 안 키움 [m]
     fit_max_jump: float = 1.0       # 맞춘 중심이 이전보다 이만큼 넘게 튀면 그 결과는 버림 [m]
     # 색 — 부표마다 창 픽셀 수 누적 (빨강·초록·보이는). 붙은 쌍에서 옆 부표가 한두 프레임 섞여도
@@ -255,7 +261,8 @@ def fit_track_circle(t: 'EvTrack', p: EvidenceParams):
         ok = np.abs(dfree) <= p.fit_outlier
         rms = float(np.sqrt(np.mean(dfree[ok] ** 2))) if ok.any() else float('inf')
         r_new = min(p.radius_max, float(r_free))
-        if (r_new <= r + 1e-3 or rms > p.fit_max_rms
+        on_frac = float(np.mean(np.abs(dfree) <= p.fit_out_tol))   # 전체 점 기준 — 얇은 호인가
+        if (r_new <= r + 1e-3 or rms > p.fit_max_rms or on_frac < p.fit_min_on_frac
                 or np.hypot(*(c_free - c)) > p.fit_max_shift
                 or facing_fraction(pts, views, c_free) < p.fit_min_facing):
             break
@@ -426,7 +433,9 @@ class EvidenceTracker:
             if a.id in drop:
                 continue
             for b in conf[i + 1:]:
-                if b.id in drop or math.hypot(a.x - b.x, a.y - b.y) > self.p.merge_radius:
+                d = math.hypot(a.x - b.x, a.y - b.y)
+                if (b.id in drop or d > self.p.merge_radius
+                        or d > a.radius + b.radius + self.p.merge_overlap):
                     continue
                 for c, n in b.color_votes.items():
                     a.color_votes[c] = a.color_votes.get(c, 0) + n
