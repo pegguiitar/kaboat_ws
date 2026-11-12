@@ -137,9 +137,10 @@ LiDAR 추적용**이며, 배의 YOLO 도킹 노드용 컨테이너가 아니다.
 그 이미지에도 VRX나 YOLO를 추가하지 않는다. Jetson에는 기존 ROS 2 Humble
 환경에서 `kaboat_msgs`, `kaboat_behaviors`, `kaboat_perception`,
 `kaboat_hardware`, `kaboat_control`, `kaboat_mission`, `kaboat_bringup`을
-빌드하고, Jetson에 맞는 PyTorch와 `requirements-yolo.txt`의 Ultralytics를
-같은 Python 환경에 설치한다. `python3 -c 'import torch, ultralytics'`로
-먼저 확인한다.
+`./scripts/build_docking_real_safe.sh`로 순차 빌드한다. 이 스크립트는
+`kaboat_sim`, VRX, ros_gz를 선택하지 않는다. Jetson에 맞는 PyTorch와
+`requirements-yolo.txt`의 Ultralytics를 같은 Python 환경에 설치하고
+`python3 -c 'import torch, ultralytics'`로 먼저 확인한다.
 
 센서와 위치추정 bringup 후 `/gps/fix`, `/odom`, `/scan/level`, 카메라 토픽,
 `odom→base_link` TF를 확인한다. 현장 기준 원점을 설정하고 `rec` 도구로
