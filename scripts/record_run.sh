@@ -59,7 +59,10 @@ topics=(
     /cmd/approach /mission/approach_cmd_preview
     /geo/position /geo/targets /geo/target_local /geo/target_markers
     /mission_points/markers /mission_points/result
-    /detections/buoys_viz /occupancy_grid/cam_points
+    /occupancy_grid/cam_points
+    # 부표 지도 마커 — /detections/buoys 와 함께 녹화하면 buoy_lidar_detector 가 구독자를 보고
+    # 미션과 상관없이 계속 계산한다 (평소엔 탐색 동안만)
+    /buoy_lidar_detector/markers
     # 장애물 회피 판단: 위험도 지도(DRI)·B-spline 경로·제어점·고위험 칸·명령
     # (구독자가 있을 때만 만드는 토픽이라 녹화를 켜면 젯슨이 10 Hz 로 만들기 시작한다)
     /avoid/dri /avoid/plan /avoid/cps /avoid/dri_marks /cmd/avoid
