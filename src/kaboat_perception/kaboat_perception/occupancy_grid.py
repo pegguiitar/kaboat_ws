@@ -194,11 +194,14 @@ class OccupancyGridNode(Node):
         # 히트 log-odds 를 거리에 비례해 올림 (range_l_occ): 라이다 최소 거리(range_min, TG-50
         # 0.4 m)에서 l_occ_near, l_occ_full_range 이상에서 L_OCC(0.7). 2026-11-12 현장 영상 분석:
         # 선수 V 자 물보라가 라이다 정면 0.4~1.6 m(최대 1.8 m)에 찍혀 그 칸(직전 L_MIN 근처)을
-        # 스캔 60~80% 로 맞혀 1.2~1.8 s 만에 95 → ESCAPE. 0.1 → 3.0 m 면 물보라 칸이 95 가 되는 데
-        # 1.6 m 에서 2.7 s 이상, 1.2 m 3.7 s, 0.8 m 6 s 이상. 거리 무관으로 되돌리려면
-        # -p l_occ_near:=0.7
-        self.declare_parameter('l_occ_near', 0.1)
-        self.declare_parameter('l_occ_full_range', 3.0)
+        # 스캔 60~80% 로 맞혀 1.2~1.8 s 만에 95 → ESCAPE.
+        # 0.1 → 3.0 m 로 처음 넣었다가 0.4 → 1.8 m (같은 날 감사): 가까운 히트가 너무 작아, 출렁여
+        # 가끔(70 %) 보이는 부표가 칸이 깎이는 속도를 못 이겨 충돌까지 지도에 안 올라왔다. 지금 값은
+        # 부표 첫 감지가 거리 무관 0.7 과 같고(70 % → 1.6 m, 50 % → 1.35 m), 물보라 칸이 95 가 되는
+        # 데 0.8/1.2/1.6 m 에서 2.9/2.4/2.0 s (히트 70 %, 예전 1.8 s). 나머지 물보라는 FSM 의 멈춤
+        # 확인(FsmParams.escape_confirm_t)이 거른다. 거리 무관으로 되돌리려면 -p l_occ_near:=0.7
+        self.declare_parameter('l_occ_near', 0.4)
+        self.declare_parameter('l_occ_full_range', 1.8)
         # 카메라 층 (camera_obstacles.py) — 기본 끔. 켜려면 d455.launch.py (run_camera).
         # 가상 벽 (virtual_walls.py): 위도·경도 꺾은선을 지금 원점 기준으로 바꿔 지도에 100 으로.
         self.declare_parameter('virtual_walls_file', _default_walls_file())   # '' / none = 끔
