@@ -87,6 +87,7 @@ ros2 launch kaboat_sim simulation.launch.py
 배가 물 위에 안정적으로 떠 있으면 세팅 완료입니다.
 
 > 자율주행 스택(`autonomy.launch.py`) 실행법은 **[SKELETON.MD](SKELETON.MD)** 참고.
+> 게이트 양측 벽 실험: **[알고리즘 비교·분석](docs/GATE_WALL_EXPERIMENT.md)** / **[실제 rosbag 센서 + RViz 실행](docs/GATE_WALL_RVIZ.md)**. 기존 gate는 유지하며, 별도 실험 코드로 비교합니다.
 > 아래 6)/7)은 자율주행 코드 없이 시뮬레이터/보트 자체를 검증하는 수동 도구입니다.
 
 ### 6) WASD 원격 조종

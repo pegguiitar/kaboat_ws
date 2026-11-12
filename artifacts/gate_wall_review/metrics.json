@@ -1,0 +1,147 @@
+{
+  "warning": "References are approximate positions from the same bag; snapshots are correlated. This is open-loop replay, not navigation success.",
+  "reference_match_radius_m": 0.8,
+  "sources": {
+    "grid": {
+      "frames": 749,
+      "point_observations": 5891,
+      "matched": 5020,
+      "reference_posts_seen": 14,
+      "unmatched_percent": 14.8,
+      "matched_position_median_m": 0.199,
+      "matched_position_p90_m": 0.432
+    },
+    "detector": {
+      "frames": 749,
+      "point_observations": 7762,
+      "matched": 6674,
+      "reference_posts_seen": 14,
+      "unmatched_percent": 14.0,
+      "matched_position_median_m": 0.315,
+      "matched_position_p90_m": 0.555
+    },
+    "detector_unseen": {
+      "frames": 749,
+      "point_observations": 15909,
+      "matched": 7868,
+      "reference_posts_seen": 14,
+      "unmatched_percent": 50.5,
+      "matched_position_median_m": 0.318,
+      "matched_position_p90_m": 0.555
+    }
+  },
+  "walls": [
+    {
+      "source": "grid",
+      "direction": "heading",
+      "frames": 749,
+      "supported_percent": 74.0,
+      "known_assignment_count": 6546,
+      "known_side_accuracy_percent": 98.6,
+      "assigned_unmatched_percent": 8.6,
+      "raw_component_mixed_percent": 33.5,
+      "center_median_m": 0.164,
+      "center_p90_m": 0.444
+    },
+    {
+      "source": "grid",
+      "direction": "waypoint",
+      "frames": 749,
+      "supported_percent": 76.4,
+      "known_assignment_count": 6547,
+      "known_side_accuracy_percent": 99.5,
+      "assigned_unmatched_percent": 8.4,
+      "raw_component_mixed_percent": 21.2,
+      "center_median_m": 0.171,
+      "center_p90_m": 0.42
+    },
+    {
+      "source": "grid",
+      "direction": "adaptive",
+      "frames": 749,
+      "supported_percent": 53.5,
+      "known_assignment_count": 6427,
+      "known_side_accuracy_percent": 97.1,
+      "assigned_unmatched_percent": 8.1,
+      "raw_component_mixed_percent": 11.4,
+      "center_median_m": 0.103,
+      "center_p90_m": 0.274
+    },
+    {
+      "source": "detector",
+      "direction": "heading",
+      "frames": 749,
+      "supported_percent": 51.5,
+      "known_assignment_count": 5673,
+      "known_side_accuracy_percent": 95.2,
+      "assigned_unmatched_percent": 0.3,
+      "raw_component_mixed_percent": 35.2,
+      "center_median_m": 0.139,
+      "center_p90_m": 0.311
+    },
+    {
+      "source": "detector",
+      "direction": "waypoint",
+      "frames": 749,
+      "supported_percent": 70.5,
+      "known_assignment_count": 5975,
+      "known_side_accuracy_percent": 99.8,
+      "assigned_unmatched_percent": 0.3,
+      "raw_component_mixed_percent": 8.9,
+      "center_median_m": 0.146,
+      "center_p90_m": 0.307
+    },
+    {
+      "source": "detector",
+      "direction": "adaptive",
+      "frames": 749,
+      "supported_percent": 72.5,
+      "known_assignment_count": 5959,
+      "known_side_accuracy_percent": 99.5,
+      "assigned_unmatched_percent": 0.0,
+      "raw_component_mixed_percent": 3.5,
+      "center_median_m": 0.147,
+      "center_p90_m": 0.309
+    },
+    {
+      "source": "detector_unseen",
+      "direction": "heading",
+      "frames": 749,
+      "supported_percent": 6.8,
+      "known_assignment_count": 5749,
+      "known_side_accuracy_percent": 75.8,
+      "assigned_unmatched_percent": 1.8,
+      "raw_component_mixed_percent": 32.6,
+      "center_median_m": 0.198,
+      "center_p90_m": 0.467
+    },
+    {
+      "source": "detector_unseen",
+      "direction": "waypoint",
+      "frames": 749,
+      "supported_percent": 42.1,
+      "known_assignment_count": 6180,
+      "known_side_accuracy_percent": 98.6,
+      "assigned_unmatched_percent": 0.9,
+      "raw_component_mixed_percent": 13.5,
+      "center_median_m": 0.167,
+      "center_p90_m": 0.328
+    },
+    {
+      "source": "detector_unseen",
+      "direction": "adaptive",
+      "frames": 749,
+      "supported_percent": 5.9,
+      "known_assignment_count": 4164,
+      "known_side_accuracy_percent": 99.3,
+      "assigned_unmatched_percent": 2.2,
+      "raw_component_mixed_percent": 3.4,
+      "center_median_m": 0.177,
+      "center_p90_m": 0.395
+    }
+  ],
+  "baseline": {
+    "frames": 749,
+    "follow_frames": 508
+  }
+}
