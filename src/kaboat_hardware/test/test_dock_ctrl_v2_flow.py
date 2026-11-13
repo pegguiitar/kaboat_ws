@@ -512,42 +512,93 @@ def test_search_stops_when_yolo_status_is_stale(node):
     assert node.reports[-1]['detail'] == 'YOLO stale'
 
 
-def test_blocked_without_u_slot_repositions_once_onto_target_axis(node):
-    """가운데 슬롯 4 m 앞에서 오른쪽 옆 슬롯(x=4) 목표 — 45° 비스듬해 목표 ㄷ자 한쪽 면이 안 보이고
-    칸막이에 막힘. 보이는 가운데 ㄷ자를 슬롯 간격만큼 옮겨 임시 목표 ㄷ자(x=4)·경유점(뒷벽 5 m 앞)을
-    잡고, 선회 → 전진 → 정면 선회 → SCAN 다시. 우회는 한 번만."""
+def _oblique_setup(node, x=0.0, y=4.0, bearing=-math.pi / 4):
+    """가운데 슬롯(x=0) 정면 y m 에서 오른쪽 옆 슬롯(x=4) 표지 쪽(−45°) 을 목표로 SEEK."""
     node.slot_pitch = PITCH                            # 시험 도크 간격 (실선 yaml 은 bag 추정 3.55)
     _lock_bearing(node)
-    yaw = -math.pi / 4
-    _odom(node, 0.0, 4.0, yaw=yaw)
-    node.locked_bearing, node.seek_line_point = yaw, np.array([0.0, 4.0])
-    node._add_cloud(300.0, _cloud((0.0, 4.0)))
-    _scan(node, ahead_m=1.5)                           # 칸막이가 앞 1.5 m
+    _odom(node, x, y, yaw=bearing)
+    node.locked_bearing, node.seek_line_point = bearing, np.array([x, y])
+    node._add_cloud(300.0, _cloud((x, y)))
+
+
+def test_oblique_target_repositions_before_moving(node):
+    """보이는 가운데 ㄷ자 법선과 목표 방위가 45° (>= 37°) — 다가가기 전에 바로 우회."""
+    _oblique_setup(node)
+    _scan(node)                                        # 앞은 비어 있음 (막힘 아님)
     node._tick()
-    assert node.phase == 'SEEK' and 'ahead — holding' in node.reports[-1]['detail']
-    node.blocked_since -= 10.0                         # 3 s 넘게 막힘
-    node._tick()
-    assert node.phase == 'REPOSITION'
+    assert node.phase == 'REPOSITION' and node.sent[-1].linear.x == 0.0
+    assert 'deg off the visible U slot axis' in node.reports[-1]['detail']
     rp = node.reposition
-    assert rp['steps'] == -1                           # 가운데에서 오른쪽(−x 가 왼쪽) 한 칸
+    assert rp['steps'] == -1
     assert rp['target'] == pytest.approx([4.0, 0.0], abs=.2)
     assert rp['waypoint'] == pytest.approx([4.0, node.reposition_distance], abs=.2)
     assert rp['heading'] == pytest.approx(FACING_WALL, abs=math.radians(3))
+
+
+def test_target_slot_itself_visible_does_not_reposition(node):
+    """보이는 ㄷ자가 바로 목표 슬롯이면(0칸) 비스듬해도 우회하지 않는다 — SEEK 가 그대로 잠근다."""
+    _oblique_setup(node, x=2.6, y=4.0, bearing=math.atan2(-4.0, -2.6))   # 가운데 슬롯이 목표 (−57°)
     _scan(node)
-    node._tick()                                       # 경유점 쪽으로 선회 (전진 0)
-    assert node.sent[-1].linear.x == 0.0 and rp['stage'] in ('turn', 'drive')
+    node._tick()
+    assert node.phase in ('SEEK', 'TO_VIA', 'BACKOFF') and node.reposition is None
+
+
+def test_blocked_fallback_repositions_when_angle_check_cannot_decide(node):
+    """각도 판단이 안 될 때(여기선 끔) 예전처럼 앞이 3 s 막히면 우회. 우회는 한 번만."""
+    _oblique_setup(node)
+    node.reposition_angle = math.radians(89.0)         # 각도 판단 끔
+    _scan(node, ahead_m=1.5)
+    node._tick()
+    assert node.phase == 'SEEK' and 'ahead — holding' in node.reports[-1]['detail']
+    node.blocked_since -= 10.0
+    node._tick()
+    assert node.phase == 'REPOSITION'
+    rp = node.reposition
+    _scan(node)
     head = math.atan2(rp['waypoint'][1] - 4.0, rp['waypoint'][0])
     _odom(node, 0.0, 4.0, yaw=head)
     node._tick()
     node._tick()
     assert rp['stage'] == 'drive' and node.sent[-1].linear.x > 0.0
-    _odom(node, *rp['waypoint'], yaw=head)             # 경유점 도착
+    node.cloud.clear()                                 # 목표 ㄷ자는 아직 못 봄 → 경유점까지
+    _odom(node, *rp['waypoint'], yaw=head)
     node._tick()
     assert rp['stage'] == 'face' and node.sent[-1].linear.x == 0.0
-    _odom(node, *rp['waypoint'], yaw=FACING_WALL)      # 임시 ㄷ자 정면
+    _odom(node, *rp['waypoint'], yaw=FACING_WALL)
     node._tick()
     assert node.phase == 'SCAN' and node.reposition_used
     assert 're-scanning' in node.reports[-1]['detail']
+
+
+def test_target_u_locks_during_reposition_goes_straight_to_via(node):
+    """우회 중 목표 ㄷ자(x=4)가 양쪽 면까지 보여 안정되면 경유점 전에 바로 TO_VIA."""
+    _oblique_setup(node)
+    _scan(node)
+    node._tick()
+    assert node.phase == 'REPOSITION'
+    pos = (3.0, 4.6)                                   # 경유점 가는 길, 뒷벽 4.6 m (> 3.94)
+    _odom(node, *pos, yaw=math.radians(40))
+    for k in range(6):
+        node._add_cloud(400.0 + .25 * k, _cloud(pos))
+        node._tick()
+        if node.phase != 'REPOSITION':
+            break
+    assert node.phase == 'TO_VIA' and node.reposition is None
+    assert 'locked during reposition' in node.reports[-1]['detail']
+    assert node.route_enu[2].tolist() == pytest.approx([4.0, 1.0], abs=.1)     # 목표 슬롯 정지점
+
+
+def test_reposition_ignores_target_lock_closer_than_backoff_limit(node):
+    """뒷벽 3.94 m 보다 가까이서 잠기면 받지 않는다 (BACKOFF 후진 방지) — 우회를 계속."""
+    _oblique_setup(node)
+    _scan(node)
+    node._tick()
+    pos = (3.6, 3.7)
+    _odom(node, *pos, yaw=math.radians(40))
+    for k in range(6):
+        node._add_cloud(500.0 + .25 * k, _cloud(pos))
+        node._tick()
+    assert node.phase == 'REPOSITION'
 
 
 def test_reposition_needs_a_complete_u_slot(node):
