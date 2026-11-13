@@ -264,8 +264,8 @@ cell 과 구분되는 "좌표 랜드마크". 극좌표는 소비자가 자기 od
 위치에 접근한 뒤 헤딩을 맞춘다. 기본 도착 조건은 위치 0.35m 이내, 각도를 준
 경우 헤딩 8° 이내이면서 회전 속도 0.1 rad/s 이하가 0.5초 유지. 한 번 도착하면 반경의
 2배를 벗어나야 다시 접근한다(히스테리시스, 2026-11-09). 미션 시작 자세 접근
-(`mission_approach`)만 도착 조건이 1m 이내 + 헤딩 ±15° 이내, 회전 속도 조건 없음
-(`approach.position_tolerance` / `heading_tolerance_deg` / `settle_yaw_rate`, 0 = 조건 없음, 2026-11-12).
+(`mission_approach`)만 도착 조건이 2m 이내 + 헤딩 ±30° 이내, 회전 속도 조건 없음
+(`approach.position_tolerance` / `heading_tolerance_deg` / `settle_yaw_rate`, 0 = 조건 없음, 2026-11-12 1 m·±15° → 2026-11-13 2 m·±30°).
 
 ```python
 def compute_cmd(self):

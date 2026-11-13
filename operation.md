@@ -144,6 +144,7 @@ ros2 launch kaboat_hardware real_sensors.launch.py outdoor:=true rtk:=true \
 | `check_yolo` | `python3 scripts/check_yolo_masks.py` | 도킹 YOLO **마스크만** 확인 (뎁스·라이다 무관). `bash scripts/run_dock_yolo.sh`(D455 + YOLO, 모터 없음)를 먼저 켜 둔다. 1초마다 도형별 ✓신뢰도·화면 위치·방위각·최근 검출률, 추론 ms. 마스크 그린 영상을 5초마다 `~/kaboat_yolo_checks/날짜_시각/`에 PNG (`--save-every 0` 끔). Ctrl+C로 요약 |
 | `test_avoid_outdoor` | `ros2 launch kaboat_hardware outdoor_avoid_test.launch.py` | 야외 회피 시험 `avoid_entry` → `avoid_end`, **조건이 맞으면 즉시 출발**. 5절 참고 |
 | `test_tournament` | `ros2 launch kaboat_hardware outdoor_tournament_test.launch.py` | 토너먼트 회피(종합 미션과 별개 경기장) `tournament_entry` → `tournament_end`. `test_avoid_outdoor`와 같은 노드·조건·인자, **조건이 맞으면 즉시 출발**. 5절 참고 |
+| `go_tournament` / `go_avoid` / `go_gate` / `go_dock` / `go_station` / `go_search` | `python3 scripts/go_and_test.py 미션` | **`goto 미션_entry` → 시작 조건을 0.5 s 유지하면 goto 를 끄고 그 미션 시험을 바로 켬** (goto 를 손으로 안 끔). 시험은 각각 `test_tournament`·`test_avoid_outdoor`·`test_gate_outdoor`·`test_dock_outdoor`·`test_mission station`·`test_mission search`(접근 단계 없이 `entry_required:=false`). 기본 조건(각 미션 시작 조건과 같음): 게이트·도킹·스테이션·탐색 **2 m·기록 선수각 ±30°**, 회피·토너먼트 **3 m·`_end` 방향 ±45°**. 옵션 → 시험 인자 순: `go_tournament --dist 1.5 --heading 20 --goto thrust_ratio:=0.3 drive_enabled:=false`. 회피·토너먼트는 넘기는 동안 흐를 여유로 시험 출발 검사를 0.5 m·5° 넓혀 넘김(`start_tolerance`·`start_heading_tolerance_deg` 를 직접 주면 그 값). 넘기는 몇 초(도킹은 YOLO 로딩이라 더 김)는 명령이 없어 배가 조금 흐를 수 있음. Ctrl+C = 켜진 쪽 끄고 끝 |
 | `test_straight` / `test_circle` / `test_bspline` / `test_station` / `test_waypoint` / `test_los` / `test_avoid` | 각 `*_test.launch.py … wait_for_start:=false` | 단독 주행 시험, **실행 즉시 출발** ([TANK_TESTS_GUIDE.md](TANK_TESTS_GUIDE.md)) |
 
 ---
@@ -275,7 +276,7 @@ test_avoid_outdoor                               # 3) 실제 주행: 출발 조�
 test_avoid_outdoor start_point:=gate_entry goal_point:=gate_end   # 다른 지점 쌍
 ```
 
-- 출발 조건: 시작점에서 3 m(`start_tolerance`) 안, 선수가 목표 방향에서 45° 안. 안 맞으면
+- 출발 조건: 시작점에서 3 m(`start_tolerance`) 안, 선수가 목표 방향에서 ±45° 안(다른 미션 2 m·±30° 보다 널널하게). 안 맞으면
   `ros2 topic echo /real_avoid_test/status`에 `start_blocked=…` 이유가 나옵니다.
 - 목표 2 m(`goal_tolerance`) 안이면 `FINISHED`로 정지. 경로에서 1.5 m(`max_cross_track_error`) 넘게
   벗어나면 정지, 경로가 5초 넘게 없으면 후진 탈출(`allow_escape:=false`면 정지).
@@ -315,7 +316,7 @@ test_tournament drive_enabled:=false             # 2) 미리보기: RViz /real_a
 test_tournament                                  # 3) 실제 주행: 출발 조건이 맞으면 바로 출발
 ```
 
-- 출발 조건(3 m·45°), 목표 2 m, 경로 이탈 1.5 m 정지, 후진 탈출은 `test_avoid_outdoor`와 같고 같은 인자로
+- 출발 조건(3 m·±45°), 목표 2 m, 경로 이탈 1.5 m 정지, 후진 탈출은 `test_avoid_outdoor`와 같고 같은 인자로
   바꿉니다. 예) `test_tournament max_cross_track_error:=2.5`.
 - 상태: `ros2 topic echo /real_avoid_test/status`.
 - **가상 벽은 회피 경기장(`arenas.avoid`)만 있습니다.** 토너먼트 경기장 둘레 로프(라이다에 안 잡힘)는
@@ -339,7 +340,7 @@ test_gate_outdoor approach:=true             # gate_entry 접근(직선, 회피 
 - 추력: 게이트 통과(LOS) 직진 상한 **0.35**(약 1656 µs, `gate.los_thrust_ratio`)·회전 0.31. 0.4(1675 µs)는
   실측 약 1.0 m/s 로 간격 3~4 m 게이트에 빨라 0.3(1638 µs)으로 내렸다가 조금 올림(2026-11-13).
   현장에서 바꿔 보기: `test_gate_outdoor los_thrust:=0.3`.
-- `approach:=true` → 게이트 시작 조건: `gate_entry` **1 m 안 + 선수각 ±15° 안**을 0.5초 유지(회전 속도
+- `approach:=true` → 게이트 시작 조건: `gate_entry` **2 m 안 + 선수각 ±30° 안**을 0.5초 유지(회전 속도
   조건 없음). 모든 미션의 시작 자세 접근(`mission_approach`)이 같은 조건. 미리보기
   (`motion_enabled:=false`)에서는 도착 신호를 안 내서 `gate`로 넘어가지 않습니다.
 - 쌍 고르기: 두 부표를 잇는 선이 진행 방향(직전 게이트 방향, 첫 게이트는 배→`gate_end`)의 수직에서

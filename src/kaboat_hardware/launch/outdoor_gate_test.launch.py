@@ -11,8 +11,8 @@
 
 gate_end 는 마지막 게이트 뒤 2~3 m 통로 중심에 기록한다 — 모든 쌍을 지난 뒤 4 m 안이어야
 그리로 가고(max_goal_after_gates), 2 m 안이면 완료, 그다음 mission_manager 가 done(정지).
-approach:=true 면 gate_entry 까지 미션 접근(직선, 장애물 회피 없음)부터 한다 — 1 m 안 +
-선수각 ±15° 안을 0.5 s 유지하면(회전 속도 조건 없음, mission_approach 기본값) gate 시작.
+approach:=true 면 gate_entry 까지 미션 접근(직선, 장애물 회피 없음)부터 한다 — 2 m 안 +
+선수각 ±30° 안을 0.5 s 유지하면(회전 속도 조건 없음, mission_approach 기본값) gate 시작.
 """
 
 import os

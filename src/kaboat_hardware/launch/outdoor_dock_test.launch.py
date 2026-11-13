@@ -18,7 +18,7 @@ YOLO 는 젯슨 CUDA venv 가 필요하므로 scripts/run_dock_mission.sh (단�
   → 경로 한 번 고정 (너무 가까우면 먼저 선수 유지 후진) → 경유점(입구 밖 1.5 m) → ㄷ자 중심선과
   평행하게 선수 정렬 → 정지점(뒷벽 앞 1 m) → 선수 유지 후진 3.25 m → /mission/complete=dock → done(정지).
 배는 목표 슬롯을 40° 안쪽에서 바라봐야 양쪽 면이 보인다 — dock_entry 는 가운데 슬롯 정면.
-approach:=true 면 dock_entry 까지 미션 접근(직선, 회피 없음, 1 m·±15°)부터 한다.
+approach:=true 면 dock_entry 까지 미션 접근(직선, 회피 없음, 2 m·±30°)부터 한다.
 YOLO 결과는 /dock/detection_status(JSON)·/dock/debug_image(마스크 영상) 등으로 나오고 rec_bag 이 저장한다.
 """
 

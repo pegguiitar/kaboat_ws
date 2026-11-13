@@ -95,7 +95,9 @@ def generate_launch_description():
                           'start_state': ParameterValue(
                               LaunchConfiguration('start_state'), value_type=str),
                           'single_mission': ParameterValue(
-                              LaunchConfiguration('single_mission'), value_type=bool)}]),
+                              LaunchConfiguration('single_mission'), value_type=bool),
+                          'entry_required': ParameterValue(
+                              LaunchConfiguration('entry_required'), value_type=bool)}]),
     ]
 
     return LaunchDescription([
@@ -120,6 +122,10 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'single_mission', default_value='false',
             description='true = start_state 하나만 하고 done(정지) — 미션 하나씩 시험'),
+        DeclareLaunchArgument(
+            'entry_required', default_value='true',
+            description='false = 미션 시작 자세 접근(approach) 없이 바로 시작 — go_station·go_search 처럼 '
+                        'goto 로 이미 세운 뒤 켤 때'),
         DeclareLaunchArgument(
             'gate_params_file', default_value=gate_params,
             description='게이트 쌍 수와 라이다/DRI 임계값 YAML'),
