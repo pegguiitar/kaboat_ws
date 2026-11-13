@@ -48,7 +48,8 @@ from std_msgs.msg import String
 from visualization_msgs.msg import Marker, MarkerArray
 
 from .behavior_base import BehaviorBase, WAYPOINT_MAX_ANGULAR, yaw_from_quaternion
-from .los_controller import circle_path, sampled_path
+from .los_controller import (BSPLINE_TRACK_YAW_KD, BSPLINE_TRACK_YAW_KP, circle_path,
+                             sampled_path)
 from .obstacle_avoidance_utils import apply_repulsion
 from .search_orbit import SearchFsm, SearchParams, exit_clear, measure_shapes, tangent_entry
 from .waypoint_controller import WaypointController, waypoint as make_waypoint
@@ -56,6 +57,8 @@ from .waypoint_controller import WaypointController, waypoint as make_waypoint
 GOAL_RESET_DISTANCE = 1.0   # [m] 출구·영역 중심이 이만큼 바뀌면 탐색을 새로 시작
 ENTRY_SPACING = 0.05        # [m] 진입 경로 샘플 간격
 ENTRY_DONE_DISTANCE = 1.0   # [m] 진입 경로 끝점에 이만큼 다가가면 원 추종으로
+ENTRY_ALIGN_AHEAD = 1.5     # [m] 진입 방향 = 경로에서 배와 가장 가까운 점부터 이만큼 앞 점 쪽
+ENTRY_ALIGN_DONE_DEG = 20.0  # [deg] 제자리 회전을 이 안까지 하고 LOS 진입으로
 MARKER_RGB = {'red': (1.0, 0.1, 0.1), 'green': (0.1, 0.9, 0.2), 'black': (0.2, 0.2, 0.2)}
 
 
@@ -180,6 +183,7 @@ class SearchCircler(BehaviorBase):
         self._shape_hist = {}          # 부표 ID → 최근 모양 판정 (True = 부표 모양)
         self._shape_grid_at = None     # 마지막으로 모양을 잰 지도 수신 시각
         self._exit_clear = False       # 완료 뒤 출구 쪽에 와서 원을 벗어났는가
+        self._entry_align = None       # 진입 시작 선수 맞추기: None / 'check' / 'pivot'
         self._last_status = None
 
     # ── 활성화 ──────────────────────────────────────────
@@ -339,6 +343,11 @@ class SearchCircler(BehaviorBase):
             self._circle_center = fsm.center
         ignore = (cx, cy, self.params.ignore_radius)
         if self._entry_path is not None and not self._entry_done:
+            pivot = self._entry_pivot()
+            if pivot is not None:
+                self._status(f'{self.params.target_color} 부표 ({cx:+.1f}, {cy:+.1f}) '
+                             '진입 방향으로 제자리 회전')
+                return pivot
             self._status(f'{self.params.target_color} 부표 ({cx:+.1f}, {cy:+.1f}) '
                          f'{fsm.direction} 선회 원으로 접선 진입')
             cmd, reached = self.los(self._entry_path, self.params.orbit_thrust,
@@ -371,10 +380,48 @@ class SearchCircler(BehaviorBase):
         # 모서리를 선회 원 반경 호로 — 진입 곡률 ≤ 1/orbit_radius 라 LOS 진입 속도가 선회 속도 아래로 안 떨어진다
         self._entry_path = polyline_path(pts, fillet_radius=self.params.orbit_radius)
         self._entry_done = False
+        self._entry_align = 'check'
         self._los_follower.reset()
         via = ' (경유점 1개 — 다른 부표 비킴)' if len(pts) == 4 else ''
         self.get_logger().info(
             f'search: 접선 진입 — 접점 ({pts[-2][0]:.1f}, {pts[-2][1]:.1f}){via}')
+
+    def _entry_pivot(self):
+        """진입 시작 때 한 번 — 경로 방향(가장 가까운 점에서 ENTRY_ALIGN_AHEAD 앞)과 선수각 차이가
+        entry_pivot_deg 보다 크면 전진 없이 제자리에서 ENTRY_ALIGN_DONE_DEG 안까지 돌린다 (Twist),
+        아니면 None (LOS 진입으로). 크게 돌며 전진하면 그 사이 앞 부표에 반발 조향이 걸려 반대편으로
+        돌아갔다. 제자리 회전에는 반발을 걸지 않는다 (LOOK 과 같은 이유)."""
+        state = getattr(self, '_entry_align', None)
+        if state is None:
+            return None
+        pose = self.odom.pose.pose
+        boat = np.array([pose.position.x, pose.position.y])
+        samples = self._entry_path.samples
+        i = int(np.argmin(np.linalg.norm(samples - boat, axis=1)))
+        j = min(len(samples) - 1, i + int(round(ENTRY_ALIGN_AHEAD / self._entry_path.spacing)))
+        dx, dy = samples[j] - boat
+        if math.hypot(dx, dy) < 0.3:
+            self._entry_align = None
+            return None
+        yaw = yaw_from_quaternion(pose.orientation)
+        err = math.atan2(math.sin(math.atan2(dy, dx) - yaw), math.cos(math.atan2(dy, dx) - yaw))
+        if state == 'check':
+            if abs(err) <= math.radians(self.params.entry_pivot_deg):
+                self._entry_align = None
+                return None
+            self._entry_align = 'pivot'
+            self.get_logger().info(
+                f'search: 진입 방향과 선수각 {math.degrees(err):+.0f}° — 제자리 회전 먼저')
+        if abs(err) <= math.radians(ENTRY_ALIGN_DONE_DEG):
+            self._entry_align = None
+            self._los_follower.reset()
+            return None
+        turn = self.params.orbit_turn
+        self._command_full_scale = (self.params.orbit_thrust, turn)
+        cmd = Twist()
+        cmd.angular.z = max(-turn, min(turn, BSPLINE_TRACK_YAW_KP * err
+                                       - BSPLINE_TRACK_YAW_KD * self.odom.twist.twist.angular.z))
+        return cmd
 
     def _hold_pose(self, boat, area):
         """LOOK — 활성화 자리를 지키며 탐색 영역 중심 쪽을 본다 (바람 보정용 상한 hold_linear)."""

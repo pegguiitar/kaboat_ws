@@ -116,6 +116,9 @@ class SearchParams:
     entry_lead: float = 0.8           # 접점에서 원을 따라 이만큼 더 간 점까지 진입 경로 [m]
     entry_clearance: float = 1.5      # 진입 직선이 다른 부표와 이보다 가까우면 비켜 가는 경유점 [m]
     entry_skip_band: float = 0.7      # 원에서 이만큼 안이면 진입 경로 없이 원을 바로 추종 [m]
+    entry_pivot_deg: float = 60.0     # 진입 시작 때 경로 방향과 선수각 차이가 이보다 크면 제자리에서 먼저 돈다 [deg]
+                                      # (180 = 끔). 2026-11-14 시뮬: approach 0.4 로 빨리 도착해 선수 0° 로 고정 →
+                                      # 진입 120° 쪽으로 크게 돌다 반발 조향에 밀려 검정 반대편으로 돌아 중심 0.61 m
     exit_cone_deg: float = 75.0       # 완료 뒤, 부표→배 방향과 배→출구 방향 사이가 이 안일 때 원을 벗어난다 [deg]
                                       # (그 전에는 원을 이어 돈다 — 출구 직선이 방금 돈 부표를 스치지 않게)
     exit_arrive_radius: float = 0.4   # 출구점이 search_end 에서 비킨 점일 때 도착 반경 [m]
@@ -149,6 +152,8 @@ class SearchParams:
                 and math.isfinite(self.shape_exclude_radius) and self.shape_exclude_radius >= 0.0):
             raise ValueError('search shape_min_range must be in [0, shape_max_range) and '
                              'shape_exclude_radius >= 0')
+        if not (math.isfinite(self.entry_pivot_deg) and 20.0 < self.entry_pivot_deg <= 180.0):
+            raise ValueError('search.entry_pivot_deg must be in (20, 180]')
         if not (math.isfinite(self.exit_cone_deg) and 0.0 < self.exit_cone_deg <= 90.0
                 and math.isfinite(self.exit_arrive_radius) and self.exit_arrive_radius > 0.0):
             raise ValueError('search exit_cone_deg must be in (0, 90] and exit_arrive_radius > 0')

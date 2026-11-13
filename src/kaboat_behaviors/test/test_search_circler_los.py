@@ -50,7 +50,7 @@ def make_state(color, buoys, boat=(45.0, 70.0), yaw=0.0, search_center=(50.0, 70
     state.waypoint = lambda x, y, *a, **kw: (calls.append(('wp', x, y, *a, kw)) or Twist(), False)
     state.report_complete = lambda: state.completed.append(True)
     for name in ('_status', '_go_goal', '_area_xy', '_plan_entry', '_hold_pose', '_grid_ok',
-                 '_update_shapes', '_shape_ok'):
+                 '_update_shapes', '_shape_ok', '_entry_pivot'):
         setattr(state, name, (lambda n: lambda *a: getattr(SearchCircler, n)(state, *a))(name))
     state._hold_ctrl = WaypointController(WaypointParams(
         max_linear=state.params.hold_linear, max_angular=WAYPOINT_MAX_ANGULAR,
@@ -100,6 +100,29 @@ def test_far_lock_follows_tangent_entry_then_circle():
     SearchCircler.compute_cmd(state)
     SearchCircler.compute_cmd(state)
     assert state.calls[-1][0].closed
+
+
+def test_entry_pivots_in_place_when_heading_far_off():
+    # 진입 경로는 동쪽(+x)인데 배는 서쪽(180°)을 봄 → 전진 없이 제자리 회전, 맞으면 LOS 진입
+    state = make_state('red', [buoy('red', 52.0, 71.0)], boat=(45.0, 70.0), yaw=math.pi)
+    cmd = SearchCircler.compute_cmd(state)
+    assert state.calls == [] and cmd.linear.x == 0.0 and abs(cmd.angular.z) > 0.1
+    assert '제자리 회전' in state._last_status
+    first = state._entry_path
+    state.odom.pose.pose.orientation.z = math.sin(0.15 / 2)          # 선수 8.6° — 20° 안
+    state.odom.pose.pose.orientation.w = math.cos(0.15 / 2)
+    SearchCircler.compute_cmd(state)
+    assert state.calls and state.calls[-1][0] is first                 # 같은 진입 경로를 LOS 로
+    state.odom.pose.pose.orientation.z = 1.0                           # 다시 틀어져도 회전은 한 번만
+    state.odom.pose.pose.orientation.w = 0.0
+    SearchCircler.compute_cmd(state)
+    assert state.calls[-1][0] is first
+
+
+def test_entry_no_pivot_when_heading_close():
+    state = make_state('red', [buoy('red', 52.0, 71.0)], boat=(45.0, 70.0), yaw=math.radians(40))
+    SearchCircler.compute_cmd(state)
+    assert state.calls and not state.calls[0][0].closed                # 바로 LOS 진입
 
 
 def test_entry_corners_are_rounded_so_los_keeps_speed():
