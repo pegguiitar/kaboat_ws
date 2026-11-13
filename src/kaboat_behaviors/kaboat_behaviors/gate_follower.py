@@ -8,6 +8,13 @@ avoidance planner is not used because it can route around a gate.
 뒤로 이어 둔다(max_chain_gates 까지). 지금 게이트를 기둥 사이로 지나면 경로를 새로 만들지
 않고 바로 다음 칸으로 넘어간다. 다음 게이트를 못 찾거나 이은 경로가 검사에 걸리면 예전처럼
 게이트 하나씩 간다.
+
+첫 쌍 찾아 다가가기 (2026-11-13): 첫 게이트(통과 0개)에서 쌍이 seek_first_after_sec 넘게 안
+잡히고 앞 seek_wait_within(4.5 m) 안에 부표가 하나도 없으면(멀어서 안 보임), 그 너머 지도 부표
+쪽(없으면 배 → gate_end 방향, 진행선에서 ±seek_max_bias_deg 안)으로 seek_thrust_ratio 로 천천히
+다가간다(상태 SEEK_FIRST_PAIR). 4.5 m 안에 부표가 들어오면 예전처럼 서서 쌍을 기다린다 — 보이는데
+쌍이 안 될 때 다가가면 게이트 2 를 먼저 골라 첫 게이트를 건너뛰었다(시뮬). 시작 자리에서
+seek_max_distance 까지만, 앞 seek_stop_ahead 안에 부표가 있으면 선다.
 """
 
 import dataclasses
@@ -43,6 +50,7 @@ HOLD_YAW_KP = 0.8
 HOLD_YAW_KD = 0.3
 HOLD_ALONG_KP = 0.3
 GATE_LOS_THRUST_RATIO = 0.35  # 게이트 통과(LOS) 직진 상한 — config/gate_params.yaml 과 같게 (0.3 → 0.35, 2026-11-13)
+SEEK_LOOK_BEYOND = 4.0        # [m] 첫 쌍 다가가기 방향: 앞 창 너머 이 거리까지의 지도 부표를 본다
 
 
 class GateFollower(BehaviorBase):
@@ -91,6 +99,15 @@ class GateFollower(BehaviorBase):
         # 밀려서 막히면 서기 전에 지금 자리에서 경로 다시 그리기 + 안전 검사를 '지금보다 더
         # 가까워지지 않기'까지 풀기 (false = 예전처럼 바로 막힘·정지)
         self.declare_parameter('gate.replan_from_here', True)
+        # 첫 쌍 찾아 다가가기 (위 모듈 설명): 첫 게이트에서 쌍이 이 시간 [s] 넘게 안 잡히면
+        # 천천히 다가간다 (0 = 끔, 예전처럼 서서 기다림)
+        self.declare_parameter('gate.seek_first_after_sec', 2.0)
+        self.declare_parameter('gate.seek_thrust_ratio', 0.12)     # 직진 (시뮬 약 0.45 m/s)
+        self.declare_parameter('gate.seek_max_distance', 3.0)      # [m] 시작 자리에서 이만큼까지만
+        self.declare_parameter('gate.seek_stop_ahead', 1.5)        # [m] 앞 이 안에 부표가 있으면 섬
+        # [m] 앞 이 거리 안에 부표가 보이면 다가가지 않고 쌍을 기다린다 (검출 83~92 % 거리)
+        self.declare_parameter('gate.seek_wait_within', 4.5)
+        self.declare_parameter('gate.seek_max_bias_deg', 30.0)     # 진행선에서 부표 쪽으로 꺾는 상한
         self.thrust_ratio = float(self.get_parameter('gate.thrust_ratio').value)
         self.los_thrust_ratio = float(
             self.get_parameter('gate.los_thrust_ratio').value)
@@ -109,6 +126,21 @@ class GateFollower(BehaviorBase):
             self.get_parameter('gate.post_visible_timeout_sec').value)
         self.hold_thrust = float(self.get_parameter('gate.hold_thrust_ratio').value)
         self.replan_from_here = bool(self.get_parameter('gate.replan_from_here').value)
+        self.seek_after = float(self.get_parameter('gate.seek_first_after_sec').value)
+        self.seek_thrust = float(self.get_parameter('gate.seek_thrust_ratio').value)
+        self.seek_max_distance = float(self.get_parameter('gate.seek_max_distance').value)
+        self.seek_stop_ahead = float(self.get_parameter('gate.seek_stop_ahead').value)
+        self.seek_wait_within = float(self.get_parameter('gate.seek_wait_within').value)
+        self.seek_max_bias = math.radians(
+            float(self.get_parameter('gate.seek_max_bias_deg').value))
+        if (not all(math.isfinite(v) for v in (
+                self.seek_after, self.seek_thrust, self.seek_max_distance,
+                self.seek_stop_ahead, self.seek_wait_within, self.seek_max_bias))
+                or self.seek_after < 0.0 or not 0.0 <= self.seek_thrust <= 1.0
+                or self.seek_max_distance < 0.0 or self.seek_stop_ahead < 0.0
+                or self.seek_wait_within < self.seek_stop_ahead
+                or not 0.0 <= self.seek_max_bias < math.pi / 2):
+            raise ValueError('invalid gate first-pair seek parameters')
         if (not all(math.isfinite(v) for v in (
                 self.visibility_release, self.replan_timeout, self.reject_hold,
                 self.post_visible_timeout, self.hold_thrust))
@@ -145,6 +177,9 @@ class GateFollower(BehaviorBase):
         self._memory_grid = None     # 기억에 마지막으로 넣은 지도 메시지
         self._extend_block_until = 0.0   # 이은 경로가 검사에 걸려 줄인 뒤 잠깐 다시 잇지 않음
         self._replan_block_until = 0.0   # 밀려서 다시 그린 뒤 잠깐은 다시 안 그림
+        self._wait_since = None      # 첫 쌍을 기다리기 시작한 시각 (첫 쌍 찾아 다가가기)
+        self._seek_origin = None     # 다가가기 시작한 자리 — 여기서 seek_max_distance 까지만
+        self._seek_note = None       # 다가가다 선 이유 (로그 한 번만)
         p = self.gate_params
         self._memory = PostMemory(
             match_radius=p.memory_match_radius, confirm_hits=p.memory_confirm_hits,
@@ -191,6 +226,9 @@ class GateFollower(BehaviorBase):
         self._memory_grid = None
         self._extend_block_until = 0.0
         self._replan_block_until = 0.0
+        self._wait_since = None
+        self._seek_origin = None
+        self._seek_note = None
 
     def on_deactivate(self):
         self._pair = None
@@ -259,6 +297,99 @@ class GateFollower(BehaviorBase):
         cmd.linear.x = push
         cmd.angular.z = turn
         return cmd
+
+    def _wait_first_pair(self, boat, yaw, dri, posts, goal, now):
+        """쌍을 못 골랐을 때. 첫 게이트면 seek_first_after_sec 뒤 첫 쌍 쪽으로 천천히 다가가고,
+        그 밖(두 번째 게이트부터·한도·막힘)은 예전처럼 서서 기다린다."""
+        if self._passed_midpoints or self.seek_after <= 0.0 or self.seek_thrust <= 0.0:
+            return self._stop('WAIT_GATE_PAIR', hold=True)
+        if self._wait_since is None:
+            self._wait_since = now
+        if now - self._wait_since < self.seek_after:
+            return self._stop('WAIT_GATE_PAIR', hold=True)
+        cmd, why = self._seek_command(boat, yaw, dri, posts, goal)
+        if cmd is None:
+            if why != self._seek_note:
+                self._seek_note = why
+                self.get_logger().info(
+                    f'gate: 첫 쌍 찾아 다가가기 멈춤 — {why}; 서서 기다림 (배 {_xy(boat)})')
+            return self._stop('WAIT_GATE_PAIR', hold=True)
+        self._seek_note = None
+        self._hold_point = None
+        self._status('SEEK_FIRST_PAIR')
+        self._publish_debug()
+        return self._output(cmd)
+
+    def _seek_command(self, boat, yaw, dri, posts, goal):
+        """첫 쌍이 잡힐 쪽으로 천천히 다가가는 명령 → (Twist, '') 또는 (None, 멈춘 이유).
+
+        다가가는 건 앞 seek_wait_within(4.5 m) 안에 부표가 하나도 없을 때뿐 — 멀어서 안 보이거나
+        짝이 앞 창(6 m) 밖에 걸린 경우만 푼다. 4.5 m 안에 부표가 보이는데 쌍이 안 되는 건 서서
+        기다린다(그 거리는 검출 83~92 % 라 곧 잡힘): 그때 다가가면 게이트 1 이 쌍으로 잡히기 전에
+        게이트 2 가 먼저 쌍이 되어 첫 게이트를 건너뛰었다 (녹화 기반 시뮬, 첫 게이트 3.7 m 시작
+        50판 중 1 → 5). 앞 창 전체를 기준으로 하면 비스듬한 게이트 1 의 한쪽 부표만 창(6 m) 안에
+        걸려 영영 기다렸다(6 m 시작).
+        방향: 배 → gate_end 진행선. 4.5 m 너머 ~ 앞 창 + SEEK_LOOK_BEYOND 의 지도 부표가 둘 이상
+        보이면 그 가운데 쪽으로 기울인다(±seek_max_bias).
+        멈춤: 4.5 m 안에 부표가 들어옴 / 시작 자리에서 seek_max_distance 넘게 옴 / 앞
+        seek_stop_ahead 안(옆 포함)에 부표 / 앞 2.5 m 안전 검사(DRI·부표 min_clearance)에 걸림.
+        """
+        p = self.gate_params
+        axis = np.asarray(goal, dtype=float) - np.asarray(boat, dtype=float)
+        length = float(np.linalg.norm(axis))
+        if length < 1e-6:
+            return None, 'gate_end 위'
+        axis /= length
+        side_axis = np.array([-axis[1], axis[0]])
+        if self._seek_origin is None:
+            self._seek_origin = boat
+        moved = math.dist(boat, self._seek_origin)
+        if moved >= self.seek_max_distance:
+            return None, f'시작 자리에서 {moved:.1f} m 옴 (한도 {self.seek_max_distance:.1f} m)'
+        rel = np.asarray(posts, dtype=float).reshape(-1, 2) - np.asarray(boat, dtype=float)
+        along, side = rel @ axis, rel @ side_axis
+        near = ((along > -0.5) & (along < self.seek_stop_ahead)
+                & (np.abs(side) <= p.max_gate_width / 2.0))
+        if near.any():
+            k = int(np.argmin(np.where(near, np.hypot(along, side), np.inf)))
+            return None, (f'앞 {along[k]:.1f} m·옆 {side[k]:+.1f} m 에 부표 '
+                          f'(seek_stop_ahead {self.seek_stop_ahead:.1f} m)')
+        lateral_ok = np.abs(side) <= p.max_midpoint_lateral + p.max_gate_width / 2.0
+        close = (along >= p.min_gate_forward) & (along <= self.seek_wait_within) & lateral_ok
+        if close.any():
+            return None, (f'앞 {self.seek_wait_within:.1f} m 안에 부표 {int(close.sum())}개 '
+                          '— 쌍이 잡히길 기다림')
+        beyond = ((along > self.seek_wait_within)
+                  & (along <= p.max_gate_forward + SEEK_LOOK_BEYOND) & lateral_ok)
+        bias = 0.0
+        if int(beyond.sum()) >= 2:
+            bias = math.atan2(float(np.mean(side[beyond])), float(np.mean(along[beyond])))
+            bias = max(-self.seek_max_bias, min(self.seek_max_bias, bias))
+        base = math.atan2(axis[1], axis[0])
+        heading = None
+        for candidate in ((base + bias, base) if bias else (base,)):
+            direction = np.array([math.cos(candidate), math.sin(candidate)])
+            steps = np.arange(0.0, 2.5 + 1e-9, p.sample_spacing)
+            points = np.asarray(boat, dtype=float) + steps[:, None] * direction
+            if points_safe(dri, points, p, start=boat if self.replan_from_here else None):
+                heading = candidate
+                break
+        if heading is None:
+            return None, '앞 2.5 m 안전 검사에 걸림'
+        err = math.atan2(math.sin(heading - yaw), math.cos(heading - yaw))
+        turn = max(-self.los_turn_ratio, min(self.los_turn_ratio,
+                   HOLD_YAW_KP * err - HOLD_YAW_KD * self.odom.twist.twist.angular.z))
+        cmd = Twist()
+        cmd.linear.x = self.seek_thrust if abs(err) < math.radians(30.0) else 0.0
+        cmd.angular.z = turn
+        self._command_full_scale = (self.seek_thrust, self.los_turn_ratio)
+        self.get_logger().info(
+            f'gate: SEEK_FIRST_PAIR — 첫 쌍 쪽으로 다가감: 방향 {math.degrees(heading):.0f}° '
+            f'(gate_end 쪽에서 {math.degrees(heading - base):+.0f}°, 먼 부표 '
+            f'{int(beyond.sum())}개), '
+            f'시작 자리에서 {moved:.1f}/{self.seek_max_distance:.1f} m (배 {_xy(boat)})',
+            throttle_duration_sec=1.0)
+        return cmd, ''
 
     def _posts_visible(self, now):
         """지금 게이트 두 기둥이 보이는지 — 각각 post_visible_timeout 안에 한 번 잡혔으면."""
@@ -557,7 +688,7 @@ class GateFollower(BehaviorBase):
                     f'gate: WAIT_GATE_PAIR — 쌍 없음: {describe_reasons(stats)}; '
                     f'보류 중 쌍 {len(self._rejected)}, 통과 {len(self._passed_midpoints)}, '
                     f'배 {_xy(boat)}', throttle_duration_sec=1.0)
-                return self._stop('WAIT_GATE_PAIR', hold=True)
+                return self._wait_first_pair(boat, yaw, dri, posts, goal, now)
             if not pair_observed(pair, self._scan_hits, self.gate_params):
                 seen = [self._post_seen(post) for post in (pair.left, pair.right)]
                 self.get_logger().info(
@@ -565,7 +696,8 @@ class GateFollower(BehaviorBase):
                     f'(왼 {_xy(pair.left)} {"보임" if seen[0] else "안 보임"}, '
                     f'오 {_xy(pair.right)} {"보임" if seen[1] else "안 보임"}; 지도에만 남은 것)',
                     throttle_duration_sec=1.0)
-                return self._stop('WAIT_GATE_PAIR', hold=True)
+                return self._wait_first_pair(boat, yaw, dri, posts, goal, now)
+            self._wait_since = None
             d = pair.direction
             self.get_logger().info(
                 f'gate: 게이트 {len(self._passed_midpoints) + 1}/'

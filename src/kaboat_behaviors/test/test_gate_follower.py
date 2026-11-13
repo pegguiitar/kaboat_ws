@@ -4,6 +4,7 @@ import math
 import time
 
 import numpy as np
+import pytest
 import rclpy
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import OccupancyGrid, Odometry
@@ -219,6 +220,144 @@ def test_stall_after_crossing_counts_the_gate_as_passed():
         assert node._passed_midpoints == [mid]
         assert node._rejected == []
         assert node._status_text == 'GATE_1/7_PASSED'
+    finally:
+        if node is not None:
+            node.destroy_node()
+        rclpy.shutdown()
+
+
+# ── 첫 쌍 찾아 다가가기 (SEEK_FIRST_PAIR) ─────────────────────────────
+
+class _Clock:
+    def __init__(self, t=1000.0):
+        self.t = t
+
+    def __call__(self):
+        return self.t
+
+
+def _seek_node(monkeypatch, posts, goal_x=14.0):
+    clock = _Clock()
+    monkeypatch.setattr(time, 'monotonic', clock)     # gate_follower·behavior_base 가 쓰는 시계
+    node = _ready_node(posts)
+    goal = PoseStamped()
+    goal.header.frame_id = 'odom'
+    goal.pose.position.x = goal_x
+    node._on_goal(goal)
+    previews = []
+    node.preview_pub.publish = previews.append
+    return node, clock, previews
+
+
+def _tick_at(node, clock, t, x=0.0, y=0.0):
+    clock.t = t
+    _set_odom(node, x, y)
+    node._on_grid(_grid(node._test_posts))
+    return node.compute_cmd()
+
+
+FAR_GATES = [(x, y) for x in (7.5, 9.5, 11.5) for y in (-1.8, 1.8)]   # 첫 게이트 7.5 m (앞 창 6 m 밖)
+
+
+def test_seek_first_pair_creeps_toward_far_gate_then_follows_it(monkeypatch):
+    rclpy.init()
+    node = None
+    try:
+        node, clock, previews = _seek_node(monkeypatch, FAR_GATES)
+        _tick_at(node, clock, 1000.0)
+        assert node._status_text == 'WAIT_GATE_PAIR'          # 처음 2 s 는 그대로 기다림
+        _tick_at(node, clock, 1001.0)
+        assert node._status_text == 'WAIT_GATE_PAIR' and previews[-1].linear.x == 0.0
+        cmd = _tick_at(node, clock, 1002.5)
+        assert node._status_text == 'SEEK_FIRST_PAIR'
+        assert previews[-1].linear.x == pytest.approx(node.seek_thrust)   # 천천히 앞으로
+        assert abs(previews[-1].angular.z) < 0.05      # 대칭 게이트 — 거의 곧장 (격자 반 칸 치우침)
+        assert cmd.linear.x == 0.0                                        # 미리보기 — 실제 명령 0
+        # 2 m 다가가면 첫 게이트가 앞 창(6 m) 안 → 평소처럼 쌍을 골라 따라감
+        _tick_at(node, clock, 1003.0, x=2.0)
+        assert node._status_text.startswith('FOLLOW_GATE_1/')
+        assert node._pair.midpoint[0] == pytest.approx(7.7, abs=0.2)      # 첫 게이트 (7.5 줄)
+    finally:
+        if node is not None:
+            node.destroy_node()
+        rclpy.shutdown()
+
+
+def test_seek_first_pair_stops_at_distance_limit(monkeypatch):
+    rclpy.init()
+    node = None
+    try:
+        far = [(x, y) for x in (12.0, 14.0) for y in (-1.8, 1.8)]      # 3 m 가도 앞 창 밖
+        node, clock, previews = _seek_node(monkeypatch, far, goal_x=16.0)
+        _tick_at(node, clock, 1000.0)
+        _tick_at(node, clock, 1002.5)
+        assert node._status_text == 'SEEK_FIRST_PAIR'
+        _tick_at(node, clock, 1003.0, x=3.1)                           # 시작 자리에서 3.1 m
+        assert node._status_text == 'WAIT_GATE_PAIR' and previews[-1].linear.x == 0.0
+    finally:
+        if node is not None:
+            node.destroy_node()
+        rclpy.shutdown()
+
+
+def test_seek_first_pair_waits_when_a_post_is_just_ahead(monkeypatch):
+    # 짝 없는 부표가 앞 1.2 m — 더 가면 첫 게이트선을 쌍 없이 넘을 수 있어 서서 기다림
+    rclpy.init()
+    node = None
+    try:
+        node, clock, previews = _seek_node(monkeypatch, [(1.2, 0.8), *FAR_GATES])
+        _tick_at(node, clock, 1000.0)
+        _tick_at(node, clock, 1002.5)
+        assert node._status_text == 'WAIT_GATE_PAIR' and previews[-1].linear.x == 0.0
+    finally:
+        if node is not None:
+            node.destroy_node()
+        rclpy.shutdown()
+
+
+def test_seek_is_only_for_the_first_gate(monkeypatch):
+    rclpy.init()
+    node = None
+    try:
+        node, clock, previews = _seek_node(monkeypatch, FAR_GATES)
+        node._passed_midpoints = [(-1.0, 0.0)]                          # 이미 한 게이트 통과
+        node._passed_directions = [(1.0, 0.0)]
+        _tick_at(node, clock, 1000.0)
+        _tick_at(node, clock, 1003.0)
+        assert node._status_text == 'WAIT_GATE_PAIR' and previews[-1].linear.x == 0.0
+    finally:
+        if node is not None:
+            node.destroy_node()
+        rclpy.shutdown()
+
+
+def test_seek_waits_when_posts_are_in_the_pair_window(monkeypatch):
+    # 앞 창(6 m) 안에 부표가 보이는데 쌍이 안 됨(왼쪽 둘, 간격 1 m) → 다가가지 않고 기다림.
+    # 보이는데 다가가면 게이트 1 이 쌍이 되기 전에 게이트 2 를 먼저 골라 첫 게이트를 건너뛰었다.
+    rclpy.init()
+    node = None
+    try:
+        node, clock, previews = _seek_node(monkeypatch, [(4.0, 2.5), (5.0, 2.6), *FAR_GATES])
+        _tick_at(node, clock, 1000.0)
+        _tick_at(node, clock, 1002.5)
+        assert node._status_text == 'WAIT_GATE_PAIR' and previews[-1].linear.x == 0.0
+    finally:
+        if node is not None:
+            node.destroy_node()
+        rclpy.shutdown()
+
+
+def test_seek_leans_toward_posts_seen_beyond_the_window(monkeypatch):
+    # 앞 창 너머(7.5 m) 왼쪽으로 치우친 게이트 → 그쪽으로 꺾어 다가감 (±30° 안)
+    rclpy.init()
+    node = None
+    try:
+        left_gates = [(x, y + 2.5) for x, y in FAR_GATES]
+        node, clock, previews = _seek_node(monkeypatch, left_gates)
+        _tick_at(node, clock, 1000.0)
+        _tick_at(node, clock, 1002.5)
+        assert node._status_text == 'SEEK_FIRST_PAIR'
+        assert previews[-1].angular.z > 0.0                              # 왼쪽(부표 쪽)으로
     finally:
         if node is not None:
             node.destroy_node()
