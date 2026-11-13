@@ -16,9 +16,13 @@
                             화면 안 후보는 빼고(보였을 것) 가운데에 가까운 쪽으로 (가까우면 양쪽에 걸쳐 보여서
                             평균 쪽은 틀린다: 2026-11-13 시뮬 5.5 m, 반대로 28 s 돎).
             다른 도형 1개가 가운데 ±search_centre_deg 밖 — 그 도형 쪽 (목표는 그 너머).
-            다른 도형 1개가 가운데 근처 — 방향 단서 없음: 선수 유지하고 retreat_cmd 로 후진해 시야를
-                            넓힌다(최대 search_backoff_max_m, 뒤 1.5 m 안 장애물이면 중단).
-                            그래도 모르면 그 도형 쪽, 정확히 가운데면 시계방향.
+            다른 도형 1개가 가운데 근처 — 도크에 아주 가까울 때(표지 간격 3.55 m, 반화각 40° →
+                            뒷벽 약 4.2 m 안)만 생긴다. 치우친 반대쪽으로 돈다: 가려진 옆 도형 중
+                            화면 가장자리에 더 가까운 쪽이라 가장 적게 돌아 단서가 나온다. 정확히 가운데면
+                            시계방향. (예전 후진으로 시야 넓히기는 뺐다 — 라이다가 120~240° 를 가려 뒤를 못 봄.)
+            도형 1개로 정한 방향으로 search_reverse_deg(90°) 돌 동안 새 도형이 안 나오면 한 번 반대로
+                            (보이던 도형이 끝 슬롯이면 그쪽엔 더 없다). 그 뒤 도형 2개 간격 규칙은 이미
+                            비어 있던 쪽 후보를 뺀다 (시뮬: 빼지 않으면 빈 쪽을 골라 30~45 s 더 돎).
             아무것도 없음 — 시계방향.
           YOLO 상태 자체가 끊기면(stale) 멈춘다. 누적 search_max_turns(2)바퀴를 돌아도 목표가 없으면
           멈추고 상태에 'not found after 2 turns' 를 남긴다(목표가 보이면 다시 시작).
@@ -81,11 +85,10 @@ def stamp(msg):
     return msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
 
 
-def front_clearance(scan, half_angle, stop_distance, centre=0.0):
-    """스캔 centre 방향(기본 앞, math.pi 면 뒤) ±half_angle 안, stop_distance 안 점이
-    FRONT_MIN_POINTS 개 이상이면 그 최소 거리, 아니면 None."""
+def front_clearance(scan, half_angle, stop_distance):
+    """스캔 앞쪽(±half_angle) stop_distance 안 점이 FRONT_MIN_POINTS 개 이상이면 그 최소 거리, 아니면 None."""
     ranges = np.asarray(scan.ranges, float)
-    angles = scan.angle_min + scan.angle_increment * np.arange(len(ranges)) - centre
+    angles = scan.angle_min + scan.angle_increment * np.arange(len(ranges))
     angles = np.arctan2(np.sin(angles), np.cos(angles))
     near = (np.isfinite(ranges) & (ranges >= max(scan.range_min, FRONT_MIN_RANGE_M))
             & (ranges < stop_distance) & (np.abs(angles) <= half_angle))
@@ -155,7 +158,7 @@ class DockCtrlV2(Node):
                     # 목표 탐색 선회 명령 (식별 모델: 0.06 → 약 8°/s, 바람 편향 2.2°/s 보다 충분히 큼)
                     'search_turn_cmd': 0.06,
                     # 도형 1개가 이 안이면 방향 단서가 없다고 보고 후진해 시야를 넓힌다 (최대 거리)
-                    'search_centre_deg': 10.0, 'search_backoff_max_m': 3.0,
+                    'search_centre_deg': 10.0, 'search_reverse_deg': 90.0,
                     # 검출 상태에 image_half_fov_deg 가 없을 때의 카메라 수평 반화각. D455 640x480 실측
                     # fx 377·cx 317 → 왼쪽 40.0°, 오른쪽 40.6° (2026-11-13 bag, 검출 광선 1272개 맞춤)
                     'camera_half_fov_deg': 40.0,
@@ -221,7 +224,7 @@ class DockCtrlV2(Node):
         self.scan_kd = float(p('scan_turn_kd'))
         self.search_turn = float(p('search_turn_cmd'))
         self.search_centre = float(p('search_centre_deg'))
-        self.search_backoff_max = float(p('search_backoff_max_m'))
+        self.search_reverse = math.radians(float(p('search_reverse_deg')))
         self.camera_half_fov = float(p('camera_half_fov_deg'))
         self.search_max_turns = float(p('search_max_turns'))
         self.seek_cmd = float(p('seek_cmd'))
@@ -254,7 +257,7 @@ class DockCtrlV2(Node):
                     self.retreat_cmd, self.via_tol, self.goal_tol, self.yaw_tol,
                     self.min_conf, self.sample_offset, self.bearing_spread,
                     self.bearing_window, self.scan_kp, self.search_turn,
-                    self.search_centre, self.search_backoff_max, self.camera_half_fov,
+                    self.search_centre, self.search_reverse, self.camera_half_fov,
                     self.search_max_turns,
                     self.seek_cmd, self.seek_max_travel, self.front_stop,
                     self.seek_center, self.seek_max_update,
@@ -286,8 +289,10 @@ class DockCtrlV2(Node):
         self.scan_heading_received = 0.0
         self.search_dir = None                      # 목표 탐색 선회 방향 (+1 왼쪽, -1 오른쪽)
         self.search_rank = 0                        # 방향 근거: 0 없음, 1 도형 1개, 2 도형 2개
-        self.widen_start = self.widen_heading = None   # 시야 넓히기 후진 시작 위치·선수각
-        self.widen_done = False
+        self.search_since_decision = 0.0            # 도형 1개로 방향을 정한 뒤 돈 각 [rad]
+        self.search_names = set()                   # 그때까지 본 다른 도형 이름
+        self.search_reversed = False
+        self.search_empty_side = None               # 90° 돌아 봐도 새 도형이 없던 쪽 (+1/−1)
         self.search_turned = 0.0                    # 이번 탐색에서 누적 선회 [rad]
         self.search_prev_yaw = None
         self.search_exhausted = False               # search_max_turns 를 다 돌았다
@@ -879,8 +884,10 @@ class DockCtrlV2(Node):
     def _clear_search(self):
         self.search_dir = None
         self.search_rank = 0
-        self.widen_start = self.widen_heading = None
-        self.widen_done = False
+        self.search_since_decision = 0.0
+        self.search_names = set()
+        self.search_reversed = False
+        self.search_empty_side = None               # 90° 돌아 봐도 새 도형이 없던 쪽 (+1/−1)
         self.search_turned = 0.0
         self.search_prev_yaw = None
         self.search_exhausted = False
@@ -918,6 +925,8 @@ class DockCtrlV2(Node):
         if self.search_exhausted:
             return 0.0, 0.0, (f'target {self.target} not found after {self.search_max_turns:g} turns '
                               f'— holding ({basis}; {why})')
+        new_shape = bool(set(seen) - self.search_names)
+        self.search_names |= set(seen)
         if len(seen) >= 2 and self.search_rank < 2:
             low, high = sorted(seen.values())[0], sorted(seen.values())[-1]
             gap = high - low                        # 이웃 도형 사이 화면 간격
@@ -925,57 +934,44 @@ class DockCtrlV2(Node):
             left, right = high + gap, low - gap
             outside = [c for c in (left, right)
                        if abs(c) > self._half_fov(1 if c > 0 else -1) - 3.0] or [left, right]
+            # 이미 90° 훑어 비어 있던 쪽 후보는 뺀다 (끝 슬롯 너머엔 도형이 없다)
+            if self.search_empty_side is not None:
+                outside = [c for c in outside if (1 if c > 0 else -1) != self.search_empty_side] or outside
             self.search_dir = 1 if min(outside, key=abs) == left else -1
             self.search_rank = 2
-            self.widen_start = None
         elif len(seen) == 1 and self.search_rank < 1:
             (bearing,) = seen.values()
-            if abs(bearing) >= self.search_centre or self.widen_done:
-                self.search_dir = 1 if bearing > 0 else -1
-                self.search_rank = 1
-                self.widen_start = None
+            if abs(bearing) >= self.search_centre:
+                self.search_dir = 1 if bearing > 0 else -1      # 목표는 그 도형 너머
+            elif bearing == 0.0:
+                self.search_dir = -1                            # 정확히 가운데 — 시계방향
             else:
-                widen = self._widen_view(yaw)
-                if widen is not None:
-                    self.search_prev_yaw = yaw      # 후진(선수 유지)은 탐색 선회로 안 센다
-                    return (*widen[:2], f'{widen[2]} for {self.target} ({basis}; {why})')
-                self.search_dir = 1 if bearing > 0 else -1
-                self.search_rank = 1
-        elif self.widen_start is not None and not seen:
-            widen = self._widen_view(yaw)           # 후진 중 잠깐 놓쳐도 계속 넓힌다
-            if widen is not None:
-                self.search_prev_yaw = yaw
-                return (*widen[:2], f'{widen[2]} for {self.target} ({basis}; {why})')
+                self.search_dir = -1 if bearing > 0 else 1      # 치우친 반대쪽
+            self.search_rank = 1
+            self.search_since_decision = 0.0
+            new_shape = False
         if self.search_dir is None:
             self.search_dir = -1                    # 아무것도 안 보이면 시계방향부터
-        if self.search_prev_yaw is not None:
-            self.search_turned += abs(wrap(yaw - self.search_prev_yaw))
+        step = abs(wrap(yaw - self.search_prev_yaw)) if self.search_prev_yaw is not None else 0.0
         self.search_prev_yaw = yaw
+        self.search_turned += step
+        reversed_now = False
+        if self.search_rank == 1:
+            self.search_since_decision = 0.0 if new_shape else self.search_since_decision + step
+            if not self.search_reversed and self.search_since_decision >= self.search_reverse:
+                self.search_empty_side = self.search_dir
+                self.search_dir = -self.search_dir   # 그쪽엔 더 없다 (끝 슬롯) — 한 번만 뒤집기
+                self.search_reversed = reversed_now = True
         turned = math.degrees(self.search_turned)
         if self.search_turned >= self.search_max_turns * 2 * math.pi:
             self.search_exhausted = True            # 목표가 보이면 _clear_search 로 다시 시작
             return 0.0, 0.0, (f'target {self.target} not found after {self.search_max_turns:g} turns '
                               f'— holding ({basis}; {why})')
         side = 'left' if self.search_dir > 0 else 'right (clockwise)'
+        note = ' — reversed: nothing new that way' if reversed_now or self.search_reversed else ''
         return 0.0, self.search_dir * self.search_turn, (
-            f'searching {side} for {self.target} ({basis}; turned {turned:.0f}/'
+            f'searching {side}{note} for {self.target} ({basis}; turned {turned:.0f}/'
             f'{360 * self.search_max_turns:.0f} deg; {why})')
-
-    def _widen_view(self, yaw):
-        """선수 유지 후진으로 시야를 넓힌다. 끝났으면(최대 거리·뒤 장애물) None."""
-        if self.widen_done:
-            return None
-        if self.widen_start is None:
-            self.widen_start, self.widen_heading = self._odom_xy(), yaw
-        backed = float(np.linalg.norm(self._odom_xy() - self.widen_start))
-        behind = (front_clearance(self.scan, self.front_half_angle, 1.5, centre=math.pi)
-                  if self.scan is not None else None)
-        if backed >= self.search_backoff_max or behind is not None:
-            self.widen_done = True
-            self.widen_start = None
-            return None
-        return (-self.retreat_cmd, self._scan_turn(self.widen_heading, yaw),
-                f'widening view, backing {backed:.1f}/{self.search_backoff_max:.1f}m')
 
     def _tick(self):
         if self.fixed_path_msg is not None and time.monotonic()-self.last_path_pub >= 1.0:

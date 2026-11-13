@@ -427,42 +427,77 @@ def test_search_clockwise_when_nothing_seen_then_follows_first_shapes(node):
     assert node.sent[-1].angular.z == pytest.approx(node.search_turn)
 
 
-def test_single_centred_shape_backs_off_to_widen_view_then_decides(node):
-    """원 하나만 가운데 — 방향 단서 없음: 선수 유지 후진, 두 번째 도형이 보이면 간격 규칙으로."""
+def test_single_centred_shape_turns_opposite_to_its_offset(node):
+    """도크 4 m 안: 원 하나만 가운데 근처. 오른쪽(−3°)으로 치우쳤으면 왼쪽 옆 도형이 화면 가장자리에
+    더 가깝다 → 왼쪽으로. 후진은 하지 않는다 (라이다가 뒤를 못 봄)."""
     node.target = 'triangle'
-    _odom(node, 0.0, 5.5)
+    _odom(node, 0.0, 4.0)
     _scan(node)
-    _shapes(node, circle=-2.0)
-    node._tick()
-    assert node.sent[-1].linear.x == pytest.approx(-node.retreat_cmd)
-    assert 'widening view' in node.reports[-1]['detail']
-    _odom(node, 0.0, 6.5)                              # 1 m 물러남
-    _shapes(node, square=37.0, circle=-3.0)            # 사각이 들어옴 → 삼각은 −43° (오른쪽 화면 밖)
-    node._tick()
-    assert node.sent[-1].linear.x == 0.0
-    assert node.sent[-1].angular.z == pytest.approx(-node.search_turn)
-
-
-def test_widen_view_stops_at_limit_or_obstacle_behind(node):
-    node.target = 'triangle'
-    _odom(node, 0.0, 5.5)
-    _scan(node)
-    _shapes(node, circle=3.0)
-    node._tick()
-    assert node.sent[-1].linear.x < 0
-    _odom(node, 0.0, 5.5 + node.search_backoff_max)    # 최대 거리 — 그 도형 쪽(왼쪽)으로 돈다
-    _shapes(node, circle=3.0)
+    _shapes(node, circle=-3.0)
     node._tick()
     assert node.sent[-1].linear.x == 0.0 and node.sent[-1].angular.z == pytest.approx(node.search_turn)
     node._clear_search()
-    msg = LaserScan(angle_min=-math.pi, angle_increment=math.radians(1.0), range_min=.4, range_max=50.)
-    msg.ranges = [float('inf')] * 360
-    for i in list(range(0, 5)) + list(range(355, 360)):   # 바로 뒤(±5°) 1.0 m
-        msg.ranges[i] = 1.0
-    node._scan(msg)
-    _shapes(node, circle=-3.0)
+    _shapes(node, circle=3.0)                          # 왼쪽으로 치우쳤으면 오른쪽으로
     node._tick()
     assert node.sent[-1].linear.x == 0.0 and node.sent[-1].angular.z == pytest.approx(-node.search_turn)
+
+
+def _turn_search(node, yaw, deg, step=10.0, **shapes):
+    """deg 만큼 search 방향으로 돌며 tick (odom 선수각을 step° 씩 바꿈). 마지막 선수각 반환."""
+    for _ in range(int(deg / step)):
+        yaw += math.copysign(math.radians(step), node.sent[-1].angular.z if node.sent else -1)
+        _odom(node, 0.0, 4.0, yaw=yaw)
+        _shapes(node, **shapes)
+        node._tick()
+    return yaw
+
+
+def test_single_shape_direction_reverses_after_90deg_without_new_shape(node):
+    """끝 슬롯(사각)만 보이고 그쪽엔 더 없다 — 90° 돌아도 새 도형이 없으면 한 번 반대로."""
+    node.target = 'triangle'
+    _scan(node)
+    yaw = FACING_WALL
+    _odom(node, 0.0, 4.0, yaw=yaw)
+    _shapes(node, square=-3.0)
+    node._tick()
+    assert node.sent[-1].angular.z > 0                  # 왼쪽부터
+    yaw = _turn_search(node, yaw, 80, square=-40.0)
+    assert node.sent[-1].angular.z > 0                  # 아직 90° 전
+    yaw = _turn_search(node, yaw, 20)
+    assert node.sent[-1].angular.z < 0 and node.search_reversed
+    assert 'reversed' in node.reports[-1]['detail']
+    _turn_search(node, yaw, 200)                       # 다시는 안 뒤집는다
+    assert node.sent[-1].angular.z < 0
+
+
+def test_pair_rule_skips_side_already_swept_empty(node):
+    """끝 슬롯(사각)만 보여 왼쪽 90° 를 훑었는데 없었다 → 뒤집어 돌다 사각 +1°·원 −39° 가 보이면
+    간격 후보 +41°(왼쪽, 더 가까움)는 이미 비어 있던 쪽이라 빼고 −79°(오른쪽)로. 시뮬 c_sqend_tri."""
+    node.target = 'triangle'
+    _scan(node)
+    yaw = FACING_WALL
+    _odom(node, 0.0, 4.0, yaw=yaw)
+    _shapes(node, square=-3.0)
+    node._tick()
+    yaw = _turn_search(node, yaw, 100)
+    assert node.search_reversed and node.search_empty_side == 1
+    _shapes(node, square=1.0, circle=-39.0)
+    node._tick()
+    assert node.search_rank == 2 and node.sent[-1].angular.z < 0
+
+
+def test_new_shape_before_90deg_switches_to_pair_rule_without_reversal(node):
+    node.target = 'triangle'
+    _scan(node)
+    yaw = FACING_WALL
+    _odom(node, 0.0, 4.0, yaw=yaw)
+    _shapes(node, circle=-3.0)
+    node._tick()
+    assert node.sent[-1].angular.z > 0                  # 왼쪽: 사각이 들어올 것
+    yaw = _turn_search(node, yaw, 30, circle=-30.0)
+    _shapes(node, square=36.0, circle=-35.0)           # 사각이 들어옴 → 삼각은 원 너머 오른쪽 밖
+    node._tick()
+    assert node.search_rank == 2 and node.sent[-1].angular.z < 0 and not node.search_reversed
 
 
 def test_search_stops_when_yolo_status_is_stale(node):
