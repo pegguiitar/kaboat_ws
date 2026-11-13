@@ -50,7 +50,7 @@ def make_state(color, buoys, boat=(45.0, 70.0), yaw=0.0, search_center=(50.0, 70
     state.waypoint = lambda x, y, *a, **kw: (calls.append(('wp', x, y, *a, kw)) or Twist(), False)
     state.report_complete = lambda: state.completed.append(True)
     for name in ('_status', '_go_goal', '_area_xy', '_plan_entry', '_hold_pose', '_grid_ok',
-                 '_update_shapes', '_shape_ok', '_entry_pivot'):
+                 '_update_shapes', '_shape_ok', '_entry_pivot', '_go_exit'):
         setattr(state, name, (lambda n: lambda *a: getattr(SearchCircler, n)(state, *a))(name))
     state._hold_ctrl = WaypointController(WaypointParams(
         max_linear=state.params.hold_linear, max_angular=WAYPOINT_MAX_ANGULAR,
@@ -285,9 +285,40 @@ def test_done_keeps_circling_until_exit_side():
     state.fsm.phase = 'DONE'
     SearchCircler.compute_cmd(state)
     assert state.calls[-1][0] is circle and state.completed     # 완료 신호는 바로, 원은 이어 감
-    move(state, 50.0, 71.0)                          # 서쪽(출구 쪽)에 옴 → 출구로
+    move(state, 50.0, 71.0)                          # 서쪽(출구 쪽)에 옴 → 출구 직선을 LOS 로
     SearchCircler.compute_cmd(state)
-    assert state.calls[-1][:3] == ('wp', 40.0, 71.0)
+    exit_path, ratio, turn = state.calls[-1]
+    assert not exit_path.closed and (ratio, turn) == (0.25, 0.31)   # exit_thrust·orbit_turn
+    assert np.allclose(exit_path.samples[0], [50.0, 71.0])
+    assert np.allclose(exit_path.samples[-1], [40.0, 71.0])
     move(state, 54.0, 71.0)                          # 한 번 벗어나면 다시 원으로 안 돌아감
     SearchCircler.compute_cmd(state)
-    assert state.calls[-1][:3] == ('wp', 40.0, 71.0)
+    assert state.calls[-1][0] is exit_path
+
+
+def test_exit_line_detours_around_other_buoy():
+    # 빨강 (52, 71) 을 돌고 서쪽 출구 (40, 71) 로 — 직선 위 (46, 71.1) 에 초록. 경유점으로 1.5 m 넘게 비킨다
+    green = (46.0, 71.1)
+    state = make_state('red', [buoy('red', 52.0, 71.0), buoy('green', *green)], boat=(50.0, 71.0))
+    state.goal.pose.position.x, state.goal.pose.position.y = 40.0, 71.0
+    SearchCircler.compute_cmd(state)
+    state.fsm.phase = 'DONE'
+    state._exit_clear = True
+    SearchCircler.compute_cmd(state)
+    path = state.calls[-1][0]
+    assert len(state._exit_points) == 3                              # 경유점 있음
+    d = np.hypot(path.samples[:, 0] - green[0], path.samples[:, 1] - green[1])
+    assert d.min() >= 1.5 - 1e-6
+    assert np.allclose(path.samples[-1], [40.0, 71.0])
+
+
+def test_exit_stops_inside_arrive_radius():
+    state = make_state('red', [buoy('red', 52.0, 71.0)], boat=(54.0, 71.0))
+    state.goal.pose.position.x, state.goal.pose.position.y = 40.0, 71.0
+    SearchCircler.compute_cmd(state)
+    state.fsm.phase = 'DONE'
+    state._exit_clear = True
+    move(state, 41.0, 71.0)                          # search_end 1 m — arrive_radius 1.5 안
+    n = len(state.calls)
+    cmd = SearchCircler.compute_cmd(state)
+    assert cmd == Twist() and len(state.calls) == n

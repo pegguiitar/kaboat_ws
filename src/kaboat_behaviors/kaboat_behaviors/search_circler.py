@@ -12,10 +12,10 @@
   ORBIT    부표 고정 → 원 밖이면 규정 방향 접선 진입 경로를 먼저 LOS 로 따라간 뒤, 반경
            orbit_radius 원을 LOS 로 추종. 원 띠 안에서 laps 바퀴 돌면 DONE
            (회피 반발은 켜 두되 목표 부표 둘레 ignore_radius 안 셀은 뺀다)
-  DONE     /mission/complete 1회 → 출구 쪽(exit_clear)까지 원을 이어 돈 뒤 search_end 로 이동
-           (mission_manager 전환 = 완료 + 2 m 안). search_end 가 부표 위에 찍혀 있으면 부표에서
-           출구 쪽으로 1.5 m 비킨 점에 exit_arrive_radius(0.4 m)로 (exit_point)
-  GIVE_UP  영역 중심에서 give_up_sec 동안 못 찾음 → 완료 신호 내고 search_end 로
+  DONE     /mission/complete 1회 → 출구 쪽(exit_clear)까지 원을 이어 돈 뒤 search_end 까지 직선을
+           LOS 로 (exit_thrust, mission_manager 전환 = 완료 + 2 m 안). search_end 가 부표 위에 찍혀
+           있으면 부표에서 출구 쪽으로 1.5 m 비킨 점에 exit_arrive_radius(0.4 m)로 (exit_point)
+  GIVE_UP  영역 중심에서 give_up_sec 동안 못 찾음 → 완료 신호 내고 search_end 까지 직선 LOS
 
 탐색 영역 중심: /mission/search_center (mission_manager — rec search_center, 없으면 search_entry
   선수 방향 7 m 앞). 못 받으면(search_entry 도 없는 시뮬·mission_params 흐름) 예전처럼
@@ -51,7 +51,8 @@ from .behavior_base import BehaviorBase, WAYPOINT_MAX_ANGULAR, yaw_from_quaterni
 from .los_controller import (BSPLINE_TRACK_YAW_KD, BSPLINE_TRACK_YAW_KP, circle_path,
                              sampled_path)
 from .obstacle_avoidance_utils import apply_repulsion
-from .search_orbit import SearchFsm, SearchParams, exit_clear, measure_shapes, tangent_entry
+from .search_orbit import (SearchFsm, SearchParams, detour_via, exit_clear, measure_shapes,
+                           tangent_entry)
 from .waypoint_controller import WaypointController, waypoint as make_waypoint
 
 GOAL_RESET_DISTANCE = 1.0   # [m] 출구·영역 중심이 이만큼 바뀌면 탐색을 새로 시작
@@ -183,6 +184,9 @@ class SearchCircler(BehaviorBase):
         self._shape_hist = {}          # 부표 ID → 최근 모양 판정 (True = 부표 모양)
         self._shape_grid_at = None     # 마지막으로 모양을 잰 지도 수신 시각
         self._exit_clear = False       # 완료 뒤 출구 쪽에 와서 원을 벗어났는가
+        self._exit_path = None         # 출구 직선 LOS 경로 (_go_exit)
+        self._exit_points = None
+        self._exit_target = None
         self._entry_align = None       # 진입 시작 선수 맞추기: None / 'check' / 'pivot'
         self._last_status = None
 
@@ -275,6 +279,7 @@ class SearchCircler(BehaviorBase):
             self._entry_points = None
             self._hold = None
             self._exit_clear = False
+            self._exit_path = None
             self._los_follower.reset()
 
         pos = self.odom.pose.pose.position
@@ -308,7 +313,7 @@ class SearchCircler(BehaviorBase):
                          else f'{self.params.give_up_sec:.0f} s 동안 목표 부표 못 찾음 — 포기')
             arrive = (self.params.exit_arrive_radius if math.dist(target, fsm.goal) > 1e-6
                       else None)
-            return self._go_goal(target, arrive)
+            return self._go_exit(target, arrive)
 
         if phase in ('LOOK', 'SEEK'):
             # 고정이 없다(처음이거나 풀림) — 다음 고정 때 진입 경로부터 다시
@@ -443,6 +448,37 @@ class SearchCircler(BehaviorBase):
             # 밀려서 제자리로 돌아갈 때만 — 제자리 회전(선수각 맞추기)엔 걸지 않는다
             cmd = apply_repulsion(cmd, self.occupancy_grid, self.odom)
         return cmd
+
+    def _go_exit(self, target, arrive=None):
+        """완료·포기 뒤 출구 — 지금 자리에서 출구점까지 직선을 LOS 로 (직진 상한 exit_thrust, 경로 이탈 보정).
+        예전 공용 waypoint()(직진 0.101, 이탈 보정 없음)는 조류에서 느리고 옆으로 밀렸다. 도착 반경 안이면
+        정지하고, 경로 끝에 닿았는데도 밖이면(밀림) 다음 tick 에 지금 자리에서 다시 긋는다."""
+        pos = self.odom.pose.pose.position
+        boat = (pos.x, pos.y)
+        radius = self.params.arrive_radius if arrive is None else arrive
+        if math.dist(boat, target) <= radius:
+            self._exit_path = None
+            self._los_follower.reset()
+            return Twist()
+        if (getattr(self, '_exit_path', None) is None
+                or math.dist(self._exit_target, target) > 0.5):
+            # 출구 직선이 다른 부표 entry_clearance 안을 지나면 경유점 하나로 비킨다 (접선 진입과 같은 규칙)
+            # — LOS 는 직선을 지키려 해서 반발 조향이 비켜도 다시 끌려왔다 (조류 시뮬 초록 중심 0.65 m)
+            others = [(b.position.x, b.position.y) for b in self.buoys]
+            center = self.fsm.center if self.fsm is not None else None
+            via = detour_via(boat, target, others, self.params.entry_clearance, away_from=center)
+            pts = [boat, via, target] if via is not None else [boat, target]
+            self._exit_path = polyline_path(pts, fillet_radius=self.params.orbit_radius)
+            self._exit_points = pts
+            self._exit_target = tuple(target)
+            self._los_follower.reset()
+            if via is not None:
+                self.get_logger().info(
+                    f'search: 출구 경유점 ({via[0]:.1f}, {via[1]:.1f}) — 다른 부표 비킴')
+        cmd, reached = self.los(self._exit_path, self.params.exit_thrust, self.params.orbit_turn)
+        if reached:
+            self._exit_path = None
+        return apply_repulsion(cmd, self.occupancy_grid, self.odom)
 
     def _go_goal(self, target, arrive=None):
         pos = self.odom.pose.pose.position

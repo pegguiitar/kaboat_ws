@@ -121,6 +121,8 @@ class SearchParams:
                                       # 진입 120° 쪽으로 크게 돌다 반발 조향에 밀려 검정 반대편으로 돌아 중심 0.61 m
     exit_cone_deg: float = 75.0       # 완료 뒤, 부표→배 방향과 배→출구 방향 사이가 이 안일 때 원을 벗어난다 [deg]
                                       # (그 전에는 원을 이어 돈다 — 출구 직선이 방금 돈 부표를 스치지 않게)
+    exit_thrust: float = 0.25         # 완료·포기 뒤 출구 직선 LOS 직진 상한 (선회와 같음). 예전 공용 waypoint()
+                                      # 0.101 은 조류 0.25 m/s 에서 22 m 에 125 s, 0.15 m/s 에서 옆으로 밀려 0.43 m
     exit_arrive_radius: float = 0.4   # 출구점이 search_end 에서 비킨 점일 때 도착 반경 [m]
                                       # (done_clearance + 이것 < mission_manager 전환 반경 2.0)
 
@@ -133,7 +135,7 @@ class SearchParams:
         if not all(math.isfinite(v) and v > 0.0 for v in positive):
             raise ValueError('search radii, laps, give_up_sec and entry_lead '
                              'must be finite and > 0')
-        unit = (self.refine_alpha, self.scan_turn, self.orbit_thrust, self.orbit_turn,
+        unit = (self.refine_alpha, self.scan_turn, self.orbit_thrust, self.orbit_turn, self.exit_thrust,
                 self.hold_linear)
         if not all(math.isfinite(v) and 0.0 <= v <= 1.0 for v in unit):
             raise ValueError('search refine_alpha / scan_turn / orbit_thrust / orbit_turn / '
@@ -221,27 +223,42 @@ def tangent_entry(boat: XY, center: XY, radius: float, direction: str,
     th2 = th + sign * lead / radius
     lead_pt = (cx + radius * math.cos(th2), cy + radius * math.sin(th2))
     pts: List[XY] = [(px, py)]
+    via = detour_via((px, py), (tx, ty), obstacles, clearance, away_from=(cx, cy))
+    if via is not None:
+        pts.append(via)
+    pts += [(tx, ty), lead_pt]
+    return pts
+
+
+def detour_via(start: XY, end: XY, obstacles: Sequence[XY], clearance: float,
+               away_from: Optional[XY] = None) -> Optional[XY]:
+    """start → end 직선이 obstacles 중 하나와 clearance 안으로 지나가면, 가장 가까운 것 바깥쪽으로
+    clearance + 0.5 m 비킨 경유점. 없으면 None. 부표가 직선 바로 위면 away_from 에서 먼 쪽 수직으로
+    (접선 진입은 선회 원 중심, 출구는 방금 돈 부표)."""
+    px, py = float(start[0]), float(start[1])
+    tx, ty = float(end[0]), float(end[1])
     worst = None
     for o in obstacles:
         c, dist = _segment_closest((px, py), (tx, ty), (float(o[0]), float(o[1])))
         if dist < clearance and (worst is None or dist < worst[2]):
-            worst = (o, c, dist)
-    if worst is not None:
-        (ox, oy), (qx, qy), dist = worst
-        if dist > 1e-6:
-            nx, ny = (qx - ox) / dist, (qy - oy) / dist
-        else:   # 부표가 직선 위 — 원 중심에서 먼 쪽 수직 방향으로
-            sx, sy = tx - px, ty - py
-            n = math.hypot(sx, sy)
-            nx, ny = -sy / n, sx / n
+            worst = ((float(o[0]), float(o[1])), c, dist)
+    if worst is None:
+        return None
+    (ox, oy), (qx, qy), dist = worst
+    if dist > 1e-6:
+        nx, ny = (qx - ox) / dist, (qy - oy) / dist
+    else:   # 부표가 직선 위 — away_from 에서 먼 쪽 수직 방향으로
+        sx, sy = tx - px, ty - py
+        n = math.hypot(sx, sy)
+        nx, ny = -sy / n, sx / n
+        if away_from is not None:
+            cx, cy = away_from
             plus = (ox + nx - cx) ** 2 + (oy + ny - cy) ** 2
             minus = (ox - nx - cx) ** 2 + (oy - ny - cy) ** 2
             if plus < minus:
                 nx, ny = -nx, -ny
-        k = clearance + 0.5
-        pts.append((ox + nx * k, oy + ny * k))
-    pts += [(tx, ty), lead_pt]
-    return pts
+    k = clearance + 0.5
+    return (ox + nx * k, oy + ny * k)
 
 
 @dataclass(frozen=True)
