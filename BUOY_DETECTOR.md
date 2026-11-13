@@ -25,8 +25,11 @@
 - **구독자가 있을 때만 계산한다** — `/detections/buoys`, `~/markers`, `~/debug_image` 중 하나라도.
   behavior 는 `USES_BUOYS = True` 인 것만 자기 state 활성 중에 구독한다 (지금은 search 만).
   대회 스택(`autonomy.launch.py`)에서는 탐색 동안만 돈다. gate 가 쓰게 되면 `USES_BUOYS` 만 켠다.
-- 출력 색: `red` / `green` / `unknown`(빨강·초록 아닌 부표 크기 물체 — **검정 부표**). 카메라에 한 번도
-  안 찍힌 것은 `unseen` 이라 내보내지 않는다 (`publish_unseen`).
+- 출력 색: `red` / `green` / `unknown`(카메라에 찍혔는데 빨강·초록 아님 — **검정 부표** 후보) /
+  `unseen`(라이다로 확정됐지만 카메라에 한 번도 안 찍힘 — 색 모름). `unseen` 도 내보낸다(`publish_unseen`,
+  기본 켬): 탐색이 목표 색을 아직 못 봤을 때 카메라로 확인하러 갈 후보로 쓰라고. 물가·다리 기둥도 섞여 있으니
+  색 판단에 쓰면 안 된다 (탐색 `search_orbit` 은 red/green/unknown 만 목표로 쓰므로 지금은 무시된다).
+  RViz 마커 색: 검정 = unknown, 보라 = unseen.
 
 ## 존재 (log-odds, 부표 하나마다)
 

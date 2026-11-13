@@ -13,7 +13,7 @@
 
 입력   /scan/level, /odom, 컬러 영상(color_topic, color_compressed), /camera/camera_info,
        /imu/data (창 투영 롤·피치)
-출력   /detections/buoys (BuoyArray, 확정 + 카메라에 찍힌 것만 — unseen 은 publish_unseen),
+출력   /detections/buoys (BuoyArray, 확정 부표. 카메라에 한 번도 안 찍힌 것은 color='unseen'),
        ~/markers (부표 중심 = 큰 둥근 점, 덩어리 점 = 작은 둥근 점, 색 = 부표 색, 존재 확률 글자), ~/debug_image (창·표)
 """
 import collections
@@ -65,13 +65,14 @@ class BuoyLidarDetector(Node):
         self.declare_parameter('depth_compressed', False)   # bag 의 compressedDepth
         self.declare_parameter('output_topic', '/detections/buoys')
         self.declare_parameter('image_max_age', 0.2)   # [s] 스캔과 이만큼 넘게 차이 나면 색 표 안 넣음
-        # 카메라에 한 번도 안 찍힌 확정 부표(unseen)도 내보낼지 — 기본은 안 냄 (검정=unknown 오염 방지)
-        self.declare_parameter('publish_unseen', False)
+        # 카메라에 한 번도 안 찍힌 확정 부표도 color='unseen' 으로 내보낼지. 기본 냄 — 탐색이 목표 색을
+        # 아직 못 봤을 때 카메라로 확인하러 갈 후보로 쓰게. 'unknown'(= 검정 후보)과는 섞지 않는다.
+        self.declare_parameter('publish_unseen', True)
         # RViz 마커에 확정 전 후보도 그릴지 — 기본은 확정만 (후보가 부표처럼 보여 헷갈림)
         self.declare_parameter('show_tentative', False)
         # 새 부표는 이 거리 안 라이다 덩어리에서만 만든다. 시야 제한(spawn_half_fov_deg)은 기본 끔(180) —
         # 배가 부표를 옆으로 지나가는 일이 많아, 카메라 정면에서만 만들면 점유지도보다 10~20 s
-        # 늦었다 (2026-11-12 bag). 카메라에 안 찍힌 건 unseen 이라 /detections/buoys 로 안 나간다.
+        # 늦었다 (2026-11-12 bag). 카메라에 안 찍힌 건 color='unseen' 으로 나간다 (publish_unseen).
         self.declare_parameter('spawn_half_fov_deg', 180.0)
         self.declare_parameter('spawn_max_range', 15.0)
         # 부표 후보가 될 라이다 덩어리 — 두 점이 cand_eps 안이면 같은 덩어리 (거리 군집화, 원형 가정 없음).
