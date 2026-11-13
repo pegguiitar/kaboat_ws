@@ -66,6 +66,7 @@ def test_rtk_off_by_default_and_on_adds_ntrip_client(rs, tmp_path, monkeypatch):
     assert not any(isinstance(a, IncludeLaunchDescription) for a in off)
     assert [a.node_executable for a in off if isinstance(a, Node)] == ['gq7_local_odom']
 
+    monkeypatch.setattr(rs, 'check_aux_port', lambda path: None)   # 테스트 PC 엔 GQ7 AUX 없음
     with pytest.raises(RuntimeError, match='NTRIP 계정'):
         rs._gq7_actions(_context(rs, outdoor='true', rtk='true'))   # 계정 없음
     on = rs._gq7_actions(_context(rs, outdoor='true', rtk='true', ntrip_mountpoint='YNDO_RTCM32',
@@ -78,3 +79,55 @@ def test_rtk_off_by_default_and_on_adds_ntrip_client(rs, tmp_path, monkeypatch):
     assert (args['username'], args['password']) == ('user1', 'pw1')
     written = yaml.safe_load(open(tmp_path / rs.RTK_PARAMS_FILE))
     assert written['microstrain_inertial_driver']['ros__parameters']['ntrip_interface_enable']
+
+
+def _rtk_ctx(rs, **kw):
+    return _context(rs, outdoor='true', rtk='true', ntrip_username='u', ntrip_password='p', **kw)
+
+
+def test_rtk_relays_corrections_through_rtcm_guard(rs, tmp_path, monkeypatch):
+    """드라이버는 /rtcm/gq7 을 받고(rtcm_guard 가 /rtcm 을 중계·감시), RTK 가 아니면 /rtcm 그대로."""
+    from launch.actions import GroupAction
+    from launch.utilities import perform_substitutions
+    from launch_ros.actions import SetRemap
+    monkeypatch.setattr(rs.tempfile, 'gettempdir', lambda: str(tmp_path))
+    monkeypatch.setattr(rs, '_ntrip_launch_file', lambda: '/opt/x/ntrip_client_launch.py')
+    monkeypatch.setattr(rs, 'check_aux_port', lambda path: None)
+
+    def remaps(actions):
+        ctx = LaunchContext()
+        group = [a for a in actions if isinstance(a, GroupAction)][0]
+        return {perform_substitutions(ctx, r.src): perform_substitutions(ctx, r.dst)
+                for r in group.get_sub_entities() if isinstance(r, SetRemap)}
+    on = rs._gq7_actions(_rtk_ctx(rs))
+    assert 'rtcm_guard' in [a.node_executable for a in on if isinstance(a, Node)]
+    assert remaps(on)['/rtcm'] == '/rtcm/gq7'
+    off = rs._gq7_actions(_context(rs, outdoor='true'))
+    assert '/rtcm' not in remaps(off)
+
+
+def test_rtk_refuses_missing_aux_port_unless_check_off(rs, tmp_path, monkeypatch):
+    monkeypatch.setattr(rs.tempfile, 'gettempdir', lambda: str(tmp_path))
+    monkeypatch.setattr(rs, '_ntrip_launch_file', lambda: '/opt/x/ntrip_client_launch.py')
+    missing = str(tmp_path / 'microstrain_aux')
+    with pytest.raises(RuntimeError, match='AUX 포트 .* 가 없다'):
+        rs._gq7_actions(_rtk_ctx(rs, gq7_aux_port=missing))
+    rs._gq7_actions(_rtk_ctx(rs, gq7_aux_port=missing, gq7_aux_check='false'))   # 확인 끔
+
+
+def test_check_aux_port_finds_a_process_holding_it(rs, tmp_path):
+    dev = tmp_path / 'ttyACM1'
+    dev.write_text('')
+    link = tmp_path / 'microstrain_aux'
+    link.symlink_to(dev)
+    proc = tmp_path / 'proc'
+    (proc / '4242' / 'fd').mkdir(parents=True)
+    (proc / '4242' / 'cmdline').write_bytes(b'microstrain_inertial_driver_node\0--ros-args\0')
+    (proc / '4243' / 'fd').mkdir(parents=True)
+    (proc / '4243' / 'cmdline').write_bytes(b'bash\0')
+    (proc / '4243' / 'fd' / '0').symlink_to(tmp_path / 'other')
+    assert rs.check_aux_port(str(link), str(proc)) is None             # 아무도 안 씀
+    (proc / '4242' / 'fd' / '7').symlink_to(dev)
+    msg = rs.check_aux_port(str(link), str(proc))
+    assert msg and '4242 microstrain_inertial_driver_node' in msg and 'kill' in msg
+    assert '가 없다' in rs.check_aux_port(str(tmp_path / 'nope'), str(proc))

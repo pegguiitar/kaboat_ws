@@ -5,11 +5,14 @@
 # 젯슨에서 센서(run_gq7_rtk, run_lidar, run_camera …)를 켠 뒤 실행:
 #   bash scripts/record_run.sh [이름]        # 단축어: rec_bag [이름]
 #   bash scripts/record_run.sh --rgb [이름]  # 단축어: rec_rgb [이름] — 카메라 컬러 영상만 (이름 기본 rgb)
+#   bash scripts/record_run.sh --no-camera [이름]  # rec_bag --no-camera — 카메라 빼고 (회피·토너먼트·게이트)
 # Ctrl+C 로 멈추면 녹화가 정리되고 끝난다. 터미널 창을 그냥 닫지 말 것.
 # 영상으로 보기: bag_to_mp4 ~/kaboat_bags/<폴더>  → 폴더 안 <폴더 이름>.mp4
 #
 # 카메라는 압축 토픽(컬러 JPEG, 뎁스 무손실 PNG)으로 저장한다. 압축 토픽이 없으면
-# (image_transport 플러그인 미설치) 원본 영상을 zstd 로 압축해 저장한다.
+# (image_transport 플러그인 미설치) 원본 영상을 zstd 로 압축해 저장한다 — 젯슨이 압축을 못 따라가
+# 메시지를 버린다 (2026-11-13 토너먼트: 'Dropping message … compression queue is full', 컬러 영상
+# 1/3·로그 일부 누락, /rosout 10 s 지연). 카메라가 필요 없는 시험은 --no-camera: 영상·압축 없이.
 # 저장 위치: ~/kaboat_bags/<이름>_<날짜_시각>/  (KABOAT_BAG_DIR 로 변경)
 # ==============================================================================
 
@@ -20,9 +23,19 @@ MIN_FREE_GB="${KABOAT_BAG_MIN_FREE_GB:-10}"
 SPLIT_BYTES=$((2 * 1024 * 1024 * 1024))   # 2 GB 마다 파일을 나눈다
 
 rgb_only=false
-if [ "${1:-}" = "--rgb" ]; then
-    rgb_only=true
-    shift
+no_camera=false
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --rgb) rgb_only=true; shift ;;
+        --no-camera|--nocam) no_camera=true; shift ;;
+        --) shift; break ;;
+        -*) echo "❌ 모르는 옵션: $1 (쓸 수 있는 것: --rgb, --no-camera)" >&2; exit 2 ;;
+        *) break ;;
+    esac
+done
+if $rgb_only && $no_camera; then
+    echo "❌ --rgb(영상만)와 --no-camera(영상 빼기)는 같이 못 씀" >&2
+    exit 2
 fi
 if $rgb_only; then name="${1:-rgb}"; else name="${1:-run}"; fi
 out="$BAG_DIR/${name}_$(date +%Y%m%d_%H%M%S)"
@@ -52,6 +65,8 @@ topics=(
     /ekf/status /ekf/odometry_earth /ekf/dual_antenna_heading /gnss_1/velocity
     /mip/ekf/gnss_dual_antenna_status /mip/ekf/aiding_measurement_summary
     /mip/ekf/gnss_position_aiding_status /rtcm /nmea
+    # rtcm_guard: GQ7 로 넘긴 보정(/rtcm/gq7)과 RTK·AUX 상태 한 줄 (AUX 쓰기 실패면 중계 멈춤)
+    /rtcm/gq7 /gnss/rtk_status
     # 수동·자율 구분: 노트북 텔레옵·RC·비상정지 입력, 모터 드라이버 상태·이벤트
     /teleop/enable /teleop/levels /teleop/esp_mode /teleop/status /teleop/event
     /rc/cmd_vel /emergency_stop /diagnostics
@@ -89,7 +104,7 @@ topics=(
     # (2026-11-12 4번 시험은 이게 없어 멈춘 이유를 영상 속 터미널로 읽었다)
     /gate/status /gate/pairs /gate/path /gate/cmd_preview /cmd/gate
     # 야외 단독 시험 노드 (회피·DRI·LOS 시험 런치)
-    /real_avoid_test/path /manual_dri/dri /manual_dri/status
+    /real_avoid_test/path /real_avoid_test/status /manual_dri/dri /manual_dri/status
     /los_test/path /los_test/status /los_test/cmd_preview /waypoint/goal
 )
 
@@ -106,7 +121,18 @@ for base in /camera/depth/image_raw /camera/camera/aligned_depth_to_color/image_
 done
 
 extra=()
-if $rgb_only; then
+if $no_camera; then
+    # 카메라 토픽(camera_info·도킹 YOLO 그림 포함)을 빼고, 영상이 없으니 전체 압축도 안 한다
+    kept=()
+    for t in "${topics[@]}"; do
+        case "$t" in
+            /camera/*|/dock/debug_image) ;;
+            *) kept+=("$t") ;;
+        esac
+    done
+    topics=("${kept[@]}")
+    echo "📷 카메라 빼고 녹화 (영상·압축 없음 — 젯슨 부하 최소)"
+elif $rgb_only; then
     # 컬러 영상 하나만 (센서·판단 토픽, 뎁스, camera_info 없음)
     if [ -n "$color_c" ]; then
         topics=("$color_c")

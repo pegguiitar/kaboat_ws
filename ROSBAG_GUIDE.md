@@ -47,6 +47,21 @@ rec_bag gate_test          # ③ 녹화 시작. 이름은 자유 (생략 시 run
 `⚠️ 압축 토픽 없음`이 나오면 원본 영상으로 녹화 중입니다(1절 apt 설치 필요).
 `⚠️ 카메라 토픽이 아직 없음`이면 `run_camera`를 안 켠 것입니다. 나중에 켜도 녹화에 들어갑니다.
 
+### 카메라 빼고 녹화 (`rec_bag --no-camera`)
+
+카메라가 필요 없는 시험(회피·토너먼트·게이트)은 영상을 빼고 녹화합니다.
+
+```bash
+rec_bag --no-camera tournament     # 카메라 토픽·도킹 YOLO 그림 없이, 압축도 안 함
+```
+
+화면에 `📷 카메라 빼고 녹화 (영상·압축 없음 — 젯슨 부하 최소)`가 나오면 정상입니다.
+
+- 압축 토픽이 없을 때 원본 영상을 zstd 로 압축하며 녹화하면 젯슨이 따라가지 못해 **메시지를 버립니다**
+  (2026-11-13 토너먼트: `Dropping message … compression queue … full`, 컬러 영상 1/3·로그 일부 누락,
+  `/rosout` 10초 지연). 영상이 꼭 필요하면 1절 플러그인을 설치해 압축 토픽으로 녹화하세요.
+- `--no-camera`(줄여서 `--nocam`)는 `--rgb`와 같이 쓸 수 없습니다.
+
 ### 카메라 RGB 영상만 녹화 (`rec_rgb`)
 
 센서·판단 토픽 없이 컬러 영상 하나만 남깁니다(뎁스·`camera_info`도 없음). `run_camera`만 켜 두면 됩니다.
@@ -150,5 +165,6 @@ ros2 bag play … --clock --topics /scan /odom /imu/data    # 일부 토픽만
 | `metadata.yaml`이 없음 (창을 닫았거나 SSH가 끊김) | `ros2 bag reindex ~/kaboat_bags/<폴더>` |
 | `❌ 남은 용량 … GB` | 지난 녹화를 노트북으로 옮기고 지움 |
 | `⚠️ 압축 토픽 없음` | `sudo apt install ros-humble-image-transport-plugins` 후 `run_camera` 재시작 |
+| 녹화 창에 `Dropping message … compression queue … full` | 원본 영상 압축을 젯슨이 못 따라감 — 카메라가 필요 없으면 `rec_bag --no-camera`, 필요하면 위 플러그인 설치 |
 | 영상 메시지 수가 기대보다 훨씬 적음 | 저장 장치가 느림(SD카드). NVMe/USB SSD로 `KABOAT_BAG_DIR=/경로 rec_bag …` |
 | `rec_bag: command not found` | 1절 `setup_jetson_bashrc.sh` 다시 실행 후 `source ~/.bashrc` |

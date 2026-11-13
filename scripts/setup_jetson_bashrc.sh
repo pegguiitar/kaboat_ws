@@ -89,6 +89,7 @@ alias stop_sensors_motors='bash "$KABOAT_WS/scripts/run_sensors_motors.sh" stop'
 alias rec='python3 "$KABOAT_WS/scripts/rec_point.py"'
 alias list_points='python3 "$KABOAT_WS/scripts/rec_point.py" --list'
 # 주행 센서 녹화 (~/kaboat_bags/이름_날짜_시각/, Ctrl+C 로 종료). 센서를 다 켠 뒤 실행
+#   카메라가 필요 없는 시험(회피·토너먼트·게이트)은 rec_bag --no-camera [이름] — 영상·압축 없이
 alias rec_bag='bash "$KABOAT_WS/scripts/record_run.sh"'
 # 카메라 컬러(RGB) 영상만 녹화 (~/kaboat_bags/이름_날짜_시각/, 이름 기본 rgb, Ctrl+C 로 종료)
 alias rec_rgb='bash "$KABOAT_WS/scripts/record_run.sh" --rgb'
@@ -181,7 +182,7 @@ echo "   - run_sensors_motors : GQ7(RTK)·라이다·모터·지점·지도·카
 echo "   - stop_sensors_motors: 위 세션 전부 Ctrl+C 후 닫기"
 echo "   - rec 이름      : 지금 위치(x, y, 선수각) 기록 (이름 생략 시 p1, p2 …)"
 echo "   - list_points   : 기록한 지점 보기"
-echo "   - rec_bag [이름] : 주행 센서 rosbag 녹화 (~/kaboat_bags, Ctrl+C 로 종료)"
+echo "   - rec_bag [이름] : 주행 센서 rosbag 녹화 (~/kaboat_bags, Ctrl+C 로 종료). 카메라 빼기: rec_bag --no-camera [이름]"
 echo "   - rec_rgb [이름] : 카메라 RGB 영상만 녹화 (~/kaboat_bags, Ctrl+C 로 종료, mp4 는 bag_to_mp4)"
 echo "   - goto 지점|x y [각도] : 야외 웨이포인트 1개 주행 (즉시 출발 40%, motion_enabled:=false 면 미리보기)"
 echo "   - run_motor     : 모터 제어기 가동"

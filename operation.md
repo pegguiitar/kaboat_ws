@@ -107,6 +107,15 @@ ros2 launch kaboat_hardware real_sensors.launch.py outdoor:=true rtk:=true \
 - 확인: `ros2 topic echo /ekf/status --once --field gnss_state` 가 `RTK Float` → `RTK Fixed`,
   `ros2 topic echo /gps/fix --once --field status` 의 `status: 2`. 기준국이 멀어 Fixed 까지 오래 걸리거나
   Float 에 머물 수 있습니다.
+- **보정이 GQ7 에 실제로 들어가는지 (2026-11-13):** 보정은 `/rtcm` → `rtcm_guard` → `/rtcm/gq7` → GQ7 AUX 로 갑니다.
+  `ros2 topic echo /gnss/rtk_status` 가 `RTK Fixed | 보정 중계 중` 이면 정상입니다.
+  - 켤 때 AUX 포트가 없거나 다른 프로세스(남은 GQ7 드라이버 등)가 잡고 있으면 `[GQ7] RTK 를 못 켬 — …` 로
+    멈춥니다. GQ7 USB 를 다시 꽂거나 그 프로세스를 끄고 다시 켭니다(`gq7_aux_check:=false` 로 끌 수 있음).
+  - 주행 중 드라이버가 `Failed to write RTCM to aux port` 를 쏟아내면 `rtcm_guard` 가 중계를 멈춰 로그 폭주를
+    끊고, `GQ7 AUX 포트에 RTK 보정을 못 씀 — …` 을 30초마다 한 번 알립니다(그동안 **RTK 아님**). 10초마다 하나씩
+    다시 넣어 보고 되면 자동으로 이어 갑니다. 안 되면 GQ7 USB 를 다시 꽂고 `run_gq7_rtk` 재시작.
+    2026-11-13 토너먼트 시험은 11:36 부터 이 상태(RTK Fixed → SBAS)로 7번을 다 했는데 아무도 몰랐습니다.
+  - 보정이 10초 넘게 안 오거나, 들어가는데 2분 넘게 RTK 가 아니면 그것도 경고합니다.
 
 ⚠️ 실내 수조 런치(`run_boat_lidar`)와 `run_gq7_outdoor`를 같이 켜면 `/odom` 발행자가
 둘이 됩니다. 하나만 켭니다.
@@ -130,7 +139,7 @@ ros2 launch kaboat_hardware real_sensors.launch.py outdoor:=true rtk:=true \
 | `stop_sensors_motors` | `bash scripts/run_sensors_motors.sh stop` | 위 세션 모든 창에 Ctrl+C(카메라 → GQ7 순) → 다 꺼지면 세션 닫기 |
 | `rec [이름]` | `python3 scripts/rec_point.py [이름]` | 지금 위치(x, y, 선수각) 기록. 이름 생략 시 `p1`, `p2` … |
 | `list_points` | `python3 scripts/rec_point.py --list` | 기록한 지점 보기 |
-| `rec_bag [이름]` | `bash scripts/record_run.sh [이름]` | 주행 센서 rosbag 녹화 → `~/kaboat_bags/이름_날짜_시각/`. **센서를 다 켠 뒤** 실행, **Ctrl+C로 종료**(창을 그냥 닫지 말 것). 카메라는 압축 토픽(약 4~5 MB/s, 20분 ≈ 6 GB), 압축 토픽이 없으면 원본 + zstd(20분 ≈ 15~18 GB). 남은 용량 10 GB 미만이면 시작 안 함. 2 GB마다 파일 분할. 자세한 사용법 [ROSBAG_GUIDE.md](ROSBAG_GUIDE.md) |
+| `rec_bag [이름]` | `bash scripts/record_run.sh [이름]` | 주행 센서 rosbag 녹화 → `~/kaboat_bags/이름_날짜_시각/`. **센서를 다 켠 뒤** 실행, **Ctrl+C로 종료**(창을 그냥 닫지 말 것). 카메라는 압축 토픽(약 4~5 MB/s, 20분 ≈ 6 GB), 압축 토픽이 없으면 원본 + zstd(20분 ≈ 15~18 GB). 남은 용량 10 GB 미만이면 시작 안 함. 2 GB마다 파일 분할. **카메라가 필요 없는 시험(회피·토너먼트·게이트)은 `rec_bag --no-camera [이름]`** — 영상·압축 없이(원본 영상 zstd 는 젯슨이 못 따라가 메시지를 버림, 2026-11-13). 자세한 사용법 [ROSBAG_GUIDE.md](ROSBAG_GUIDE.md) |
 | `rec_rgb [이름]` | `bash scripts/record_run.sh --rgb [이름]` | 카메라 컬러(RGB) 영상만 녹화 → `~/kaboat_bags/이름_날짜_시각/` (이름 생략 시 `rgb`). `run_camera`만 켜면 됨, **Ctrl+C로 종료**. 압축 토픽(JPEG) 약 1~1.5 MB/s, 없으면 원본 + zstd. 영상은 `bag_to_mp4 <폴더>` |
 | `bag_to_mp4 <bag 폴더>` | `python3 scripts/bag_to_mp4.py <bag 폴더>` | bag 의 카메라 영상 → mp4 (bag 폴더 안 `<폴더 이름>.mp4`, 동영상 플레이어로 열림). `rec_bag` 폴더(압축 토픽)·`ros2 bag record` 폴더 둘 다. 토픽 기본 `/camera/color/image_raw`(또는 그 `/compressed`), 바꾸려면 `--topic /dock/debug_image`. OpenCV 가 mp4 를 못 쓰면 `.avi` |
 | `goto 지점` / `goto x y [각도]` | `ros2 launch kaboat_hardware outdoor_waypoint.launch.py point:=지점` (또는 `x:= y:= angle:=`) | 야외 웨이포인트 1개 주행, **실행 즉시 출발**(추력 40%). 5절 참고 |

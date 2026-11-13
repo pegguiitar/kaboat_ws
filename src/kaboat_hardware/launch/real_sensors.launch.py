@@ -53,6 +53,43 @@ def gq7_params_with_ntrip(base_path: str, aux_port: str, directory: str | None =
     return path
 
 
+def check_aux_port(path: str, proc_root: str = '/proc') -> str | None:
+    """RTK 를 켜기 전 GQ7 AUX 포트 확인 — 문제가 있으면 이유·해결 문장, 없으면 None.
+
+    AUX 가 없거나 다른 프로세스(남은 GQ7 드라이버 등)가 잡고 있으면 드라이버가 RTCM 을 못 써
+    'Failed to write RTCM to aux port' 를 초당 ~10줄 찍고 RTK 가 SBAS 로 떨어진다
+    (2026-11-13 토너먼트 시험 내내). 켤 때 바로 알린다.
+    """
+    if not os.path.exists(path):
+        return (f'GQ7 AUX 포트 {path} 가 없다 — GQ7 USB 를 다시 꽂고 ls -l /dev/microstrain_* 로 '
+                f'main·aux 둘 다 보이는지 확인. RTK 없이 쓰려면 run_gq7_outdoor')
+    real = os.path.realpath(path)
+    users = []
+    try:
+        pids = [d for d in os.listdir(proc_root) if d.isdigit() and int(d) != os.getpid()]
+    except OSError:
+        pids = []
+    for pid in pids:
+        fd_dir = os.path.join(proc_root, pid, 'fd')
+        try:
+            fds = os.listdir(fd_dir)
+        except OSError:
+            continue
+        for fd in fds:
+            try:
+                if os.path.realpath(os.path.join(fd_dir, fd)) == real:
+                    with open(os.path.join(proc_root, pid, 'cmdline'), 'rb') as f:
+                        cmd = f.read().replace(b'\0', b' ').decode(errors='replace').strip()
+                    users.append(f'{pid} {cmd[:80]}')
+                    break
+            except OSError:
+                continue
+    if users:
+        return (f'GQ7 AUX 포트 {path}({real}) 를 이미 다른 프로세스가 쓰고 있다: {"; ".join(users)} — '
+                f'남은 GQ7 드라이버·센서 런치를 끄고 다시 켤 것 (kill <PID>)')
+    return None
+
+
 def generate_launch_description():
     hardware_share = get_package_share_directory('kaboat_hardware')
     bringup_share = get_package_share_directory('kaboat_bringup')
@@ -94,6 +131,7 @@ def _gq7_actions(context):
         return []
     params_file = context.perform_substitution(LaunchConfiguration('gq7_config_file'))
     outdoor = _truthy(context, 'outdoor')
+    rtk = False
     actions = []
     if outdoor:
         config_dir = os.path.join(get_package_share_directory('kaboat_hardware'), 'config')
@@ -115,9 +153,14 @@ def _gq7_actions(context):
             ),
         ]
         if _truthy(context, 'rtk'):
-            actions += _rtk_actions(context)
             aux_port = context.perform_substitution(LaunchConfiguration('gq7_aux_port'))
+            if _truthy(context, 'gq7_aux_check'):
+                problem = check_aux_port(aux_port)
+                if problem:
+                    raise RuntimeError(f'[GQ7] RTK 를 못 켬 — {problem}')
+            actions += _rtk_actions(context)
             params_file = gq7_params_with_ntrip(params_file, aux_port)
+            rtk = True
     remap_odom = not outdoor and _truthy(context, 'enable_odom_remap')
 
     # 공식 MicroStrain launch를 사용하되, 나머지 자율주행 코드가 기대하는
@@ -126,6 +169,9 @@ def _gq7_actions(context):
         SetRemap(src='/gnss_1/llh_position', dst='/gps/fix'),
         SetRemap(src='/gnss_2/llh_position', dst='/gps/fix_secondary'),
     ]
+    if rtk:
+        # 드라이버는 NTRIP 보정을 rtcm_guard 를 거쳐 받는다 (/rtcm → /rtcm/gq7, AUX 쓰기 실패 감시)
+        remaps.append(SetRemap(src='/rtcm', dst='/rtcm/gq7'))
     if remap_odom:
         # ⚠️ 실내 수조에서는 indoor_lidar_odom 이, 야외에서는 gq7_local_odom 이 /odom 을
         # 발행하므로 이 remap 을 쓰지 않는다. 켠 채로 두면 /odom 발행자가 둘이 되어
@@ -180,8 +226,11 @@ def _rtk_actions(context):
             'rtk:=true 에는 NTRIP 계정이 필요하다 — '
             'ntrip_username:=<아이디> ntrip_password:=<비밀번호> 를 같이 넘긴다')
     return [
-        LogInfo(msg=f'[GQ7] RTK: NTRIP {host}:{g("ntrip_port")}/{mount} → /rtcm → GQ7 AUX '
-                    f'({g("gq7_aux_port")})'),
+        LogInfo(msg=f'[GQ7] RTK: NTRIP {host}:{g("ntrip_port")}/{mount} → /rtcm → rtcm_guard → '
+                    f'/rtcm/gq7 → GQ7 AUX ({g("gq7_aux_port")})'),
+        # AUX 쓰기 실패('Failed to write RTCM to aux port' 폭주)·RTK 상태 감시, /gnss/rtk_status
+        Node(package='kaboat_hardware', executable='rtcm_guard', name='rtcm_guard',
+             output='screen', parameters=[{'use_sim_time': False}]),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(_ntrip_launch_file()),
             launch_arguments={
@@ -247,6 +296,9 @@ def _launch(d455, gq7, enable_d455, config_file, default_config, default_gq7_con
                               description='NTRIP 계정 비밀번호 (rtk:=true 때 필수)'),
         DeclareLaunchArgument('gq7_aux_port', default_value='/dev/microstrain_aux',
                               description='GQ7 AUX 포트 (RTCM 입력)'),
+        DeclareLaunchArgument('gq7_aux_check', default_value='true',
+                              description='rtk:=true 때 AUX 포트가 있고 다른 프로세스가 안 잡고 있는지 '
+                                          '켤 때 확인 (false = 확인 안 함)'),
         DeclareLaunchArgument(
             'enable_odom_remap', default_value='true',
             description='GQ7 /ekf/odometry_map → /odom remap (outdoor:=false 일 때만). '
