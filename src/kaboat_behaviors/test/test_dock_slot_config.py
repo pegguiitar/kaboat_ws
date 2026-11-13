@@ -15,7 +15,8 @@ from kaboat_behaviors.slot_dimensions import SlotDimensions
 CONFIG = (Path(__file__).resolve().parents[2]
           / 'kaboat_bringup' / 'config' / 'dock_slot.yaml')
 NODE_ONLY = {'dock.dimensions_measured', 'dock.wall_to_mouth_m',
-             'dock.exit_clearance_m'}
+             'dock.exit_clearance_m',
+             'dock.slot_pitch_m'}   # dock_ctrl_v2.load_slot_pitch 가 파일에서 직접 읽음
 
 
 def flatten(tree, prefix=''):
