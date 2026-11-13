@@ -42,7 +42,7 @@ def _xy(point) -> str:
 HOLD_YAW_KP = 0.8
 HOLD_YAW_KD = 0.3
 HOLD_ALONG_KP = 0.3
-GATE_LOS_THRUST_RATIO = 0.3   # 게이트 통과(LOS) 직진 상한 — config/gate_params.yaml 과 같게
+GATE_LOS_THRUST_RATIO = 0.35  # 게이트 통과(LOS) 직진 상한 — config/gate_params.yaml 과 같게 (0.3 → 0.35, 2026-11-13)
 
 
 class GateFollower(BehaviorBase):
