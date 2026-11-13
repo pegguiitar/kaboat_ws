@@ -2,9 +2,17 @@
 
 순서 (2026-11-13):
   SCAN    제자리에서 YOLO 로 목표 도형만 찾는다 (세 슬롯 중 어디로 갈지 = 목표 도형의 화면 방위).
-          선수를 돌려 목표를 화면 가운데(±center_tolerance_deg)에 두고, 회전이 멎은 채 연속
-          bearing_samples 프레임의 세계 방위가 bearing_spread_deg 안이면 그 방위를 고정.
-  SEEK    고정한 방위의 직선을 seek_cmd 로 서행(LOS). 라이다 스캔면이 수면 위 ~0.14 m 라 슬롯
+          세계 방위 = 촬영 시각(image_stamp_s, 없으면 받은 시각 - camera_latency_s)의 odom 선수각
+          + 화면 방위. 최근 bearing_window_s 안에서 화면 가운데 ±sample_max_offset_deg,
+          선회율 ±lock_yaw_rate_deg 인 프레임 bearing_samples 개의 세계 방위가 bearing_spread_deg
+          안이면 그 방위를 고정. 그동안 선수는 세계 방위를 odom 으로 따라간다(scan_turn_kp/kd).
+          2026-11-13 bag: 예전 방식(받은 시각의 선수각 + 화면 방위로 P 제어, ±3° 데드밴드, 가운데
+          ±6°·4°/s 동시 조건)은 카메라 지연 0.21 s 때문에 ±18°, 25°/s 로 계속 흔들려 한 번도
+          고정 못 했다 — 같은 기록에 지연 보상만 넣어도 세계 방위 표준편차 3.5° → 1.2°.
+  SEEK    목표 도형을 선수 가운데(±seek_center_deg)에 둔 채 seek_cmd 로 서행 — 벗어나면 전진 0, 선수만
+          돌린다(선회율 제약 없음). 보이는 동안 지연 보상한 YOLO 방위로 목표 방위·방위선을 갱신하고
+          (한 번에 seek_max_update_deg 넘게 튀면 버림), 가까워져 안 보이면 마지막 방위로 간다.
+          라이다 스캔면이 수면 위 ~0.14 m 라 슬롯
           벽은 약 6 m 안에서만 잡힌다(2026-11-12 bag). 최근 cloud_window_s 의 /scan/level 을 odom 에
           쌓아 고정 치수(dock_slot.yaml: 폭·깊이) ㄷ자 슬롯을 찾는다 — 목표 방위선에서
           slot_target_offset_m 안의 슬롯만 (YOLO 는 세 슬롯 중 어디인지만 정한다). 같은 ㄷ자가
@@ -49,7 +57,7 @@ from kaboat_behaviors.slot_axis import scan_points
 from kaboat_behaviors.slot_dimensions import SlotDimensions
 from .dock_one_shot import (LocalGeo, fixed_route, parse_marker_order, retreat_error,
                             retreat_route, stable_bearing, stable_wall_lock,
-                            straight_samples, target_sight, wall_distance, wrap)
+                            target_sight, wall_distance, wrap)
 
 FRONT_MIN_RANGE_M = 0.8      # 이보다 가까운 점은 선체·물보라로 보고 앞 막힘 판정에서 뺀다
 FRONT_MIN_POINTS = 3
@@ -116,11 +124,22 @@ class DockCtrlV2(Node):
                     'yaw_tolerance_deg': 8.0, 'target_class': 'triangle',
                     'position_source': 'odom', 'marker_order': '',
                     # SCAN: 목표 도형 방위 고정
-                    'min_confidence': 0.55, 'center_tolerance_deg': 6.0,
+                    'min_confidence': 0.55,
+                    # 고정에 쓸 프레임: 화면 가운데 ±8°. 2026-11-13 bag(라이다 ㄷ자 중심 대비): ±8° 면
+                    # 방위 오차 ≤0.6°, ±20° 면 ≤2.6° — 가장자리일수록 틀리고, 11/12 에는 화면 끝
+                    # 오검출로 옆 슬롯을 고른 적이 있다. 선회율 제한은 기본 끔(0) — 촬영 시각으로
+                    # 지연 보상하면 25°/s 로 돌아도 맞다. 0 보다 크면 그 선회율 [deg/s] 이하 프레임만.
+                    'sample_max_offset_deg': 8.0, 'lock_yaw_rate_deg': 0.0,
                     'bearing_samples': 5, 'bearing_spread_deg': 3.0,
-                    'lock_yaw_rate_deg': 4.0,
+                    'bearing_window_s': 2.0,
+                    # 검출 상태에 image_stamp_s 가 없을 때(예전 검출기) 쓰는 촬영→수신 지연
+                    'camera_latency_s': 0.2,
+                    # SCAN 제자리 선회 PD (세계 방위 - odom 선수각). 1.4/0.16 은 bag 에서 식별한
+                    # 선회 모델(지연 0.2 s, 시정수 0.8 s)에서 덜 감쇠돼 0.8/0.4 로 낮춤.
+                    'scan_turn_kp': 0.8, 'scan_turn_kd': 0.4,
                     # SEEK: 방위 따라 서행, 라이다 벽 고정
                     'seek_cmd': 0.07, 'seek_max_travel_m': 10.0,
+                    'seek_center_deg': 8.0, 'seek_max_update_deg': 10.0,
                     'front_stop_m': 2.0, 'front_half_angle_deg': 25.0,
                     'scan_topic': '/scan',
                     # ㄷ자 슬롯 (치수는 slot_config = dock_slot.yaml, '' 면 kaboat_bringup 것)
@@ -128,8 +147,10 @@ class DockCtrlV2(Node):
                     'cloud_window_s': 1.0, 'slot_target_offset_m': 1.6,
                     'slot_max_range_m': 12.0,
                     'lock_window_s': 2.5, 'lock_min_span_s': 1.0,
-                    # 9 m 밖 ㄷ자는 좌우 0.3 m 이상 틀린 게 17 % (2026-11-12 bag) — 이 안에서만 고정
-                    'lock_max_distance_m': 8.0,
+                    # 9 m 밖 ㄷ자는 좌우 0.3 m 이상 틀린 게 17 % (2026-11-12 bag) — 이 안에서만 고정.
+                    # 2026-11-13 bag 재생: 7.7 m 에서 고정하면 슬롯 중심이 법선 방향 0.89 m 틀렸고
+                    # 6 m 안 추정은 모두 ±0.15 m (원래 5.05 m 고정과 1 cm 차) → 8 → 6 m.
+                    'lock_max_distance_m': 6.0,
                     'lock_goal_spread_m': 0.3, 'lock_normal_spread_deg': 5.0,
                     # BACKOFF
                     'via_margin_m': 0.5, 'backoff_max_m': 3.0}
@@ -166,12 +187,18 @@ class DockCtrlV2(Node):
         if self.target not in ('triangle', 'circle', 'square'):
             raise ValueError('invalid target_class')
         self.min_conf = float(p('min_confidence'))
-        self.center_tol = math.radians(float(p('center_tolerance_deg')))
+        self.sample_offset = math.radians(float(p('sample_max_offset_deg')))
         self.bearing_n = int(p('bearing_samples'))
         self.bearing_spread = float(p('bearing_spread_deg'))
+        self.bearing_window = float(p('bearing_window_s'))
         self.lock_rate = math.radians(float(p('lock_yaw_rate_deg')))
+        self.camera_latency = float(p('camera_latency_s'))
+        self.scan_kp = float(p('scan_turn_kp'))
+        self.scan_kd = float(p('scan_turn_kd'))
         self.seek_cmd = float(p('seek_cmd'))
         self.seek_max_travel = float(p('seek_max_travel_m'))
+        self.seek_center = math.radians(float(p('seek_center_deg')))
+        self.seek_max_update = math.radians(float(p('seek_max_update_deg')))
         self.front_stop = float(p('front_stop_m'))
         self.front_half_angle = math.radians(float(p('front_half_angle_deg')))
         self.cloud_window = float(p('cloud_window_s'))
@@ -196,12 +223,17 @@ class DockCtrlV2(Node):
                     self.perception_timeout,
                     self.max_turn, self.approach_cmd, self.final_cmd,
                     self.retreat_cmd, self.via_tol, self.goal_tol, self.yaw_tol,
-                    self.min_conf, self.center_tol, self.bearing_spread, self.lock_rate,
+                    self.min_conf, self.sample_offset, self.bearing_spread,
+                    self.bearing_window, self.scan_kp,
                     self.seek_cmd, self.seek_max_travel, self.front_stop,
+                    self.seek_center, self.seek_max_update,
                     self.front_half_angle, self.cloud_window, self.lock_window,
                     self.lock_goal_spread, self.lock_normal_spread, self.lock_max_distance,
                     self.via_margin, self.backoff_max)
                    ) or not math.isfinite(self.retreat_distance) or self.retreat_distance <= 3.0 \
+                or not (math.isfinite(self.camera_latency) and 0 <= self.camera_latency < 2) \
+                or not (math.isfinite(self.scan_kd) and self.scan_kd >= 0) \
+                or not (math.isfinite(self.lock_rate) and self.lock_rate >= 0) \
                 or self.stable_samples < 2 or self.bearing_n < 2 \
                 or not 0 <= self.lock_min_span < self.lock_window:
             raise ValueError('invalid docking controller limits')
@@ -216,7 +248,11 @@ class DockCtrlV2(Node):
         self.det = self.scan = None
         self.det_received = self.scan_received = 0.0
         self.det_seq = self.last_det_seq = 0
-        self.bearing_samples = deque(maxlen=max(self.bearing_n, 2))
+        self.det_stamp = None                       # 지금 검출의 촬영 시각 [s, ROS 시간]
+        self.yaw_history = deque(maxlen=100)        # (odom 헤더 시각, 펼친 선수각) — 약 4 s
+        self.bearing_samples = deque(maxlen=max(self.bearing_n, 2) * 4)   # (시각, 세계 방위)
+        self.scan_heading = None                    # SCAN 이 따라가는 목표 세계 방위
+        self.scan_heading_received = 0.0
         self.pending_scans = deque(maxlen=30)       # TF 를 기다리는 /scan/level
         self.cloud = deque()                        # (stamp_s, odom XY 점들), 최근 cloud_window_s
         self.cloud_version = self.detected_version = 0
@@ -225,6 +261,7 @@ class DockCtrlV2(Node):
         self.slot_last = None                       # (USlot 또는 None, 이유)
         self.locked_bearing = None
         self.seek_start = self.seek_start_odom = self.seek_plan = None
+        self.seek_line_point = None                 # 목표 방위선이 지나는 점 (odom, 마지막 시선)
         self.lock = None
         self.backoff_start = self.backoff_heading = None
         self.phase = 'IDLE'
@@ -274,6 +311,26 @@ class DockCtrlV2(Node):
 
     def _odom(self, msg):
         self.odom, self.odom_received = msg, time.monotonic()
+        yaw = yaw_from_quaternion(msg.pose.pose.orientation)
+        t = stamp(msg)
+        if self.yaw_history:
+            last_t, last_yaw = self.yaw_history[-1]
+            if t < last_t:              # 시간이 거꾸로(bag 다시 재생 등) — 이력 버림
+                self.yaw_history.clear()
+            else:
+                yaw = last_yaw + wrap(yaw - last_yaw)
+        self.yaw_history.append((t, yaw))
+
+    def _yaw_at(self, t):
+        """odom 이력에서 시각 t 의 선수각 (보간). t 가 이력보다 늦으면 마지막 값, 이르면 None."""
+        if not self.yaw_history:
+            return None
+        times = [s for s, _ in self.yaw_history]
+        if t is None or t >= times[-1]:
+            return wrap(self.yaw_history[-1][1])
+        if t < times[0]:
+            return None
+        return wrap(float(np.interp(t, times, [y for _, y in self.yaw_history])))
 
     def _scan(self, msg):
         self.scan, self.scan_received = msg, time.monotonic()
@@ -285,6 +342,15 @@ class DockCtrlV2(Node):
             self.det_seq += 1
         except ValueError:
             self.det = None
+            return
+        image_stamp = self.det.get('image_stamp_s') if isinstance(self.det, dict) else None
+        try:
+            image_stamp = float(image_stamp)
+        except (TypeError, ValueError):
+            image_stamp = None
+        if image_stamp is None or not math.isfinite(image_stamp) or image_stamp <= 0:
+            image_stamp = self.get_clock().now().nanoseconds * 1e-9 - self.camera_latency
+        self.det_stamp = image_stamp
 
     def _slot_scan(self, msg):
         if msg.header.frame_id and stamp(msg) > 0:
@@ -324,7 +390,7 @@ class DockCtrlV2(Node):
         self.detected_version = self.cloud_version
         points = np.vstack([pts for _, pts in self.cloud])
         direction = (math.cos(self.locked_bearing), math.sin(self.locked_bearing))
-        slot, why = find_u_slot(points, self._odom_xy(), self.seek_start_odom, direction,
+        slot, why = find_u_slot(points, self._odom_xy(), self.seek_line_point, direction,
                                 self.slot_params)
         self.slot_last = (slot, why)
         self._publish_slot_markers(slot)
@@ -407,6 +473,8 @@ class DockCtrlV2(Node):
         self.det_received = 0.0
         self.last_det_seq = self.det_seq
         self.bearing_samples.clear()
+        self.scan_heading = None
+        self.scan_heading_received = 0.0
         self.cloud.clear()
         self.pending_scans.clear()
         self.slot_samples.clear()
@@ -620,39 +688,79 @@ class DockCtrlV2(Node):
         self.locked_bearing = bearing
         self.seek_start = self._position()
         self.seek_start_odom = self._odom_xy()
+        self.seek_line_point = self.seek_start_odom.copy()
         self.cloud.clear()
         self.slot_samples.clear()
-        end = self.seek_start + self.seek_max_travel * np.array([math.cos(bearing), math.sin(bearing)])
-        samples = straight_samples(self.seek_start, end)
-        self.seek_plan = sampled_path(samples, spacing=.1, curvatures=np.zeros(len(samples)),
-                                      frame_id='dock_enu')
         self.follower.reset()
 
-    def _scan_target(self, yaw):
-        """SCAN 한 tick: 목표 도형을 화면 가운데로 돌리고, 멈춘 채 방위가 안정되면 SEEK."""
-        if self.det is None or time.monotonic() - self.det_received > self.perception_timeout:
-            self.bearing_samples.clear()
-            return 0.0, 'YOLO stale'
+    def _target_sample(self):
+        """새 YOLO 결과면 (ok, 화면 방위, 촬영 시각 세계 방위 또는 None, 이유). 아니면 ok=False."""
         ok, bearing, why = target_sight(self.det, self.target, order=self.marker_order,
                                         min_confidence=self.min_conf)
-        if not ok:
+        if not ok or self.det_seq == self.last_det_seq:
+            return ok, bearing, None, why
+        self.last_det_seq = self.det_seq
+        seen_yaw = self._yaw_at(self.det_stamp)
+        if seen_yaw is None:
+            return ok, bearing, None, 'no odom yaw at image time'
+        return ok, bearing, wrap(seen_yaw + bearing), why
+
+    def _seek_sight(self):
+        """SEEK 중 목표가 보이면 목표 방위(EMA)·방위선을 갱신. 반환 설명."""
+        if self.det is None or time.monotonic() - self.det_received > self.perception_timeout:
+            return f'{self.target} not in view — keeping {math.degrees(self.locked_bearing):.1f} deg'
+        ok, bearing, world, why = self._target_sample()
+        if world is None:
+            return why if not ok else f'{self.target} screen {math.degrees(bearing):+.1f} deg'
+        jump = wrap(world - self.locked_bearing)
+        if abs(bearing) > self.sample_offset or abs(jump) > self.seek_max_update:
+            return f'{self.target} sight {math.degrees(world):.1f} deg ignored (jump {math.degrees(jump):+.1f})'
+        self.locked_bearing = wrap(self.locked_bearing + .3 * jump)
+        self.seek_line_point = self._odom_xy()
+        return f'{self.target} screen {math.degrees(bearing):+.1f} deg'
+
+    def _scan_turn(self, heading, yaw):
+        """SCAN 제자리 선회 PD — 데드밴드 없음(가운데 근처에서도 선회율을 계속 잡는다)."""
+        rate = self.odom.twist.twist.angular.z
+        return float(np.clip(self.scan_kp * wrap(heading - yaw) - self.scan_kd * rate,
+                             -self.max_turn, self.max_turn))
+
+    def _scan_target(self, yaw):
+        """SCAN 한 tick: 목표 도형의 세계 방위로 선수를 돌리며, 방위가 안정되면 SEEK.
+
+        세계 방위는 촬영 시각의 선수각으로 만든다 — 받은 시각의 선수각을 쓰면 도는 동안
+        (선회율 × 0.2 s) 만큼 밀려 제어가 흔들리고 방위 고정도 안 된다(2026-11-13 bag).
+        """
+        now = time.monotonic()
+        if self.det is None or now - self.det_received > self.perception_timeout:
             self.bearing_samples.clear()
-            return 0.0, why            # 목표가 안 보이면 멈춰 기다린다 (눈먼 360° 회전 안 함)
-        world = wrap(yaw + bearing)
-        if self.det_seq != self.last_det_seq:
-            self.last_det_seq = self.det_seq
-            still = abs(self.odom.twist.twist.angular.z) <= self.lock_rate
-            if abs(bearing) <= self.center_tol and still:
-                self.bearing_samples.append(world)
-            else:
-                self.bearing_samples.clear()
-        locked, mean, why = stable_bearing(self.bearing_samples, min_samples=self.bearing_n,
-                                           max_spread_deg=self.bearing_spread)
+            self.scan_heading = None
+            return 0.0, 'YOLO stale'
+        ok, bearing, world, why = self._target_sample()
+        if world is not None:
+            self.scan_heading = world if self.scan_heading is None else math.atan2(
+                math.sin(world) + math.sin(self.scan_heading),
+                math.cos(world) + math.cos(self.scan_heading))
+            self.scan_heading_received = now
+            rate = abs(self.odom.twist.twist.angular.z)
+            if abs(bearing) <= self.sample_offset and (self.lock_rate == 0 or rate <= self.lock_rate):
+                self.bearing_samples.append((self.det_stamp, world))
+        # 한두 프레임 놓쳐도 지우지 않는다 — 창(bearing_window_s) 밖으로 나간 것만 버린다
+        while self.bearing_samples and (self.bearing_samples[0][0]
+                                        < self.det_stamp - self.bearing_window):
+            self.bearing_samples.popleft()
+        locked, mean, lock_why = stable_bearing([w for _, w in self.bearing_samples],
+                                                min_samples=self.bearing_n,
+                                                max_spread_deg=self.bearing_spread)
         if locked:
             self._start_seek(mean)
             return 0.0, f'{self.target} bearing locked {math.degrees(mean):.1f} deg'
-        turn = self._turn(world, yaw) if abs(bearing) > .5 * self.center_tol else 0.0
-        return turn, f'centering {self.target} ({math.degrees(bearing):+.1f} deg); {why}'
+        if self.scan_heading is None or now - self.scan_heading_received > self.perception_timeout:
+            self.scan_heading = None
+            return 0.0, why            # 목표가 안 보이면 멈춰 기다린다 (눈먼 360° 회전 안 함)
+        detail = (f'turning to {self.target} {math.degrees(self.scan_heading):.1f} deg'
+                  + (f' (screen {math.degrees(bearing):+.1f} deg)' if ok else f' ({why})'))
+        return self._scan_turn(self.scan_heading, yaw), f'{detail}; {lock_why}'
 
     def _tick(self):
         if self.fixed_path_msg is not None and time.monotonic()-self.last_path_pub >= 1.0:
@@ -708,13 +816,13 @@ class DockCtrlV2(Node):
                 self._command(0, 0)
                 self._report(f'no U slot within {self.seek_max_travel:.1f}m — holding; {wall_why}')
                 return
-            step = self.follower.step(self.seek_plan, xy, yaw,
-                                      self.odom.twist.twist.angular.z,
-                                      thrust_ratio=self.seek_cmd,
-                                      turn_ratio=self.max_turn)
-            self._command(step.linear, step.angular)
-            self._report(f'seeking along {math.degrees(self.locked_bearing):.1f} deg, '
-                         f'{travelled:.1f}m; {wall_why}')
+            sight_why = self._seek_sight()
+            error = wrap(self.locked_bearing - yaw)
+            centred = abs(error) <= self.seek_center
+            self._command(self.seek_cmd if centred else 0.0, self._scan_turn(self.locked_bearing, yaw))
+            self._report(f'seeking {math.degrees(self.locked_bearing):.1f} deg '
+                         f'({"centred" if centred else f"centring {math.degrees(error):+.1f} deg"}), '
+                         f'{travelled:.1f}m; {sight_why}; {wall_why}')
             return
         if self.phase == 'BACKOFF':
             have, need = self._via_room(self.lock)

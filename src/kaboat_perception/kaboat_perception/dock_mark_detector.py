@@ -175,6 +175,9 @@ class DockMarkDetector(Node):
         extra['debug_count'] = self.debug_count
         extra['depth_quality'] = self.depth_diagnostics
         extra['sight_rays'] = getattr(self, 'sight_diagnostics', {})
+        # 이 sight_rays 를 만든 RGB 촬영 시각 — 도킹 제어가 그 시각의 선수각으로 방위를 세계 방위로
+        # 바꾼다(촬영→상태 발행 약 0.2 s, 2026-11-13 bag; 도는 중이면 그만큼 방위가 밀린다).
+        extra['image_stamp_s'] = getattr(self, 'frame_stamp_s', None)
         msg = String()
         msg.data = json.dumps({'valid': valid, 'reason': reason,
                                'target_class': self.target_class,
@@ -265,6 +268,8 @@ class DockMarkDetector(Node):
 
     def on_frame(self, rgb_msg: Image, depth_msg: Image, info_msg: CameraInfo):
         self.frame_started = time.perf_counter()
+        stamp = rgb_msg.header.stamp
+        self.frame_stamp_s = (stamp.sec + stamp.nanosec * 1e-9) or None
         self.inference_ms = None
         self.depth_diagnostics = {}
         self.sight_diagnostics = {}
