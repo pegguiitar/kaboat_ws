@@ -55,6 +55,26 @@ Visualization Manager:
         Axes Length: 1
       Value: true
     - Class: rviz_default_plugins/MarkerArray
+      Name: Dock ctrl (state, sight, bearing)
+      Enabled: true
+      Topic:
+        Value: /dock/ctrl_markers
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Name: U slot candidate
+      Enabled: true
+      Topic:
+        Value: /dock/slot_markers
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
       Name: Three camera bearings
       Enabled: true
       Topic:

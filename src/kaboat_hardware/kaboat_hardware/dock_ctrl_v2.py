@@ -9,6 +9,18 @@
           2026-11-13 bag: 예전 방식(받은 시각의 선수각 + 화면 방위로 P 제어, ±3° 데드밴드, 가운데
           ±6°·4°/s 동시 조건)은 카메라 지연 0.21 s 때문에 ±18°, 25°/s 로 계속 흔들려 한 번도
           고정 못 했다 — 같은 기록에 지연 보상만 넣어도 세계 방위 표준편차 3.5° → 1.2°.
+          목표가 안 보이면 search_turn_cmd 로 천천히 돌며 찾는다 (선회각 제한 없음, YOLO 를 믿음).
+          방향 근거 (좋은 것 우선, 더 좋은 근거가 처음 생기면 한 번 다시 정하고 그 외엔 유지 — 돌면
+          보이던 도형이 반대로 밀려나므로 매번 다시 정하면 좌우로 왔다 갔다 한다):
+            다른 도형 2개 — 슬롯은 같은 간격이라 목표는 두 도형 화면 간격만큼 바깥 어느 한쪽.
+                            화면 안 후보는 빼고(보였을 것) 가운데에 가까운 쪽으로 (가까우면 양쪽에 걸쳐 보여서
+                            평균 쪽은 틀린다: 2026-11-13 시뮬 5.5 m, 반대로 28 s 돎).
+            다른 도형 1개가 가운데 ±search_centre_deg 밖 — 그 도형 쪽 (목표는 그 너머).
+            다른 도형 1개가 가운데 근처 — 방향 단서 없음: 선수 유지하고 retreat_cmd 로 후진해 시야를
+                            넓힌다(최대 search_backoff_max_m, 뒤 1.5 m 안 장애물이면 중단).
+                            그래도 모르면 그 도형 쪽, 정확히 가운데면 시계방향.
+            아무것도 없음 — 시계방향.
+          YOLO 상태 자체가 끊기면(stale) 멈춘다.
   SEEK    목표 도형을 선수 가운데(±seek_center_deg)에 둔 채 seek_cmd 로 서행 — 벗어나면 전진 0, 선수만
           돌린다(선회율 제약 없음). 보이는 동안 지연 보상한 YOLO 방위로 목표 방위·방위선을 갱신하고
           (한 번에 seek_max_update_deg 넘게 튀면 버림), 가까워져 안 보이면 마지막 방위로 간다.
@@ -67,10 +79,11 @@ def stamp(msg):
     return msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
 
 
-def front_clearance(scan, half_angle, stop_distance):
-    """스캔 앞쪽(±half_angle) stop_distance 안 점이 FRONT_MIN_POINTS 개 이상이면 그 최소 거리, 아니면 None."""
+def front_clearance(scan, half_angle, stop_distance, centre=0.0):
+    """스캔 centre 방향(기본 앞, math.pi 면 뒤) ±half_angle 안, stop_distance 안 점이
+    FRONT_MIN_POINTS 개 이상이면 그 최소 거리, 아니면 None."""
     ranges = np.asarray(scan.ranges, float)
-    angles = scan.angle_min + scan.angle_increment * np.arange(len(ranges))
+    angles = scan.angle_min + scan.angle_increment * np.arange(len(ranges)) - centre
     angles = np.arctan2(np.sin(angles), np.cos(angles))
     near = (np.isfinite(ranges) & (ranges >= max(scan.range_min, FRONT_MIN_RANGE_M))
             & (ranges < stop_distance) & (np.abs(angles) <= half_angle))
@@ -137,6 +150,11 @@ class DockCtrlV2(Node):
                     # SCAN 제자리 선회 PD (세계 방위 - odom 선수각). 1.4/0.16 은 bag 에서 식별한
                     # 선회 모델(지연 0.2 s, 시정수 0.8 s)에서 덜 감쇠돼 0.8/0.4 로 낮춤.
                     'scan_turn_kp': 0.8, 'scan_turn_kd': 0.4,
+                    # 목표 탐색 선회 명령 (식별 모델: 0.06 → 약 8°/s, 바람 편향 2.2°/s 보다 충분히 큼)
+                    'search_turn_cmd': 0.06,
+                    # 도형 1개가 이 안이면 방향 단서가 없다고 보고 후진해 시야를 넓힌다 (최대 거리)
+                    'search_centre_deg': 10.0, 'search_backoff_max_m': 3.0,
+                    'camera_half_fov_deg': 34.5,       # D455 컬러 수평 화각 69°의 절반
                     # SEEK: 방위 따라 서행, 라이다 벽 고정
                     'seek_cmd': 0.07, 'seek_max_travel_m': 10.0,
                     'seek_center_deg': 8.0, 'seek_max_update_deg': 10.0,
@@ -195,6 +213,10 @@ class DockCtrlV2(Node):
         self.camera_latency = float(p('camera_latency_s'))
         self.scan_kp = float(p('scan_turn_kp'))
         self.scan_kd = float(p('scan_turn_kd'))
+        self.search_turn = float(p('search_turn_cmd'))
+        self.search_centre = float(p('search_centre_deg'))
+        self.search_backoff_max = float(p('search_backoff_max_m'))
+        self.camera_half_fov = float(p('camera_half_fov_deg'))
         self.seek_cmd = float(p('seek_cmd'))
         self.seek_max_travel = float(p('seek_max_travel_m'))
         self.seek_center = math.radians(float(p('seek_center_deg')))
@@ -224,7 +246,8 @@ class DockCtrlV2(Node):
                     self.max_turn, self.approach_cmd, self.final_cmd,
                     self.retreat_cmd, self.via_tol, self.goal_tol, self.yaw_tol,
                     self.min_conf, self.sample_offset, self.bearing_spread,
-                    self.bearing_window, self.scan_kp,
+                    self.bearing_window, self.scan_kp, self.search_turn,
+                    self.search_centre, self.search_backoff_max, self.camera_half_fov,
                     self.seek_cmd, self.seek_max_travel, self.front_stop,
                     self.seek_center, self.seek_max_update,
                     self.front_half_angle, self.cloud_window, self.lock_window,
@@ -253,6 +276,13 @@ class DockCtrlV2(Node):
         self.bearing_samples = deque(maxlen=max(self.bearing_n, 2) * 4)   # (시각, 세계 방위)
         self.scan_heading = None                    # SCAN 이 따라가는 목표 세계 방위
         self.scan_heading_received = 0.0
+        self.search_dir = None                      # 목표 탐색 선회 방향 (+1 왼쪽, -1 오른쪽)
+        self.search_rank = 0                        # 방향 근거: 0 없음, 1 도형 1개, 2 도형 2개
+        self.widen_start = self.widen_heading = None   # 시야 넓히기 후진 시작 위치·선수각
+        self.widen_done = False
+        self.last_sight = None                      # (수신 monotonic, 세계 방위, 화면 방위) — RViz 용
+        self.last_cmd = (0.0, 0.0)                  # 마지막 (전진, 선회) 명령 — RViz 글자용
+        self.phase_log = deque(maxlen=6)            # (ROS 시각, 단계, 상세) — RViz 단계 전이 기록
         self.pending_scans = deque(maxlen=30)       # TF 를 기다리는 /scan/level
         self.cloud = deque()                        # (stamp_s, odom XY 점들), 최근 cloud_window_s
         self.cloud_version = self.detected_version = 0
@@ -286,6 +316,8 @@ class DockCtrlV2(Node):
         self.gps_path_pub = self.create_publisher(String, '/dock/one_shot_gps', latched)
         self.path_markers_pub = self.create_publisher(MarkerArray, '/dock/one_shot_markers', latched)
         self.slot_markers_pub = self.create_publisher(MarkerArray, '/dock/slot_markers', 1)
+        # 단계·전이 기록·목표 시선·고정 방위선·SEEK 가운데 범위 (odom, RViz/bag 재생 확인용)
+        self.ctrl_markers_pub = self.create_publisher(MarkerArray, '/dock/ctrl_markers', 1)
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
         self.create_subscription(NavSatFix, '/gps/fix', self._gps, sensor_qos)
@@ -475,6 +507,7 @@ class DockCtrlV2(Node):
         self.bearing_samples.clear()
         self.scan_heading = None
         self.scan_heading_received = 0.0
+        self._clear_search()
         self.cloud.clear()
         self.pending_scans.clear()
         self.slot_samples.clear()
@@ -532,6 +565,7 @@ class DockCtrlV2(Node):
         msg = Twist()
         msg.linear.x = float(linear)
         msg.angular.z = float(angular)
+        self.last_cmd = (msg.linear.x, msg.angular.z)
         self.preview.publish(msg)
         if self.drive and (not self.manual_handoff or self.phase != 'IDLE'):
             self.cmd.publish(msg)
@@ -554,6 +588,72 @@ class DockCtrlV2(Node):
                 'route_fixed': self.route_enu is not None,
                 'route_xy': [xy.tolist() for xy in self.route_enu] if self.route_enu else None}
         self.status.publish(String(data=json.dumps(data)))
+        if not self.phase_log or self.phase_log[-1][1] != self.phase:
+            self.phase_log.append((self.get_clock().now().nanoseconds * 1e-9, self.phase, detail))
+        self._publish_ctrl_markers(detail)
+
+    PHASE_COLORS = {'IDLE': (.7, .7, .7), 'STAGE': (.8, .8, .3), 'SCAN': (1., .7, .1),
+                    'SEEK': (.3, .6, 1.), 'BACKOFF': (1., .3, .3), 'TO_VIA': (.2, .9, .4),
+                    'ALIGN_VIA': (.2, .9, .8), 'TO_GOAL': (.1, 1., .2), 'REVERSE': (.8, .4, 1.),
+                    'COMPLETE': (1., 1., 1.)}
+
+    def _publish_ctrl_markers(self, detail):
+        """RViz: 단계 글자·전이 기록, 지연 보상한 목표 시선, SCAN 목표/고정 방위선, SEEK ±가운데."""
+        if self.odom is None:
+            return
+        header_stamp = self.get_clock().now().to_msg()
+        xy, yaw = self._odom_xy(), self._yaw()
+        markers = []
+
+        def marker(mid, kind, color, scale, z=.3, alpha=1.0):
+            m = Marker()
+            m.header.frame_id, m.header.stamp = 'odom', header_stamp
+            m.ns, m.id, m.type, m.action = 'dock_ctrl', mid, kind, Marker.ADD
+            m.pose.orientation.w = 1.0
+            m.pose.position.z = z
+            m.scale.x = m.scale.y = m.scale.z = scale
+            m.color.r, m.color.g, m.color.b = color
+            m.color.a = alpha
+            m.lifetime.nanosec = 500_000_000
+            markers.append(m)
+            return m
+
+        def ray(mid, origin, heading, length, color, width, z=.3):
+            m = marker(mid, Marker.LINE_STRIP, color, width, z=0.0)
+            end = np.asarray(origin) + length * np.array([math.cos(heading), math.sin(heading)])
+            m.points = [Point(x=float(origin[0]), y=float(origin[1]), z=z),
+                        Point(x=float(end[0]), y=float(end[1]), z=z)]
+            return m
+
+        color = self.PHASE_COLORS.get(self.phase, (1., 1., 1.))
+        text = marker(0, Marker.TEXT_VIEW_FACING, color, .7, z=2.2)
+        text.pose.position.x, text.pose.position.y = map(float, xy)
+        linear, angular = self.last_cmd
+        applied = '' if self.drive else ' — preview only (drive_enabled=false)'
+        text.text = (f'{self.phase}\n{detail[:70]}\n'
+                     f'cmd v={linear:+.2f} w={angular:+.2f}{applied}')
+        log = marker(1, Marker.TEXT_VIEW_FACING, (1., 1., 1.), .45, z=4.0, alpha=.9)
+        log.pose.position.x, log.pose.position.y = float(xy[0]) - 4.0, float(xy[1]) + 3.0
+        log.text = '\n'.join(time.strftime('%H:%M:%S', time.localtime(t)) + f' {ph}'
+                             for t, ph, _ in self.phase_log)
+        now = time.monotonic()
+        if self.last_sight and now - self.last_sight[0] <= self.perception_timeout:
+            _, world, screen = self.last_sight          # 노랑 = 고정 표본 범위 밖, 초록 = 안
+            usable = abs(screen) <= self.sample_offset
+            ray(2, xy, world, 14.0, (.2, 1., .2) if usable else (1., 1., .2), .06, z=.35)
+        if self.phase == 'SCAN' and self.scan_heading is not None:
+            ray(3, xy, self.scan_heading, 12.0, (1., .55, 0.), .12, z=.25)
+        if self.locked_bearing is not None and self.seek_line_point is not None:
+            ray(4, self.seek_line_point, self.locked_bearing, self.seek_max_travel + 2.0,
+                (1., .2, .1), .15, z=.2)
+        if self.phase == 'SEEK':                        # 선수 ±seek_center_deg — 목표 방위가 안이면 전진
+            cone = marker(5, Marker.LINE_LIST, (.6, .8, 1.), .04, z=0.0, alpha=.7)
+            for side in (-1, 1):
+                end = xy + 6.0 * np.array([math.cos(yaw + side * self.seek_center),
+                                           math.sin(yaw + side * self.seek_center)])
+                cone.points += [Point(x=float(xy[0]), y=float(xy[1]), z=.3),
+                                Point(x=float(end[0]), y=float(end[1]), z=.3)]
+        self.ctrl_markers_pub.publish(MarkerArray(markers=markers))
 
     def _slot_report(self):
         if self.slot_last is None:
@@ -703,7 +803,9 @@ class DockCtrlV2(Node):
         seen_yaw = self._yaw_at(self.det_stamp)
         if seen_yaw is None:
             return ok, bearing, None, 'no odom yaw at image time'
-        return ok, bearing, wrap(seen_yaw + bearing), why
+        world = wrap(seen_yaw + bearing)
+        self.last_sight = (time.monotonic(), world, bearing)
+        return ok, bearing, world, why
 
     def _seek_sight(self):
         """SEEK 중 목표가 보이면 목표 방위(EMA)·방위선을 갱신. 반환 설명."""
@@ -735,9 +837,10 @@ class DockCtrlV2(Node):
         if self.det is None or now - self.det_received > self.perception_timeout:
             self.bearing_samples.clear()
             self.scan_heading = None
-            return 0.0, 'YOLO stale'
+            return 0.0, 0.0, 'YOLO stale'
         ok, bearing, world, why = self._target_sample()
         if world is not None:
+            self._clear_search()                    # 목표를 봤다 — 다음 탐색은 새로 방향을 정한다
             self.scan_heading = world if self.scan_heading is None else math.atan2(
                 math.sin(world) + math.sin(self.scan_heading),
                 math.cos(world) + math.cos(self.scan_heading))
@@ -754,13 +857,84 @@ class DockCtrlV2(Node):
                                                 max_spread_deg=self.bearing_spread)
         if locked:
             self._start_seek(mean)
-            return 0.0, f'{self.target} bearing locked {math.degrees(mean):.1f} deg'
+            return 0.0, 0.0, f'{self.target} bearing locked {math.degrees(mean):.1f} deg'
         if self.scan_heading is None or now - self.scan_heading_received > self.perception_timeout:
             self.scan_heading = None
-            return 0.0, why            # 목표가 안 보이면 멈춰 기다린다 (눈먼 360° 회전 안 함)
+            return self._search(why, yaw)
         detail = (f'turning to {self.target} {math.degrees(self.scan_heading):.1f} deg'
                   + (f' (screen {math.degrees(bearing):+.1f} deg)' if ok else f' ({why})'))
-        return self._scan_turn(self.scan_heading, yaw), f'{detail}; {lock_why}'
+        return 0.0, self._scan_turn(self.scan_heading, yaw), f'{detail}; {lock_why}'
+
+    def _clear_search(self):
+        self.search_dir = None
+        self.search_rank = 0
+        self.widen_start = self.widen_heading = None
+        self.widen_done = False
+
+    def _other_shapes(self):
+        """지금 검출에서 목표가 아닌 신뢰 도형들의 화면 방위 [deg, + 왼쪽]."""
+        rays = self.det.get('sight_rays', {}) if isinstance(self.det, dict) else {}
+        seen = {}
+        for name, ray in (rays or {}).items():
+            try:
+                if name != self.target and float(ray.get('confidence', 0)) >= self.min_conf:
+                    value = float(ray['bearing_left_deg'])
+                    if math.isfinite(value):
+                        seen[name] = value
+            except (AttributeError, KeyError, TypeError, ValueError):
+                continue
+        return seen
+
+    def _search(self, why, yaw):
+        """목표가 안 보일 때 (전진, 선회, 설명). 근거별 방향은 모듈 설명 참고."""
+        seen = self._other_shapes()
+        basis = ('other shapes ' + ', '.join(f'{k} {v:+.0f}' for k, v in sorted(seen.items()))
+                 if seen else 'no shape in view')
+        if len(seen) >= 2 and self.search_rank < 2:
+            low, high = sorted(seen.values())[0], sorted(seen.values())[-1]
+            gap = high - low                        # 이웃 도형 사이 화면 간격
+            # 화면 안에 들어올 후보는 아니다(보였을 것) — 화면 밖 후보 중 가운데에 가까운 쪽
+            left, right = high + gap, low - gap
+            outside = [c for c in (left, right) if abs(c) > self.camera_half_fov - 3.0] or [left, right]
+            self.search_dir = 1 if min(outside, key=abs) == left else -1
+            self.search_rank = 2
+            self.widen_start = None
+        elif len(seen) == 1 and self.search_rank < 1:
+            (bearing,) = seen.values()
+            if abs(bearing) >= self.search_centre or self.widen_done:
+                self.search_dir = 1 if bearing > 0 else -1
+                self.search_rank = 1
+                self.widen_start = None
+            else:
+                widen = self._widen_view(yaw)
+                if widen is not None:
+                    return (*widen[:2], f'{widen[2]} for {self.target} ({basis}; {why})')
+                self.search_dir = 1 if bearing > 0 else -1
+                self.search_rank = 1
+        elif self.widen_start is not None and not seen:
+            widen = self._widen_view(yaw)           # 후진 중 잠깐 놓쳐도 계속 넓힌다
+            if widen is not None:
+                return (*widen[:2], f'{widen[2]} for {self.target} ({basis}; {why})')
+        if self.search_dir is None:
+            self.search_dir = -1                    # 아무것도 안 보이면 시계방향부터
+        side = 'left' if self.search_dir > 0 else 'right (clockwise)'
+        return 0.0, self.search_dir * self.search_turn, f'searching {side} for {self.target} ({basis}; {why})'
+
+    def _widen_view(self, yaw):
+        """선수 유지 후진으로 시야를 넓힌다. 끝났으면(최대 거리·뒤 장애물) None."""
+        if self.widen_done:
+            return None
+        if self.widen_start is None:
+            self.widen_start, self.widen_heading = self._odom_xy(), yaw
+        backed = float(np.linalg.norm(self._odom_xy() - self.widen_start))
+        behind = (front_clearance(self.scan, self.front_half_angle, 1.5, centre=math.pi)
+                  if self.scan is not None else None)
+        if backed >= self.search_backoff_max or behind is not None:
+            self.widen_done = True
+            self.widen_start = None
+            return None
+        return (-self.retreat_cmd, self._scan_turn(self.widen_heading, yaw),
+                f'widening view, backing {backed:.1f}/{self.search_backoff_max:.1f}m')
 
     def _tick(self):
         if self.fixed_path_msg is not None and time.monotonic()-self.last_path_pub >= 1.0:
@@ -792,8 +966,8 @@ class DockCtrlV2(Node):
             self._report(f'staging distance {distance:.2f}m')
             return
         if self.phase == 'SCAN':
-            turn, why = self._scan_target(yaw)
-            self._command(0, turn)
+            linear, turn, why = self._scan_target(yaw)
+            self._command(linear, turn)
             self._report(why)
             return
         if self.phase == 'SEEK':

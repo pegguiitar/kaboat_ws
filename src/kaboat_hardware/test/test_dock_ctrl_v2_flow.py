@@ -140,9 +140,11 @@ def test_scan_turns_toward_target_then_locks_bearing(node):
     _det(node, 15.0, name='square')          # 한 프레임 놓쳐도 마지막 세계 방위로 계속 돈다
     node._tick()
     assert node.sent[-1].linear.x == 0.0 and node.sent[-1].angular.z > 0.0
-    node.scan_heading_received -= 10.0       # 목표를 오래 못 보면 멈춰 기다린다
+    node.scan_heading_received -= 10.0       # 목표를 오래 못 보면 다른 도형(왼쪽) 쪽으로 탐색 선회
     node._tick()
-    assert node.sent[-1].linear.x == 0.0 and node.sent[-1].angular.z == 0.0
+    assert node.sent[-1].linear.x == 0.0
+    assert node.sent[-1].angular.z == pytest.approx(node.search_turn)
+    assert 'searching left' in node.reports[-1]['detail']
     for k in range(node.bearing_n):
         _det(node, 1.0)
         node._tick()
@@ -310,3 +312,119 @@ def test_seek_follows_target_sight_and_ignores_jumps(node):
         _det(node, 5.0, name='square')                   # 목표 안 보임 → 마지막 방위 유지
         node._tick()
     assert node.locked_bearing == pytest.approx(settled)
+
+
+def test_ctrl_markers_show_phase_sight_and_bearing_line(node):
+    """RViz /dock/ctrl_markers: 단계 글자·전이 기록, 목표 시선, SEEK 고정 방위선·가운데 범위."""
+    published = []
+    node.ctrl_markers_pub.publish = published.append
+    _lock_bearing(node)
+    _det(node, 1.0)
+    node._tick()
+    markers = {m.id: m for m in published[-1].markers}
+    assert markers[0].text.startswith('SEEK')
+    assert [line.split()[-1] for line in markers[1].text.splitlines()][-2:] == ['SCAN', 'SEEK']
+    assert {2, 4, 5} <= set(markers)                      # 시선, 고정 방위선, ±가운데
+    line = markers[4].points
+    heading = math.atan2(line[1].y - line[0].y, line[1].x - line[0].x)
+    assert heading == pytest.approx(node.locked_bearing)
+
+
+def _shapes(node, **bearings):
+    """목표가 아닌 도형들만 보이는 검출 (도형=화면 방위°)."""
+    node._det(String(data=json.dumps({'sight_rays': {
+        name: {'confidence': .9, 'pixel_uv': [320 - 4 * b, 220], 'bearing_left_deg': b}
+        for name, b in bearings.items()}})))
+
+
+def test_search_far_pair_turns_past_the_group(node):
+    """멀리서 사각·원이 오른쪽에 몰려 보이면 삼각은 원 너머 오른쪽 (왼쪽 후보 +15° 는 화면 안이라 아님)."""
+    node.target = 'triangle'
+    _odom(node, 0.0, 10.0)
+    _scan(node)
+    _shapes(node, square=-5.0, circle=-25.0)
+    node._tick()
+    assert node.sent[-1].angular.z == pytest.approx(-node.search_turn)
+    _shapes(node, square=12.0, circle=-8.0)            # 돌면서 도형이 왼쪽으로 밀려도 방향 유지
+    node._tick()
+    assert node.sent[-1].angular.z == pytest.approx(-node.search_turn)
+    _det(node, -20.0, name='triangle')                 # 목표가 보이면 그쪽으로 선수 맞추기
+    node._tick()
+    assert node.sent[-1].angular.z < 0 and 'turning to triangle' in node.reports[-1]['detail']
+    assert node.search_dir is None
+
+
+def test_search_close_pair_uses_spacing_not_mean(node):
+    """2026-11-13 시뮬 5.5 m: 사각 +32°, 원 −2° — 평균(+15°)은 왼쪽이지만 삼각은 −36° (오른쪽 바로 밖)."""
+    node.target = 'triangle'
+    _odom(node, 0.0, 5.5)
+    _scan(node)
+    _shapes(node, square=32.0, circle=-2.0)
+    node._tick()
+    assert node.sent[-1].angular.z == pytest.approx(-node.search_turn)
+    assert node.sent[-1].linear.x == 0.0
+
+
+def test_search_clockwise_when_nothing_seen_then_follows_first_shapes(node):
+    _odom(node, 0.0, 10.0)
+    _scan(node)
+    _shapes(node)                                      # YOLO 는 돌지만 아무 도형도 없음
+    node._tick()
+    assert node.sent[-1].angular.z == pytest.approx(-node.search_turn)     # 시계방향
+    assert 'no shape in view' in node.reports[-1]['detail']
+    _shapes(node, triangle=20.0)                       # 가운데 밖 왼쪽에 다른 도형 — 그쪽으로 바꿈
+    node._tick()
+    assert node.sent[-1].angular.z == pytest.approx(node.search_turn)
+    _shapes(node, triangle=-20.0)                      # 같은 근거(1개)로는 다시 안 바꿈
+    node._tick()
+    assert node.sent[-1].angular.z == pytest.approx(node.search_turn)
+
+
+def test_single_centred_shape_backs_off_to_widen_view_then_decides(node):
+    """원 하나만 가운데 — 방향 단서 없음: 선수 유지 후진, 두 번째 도형이 보이면 간격 규칙으로."""
+    node.target = 'triangle'
+    _odom(node, 0.0, 5.5)
+    _scan(node)
+    _shapes(node, circle=-2.0)
+    node._tick()
+    assert node.sent[-1].linear.x == pytest.approx(-node.retreat_cmd)
+    assert 'widening view' in node.reports[-1]['detail']
+    _odom(node, 0.0, 6.5)                              # 1 m 물러남
+    _shapes(node, square=31.0, circle=-1.0)            # 사각이 들어옴 → 삼각은 오른쪽 밖
+    node._tick()
+    assert node.sent[-1].linear.x == 0.0
+    assert node.sent[-1].angular.z == pytest.approx(-node.search_turn)
+
+
+def test_widen_view_stops_at_limit_or_obstacle_behind(node):
+    node.target = 'triangle'
+    _odom(node, 0.0, 5.5)
+    _scan(node)
+    _shapes(node, circle=3.0)
+    node._tick()
+    assert node.sent[-1].linear.x < 0
+    _odom(node, 0.0, 5.5 + node.search_backoff_max)    # 최대 거리 — 그 도형 쪽(왼쪽)으로 돈다
+    _shapes(node, circle=3.0)
+    node._tick()
+    assert node.sent[-1].linear.x == 0.0 and node.sent[-1].angular.z == pytest.approx(node.search_turn)
+    node._clear_search()
+    msg = LaserScan(angle_min=-math.pi, angle_increment=math.radians(1.0), range_min=.4, range_max=50.)
+    msg.ranges = [float('inf')] * 360
+    for i in list(range(0, 5)) + list(range(355, 360)):   # 바로 뒤(±5°) 1.0 m
+        msg.ranges[i] = 1.0
+    node._scan(msg)
+    _shapes(node, circle=-3.0)
+    node._tick()
+    assert node.sent[-1].linear.x == 0.0 and node.sent[-1].angular.z == pytest.approx(-node.search_turn)
+
+
+def test_search_stops_when_yolo_status_is_stale(node):
+    _odom(node, 0.0, 10.0)
+    _scan(node)
+    _shapes(node, square=-25.0)
+    node._tick()
+    assert node.sent[-1].angular.z != 0.0
+    node.det_received -= 10.0                          # 검출 노드가 멈춤 — 눈먼 회전·후진 안 함
+    node._tick()
+    assert node.sent[-1].angular.z == 0.0 and node.sent[-1].linear.x == 0.0
+    assert node.reports[-1]['detail'] == 'YOLO stale'
