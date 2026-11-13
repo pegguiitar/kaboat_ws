@@ -19,7 +19,12 @@ def view(buoy_ranges=None, default=np.inf, x=0.0, y=0.0, yaw=0.0):
     return LidarView(x, y, yaw, -math.pi, INC, r, 0.4, 50.0)
 
 
-P = EvidenceParams()
+def EP(**kw):
+    """확정 히트·나이 조건을 끈 파라미터 — L 규칙만 보는 테스트용 (조건 자체는 아래 따로 테스트)."""
+    return EvidenceParams(**{'confirm_min_hits': 1, 'confirm_min_age': 0.0, **kw})
+
+
+P = EP()
 
 
 # ---------- 빔 근거 ----------
@@ -47,6 +52,22 @@ def test_confirm_after_three_hits():
     assert tk.update([(8.0, 0.0, None)], 0.0) == []
     assert tk.update([(8.0, 0.0, None)], 0.1) == []   # 1.6 < 2.0
     assert len(tk.update([(8.0, 0.0, None)], 0.2)) == 1
+
+
+def test_short_burst_of_hits_is_not_confirmed():
+    # 배 옆 물보라 — 3 연속 히트(0.2 s)로 L 은 2.4 지만 히트 4 개·0.5 s 가 안 돼 확정 안 됨
+    tk = EvidenceTracker(EvidenceParams())
+    for k in range(3):
+        assert tk.update([(3.0, 0.0, None)], 0.1 * k) == []
+    for k in range(3, 6):
+        tk.update([], 0.1 * k)
+    assert tk.confirmed() == []
+
+
+def test_steady_hits_confirm_after_half_second():
+    tk = EvidenceTracker(EvidenceParams())
+    got = [len(tk.update([(8.0, 0.0, None)], 0.1 * k)) for k in range(7)]
+    assert got == [0, 0, 0, 0, 0, 1, 1]               # 히트 4 는 0.3 s — 0.5 s 지나서 확정
 
 
 def test_single_noise_hit_removed_after_timeout():
@@ -121,14 +142,14 @@ def test_unknown_votes_make_unknown():
 # ---------- 병합 ----------
 
 def test_overlapping_confirmed_tracks_merge():
-    tk = EvidenceTracker(EvidenceParams(gate_radius=0.1))
+    tk = EvidenceTracker(EP(gate_radius=0.1))
     for k in range(4):
         tk.update([(8.0, 0.0, 'red'), (8.4, 0.0, 'red')], 0.1 * k)   # 0.4 ≤ 0.2 + 0.2 + 0.1
     assert len(tk.confirmed()) == 1
 
 
 def test_adjacent_pair_never_merges():
-    tk = EvidenceTracker(EvidenceParams(gate_radius=0.1, spawn_min_sep=0.8))
+    tk = EvidenceTracker(EP(gate_radius=0.1, spawn_min_sep=0.8))
     for k in range(4):
         tk.update([(8.0, 0.0, 'green'), (8.9, 0.0, None)], 0.1 * k)   # 0.9 m — 원이 안 겹침
     assert len(tk.confirmed()) == 2
@@ -224,7 +245,7 @@ def test_wide_buoy_blob_associates_by_its_size():
 
 
 def test_far_track_not_freed_beyond_max_range():
-    tk = EvidenceTracker(EvidenceParams(max_range=10.0, forget_range=30.0))
+    tk = EvidenceTracker(EP(max_range=10.0, forget_range=30.0))
     for k in range(6):
         tk.update([(12.0, 0.0, None)], 0.1 * k)
     run(tk, view({0: 20.0}), 10.0)                   # 12 m 부표 자리를 빔이 지나가도
@@ -274,7 +295,7 @@ def test_buoy_forgotten_when_boat_far_away():
 # ---------- 중복 생성 막기 ----------
 
 def test_no_new_buoy_right_next_to_existing():
-    tk = EvidenceTracker(EvidenceParams(gate_radius=0.1))
+    tk = EvidenceTracker(EP(gate_radius=0.1))
     for k in range(4):
         tk.update([(8.0, 0.0, None)], 0.1 * k)
     tk.update([(8.9, 0.0, None)], 0.5)                 # 0.9 m 옆 — 같은 부표의 다른 면
@@ -282,7 +303,7 @@ def test_no_new_buoy_right_next_to_existing():
 
 
 def test_adjacent_pair_at_1_2m_gets_two_buoys():
-    tk = EvidenceTracker(EvidenceParams(gate_radius=0.1))
+    tk = EvidenceTracker(EP(gate_radius=0.1))
     for k in range(4):
         tk.update([(8.0, 0.0, 'green'), (9.3, 0.0, None)], 0.1 * k)   # 탐색 bag 쌍 중심 간격 ≥ 1.37 m
     assert len(tk.confirmed()) == 2
@@ -290,13 +311,13 @@ def test_adjacent_pair_at_1_2m_gets_two_buoys():
 
 def test_split_cluster_in_one_scan_makes_one_buoy():
     # 한 스캔에서 한 부표가 두 군집(0.5 m 간격)으로 쪼개져도 새 부표는 하나
-    tk = EvidenceTracker(EvidenceParams(gate_radius=0.1))
+    tk = EvidenceTracker(EP(gate_radius=0.1))
     tk.update([(8.0, 0.0, None), (8.0, 0.5, None)], 0.0)
     assert len(tk.tracks) == 1
 
 
 def test_confirmed_tracks_drifting_within_spawn_sep_merge():
-    tk = EvidenceTracker(EvidenceParams(gate_radius=0.1, spawn_min_sep=0.8))
+    tk = EvidenceTracker(EP(gate_radius=0.1, spawn_min_sep=0.8))
     for k in range(4):
         tk.update([(8.0, 0.0, None), (9.0, 0.0, None)], 0.1 * k)     # 1.0 m — 둘 다 생김
     assert len(tk.confirmed()) == 2

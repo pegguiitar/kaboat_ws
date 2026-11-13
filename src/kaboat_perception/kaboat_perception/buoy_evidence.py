@@ -12,7 +12,7 @@
   → "보였어야 하는데 안 보였을 때"만 지운다. 시야 밖·가림·센서 없음은 근거가 아니다.
 
 상태 (히스테리시스):
-  후보 —(L ≥ l_confirm)→ 확정 —(L ≤ l_delete)→ 삭제
+  후보 —(L ≥ l_confirm, 히트 confirm_min_hits 이상, confirm_min_age 지남)→ 확정 —(L ≤ l_delete)→ 삭제
   후보는 L < 0 이 되거나 tentative_timeout 동안 다시 안 잡히면 삭제 (물보라·반짝임).
   새 부표는 호출자가 허락한 검출(can_spawn)에서만 만든다. 기존 부표 중심 spawn_min_sep 안에서는
   새 부표를 안 만들고, 확정 부표가 그 안으로 다가오면 합친다 — 같은 부표가 다른 방향에서 둘로
@@ -58,6 +58,9 @@ class EvidenceParams:
     l_min: float = -2.0
     l_max: float = 4.0
     tentative_timeout: float = 3.0  # 후보가 이만큼 안 잡히면 삭제 [s]
+    confirm_min_hits: int = 4       # 확정에 필요한 최소 히트 수 — L 만으로는 3 연속 히트(0.3 s)면 확정돼
+                                    # 배 옆 물보라 덩어리가 부표가 됐다 (2026-11-12 탐색 bag)
+    confirm_min_age: float = 0.5    # 처음 잡힌 뒤 이만큼 지나야 확정 [s]
     merge_radius: float = 1.0       # 확정 부표 병합 거리 상한 [m] — 그 안에서도 두 덩어리가 겹치거나
                                     # (중심 거리 ≤ 두 반폭 합 + merge_overlap) spawn_min_sep 안일 때만
     merge_overlap: float = 0.1      # [m]
@@ -113,6 +116,7 @@ class EvTrack:
     px_green: int = 0
     px_visible: int = 0
     px_params: Optional[Tuple[float, float, int]] = None   # (min_frac, dominance, min_visible)
+    born: float = 0.0             # 처음 잡힌 시각 [s]
 
     @property
     def color(self) -> str:
@@ -181,6 +185,7 @@ class EvidenceTracker:
         self.tracks: List[EvTrack] = []
         self._next_id = 0
         self._last_now: Optional[float] = None
+        self.last_assoc: Dict[int, int] = {}   # 마지막 update 의 검출 번호 → 부표 id (시각화용)
 
     def confirmed(self) -> List[EvTrack]:
         return [t for t in self.tracks if t.confirmed]
@@ -210,6 +215,7 @@ class EvidenceTracker:
                     pairs.append((d, i, t.id))
         pairs.sort()
         used_det, used_trk = set(), set()
+        self.last_assoc = {}
         by_id = {t.id: t for t in self.tracks}
         for _d, i, tid in pairs:
             if i in used_det or tid in used_trk:
@@ -217,6 +223,7 @@ class EvidenceTracker:
             used_det.add(i)
             used_trk.add(tid)
             t = by_id[tid]
+            self.last_assoc[i] = tid
             self._add_blob(t, *blobs[i])
             t.L = min(p.l_max, t.L + p.l_hit)
             t.hits += 1
@@ -231,7 +238,8 @@ class EvidenceTracker:
             if any(math.hypot(bx - ex, by - ey) < p.spawn_min_sep for ex, ey in existing):
                 continue                   # 기존 부표 바로 옆 — 같은 부표의 다른 면일 가능성이 크다
             existing.append((bx, by))      # 같은 스캔에서 쪼개진 덩어리 둘이 둘 다 생기지 않게
-            t = EvTrack(self._next_id, bx, by, p.l_hit, now, hits=1, radius=p.radius_prior)
+            t = EvTrack(self._next_id, bx, by, p.l_hit, now, hits=1, radius=p.radius_prior, born=now)
+            self.last_assoc[i] = t.id
             self._add_blob(t, bx, by, w)
             t.px_params = (p.px_min_frac, p.px_dominance, p.px_min_visible)
             self._add_color(t, color)
@@ -255,7 +263,8 @@ class EvidenceTracker:
             if view is not None and math.hypot(t.x - view.x, t.y - view.y) > p.forget_range:
                 continue
             if not t.confirmed:
-                if t.L >= p.l_confirm:
+                if (t.L >= p.l_confirm and t.hits >= p.confirm_min_hits
+                        and now - t.born >= p.confirm_min_age):
                     t.confirmed = True
                 elif t.L < 0.0 or now - t.last_seen > p.tentative_timeout:
                     continue

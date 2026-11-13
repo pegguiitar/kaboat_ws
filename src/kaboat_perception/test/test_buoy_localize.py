@@ -70,6 +70,33 @@ def test_sparse_and_narrow_hits_dropped():
     assert lidar_blobs(pts, G) == []
 
 
+def test_sparse_water_returns_dropped_with_angle_inc():
+    # 2.4 m 에서 빔 3 개가 0.15 m 에 흩어짐 — 덮는 폭 3 × 2.4 × 0.0031 = 0.02 m < 0.05
+    inc = math.radians(0.177)
+    o = np.array([G.lidar_offset_x, G.lidar_offset_y])
+    a = np.array([0.0, 0.03, 0.06])
+    pts = o + 2.4 * np.column_stack((np.cos(a), np.sin(a)))
+    assert len(lidar_blobs(pts, G)) == 1                      # 빔 간격을 안 주면 거르지 않음
+    rej = []
+    assert lidar_blobs(pts, G, inc, rej) == [] and rej[0][3] == 'cover'
+
+
+def test_buoy_surface_kept_with_angle_inc():
+    inc = math.radians(0.177)
+    pts = _scan([(6.0, 0.0, 0.3)], inc_deg=0.177)
+    assert len(lidar_blobs(pts, G, inc)) == 1
+
+
+def test_gappy_blob_dropped_by_fill():
+    # 각도 범위 안 빔 중 1/4 만 맞음 — 물결 반사
+    inc = math.radians(0.177)
+    o = np.array([G.lidar_offset_x, G.lidar_offset_y])
+    a = inc * np.arange(0, 40, 4)
+    pts = o + 4.0 * np.column_stack((np.cos(a), np.sin(a)))
+    rej = []
+    assert lidar_blobs(pts, G, inc, rej) == [] and rej[0][3] == 'fill'
+
+
 def test_lidar_points_include_mount_offset():
     pts = lidar_points([5.0], 0.0, INC, 0.1, 40.0, G)           # 정면 빔 1개
     assert pts[0] == pytest.approx((G.lidar_offset_x + 5.0, G.lidar_offset_y))
