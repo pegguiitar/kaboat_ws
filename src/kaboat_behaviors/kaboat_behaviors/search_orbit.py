@@ -26,10 +26,11 @@
            방향 접선으로 들어가는 진입 경로(tangent_entry)를 먼저 따라간다. 원 띠
            (|거리 − orbit_radius| ≤ orbit_band) 안에 있을 때만 부표 둘레를 규정 방향으로
            돈 각도를 쌓고, laps 바퀴가 되면 DONE.
-  DONE     완료 — 노드가 완료 신호 1회 + 출구(goal)로 (mission_manager 전환 = 완료 +
-           search_end 2 m 안). search_end 가 목표 부표 위(done_clearance 안)에 찍혀 있으면
-           부표에 들이받지 않게 부표에서 배 쪽으로 done_clearance 떨어진 점으로 간다
-           (exit_point — 그래도 search_end 2 m 안이다).
+  DONE     완료 — 노드가 완료 신호 1회. 배→출구 직선이 부표에서 멀어지는 쪽(exit_clear, 출구 원뿔
+           exit_cone_deg)에 올 때까지 원을 이어 돈 뒤 출구(goal)로 — 반대편에서 바로 나가면 직선이
+           방금 돈 부표를 스쳤다(2026-11-13 시뮬 0.9 m). mission_manager 전환 = 완료 + search_end 2 m 안.
+           search_end 가 목표 부표 위(done_clearance 안)에 찍혀 있으면 부표에서 **출구 쪽**으로
+           done_clearance 떨어진 점으로 간다 (exit_point — search_end 2 m 안).
   GIVE_UP  SEEK 에서 영역 중심에 도착하고 give_up_sec 동안 못 찾음 — 완료 신호를 내고 다음
            미션으로 넘긴다 (탐색 점수는 없지만 15분 제한 안에 회피를 하러 간다).
 
@@ -39,6 +40,9 @@
   사라지면 relock_radius(0.6 m) 안 같은 색 부표를 이어받는다 — 1.2 m 붙은 초록·검정 쌍에서
   옆 부표로 끌려가지 않게. 고정한 부표가 목표 아닌 빨강·초록으로 분명히 바뀌면 고정을 풀고
   다시 찾는다. 목표 색이 lock_confirm_sec(1 s) 이어진 부표만 고른다.
+모양 검사(measure_shapes): 배 3–6 m 안 부표의 점유지도 덩어리(긴 축·칸·1–2 m 고리)를 지도마다 재서
+  다수결. 고리·덩어리에서 다른 검출 부표 자리는 뺀다(붙은 쌍). 선회 각을 세기 시작하면 모양으로는
+  고정을 풀지 않는다.
 후보: 목표 색 부표 중 탐색 영역 중심에서 target_search_radius 안, 중심에 가장 가까운 것.
   각도를 쌓기 시작하기 전에는 중심에 switch_margin 이상 더 가까운 후보가 나오면 바꾼다
   — 경기장 주황 부표는 부표 검출에서 빨강으로 나오므로(BUOY_DETECTOR.md), 멀리서
@@ -97,6 +101,10 @@ class SearchParams:
     shape_max_cells: int = 25         # 덩어리 칸 수 (0.2 m 칸)
     shape_max_ring: int = 12          # 중심 1–2 m 고리 안 다른 점유 칸 수
     shape_max_range: float = 6.0      # 배에서 이 안의 부표만 모양을 잰다 [m] (먼 건 점이 성김)
+    shape_min_range: float = 3.0      # 배에서 이보다 가까운 부표는 안 잰다 [m] — 2026-11-12 bag: 배가 2 m 옆을
+                                      # 지나는 동안 초록 덩어리가 12 → 21 칸·긴 축 1.2 → 1.9 m 로 번졌다
+    shape_exclude_radius: float = 0.7  # 고리·덩어리를 셀 때 다른 검출 부표 중심 이 안 칸은 뺀다 [m] — 1.46 m
+                                      # 붙은 초록·검정 쌍이 서로의 1–2 m 고리에 들어가 둘 다 구조물로 판정됐다
     shape_min_evals: int = 5          # 판정에 필요한 최소 평가 수 (지도 메시지 단위)
     shape_pass_ratio: float = 0.6     # 최근 평가 중 이 비율 이상 통과하면 부표 모양
     field_gap: float = 10.0           # 검정 후보는 확인된 빨강·초록 중 가장 가까운 것까지 이 안 [m]
@@ -108,6 +116,10 @@ class SearchParams:
     entry_lead: float = 0.8           # 접점에서 원을 따라 이만큼 더 간 점까지 진입 경로 [m]
     entry_clearance: float = 1.5      # 진입 직선이 다른 부표와 이보다 가까우면 비켜 가는 경유점 [m]
     entry_skip_band: float = 0.7      # 원에서 이만큼 안이면 진입 경로 없이 원을 바로 추종 [m]
+    exit_cone_deg: float = 75.0       # 완료 뒤, 부표→배 방향과 배→출구 방향 사이가 이 안일 때 원을 벗어난다 [deg]
+                                      # (그 전에는 원을 이어 돈다 — 출구 직선이 방금 돈 부표를 스치지 않게)
+    exit_arrive_radius: float = 0.4   # 출구점이 search_end 에서 비킨 점일 때 도착 반경 [m]
+                                      # (done_clearance + 이것 < mission_manager 전환 반경 2.0)
 
     def __post_init__(self):
         if self.target_color not in ('',) + TARGET_COLORS:
@@ -133,6 +145,13 @@ class SearchParams:
         if not all(math.isfinite(v) and v > 0.0 for v in (
                 self.shape_max_extent, self.shape_max_range, self.field_gap)):
             raise ValueError('search shape_max_extent / shape_max_range / field_gap must be > 0')
+        if not (math.isfinite(self.shape_min_range) and 0.0 <= self.shape_min_range < self.shape_max_range
+                and math.isfinite(self.shape_exclude_radius) and self.shape_exclude_radius >= 0.0):
+            raise ValueError('search shape_min_range must be in [0, shape_max_range) and '
+                             'shape_exclude_radius >= 0')
+        if not (math.isfinite(self.exit_cone_deg) and 0.0 < self.exit_cone_deg <= 90.0
+                and math.isfinite(self.exit_arrive_radius) and self.exit_arrive_radius > 0.0):
+            raise ValueError('search exit_cone_deg must be in (0, 90] and exit_arrive_radius > 0')
         if (self.shape_max_cells < 1 or self.shape_max_ring < 0 or self.shape_min_evals < 1
                 or not 0.0 < self.shape_pass_ratio <= 1.0):
             raise ValueError('search shape_max_cells / shape_max_ring / shape_min_evals / '
@@ -229,11 +248,14 @@ class BlobShape:
 
 def blob_shape(grid, resolution: float, origin: XY, xy: XY, *, occ_threshold: int = 50,
                seed_radius: float = 0.6, ring: Tuple[float, float] = (1.0, 2.0),
-               max_cells: int = 800) -> Optional[BlobShape]:
+               max_cells: int = 800, exclude: Sequence[XY] = (),
+               exclude_radius: float = 0.7) -> Optional[BlobShape]:
     """점유지도에서 xy 의 덩어리 모양. 지도 밖이거나 xy 근처(seed_radius)에 점유 칸이 없으면 None.
 
     grid: 2-D 배열 [행 = y, 열 = x] (OccupancyGrid.data 를 height×width 로), 값 0–100 / -1.
     덩어리 = seed 칸에서 8-이웃으로 이어진 점유 칸 (max_cells 에서 끊음 — 벽은 그 전에 이미 길다).
+    exclude: 다른 부표 중심들 — 그 exclude_radius 안 칸은 빈 칸으로 본다 (덩어리·고리 둘 다).
+    이웃 부표는 구조물 근거가 아니다 (2026-11-12 bag: 1.46 m 붙은 초록·검정이 서로의 고리 칸이 됐다).
     """
     import numpy as np
     g = np.asarray(grid)
@@ -246,6 +268,16 @@ def blob_shape(grid, resolution: float, origin: XY, xy: XY, *, occ_threshold: in
     r = int(math.ceil(max(seed_radius, ring[1]) / resolution)) + 1
     i0, i1 = max(0, int(ci) - r), min(w, int(ci) + r + 1)
     j0, j1 = max(0, int(cj) - r), min(h, int(cj) + r + 1)
+    if exclude and exclude_radius > 0.0:
+        occ = occ.copy()
+        k = int(math.ceil(exclude_radius / resolution)) + 1
+        for ex, ey in exclude:
+            ei = (ex - origin[0]) / resolution
+            ej = (ey - origin[1]) / resolution
+            for j in range(max(0, int(ej) - k), min(h, int(ej) + k + 1)):
+                for i in range(max(0, int(ei) - k), min(w, int(ei) + k + 1)):
+                    if math.hypot(i + 0.5 - ei, j + 0.5 - ej) * resolution <= exclude_radius:
+                        occ[j, i] = False
     seeds = [(j, i) for j in range(j0, j1) for i in range(i0, i1)
              if occ[j, i] and math.hypot(i + 0.5 - ci, j + 0.5 - cj) * resolution <= seed_radius]
     if not seeds:
@@ -276,6 +308,61 @@ def blob_shape(grid, resolution: float, origin: XY, xy: XY, *, occ_threshold: in
                 if ring[0] <= d <= ring[1]:
                     ring_cells += 1
     return BlobShape(extent, len(seen), ring_cells)
+
+
+def measure_shapes(grid, resolution: float, origin: XY, buoys, boat_xy: XY, area_xy: XY,
+                   params: 'SearchParams') -> dict:
+    """지도 한 장 → {부표 ID: 부표 모양인가(bool)} — 노드가 새 지도마다 한 번 불러 다수결에 쌓는다.
+
+    배에서 shape_min_range–shape_max_range 사이, 영역 중심 target_search_radius + 1 m 안 부표만 잰다.
+    고리·덩어리에서 **이웃 부표** 자리는 뺀다 — 이웃 = 0.9–3 m 안 다른 검출 부표 중 자기 덩어리가 부표
+    크기(긴 축·칸 상한 안)인 것. 벽·도크에 붙은 조각이 부표로 검출돼도 그 덩어리는 벽 전체라 안 빠지고
+    구조물 근거로 남는다. 0.9 m 안 것은 같은 물체의 중복일 수 있어 빼지 않는다 (검출기가 합치는 거리).
+    """
+    p = params
+    pts = [(getattr(b, 'id', None), (float(b.position.x), float(b.position.y))) for b in buoys]
+    pts = [(bid, xy) for bid, xy in pts if all(math.isfinite(v) for v in xy)]
+    small = {}
+
+    def buoy_sized(key, xy):
+        if key not in small:
+            s = blob_shape(grid, resolution, origin, xy)
+            small[key] = (s is not None and s.extent <= p.shape_max_extent
+                          and s.cells <= p.shape_max_cells)
+        return small[key]
+
+    out = {}
+    for k, (bid, xy) in enumerate(pts):
+        if bid is None:
+            continue
+        d = math.dist(xy, boat_xy)
+        if (d > p.shape_max_range or d < p.shape_min_range
+                or math.dist(xy, area_xy) > p.target_search_radius + 1.0):
+            continue
+        others = [o for j, (oid, o) in enumerate(pts)
+                  if j != k and 0.9 < math.dist(o, xy) <= 3.0 and buoy_sized(j, o)]
+        s = blob_shape(grid, resolution, origin, xy, exclude=others,
+                       exclude_radius=p.shape_exclude_radius)
+        if s is None:
+            continue
+        out[bid] = (s.extent <= p.shape_max_extent and s.cells <= p.shape_max_cells
+                    and s.ring_cells <= p.shape_max_ring)
+    return out
+
+
+def exit_clear(boat_xy: XY, center: XY, target: XY, cone_deg: float, free_radius: float) -> bool:
+    """완료 뒤 원을 벗어나도 되나 — 배→출구 직선이 부표에서 멀어지는 쪽이면 True.
+
+    부표→배 방향과 배→출구 방향 사이 각이 cone_deg 안이면 직선이 부표에서 계속 멀어진다 (90° 미만이면
+    가장 가까운 점이 지금 자리). 배가 이미 free_radius 밖이거나 출구가 코앞이면 True.
+    """
+    rx, ry = boat_xy[0] - center[0], boat_xy[1] - center[1]
+    gx, gy = target[0] - boat_xy[0], target[1] - boat_xy[1]
+    nr, ng = math.hypot(rx, ry), math.hypot(gx, gy)
+    if nr >= free_radius or ng < 0.5 or nr < 1e-6:
+        return True
+    cos_a = (rx * gx + ry * gy) / (nr * ng)
+    return cos_a >= math.cos(math.radians(cone_deg))
 
 
 class SearchFsm:
@@ -327,12 +414,18 @@ class SearchFsm:
         return max(0.0, self.p.look_sec - (now - self._look_since))
 
     def exit_point(self, boat_xy) -> XY:
-        """완료 뒤 갈 점 — 보통 출구(goal), 출구가 부표 위면 부표에서 배 쪽으로 비킨 점."""
+        """완료 뒤 갈 점 — 보통 출구(goal). 출구가 부표 done_clearance 안이면 부표에서 **출구 쪽**으로
+        done_clearance 비킨 점 (출구점–goal < done_clearance 라 노드가 exit_arrive_radius 로 다가가면
+        mission_manager 2 m 전환 안이다). 예전엔 배 쪽으로 비켜, 배가 반대편에서 끝내면 출구점이
+        goal 에서 최대 3 m 라 전환이 안 됐다. goal 이 부표 중심과 같으면 배 쪽."""
         if self.center is None or math.dist(self.goal, self.center) >= self.p.done_clearance:
             return self.goal
         cx, cy = self.center
-        vx, vy = boat_xy[0] - cx, boat_xy[1] - cy
+        vx, vy = self.goal[0] - cx, self.goal[1] - cy
         n = math.hypot(vx, vy)
+        if n < 1e-6:
+            vx, vy = boat_xy[0] - cx, boat_xy[1] - cy
+            n = math.hypot(vx, vy)
         if n < 1e-6:
             vx, vy, n = 1.0, 0.0, 1.0
         k = self.p.done_clearance / n
@@ -412,13 +505,16 @@ class SearchFsm:
         return now - self._look_since < self.p.look_sec
 
     def update(self, buoys, boat_xy, now: float, shape_ok=None) -> str:
-        """shape_ok: candidates() 참고. 고정한 부표가 구조물(False)로 판정되면 고정을 푼다."""
+        """shape_ok: candidates() 참고. 고정한 부표가 구조물(False)로 판정되면 고정을 푼다 — 단 선회 각을
+        세기 시작한 뒤(counting)에는 모양으로 풀지 않는다(색이 바뀔 때만). 선회 중 배가 부표 옆을 돌면
+        지도 덩어리가 번져 진짜 목표가 구조물로 판정됐다(2026-11-12 bag → 포기)."""
         if self.done:
             return self.phase
         cands = self.candidates(buoys, now, shape_ok)
         if self.center is not None and not self._refine(buoys):
             self._unlock()                 # 고정한 부표가 목표 아닌 색으로 바뀜 — 다시 찾기
-        elif self.center is not None and shape_ok is not None and self.locked_id is not None:
+        elif (self.center is not None and shape_ok is not None and self.locked_id is not None
+              and not self.counting):
             locked = next((b for b in buoys if getattr(b, 'id', None) == self.locked_id), None)
             if locked is not None and shape_ok(locked) is False:
                 self._unlock()             # 가까이서 보니 구조물(도크·기둥 등) — 다시 찾기

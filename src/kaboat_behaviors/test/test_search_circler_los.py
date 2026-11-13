@@ -102,6 +102,25 @@ def test_far_lock_follows_tangent_entry_then_circle():
     assert state.calls[-1][0].closed
 
 
+def test_entry_corners_are_rounded_so_los_keeps_speed():
+    # 2026-11-13 배치, 시작 자세에서 빨강(시계) — 검정을 비키는 경유점이 있는 진입.
+    # 꺾은선이면 꼭짓점 κ 4.5 → LOS 최저 속도, 둥글게 하면 |κ| ≤ 1/orbit_radius 근처
+    from kaboat_behaviors.search_circler import polyline_path
+    from kaboat_behaviors.search_orbit import tangent_entry
+    boat, red, black, green = (168.9, -9.53), (174.5, -1.2), (169.3, -5.9), (166.5, -0.2)
+    pts = tangent_entry(boat, red, 2.0, 'cw', [black, green], clearance=1.5)
+    assert len(pts) == 4                                          # 경유점 있음
+    sharp = polyline_path(pts)
+    round_ = polyline_path(pts, fillet_radius=2.0)
+    assert np.max(np.abs(sharp.curvatures)) > 3.0
+    assert np.max(np.abs(round_.curvatures)) <= 1.0 / 1.7 + 1e-9   # 접점 쪽 짧은 구간 때문에 반경 조금 줄어듦
+    assert np.allclose(round_.samples[0], pts[0]) and np.allclose(round_.samples[-1], pts[-1])
+    steps = np.linalg.norm(np.diff(round_.samples, axis=0), axis=1)
+    assert steps.max() < 0.06                                      # 거의 등간격
+    dmin = np.min(np.hypot(round_.samples[:, 0] - black[0], round_.samples[:, 1] - black[1]))
+    assert dmin >= 1.5 - 1e-6                                      # 깎아도 검정 clearance 유지
+
+
 def test_no_tangent_entry_when_disabled():
     state = make_state('red', [buoy('red', 52.0, 71.0)], tangent_entry=False)
     SearchCircler.compute_cmd(state)
@@ -201,18 +220,51 @@ def idbuoy(color, x, y, bid):
 
 
 def test_shape_votes_accumulate_per_new_grid():
-    # (45, 70) 에 3×3 칸 부표, 5 m 떨어진 y = 75 에 5 m 벽 (x 42~47) — 두 번째 unknown 이 그 위
+    # (45, 70) 에 3×3 칸 부표, 5 m 떨어진 y = 75 에 5 m 벽 (x 42~47) — 두 번째 unknown 이 그 위.
+    # 배는 둘 다 4.3 m (모양은 배 3–6 m 안에서만 잰다)
     buoy_cells = [(25 + di, 50 + dj) for di in (-1, 0, 1) for dj in (-1, 0, 1)]
     wall_cells = [(i, 75) for i in range(10, 35)]
+    boat = (41.5, 72.5)
     state = make_state('black', [idbuoy('unknown', 45.0, 70.0, 1),
                                  idbuoy('unknown', 45.0, 75.0, 2)],
-                       boat=(44.0, 70.0), shape_check=True)
+                       boat=boat, shape_check=True)
     state.occupancy_grid = real_grid(buoy_cells + wall_cells)
     for k in range(6):
         state._grid_at = 100.0 + k                     # 새 지도 메시지마다 한 번씩
-        SearchCircler._update_shapes(state, (44.0, 70.0), (50.0, 70.0))
-    SearchCircler._update_shapes(state, (44.0, 70.0), (50.0, 70.0))   # 같은 지도 — 안 셈
+        SearchCircler._update_shapes(state, boat, (50.0, 70.0))
+    SearchCircler._update_shapes(state, boat, (50.0, 70.0))   # 같은 지도 — 안 셈
     assert len(state._shape_hist[1]) == 6
     assert SearchCircler._shape_ok(state, idbuoy('unknown', 45.0, 70.0, 1)) is True
     assert SearchCircler._shape_ok(state, idbuoy('unknown', 45.0, 75.0, 2)) is False
     assert SearchCircler._shape_ok(state, idbuoy('unknown', 0, 0, 9)) is None
+
+
+def test_no_shape_votes_when_boat_too_close():
+    # 배 1 m — 덩어리가 배 옆에서 번지므로 안 잰다 (shape_min_range 3 m)
+    buoy_cells = [(25 + di, 50 + dj) for di in (-1, 0, 1) for dj in (-1, 0, 1)]
+    state = make_state('black', [idbuoy('unknown', 45.0, 70.0, 1)], boat=(44.0, 70.0),
+                       shape_check=True)
+    state.occupancy_grid = real_grid(buoy_cells)
+    state._grid_at = 100.0
+    SearchCircler._update_shapes(state, (44.0, 70.0), (50.0, 70.0))
+    assert 1 not in state._shape_hist
+
+
+# ---------- 완료 뒤: 출구 쪽까지 원을 이어 돈다 ----------
+
+def test_done_keeps_circling_until_exit_side():
+    # 출구 (40, 71) 는 부표 (52, 71) 서쪽. 배가 동쪽 원 위에서 끝나면 곧장 가면 부표를 가로지른다
+    state = make_state('red', [buoy('red', 52.0, 71.0)], boat=(54.0, 71.0))
+    state.goal.pose.position.x, state.goal.pose.position.y = 40.0, 71.0
+    SearchCircler.compute_cmd(state)                 # 고정 → 원
+    circle = state.calls[-1][0]
+    assert circle.closed
+    state.fsm.phase = 'DONE'
+    SearchCircler.compute_cmd(state)
+    assert state.calls[-1][0] is circle and state.completed     # 완료 신호는 바로, 원은 이어 감
+    move(state, 50.0, 71.0)                          # 서쪽(출구 쪽)에 옴 → 출구로
+    SearchCircler.compute_cmd(state)
+    assert state.calls[-1][:3] == ('wp', 40.0, 71.0)
+    move(state, 54.0, 71.0)                          # 한 번 벗어나면 다시 원으로 안 돌아감
+    SearchCircler.compute_cmd(state)
+    assert state.calls[-1][:3] == ('wp', 40.0, 71.0)

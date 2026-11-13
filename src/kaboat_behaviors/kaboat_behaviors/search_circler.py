@@ -12,8 +12,9 @@
   ORBIT    부표 고정 → 원 밖이면 규정 방향 접선 진입 경로를 먼저 LOS 로 따라간 뒤, 반경
            orbit_radius 원을 LOS 로 추종. 원 띠 안에서 laps 바퀴 돌면 DONE
            (회피 반발은 켜 두되 목표 부표 둘레 ignore_radius 안 셀은 뺀다)
-  DONE     /mission/complete 1회 → search_end 로 이동 (mission_manager 전환 = 완료 + 2 m 안)
-           search_end 가 부표 위에 찍혀 있으면 부표에서 1.5 m 비킨 점으로 (exit_point)
+  DONE     /mission/complete 1회 → 출구 쪽(exit_clear)까지 원을 이어 돈 뒤 search_end 로 이동
+           (mission_manager 전환 = 완료 + 2 m 안). search_end 가 부표 위에 찍혀 있으면 부표에서
+           출구 쪽으로 1.5 m 비킨 점에 exit_arrive_radius(0.4 m)로 (exit_point)
   GIVE_UP  영역 중심에서 give_up_sec 동안 못 찾음 → 완료 신호 내고 search_end 로
 
 탐색 영역 중심: /mission/search_center (mission_manager — rec search_center, 없으면 search_entry
@@ -49,7 +50,7 @@ from visualization_msgs.msg import Marker, MarkerArray
 from .behavior_base import BehaviorBase, WAYPOINT_MAX_ANGULAR, yaw_from_quaternion
 from .los_controller import circle_path, sampled_path
 from .obstacle_avoidance_utils import apply_repulsion
-from .search_orbit import SearchFsm, SearchParams, blob_shape, tangent_entry
+from .search_orbit import SearchFsm, SearchParams, exit_clear, measure_shapes, tangent_entry
 from .waypoint_controller import WaypointController, waypoint as make_waypoint
 
 GOAL_RESET_DISTANCE = 1.0   # [m] 출구·영역 중심이 이만큼 바뀌면 탐색을 새로 시작
@@ -58,17 +59,70 @@ ENTRY_DONE_DISTANCE = 1.0   # [m] 진입 경로 끝점에 이만큼 다가가면
 MARKER_RGB = {'red': (1.0, 0.1, 0.1), 'green': (0.1, 0.9, 0.2), 'black': (0.2, 0.2, 0.2)}
 
 
-def polyline_path(points, spacing=ENTRY_SPACING):
-    """꼭짓점 목록 → 거의 등간격으로 샘플한 열린 경로 (모서리는 LOS 가 lookahead 로 깎는다)."""
-    pts = [np.asarray(points[0], dtype=np.float64)]
-    for a, b in zip(points[:-1], points[1:]):
-        a, b = np.asarray(a, dtype=np.float64), np.asarray(b, dtype=np.float64)
-        n = max(1, int(math.ceil(np.linalg.norm(b - a) / spacing)))
-        for k in range(1, n + 1):
-            pts.append(a + (b - a) * (k / n))
-    samples = np.array(pts)
+ENTRY_FILLET_OFFSET = 0.5  # [m] 모서리를 호로 깎을 때 꼭짓점에서 안쪽으로 들어가는 최대 거리
+                           # (경유점은 부표에서 entry_clearance + 0.5 m 라 깎아도 clearance 는 지킨다)
+
+
+def polyline_path(points, spacing=ENTRY_SPACING, fillet_radius=None):
+    """꼭짓점 목록 → 거의 등간격으로 샘플한 열린 경로. 곡률은 해석값(직선 0, 호 ±1/R)으로 준다.
+
+    fillet_radius 를 주면 안쪽 꼭짓점을 그 반경 호로 둥글게 잇는다 (붙은 두 구간 길이의 45 % 와
+    꼭짓점에서 ENTRY_FILLET_OFFSET 안으로 줄임). 꺾은선 그대로면 샘플 곡률이 꼭짓점에서 튀어
+    (24° 꺾임에 κ 4.5) LOS 가 모서리 2 m 앞부터 최저 속도(명령 0.018)로 떨어졌고, 조류 0.15 m/s 에서
+    진행 위치가 모서리 앞에 묶인 채 밀려나 접선 진입이 끝나지 않았다 (2026-11-14 닫힌 루프 시뮬).
+    """
+    P = [np.asarray(p, dtype=np.float64) for p in points]
+    pieces = []            # (점 목록, 곡률) — 직선·호
+    start = P[0]
+    for i in range(1, len(P) - 1):
+        a, v, b = P[i - 1], P[i], P[i + 1]
+        l_in, l_out = np.linalg.norm(v - a), np.linalg.norm(b - v)
+        if fillet_radius is None or l_in < 1e-6 or l_out < 1e-6:
+            pieces.append(((start, v), 0.0))
+            start = v
+            continue
+        u_in, u_out = (v - a) / l_in, (b - v) / l_out
+        cross = u_in[0] * u_out[1] - u_in[1] * u_out[0]
+        theta = math.atan2(abs(cross), float(u_in @ u_out))      # 꺾인 각 (0..π)
+        if theta < 1e-3:
+            pieces.append(((start, v), 0.0))
+            start = v
+            continue
+        half = theta / 2.0
+        r = min(fillet_radius, 0.45 * min(l_in, l_out) / math.tan(half))
+        if half < math.pi / 2 - 1e-6:
+            r = min(r, ENTRY_FILLET_OFFSET / (1.0 / math.cos(half) - 1.0))
+        t = r * math.tan(half)
+        p_a, p_b = v - t * u_in, v + t * u_out
+        sign = 1.0 if cross > 0 else -1.0                          # 좌회전(반시계) +
+        normal = sign * np.array([-u_in[1], u_in[0]])
+        center = p_a + r * normal
+        a0 = math.atan2(p_a[1] - center[1], p_a[0] - center[0])
+        pieces.append(((start, p_a), 0.0))
+        pieces.append((('arc', center, r, a0, sign * theta), sign / r))
+        start = p_b
+    pieces.append(((start, P[-1]), 0.0))
+
+    pts, kap = [P[0]], [0.0]
+    for geom, k in pieces:
+        if isinstance(geom[0], str):          # ('arc', 중심, 반경, 시작각, 쓸 각)
+            _, center, r, a0, sweep = geom
+            n = max(1, int(math.ceil(abs(sweep) * r / spacing)))
+            for j in range(1, n + 1):
+                ang = a0 + sweep * j / n
+                pts.append(center + r * np.array([math.cos(ang), math.sin(ang)]))
+                kap.append(k)
+        else:
+            a, b = geom
+            n = max(1, int(math.ceil(np.linalg.norm(b - a) / spacing)))
+            for j in range(1, n + 1):
+                pts.append(a + (b - a) * (j / n))
+                kap.append(k)
+    samples, kap = np.array(pts), np.array(kap)
     keep = np.concatenate(([True], np.linalg.norm(np.diff(samples, axis=0), axis=1) > 1e-6))
-    return sampled_path(samples[keep], spacing=spacing)
+    if fillet_radius is None:
+        return sampled_path(samples[keep], spacing=spacing)
+    return sampled_path(samples[keep], spacing=spacing, curvatures=kap[keep])
 
 
 class SearchCircler(BehaviorBase):
@@ -125,6 +179,7 @@ class SearchCircler(BehaviorBase):
         self._warned_no_center = False
         self._shape_hist = {}          # 부표 ID → 최근 모양 판정 (True = 부표 모양)
         self._shape_grid_at = None     # 마지막으로 모양을 잰 지도 수신 시각
+        self._exit_clear = False       # 완료 뒤 출구 쪽에 와서 원을 벗어났는가
         self._last_status = None
 
     # ── 활성화 ──────────────────────────────────────────
@@ -145,26 +200,16 @@ class SearchCircler(BehaviorBase):
                 and now - self._grid_at <= self.params.grid_timeout_sec)
 
     def _update_shapes(self, boat, area):
-        """새 지도마다 한 번 — 영역 안·배 shape_max_range 안 부표의 덩어리 모양 판정을 쌓는다."""
+        """새 지도마다 한 번 — 영역 안·배 3–6 m 부표의 덩어리 모양 판정을 쌓는다 (measure_shapes)."""
         grid = self.occupancy_grid
         if grid is None or self._grid_at is None or self._grid_at == self._shape_grid_at:
             return
         self._shape_grid_at = self._grid_at
-        p = self.params
         info = grid.info
         arr = np.asarray(grid.data, dtype=np.int16).reshape(info.height, info.width)
         origin = (info.origin.position.x, info.origin.position.y)
-        for b in self.buoys:
-            bid = getattr(b, 'id', None)
-            xy = (b.position.x, b.position.y)
-            if (bid is None or math.dist(xy, boat) > p.shape_max_range
-                    or math.dist(xy, area) > p.target_search_radius + 1.0):
-                continue
-            s = blob_shape(arr, info.resolution, origin, xy)
-            if s is None:
-                continue
-            ok = (s.extent <= p.shape_max_extent and s.cells <= p.shape_max_cells
-                  and s.ring_cells <= p.shape_max_ring)
+        for bid, ok in measure_shapes(arr, info.resolution, origin, self.buoys, boat, area,
+                                      self.params).items():
             self._shape_hist.setdefault(bid, deque(maxlen=20)).append(ok)
 
     def _shape_ok(self, buoy):
@@ -225,6 +270,7 @@ class SearchCircler(BehaviorBase):
             self._entry_done = False
             self._entry_points = None
             self._hold = None
+            self._exit_clear = False
             self._los_follower.reset()
 
         pos = self.odom.pose.pose.position
@@ -238,10 +284,27 @@ class SearchCircler(BehaviorBase):
         phase = fsm.update(self.buoys, boat, now, shape_ok)
 
         if fsm.done:
+            self.report_complete()
+            target = fsm.exit_point(boat)
+            if (phase == 'DONE' and fsm.center is not None and not self._exit_clear
+                    and self._circle_path is not None):
+                p = self.params
+                if exit_clear(boat, fsm.center, target, p.exit_cone_deg,
+                              p.orbit_radius + p.orbit_band):
+                    self._exit_clear = True
+                    self._los_follower.reset()
+                else:
+                    # 출구 직선이 방금 돈 부표를 스치지 않게 — 출구 쪽에 올 때까지 원을 이어 돈다
+                    self._status('완료 — 출구 쪽까지 선회 이어 감')
+                    cx, cy = fsm.center
+                    cmd, _ = self.los(self._circle_path, p.orbit_thrust, p.orbit_turn)
+                    return apply_repulsion(cmd, self.occupancy_grid, self.odom,
+                                           ignore=(cx, cy, p.ignore_radius))
             self._status('완료 — 탐색 목표점으로' if phase == 'DONE'
                          else f'{self.params.give_up_sec:.0f} s 동안 목표 부표 못 찾음 — 포기')
-            self.report_complete()
-            return self._go_goal(fsm.exit_point(boat))
+            arrive = (self.params.exit_arrive_radius if math.dist(target, fsm.goal) > 1e-6
+                      else None)
+            return self._go_goal(target, arrive)
 
         if phase in ('LOOK', 'SEEK'):
             # 고정이 없다(처음이거나 풀림) — 다음 고정 때 진입 경로부터 다시
@@ -305,7 +368,8 @@ class SearchCircler(BehaviorBase):
         if pts is None:
             return
         self._entry_points = pts
-        self._entry_path = polyline_path(pts)
+        # 모서리를 선회 원 반경 호로 — 진입 곡률 ≤ 1/orbit_radius 라 LOS 진입 속도가 선회 속도 아래로 안 떨어진다
+        self._entry_path = polyline_path(pts, fillet_radius=self.params.orbit_radius)
         self._entry_done = False
         self._los_follower.reset()
         via = ' (경유점 1개 — 다른 부표 비킴)' if len(pts) == 4 else ''
@@ -333,9 +397,10 @@ class SearchCircler(BehaviorBase):
             cmd = apply_repulsion(cmd, self.occupancy_grid, self.odom)
         return cmd
 
-    def _go_goal(self, target):
+    def _go_goal(self, target, arrive=None):
         pos = self.odom.pose.pose.position
-        if math.hypot(target[0] - pos.x, target[1] - pos.y) <= self.params.arrive_radius:
+        radius = self.params.arrive_radius if arrive is None else arrive
+        if math.hypot(target[0] - pos.x, target[1] - pos.y) <= radius:
             self._los_follower.reset()
             return Twist()
         cmd, _ = self.waypoint(target[0], target[1], slow_radius=3.0)

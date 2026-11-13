@@ -170,12 +170,33 @@ def test_exit_point_is_goal_when_goal_clear_of_buoy():
 
 
 def test_exit_point_steps_off_buoy_recorded_as_goal():
-    # search_end 를 부표 위에 찍은 경우 (sim mission_params 가 그렇다) — 부표에서 배 쪽으로 1.5 m
+    # search_end 를 부표 중심에 찍은 경우 (sim mission_params 가 그렇다) — 부표에서 배 쪽으로 1.5 m
     f = fsm('red', done_clearance=1.5)
     f.update([buoy('red', 50, 70)], (40, 70), 0.0)
     x, y = f.exit_point((50, 72))
     assert (x, y) == pytest.approx((50.0, 71.5))
     assert math.dist((x, y), GOAL) < 2.0          # mission_manager 전환 반경 안
+
+
+@pytest.mark.parametrize('boat', [(52.0, 70.0), (48.0, 70.0), (50.0, 72.0), (50.0, 68.0)])
+def test_exit_point_near_buoy_steps_toward_exit_wherever_boat_ends(boat):
+    # search_end 가 부표 1.0 m 옆 — 배가 어느 쪽에서 끝나도 출구점은 출구 쪽, search_end 0.5 m.
+    # 예전(배 쪽)은 배가 반대편이면 출구점–search_end 2.5 m 라 mission_manager 2 m 전환이 안 됐다
+    f = fsm('red', done_clearance=1.5)
+    f.update([buoy('red', 50.0, 69.0)], (40, 70), 0.0)               # GOAL (50, 70) 은 부표 북쪽 1 m
+    e = f.exit_point(boat)
+    assert e == pytest.approx((50.0, 70.5))
+    assert math.dist(e, GOAL) + f.p.exit_arrive_radius < 2.0
+
+
+def test_exit_clear_only_when_exit_line_leaves_buoy():
+    from kaboat_behaviors.search_orbit import exit_clear
+    c, exit_xy = (0.0, 0.0), (-20.0, 0.0)                            # 출구는 서쪽 멀리
+    assert not exit_clear((2.0, 0.0), c, exit_xy, 75.0, 3.0)         # 동쪽 — 직선이 부표를 지남
+    assert not exit_clear((0.0, 2.0), c, exit_xy, 75.0, 3.0)         # 북쪽 — 90°
+    assert exit_clear((-1.0, 1.73), c, exit_xy, 75.0, 3.0)          # 북서 (60°)
+    assert exit_clear((-2.0, 0.0), c, exit_xy, 75.0, 3.0)            # 서쪽
+    assert exit_clear((5.0, 0.0), c, exit_xy, 75.0, 3.0)             # 이미 원 띠 밖
 
 
 # ---------- 검정 = unknown (소거법) ----------
@@ -455,6 +476,68 @@ def test_unlock_when_locked_turns_out_structure():
     assert f.phase == 'ORBIT'
     f.update([red], (172.0, -3.0), 0.1, _shape({5: False}))
     assert f.center is None and f.unlocks == 1
+
+
+def test_no_shape_unlock_once_circling():
+    # 선회 각을 세기 시작하면 모양으로는 안 푼다 — 배가 부표 옆을 돌면 지도 덩어리가 번진다
+    f = fsm_0113('red')
+    red = buoy('red', 174.5, -1.2, 5)
+    f.update([red], (176.5, -1.2), 0.0, _shape({5: None}))          # 원 위에서 고정
+    f.update([red], (176.4, -1.8), 0.1, _shape({5: None}))
+    assert f.counting
+    f.update([red], (176.2, -2.3), 0.2, _shape({5: False}))
+    assert f.center is not None and f.unlocks == 0
+    green = buoy('green', 174.5, -1.2, 5)                             # 색이 바뀌면 여전히 푼다
+    f.update([green], (176.0, -2.6), 0.3, _shape({5: False}))
+    assert f.center is None and f.unlocks == 1
+
+
+def _disk(cx, cy, r, res=0.2):
+    k = int(r / res) + 2
+    ci, cj = cx / res, cy / res
+    return [(i, j) for j in range(int(cj) - k, int(cj) + k + 1) for i in range(int(ci) - k, int(ci) + k + 1)
+            if math.hypot(i + 0.5 - ci, j + 0.5 - cj) * res <= r]
+
+
+def test_blob_shape_excludes_neighbour_buoy_from_ring():
+    from kaboat_behaviors.search_orbit import blob_shape
+    a, b = (4.1, 4.1), (5.56, 4.1)                                   # 1.46 m 붙은 쌍
+    g = _grid(_disk(*a, 0.45) + _disk(*b, 0.45))                     # 실측 덩어리 14–16 칸
+    plain = blob_shape(g, 0.2, (0.0, 0.0), a)
+    excl = blob_shape(g, 0.2, (0.0, 0.0), a, exclude=[b], exclude_radius=0.7)
+    assert plain.ring_cells > 12                                     # 예전: 이웃이 고리 칸 → 구조물
+    assert excl.ring_cells == 0 and excl.cells == plain.cells
+
+
+def test_measure_shapes_pair_passes_but_wall_fragment_fails():
+    import numpy as np
+    from types import SimpleNamespace as NS
+    from kaboat_behaviors.search_orbit import measure_shapes
+    p = SearchParams(target_color='black')
+    a, b = (4.1, 4.1), (5.56, 4.1)
+    wall = [(i, 30) for i in range(5, 35)]                            # y = 6.1 m, 6 m 벽
+    g = np.asarray(_grid(_disk(*a, 0.45) + _disk(*b, 0.45) + wall))
+    buoys = [NS(id=1, position=NS(x=a[0], y=a[1])), NS(id=2, position=NS(x=b[0], y=b[1])),
+             NS(id=3, position=NS(x=4.9, y=6.1))]                    # 벽 위 부표만 한 조각
+    out = measure_shapes(g, 0.2, (0.0, 0.0), buoys, (4.8, 0.2), (4.8, 4.1), p)
+    assert out == {1: True, 2: True, 3: False}
+    # 배가 3 m 안이면 안 잰다
+    assert measure_shapes(g, 0.2, (0.0, 0.0), buoys[:1], (4.1, 2.6), (4.8, 4.1), p) == {}
+
+
+def test_measure_shapes_keeps_structure_neighbours_as_evidence():
+    # 부표만 한 도크 조각(1 m) 옆 1.5 m 에 도크 벽(4 m). 벽 위에도 검출 "부표"가 하나 있어도
+    # 그 덩어리는 벽 전체라 이웃 부표로 빼지 않는다 → 조각의 고리에 벽이 남아 구조물로 판정
+    import numpy as np
+    from types import SimpleNamespace as NS
+    from kaboat_behaviors.search_orbit import measure_shapes
+    p = SearchParams(target_color='black')
+    piece = [(i, 20) for i in range(18, 23)] + [(i, 21) for i in range(18, 23)]   # 1.0 m × 0.4 m
+    wall = [(i, j) for i in range(10, 30) for j in (27, 28)]                       # 1.4 m 위, 4 m
+    g = np.asarray(_grid(piece + wall))
+    buoys = [NS(id=1, position=NS(x=4.1, y=4.2)), NS(id=2, position=NS(x=4.1, y=5.6))]
+    out = measure_shapes(g, 0.2, (0.0, 0.0), buoys, (4.1, 0.0), (4.1, 4.1), p)
+    assert out[1] is False and out[2] is False
 
 
 def test_black_ranked_by_nearest_red_green_not_area_center():
