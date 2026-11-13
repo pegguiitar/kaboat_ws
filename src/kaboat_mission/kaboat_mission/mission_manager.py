@@ -24,6 +24,11 @@
   멈추지 않고 건너뛴다. mission_timeouts:=false 면 전부 끔. 단일 미션 시험(test_mission·go_*)은 해당
   없음 — 넘어갈 다음 미션이 없다.
 
+포기 신호 /mission/give_up (String '<미션>: 이유', 2026-11-14): behavior 가 더 할 게 없다고 알리면
+  제한 시간을 기다리지 않고 위와 같이 건너뛴다 (dock 은 먼저 직진 후진). 지금은 dock_ctrl_v2 가 누적
+  2바퀴를 돌아도 목표 도형을 못 찾으면 SCAN 시작 선수각(도크 쪽)으로 되돌린 뒤 보낸다. 이어 도는
+  실행에서만 받고(단일 미션 시험은 그대로 둠), skip_on_give_up:=false 면 무시.
+
 미션 시작: 각 미션의 entry_waypoints.<state> = [x, y, angle_deg] 로
   approach state 에 진입한다. waypoint() 도달 신호를 받은 뒤에만 해당
   behavior 를 활성화한다. 미설정 entry 는 idle 로 정지한다.
@@ -142,6 +147,7 @@ class MissionManager(Node):
         self.declare_parameter('undock_wait_auto', True)
         # 제한 시간 — 여러 미션을 이어 도는 실행에서만 (모듈 설명)
         self.declare_parameter('mission_timeouts', True)
+        self.declare_parameter('skip_on_give_up', True)
         for name in MISSION_ORDER:
             self.declare_parameter(f'time_limit.{name}', MISSION_TIME_LIMITS[name])
         self.declare_parameter('approach_timeout_sec', APPROACH_TIMEOUT)
@@ -151,6 +157,8 @@ class MissionManager(Node):
 
         self.radius = float(self.get_parameter('transition_radius').value)
         self.mission_timeouts = bool(self.get_parameter('mission_timeouts').value)
+        self.skip_on_give_up = bool(self.get_parameter('skip_on_give_up').value)
+        self._give_up_noted = False        # 무시한 포기 신호 경고는 미션마다 한 번
         self.time_limits = {name: float(self.get_parameter(f'time_limit.{name}').value)
                             for name in MISSION_ORDER}
         self.approach_timeout = float(self.get_parameter('approach_timeout_sec').value)
@@ -251,6 +259,7 @@ class MissionManager(Node):
 
         self.create_subscription(Odometry, '/odom', self.on_odom, 10)
         self.create_subscription(String, '/mission/complete', self.on_complete, 10)
+        self.create_subscription(String, '/mission/give_up', self.on_give_up, 10)
         self.create_subscription(Path, '/dock/one_shot_path', self.on_dock_path, latched)
         self.create_subscription(String, '/teleop/status', self.on_thruster_status, 10)
         self.create_timer(0.2, self.tick)  # 5Hz 판정
@@ -458,6 +467,35 @@ class MissionManager(Node):
                    f'몫 {self.time_limits[state]:.0f} s, 전체 +{now - self.run_started_at:.0f} s)')
         else:
             return False
+        self.skip_current(state, why, now)
+        return True
+
+    def on_give_up(self, msg: String):
+        """behavior 가 '<미션>: 이유' 로 포기를 알림 (dock: 2바퀴 돌아도 목표 도형 못 찾음).
+
+        이어 도는 실행이면 시간 초과와 같이 건너뛴다 (dock 은 먼저 직진 후진). 단일 미션 시험은 넘어갈
+        다음 미션이 없어 그대로 둔다. skip_on_give_up:=false 면 무시 (제한 시간까지 기다림).
+        """
+        if not (0 <= self.idx < len(MISSION_ORDER)) or self.phase != 'mission':
+            return
+        name, _, reason = msg.data.partition(':')
+        name, reason = name.strip(), reason.strip() or '이유 없음'
+        state = MISSION_ORDER[self.idx]
+        if name != state:
+            self.get_logger().warning(f"현재 미션은 '{state}' — 다른 포기 신호 '{msg.data}' 무시")
+            return
+        if self.single_mission or not self.skip_on_give_up:
+            if not self._give_up_noted:
+                self._give_up_noted = True
+                self.get_logger().warning(
+                    f"'{state}' 포기 신호 ({reason}) — "
+                    + ('단일 미션 시험이라 넘어갈 다음 미션 없음, 그대로 둠' if self.single_mission
+                       else 'skip_on_give_up=false — 제한 시간까지 그대로 둠'))
+            return
+        self.skip_current(state, f'포기: {reason}', self._now())
+
+    def skip_current(self, state: str, why: str, now: float):
+        """지금 미션을 건너뛴다 — dock 미션 중이면 먼저 직진 후진, 아니면 바로 다음 미션 접근."""
         retreat = state == 'dock' and self.phase == 'mission' and self.retreat_m > 0.0
         self.skipped.append((state, why))
         self.get_logger().error(
@@ -467,7 +505,6 @@ class MissionManager(Node):
             self.start_retreat(now)
         else:
             self.advance()
-        return True
 
     def start_retreat(self, now: float):
         """dock 시간 초과 — 슬롯 근처일 수 있으니 직진 후진으로 빠져나온 뒤 다음 미션."""
@@ -559,6 +596,7 @@ class MissionManager(Node):
 
     def set_state(self, state: str):
         self.behavior_complete = False
+        self._give_up_noted = False
         msg = String()
         msg.data = state
         self.pub_state.publish(msg)

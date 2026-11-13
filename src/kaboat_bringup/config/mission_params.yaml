@@ -36,6 +36,9 @@ mission_manager:
       search:  180.0
       avoid:   180.0
     approach_timeout_sec: 90.0   # 시작 자세 접근만 이만큼 넘으면 그 미션을 건너뜀
+    # behavior 포기 신호(/mission/give_up)를 받으면 제한 시간 전이라도 건너뜀 (이어 도는 실행만).
+    # dock: 누적 2바퀴 돌아도 목표 도형 못 찾음 → 도크 쪽 선수로 되돌린 뒤 → 직진 후진 3 m → search
+    skip_on_give_up: true
 
     # 각 미션 시작 자세 [odom x(m), y(m), 선수각(deg)]. 값이 미정이라
     # entry_ready=false 로 둔다. 실측값을 넣고 해당 항목을 true 로 바꿔야

@@ -27,7 +27,10 @@
                             규칙도 그쪽 후보를 뺀다.
             아무것도 없음 — 시계방향.
           YOLO 상태 자체가 끊기면(stale) 멈춘다. 누적 search_max_turns(2)바퀴를 돌아도 목표가 없으면
-          멈추고 상태에 'not found after 2 turns' 를 남긴다(목표가 보이면 다시 시작).
+          상태에 'not found after 2 turns' 를 남기고(목표가 보이면 다시 시작) — 미션 모드면 SCAN 시작
+          선수각(도크 쪽)으로 되돌린 뒤 /mission/give_up 'dock: …' 을 보낸다. 전체 실행이면 mission_manager 가
+          시간 초과 때처럼 직진 후진 3 m 뒤 다음 미션으로 넘긴다(선수가 도크 쪽이라 후진은 도크에서
+          멀어진다). 단일 시험·미션 모드 아님이면 그대로 멈춘다.
           화면 안/밖 판단의 반화각은 검출 상태의 image_half_fov_deg(좌우), 없으면 camera_half_fov_deg.
   SEEK    목표 도형을 선수 가운데(±seek_center_deg)에 둔 채 seek_cmd 로 서행 — 벗어나면 전진 0, 선수만
           돌린다(선회율 제약 없음). 보이는 동안 지연 보상한 YOLO 방위로 목표 방위·방위선을 갱신하고
@@ -38,7 +41,14 @@
           slot_target_offset_m 안의 슬롯만 (YOLO 는 세 슬롯 중 어디인지만 정한다). 같은 ㄷ자가
           lock_min_span_s 이상 같은 자리·법선이면 진입 기하 고정. 직선 하나(RANSAC)로 벽을 정하면
           뒷벽과 평행한 칸막이 끝면(1.94 m 앞)을 잡던 문제를 ㄷ자 전체로 피한다(dock_u_slot.py).
-          앞 front_stop_m 안에 점이 있거나 seek_max_travel_m 를 가면 멈춰 기다린다.
+          앞 front_stop_m 안에 점이 있으면 멈춰 기다린다(아래 REPOSITION·UNBLOCK). 막힘 없이
+          seek_max_travel_m 를 가도 못 잡으면 방위가 틀렸거나 낡았다고 보고 그 자리에서 SCAN 부터 다시
+          (seek_rescan_max_attempts 번까지, 다 쓰면 멈춤).
+  REPOSITION 비스듬하거나 앞이 reposition_after_s 막히면 보이는 ㄷ자를 slot_pitch_m 만큼 옮긴 임시 목표
+          축 위 경유점으로 우회 (한 번만).
+  UNBLOCK 앞이 reposition_after_s 막혔는데 우회를 못 짜거나(보이는 ㄷ자 없음 등) 이미 썼거나, 우회 전진이
+          막히면: 선수 유지 직진 후진 unblock_distance_m (온 길을 되짚음 — 뒤는 라이다가 못 본다) 뒤
+          SCAN 부터 다시. unblock_max_attempts 번 다 쓰면 멈춰 기다린다 (예전엔 처음부터 그대로 멈춤).
   BACKOFF 고정했을 때 이미 경유점보다 벽에 가까우면 선수 유지 후진으로 거리를 벌린다.
   TO_VIA → ALIGN_VIA → TO_GOAL  경유점(입구 밖 pre_entry_offset) → 슬롯 중심선과 평행하게 선수
           정렬 → 정지점(뒷벽 앞 berth_distance). 치수는 모두 dock_slot.yaml (slot_config).
@@ -82,6 +92,7 @@ from .dock_one_shot import (LocalGeo, fixed_route, parse_marker_order, retreat_e
 
 FRONT_MIN_RANGE_M = 0.8      # 이보다 가까운 점은 선체·물보라로 보고 앞 막힘 판정에서 뺀다
 FRONT_MIN_POINTS = 3
+GIVE_UP_ALIGN_MAX_S = 20.0   # 목표 못 찾아 포기하기 전 SCAN 시작 선수각으로 되돌리는 상한 [s]
 
 
 def stamp(msg):
@@ -106,8 +117,8 @@ def default_slot_config():
     return os.path.join(get_package_share_directory('kaboat_bringup'), 'config', 'dock_slot.yaml')
 
 
-def load_slot_pitch(path, default=3.55):
-    """dock_slot.yaml slot_pitch_m (이웃 슬롯 중심 간격). 없으면 default — 2026-11-13 bag 추정, 실측 아님."""
+def load_slot_pitch(path, default=4.02):
+    """dock_slot.yaml slot_pitch_m (이웃 슬롯 중심 간격). 없으면 default — 2026-11-12 라이다 실측 3.99/4.06."""
     with open(path, encoding='utf-8') as f:
         dock = yaml.safe_load(f)['docking_ctrl']['ros__parameters']['dock']
     return float(dock.get('slot_pitch_m', default))
@@ -200,7 +211,15 @@ class DockCtrlV2(Node):
                     'reposition_distance_m': 5.0, 'reposition_tolerance_m': 0.5,
                     # 보이는 ㄷ자 법선과 목표 방위가 이 각 이상이면 막히기 전에 바로 우회 — 목표 표지로 가는
                     # 시선이 칸막이 끝에 닿기 시작하는 각 atan(슬롯 반폭 1.485 / 깊이 1.94) ≈ 37°
-                    'reposition_angle_deg': 37.0}
+                    'reposition_angle_deg': 37.0,
+                    # UNBLOCK: 막혔는데 우회를 못 하면 선수 유지 직진 후진(retreat_cmd)으로 이만큼 온 길을
+                    # 되짚고 SCAN 부터 다시 (unblock_max_s 넘으면 덜 갔어도 다시). 도킹 한 번에 최대
+                    # unblock_max_attempts 번 — 다 쓰면 멈춰 기다린다 (전체 실행은 도킹 제한 240 s 가 넘김).
+                    'unblock_distance_m': 2.0, 'unblock_max_s': 30.0,
+                    'unblock_max_attempts': 3,
+                    # SEEK 가 막힘 없이 seek_max_travel_m 를 가도 ㄷ자를 못 잡으면 그 자리에서 SCAN 부터 다시
+                    # (목표 방위를 새로 잡음). 도킹 한 번에 최대 이만큼 — 다 쓰면 멈춰 기다린다.
+                    'seek_rescan_max_attempts': 2}
         for name, value in defaults.items():
             self.declare_parameter(name, value)
         p = lambda name: self.get_parameter(name).value
@@ -275,6 +294,10 @@ class DockCtrlV2(Node):
         self.reposition_distance = float(p('reposition_distance_m'))
         self.reposition_tol = float(p('reposition_tolerance_m'))
         self.reposition_angle = math.radians(float(p('reposition_angle_deg')))
+        self.unblock_distance = float(p('unblock_distance_m'))
+        self.unblock_max_s = float(p('unblock_max_s'))
+        self.unblock_max = int(p('unblock_max_attempts'))
+        self.seek_rescan_max = int(p('seek_rescan_max_attempts'))
         if not all(math.isfinite(v) and v > 0 for v in
                    (self.stage_radius, self.gps_timeout, self.odom_timeout,
                     self.perception_timeout,
@@ -290,8 +313,9 @@ class DockCtrlV2(Node):
                     self.lock_goal_spread, self.lock_normal_spread, self.lock_max_distance,
                     self.via_margin, self.backoff_max, self.reposition_after,
                     self.reposition_distance, self.reposition_tol, self.slot_pitch,
-                    self.reposition_angle)
+                    self.reposition_angle, self.unblock_distance, self.unblock_max_s)
                    ) or not math.isfinite(self.retreat_distance) or self.retreat_distance <= 3.0 \
+                or self.unblock_max < 0 or self.seek_rescan_max < 0 \
                 or not (math.isfinite(self.camera_latency) and 0 <= self.camera_latency < 2) \
                 or not (math.isfinite(self.scan_kd) and self.scan_kd >= 0) \
                 or not (math.isfinite(self.lock_rate) and self.lock_rate >= 0) \
@@ -324,6 +348,10 @@ class DockCtrlV2(Node):
         self.search_turned = 0.0                    # 이번 탐색에서 누적 선회 [rad]
         self.search_prev_yaw = None
         self.search_exhausted = False               # search_max_turns 를 다 돌았다
+        self.scan_home_yaw = None                   # 이번 SCAN 을 시작한 선수각 (대개 도크 쪽)
+        self.give_up_since = None                   # 다 돌고 시작 선수각으로 되돌리기 시작 (monotonic)
+        self.give_up_sent = False                   # /mission/give_up 보냄
+        self.give_up_last = 0.0
         self.last_sight = None                      # (수신 monotonic, 세계 방위, 화면 방위) — RViz 용
         self.last_cmd = (0.0, 0.0)                  # 마지막 (전진, 선회) 명령 — RViz 글자용
         self.phase_log = deque(maxlen=6)            # (ROS 시각, 단계, 상세) — RViz 단계 전이 기록
@@ -344,6 +372,11 @@ class DockCtrlV2(Node):
         self.reposition_planned = 0.0               # 마지막 막힘 우회 계획 시도 (monotonic)
         self.oblique_checked = 0.0                  # 마지막 비스듬함(37°) 확인 (monotonic)
         self.reposition_why = ''
+        self.unblock_count = 0                      # 이번 도킹에서 막혀 후진한 횟수
+        self.seek_rescans = 0                       # 이번 도킹에서 SEEK 거리 한도로 다시 SCAN 한 횟수
+        self.unblock_start = self.unblock_heading = None
+        self.unblock_since = 0.0
+        self.unblock_why = ''
         self.phase = 'IDLE'
         self.first_plan = self.final_plan = None
         self.route_enu = None
@@ -358,6 +391,9 @@ class DockCtrlV2(Node):
                                     ratio_limits_only=True)
         self.cmd = self.create_publisher(Twist, '/cmd/dock' if self.mission_mode else '/cmd_vel', 10)
         self.complete_pub = self.create_publisher(String, '/mission/complete', 10)
+        # 목표를 끝내 못 찾음 → mission_manager 에 dock 건너뛰기 요청 (전체 실행에서만 받아 줌)
+        self.give_up_pub = (self.create_publisher(String, '/mission/give_up', 10)
+                            if self.mission_mode else None)
         self.preview = self.create_publisher(Twist, '/dock/cmd_preview', 10)
         self.status = self.create_publisher(String, '/dock/status', 10)
         latched = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
@@ -548,9 +584,12 @@ class DockCtrlV2(Node):
         self.phase = phase
         self.blocked_since = None
         self.reposition = None
-        if not keep_reposition:
+        self.unblock_start = None
+        if not keep_reposition:                     # 새 도킹 — 우회·막힘 후진·다시 SCAN 횟수도 처음부터
             self.reposition_used = False
             self.reposition_why = ''
+            self.unblock_count = 0
+            self.seek_rescans = 0
         self.complete_sent = False
         self.route_enu = None
         self.route_origin_odom = self.route_origin_enu = None
@@ -563,6 +602,7 @@ class DockCtrlV2(Node):
         self.scan_heading = None
         self.scan_heading_received = 0.0
         self._clear_search()
+        self.scan_home_yaw = None                   # 첫 SCAN tick 의 선수각으로 다시 잡는다
         self.cloud.clear()
         self.pending_scans.clear()
         self.slot_samples.clear()
@@ -650,7 +690,7 @@ class DockCtrlV2(Node):
     PHASE_COLORS = {'IDLE': (.7, .7, .7), 'STAGE': (.8, .8, .3), 'SCAN': (1., .7, .1),
                     'SEEK': (.3, .6, 1.), 'BACKOFF': (1., .3, .3), 'TO_VIA': (.2, .9, .4),
                     'ALIGN_VIA': (.2, .9, .8), 'TO_GOAL': (.1, 1., .2), 'REVERSE': (.8, .4, 1.),
-                    'COMPLETE': (1., 1., 1.), 'REPOSITION': (1., .2, 1.)}
+                    'COMPLETE': (1., 1., 1.), 'REPOSITION': (1., .2, 1.), 'UNBLOCK': (1., .5, .5)}
 
     def _publish_ctrl_markers(self, detail):
         """RViz: 단계 글자·전이 기록, 지연 보상한 목표 시선, SCAN 목표/고정 방위선, SEEK ±가운데."""
@@ -1008,8 +1048,17 @@ class DockCtrlV2(Node):
             blocked = front_clearance(self.scan, self.front_half_angle, self.front_stop)
             if blocked is not None:
                 self._command(0, 0)
-                self._report(f'reposition: something {blocked:.2f}m ahead — holding ({distance:.1f}m to go)')
+                now = time.monotonic()
+                if rp['blocked_since'] is None:
+                    rp['blocked_since'] = now
+                held = now - rp['blocked_since']
+                if held >= self.reposition_after and self._start_unblock(
+                        yaw, f'reposition blocked {held:.1f}s, {blocked:.2f}m ahead'):
+                    return
+                self._report(f'reposition: something {blocked:.2f}m ahead — holding ({distance:.1f}m to go)'
+                             + self._unblock_note())
                 return
+            rp['blocked_since'] = None
             step = self.follower.step(rp['plan'], xy, yaw, self.odom.twist.twist.angular.z,
                                       thrust_ratio=self.seek_cmd, turn_ratio=self.max_turn)
             if step.reached:
@@ -1026,6 +1075,46 @@ class DockCtrlV2(Node):
             return
         self._command(0, self._scan_turn(rp['heading'], yaw))
         self._report(f'reposition: facing temporary U slot ({math.degrees(error):+.0f} deg)')
+
+    # ── 막혀서 더 할 게 없을 때: 온 길로 직진 후진 → SCAN 부터 다시 ──────────────────────
+    def _start_unblock(self, yaw, why):
+        """선수 유지 직진 후진(UNBLOCK) 시작. 횟수를 다 썼으면 False (호출한 쪽이 멈춰 기다린다).
+
+        뒤(120~240°)는 라이다가 가려 못 본다 — 방금 앞으로 온 길을 같은 선수로 되짚는 것이라
+        BACKOFF·REVERSE·미션 시간 초과 후진과 같은 가정이다.
+        """
+        if self.unblock_count >= self.unblock_max:
+            return False
+        self.unblock_count += 1
+        self.phase = 'UNBLOCK'
+        self.unblock_start = self._odom_xy()
+        self.unblock_heading = yaw
+        self.unblock_since = time.monotonic()
+        self.unblock_why = why
+        self.reposition = None
+        self.follower.reset()
+        self._command(0, 0)
+        self._report(f'{why} — backing {self.unblock_distance:.1f}m to re-scan '
+                     f'({self.unblock_count}/{self.unblock_max})')
+        return True
+
+    def _unblock_note(self):
+        if self.unblock_max and self.unblock_count >= self.unblock_max:
+            return f'; gave up after {self.unblock_count} retreats'
+        return ''
+
+    def _unblock_tick(self, yaw):
+        backed = float(np.linalg.norm(self._odom_xy() - self.unblock_start))
+        elapsed = time.monotonic() - self.unblock_since
+        if backed >= self.unblock_distance or elapsed >= self.unblock_max_s:
+            self._reset_search('SCAN', keep_reposition=True)
+            self._command(0, 0)
+            self._report(f'backed {backed:.2f}m in {elapsed:.0f}s after block '
+                         f'({self.unblock_count}/{self.unblock_max}) — re-scanning')
+            return
+        self._command(-self.retreat_cmd, self._turn(self.unblock_heading, yaw))
+        self._report(f'unblock {self.unblock_count}/{self.unblock_max}: backing straight '
+                     f'{backed:.2f}/{self.unblock_distance:.1f}m ({self.unblock_why})')
 
     def _start_seek(self, bearing):
         self.phase = 'SEEK'
@@ -1120,6 +1209,37 @@ class DockCtrlV2(Node):
         self.search_turned = 0.0
         self.search_prev_yaw = None
         self.search_exhausted = False
+        self.give_up_since = None
+        self.give_up_sent = False
+        self.give_up_last = 0.0
+
+    def _search_exhausted(self, yaw, basis, why):
+        """누적 search_max_turns 바퀴를 돌아도 목표가 없을 때 (전진, 선회, 설명).
+
+        미션 모드: SCAN 시작 선수각(대개 도크 쪽)으로 되돌린 뒤(최대 GIVE_UP_ALIGN_MAX_S) /mission/give_up 을
+        1 s 마다 보낸다. 전체 실행이면 mission_manager 가 받아 직진 후진 3 m → 다음 미션 — 탐색 선회로
+        선수가 아무 데나 향한 채 후진하면 도크 쪽으로 갈 수 있다. 단일 시험은 무시돼 그대로 멈춘다.
+        """
+        lost = f'target {self.target} not found after {self.search_max_turns:g} turns'
+        if self.give_up_pub is None:
+            return 0.0, 0.0, f'{lost} — holding ({basis}; {why})'
+        now = time.monotonic()
+        if self.give_up_since is None:
+            self.give_up_since = now
+        home = yaw if self.scan_home_yaw is None else self.scan_home_yaw
+        error = wrap(home - yaw)
+        settled = (abs(error) <= self.yaw_tol
+                   and abs(self.odom.twist.twist.angular.z) <= math.radians(5))
+        if (not self.give_up_sent and not settled
+                and now - self.give_up_since < GIVE_UP_ALIGN_MAX_S):
+            return 0.0, self._scan_turn(home, yaw), (
+                f'{lost} — turning back to scan start heading ({math.degrees(error):+.0f} deg) '
+                f'before giving up ({basis})')
+        if now - self.give_up_last >= 1.0:          # 한 번 잃어도 되게 — state 가 바뀌면 IDLE
+            self.give_up_pub.publish(String(data=f'dock: {lost}'))
+            self.give_up_last = now
+            self.give_up_sent = True
+        return 0.0, 0.0, f'{lost} — gave up, asked mission manager to skip dock ({basis}; {why})'
 
     def _half_fov(self, side):
         """화면 수평 반화각 [deg], side +1 왼쪽 / -1 오른쪽 — 검출 상태 값, 없으면 파라미터."""
@@ -1152,8 +1272,7 @@ class DockCtrlV2(Node):
         basis = ('other shapes ' + ', '.join(f'{k} {v:+.0f}' for k, v in sorted(seen.items()))
                  if seen else 'no shape in view')
         if self.search_exhausted:
-            return 0.0, 0.0, (f'target {self.target} not found after {self.search_max_turns:g} turns '
-                              f'— holding ({basis}; {why})')
+            return self._search_exhausted(yaw, basis, why)
         new_shape = bool(set(seen) - self.search_names)
         self.search_names |= set(seen)
         if len(seen) >= 2 and self.search_rank < 2:
@@ -1201,8 +1320,7 @@ class DockCtrlV2(Node):
         turned = math.degrees(self.search_turned)
         if self.search_turned >= self.search_max_turns * 2 * math.pi:
             self.search_exhausted = True            # 목표가 보이면 _clear_search 로 다시 시작
-            return 0.0, 0.0, (f'target {self.target} not found after {self.search_max_turns:g} turns '
-                              f'— holding ({basis}; {why})')
+            return self._search_exhausted(yaw, basis, why)
         side = 'left' if self.search_dir > 0 else 'right (clockwise)'
         note = ' — reversed: nothing new that way' if reversed_now or self.search_reversed else ''
         return 0.0, self.search_dir * self.search_turn, (
@@ -1239,6 +1357,8 @@ class DockCtrlV2(Node):
             self._report(f'staging distance {distance:.2f}m')
             return
         if self.phase == 'SCAN':
+            if self.scan_home_yaw is None:
+                self.scan_home_yaw = yaw
             linear, turn, why = self._scan_target(yaw)
             self._command(linear, turn)
             self._report(why)
@@ -1265,23 +1385,36 @@ class DockCtrlV2(Node):
                 now = time.monotonic()
                 if self.blocked_since is None:
                     self.blocked_since = now
-                note = ''
-                if (not self.reposition_used and now - self.blocked_since >= self.reposition_after
-                        and now - self.reposition_planned >= 1.0):
-                    self.reposition_planned = now
-                    if self._plan_reposition(xy, yaw):
-                        self.phase = 'REPOSITION'
-                        self._report(f'blocked {now - self.blocked_since:.1f}s without U slot — '
-                                     f'{self.reposition_why}')
+                held = now - self.blocked_since
+                if held >= self.reposition_after:
+                    if not self.reposition_used and now - self.reposition_planned >= 1.0:
+                        self.reposition_planned = now
+                        if self._plan_reposition(xy, yaw):
+                            self.phase = 'REPOSITION'
+                            self._report(f'blocked {held:.1f}s without U slot — {self.reposition_why}')
+                            return
+                    # 우회를 못 짰거나 이미 썼다 — 서서 기다리지 않고 온 길로 빠져 다시 찾는다
+                    why = (self.reposition_why if not self.reposition_used
+                           else 'already repositioned once')
+                    if self._start_unblock(yaw, f'blocked {held:.1f}s, {blocked:.2f}m ahead, '
+                                                f'no reposition ({why})'):
                         return
-                if self.reposition_why:
-                    note = f'; reposition: {self.reposition_why}'
-                self._report(f'something {blocked:.2f}m ahead — holding; {wall_why}{note}')
+                note = f'; reposition: {self.reposition_why}' if self.reposition_why else ''
+                self._report(f'something {blocked:.2f}m ahead — holding; {wall_why}{note}'
+                             + self._unblock_note())
                 return
             self.blocked_since = None
             if travelled >= self.seek_max_travel - self.via_tol:
                 self._command(0, 0)
-                self._report(f'no U slot within {self.seek_max_travel:.1f}m — holding; {wall_why}')
+                # 앞은 비었는데 ㄷ자를 못 잡음 — 방위가 틀렸거나 낡았다. 서 있지 않고 여기서 목표 방위부터 다시
+                if self.seek_rescans < self.seek_rescan_max:
+                    self.seek_rescans += 1
+                    self._reset_search('SCAN', keep_reposition=True)
+                    self._report(f'no U slot within {self.seek_max_travel:.1f}m ({wall_why}) — '
+                                 f're-scanning here ({self.seek_rescans}/{self.seek_rescan_max})')
+                    return
+                self._report(f'no U slot within {self.seek_max_travel:.1f}m — holding; {wall_why}; '
+                             f'gave up after {self.seek_rescans} re-scans')
                 return
             sight_why = self._seek_sight()
             error = wrap(self.locked_bearing - yaw)
@@ -1293,6 +1426,9 @@ class DockCtrlV2(Node):
             return
         if self.phase == 'REPOSITION':
             self._reposition_tick(xy, yaw)
+            return
+        if self.phase == 'UNBLOCK':
+            self._unblock_tick(yaw)
             return
         if self.phase == 'BACKOFF':
             have, need = self._via_room(self.lock)

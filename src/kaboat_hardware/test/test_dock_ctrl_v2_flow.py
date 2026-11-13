@@ -265,8 +265,29 @@ def test_seek_holds_for_front_obstacle_stale_scan_and_travel_limit(node):
     _scan(node)
     _odom(node, 0.0, 10.0 - node.seek_max_travel)
     node._tick()
-    assert node.sent[-1].linear.x == 0.0 and node.phase == 'SEEK'
-    assert 'no U slot' in node.reports[-1]['detail']
+    assert node.sent[-1].linear.x == 0.0 and node.phase == 'SCAN'       # 예전엔 SEEK 로 계속 섰다
+    assert 'no U slot' in node.reports[-1]['detail'] and 're-scanning here' in node.reports[-1]['detail']
+    assert node.seek_rescans == 1 and node.locked_bearing is None
+
+
+def test_seek_travel_limit_rescans_then_gives_up(node):
+    """막힘 없이 seek_max_travel_m 를 가도 ㄷ자를 못 잡으면 그 자리에서 다시 SCAN → 새 방위로 SEEK.
+    seek_rescan_max_attempts 번 다 쓰면 멈춰 기다리고, 새 도킹이면 횟수는 처음부터."""
+    y = 10.0
+    for k in range(node.seek_rescan_max):
+        _lock_bearing(node, y=y)                                          # 그 자리에서 방위 다시 고정
+        y -= node.seek_max_travel
+        _odom(node, 0.0, y)
+        node._tick()
+        assert node.phase == 'SCAN' and node.seek_rescans == k + 1
+    _lock_bearing(node, y=y)
+    _odom(node, 0.0, y - node.seek_max_travel)
+    node._tick()
+    assert node.phase == 'SEEK' and node.sent[-1].linear.x == 0.0
+    assert f'gave up after {node.seek_rescan_max} re-scans' in node.reports[-1]['detail']
+    node._on_mission_state(String(data='search'))
+    node._on_mission_state(String(data='dock'))
+    assert node.seek_rescans == 0
 
 
 def test_front_clearance_ignores_spray_and_side_points():
@@ -390,6 +411,7 @@ def test_search_uses_half_fov_from_detection_status(node):
 
 
 def test_search_stops_after_two_turns_and_resumes_when_target_seen(node):
+    node.give_up_pub = None                            # 미션 모드 아님 (단독 시험) — 포기 없이 멈춤 (포기는 아래)
     _scan(node)
     yaw = 0.0
     for k in range(80):                                # 10°씩 돌며 800° — 720° 에서 멈춰야 함
@@ -410,6 +432,62 @@ def test_search_stops_after_two_turns_and_resumes_when_target_seen(node):
     node._tick()
     assert node.sent[-1].angular.z > 0.0 and not node.search_exhausted
     assert 'turning to circle' in node.reports[-1]['detail']
+
+
+def test_two_turns_without_target_turns_back_to_scan_heading_then_gives_up(node):
+    """미션 모드: 2바퀴 다 돌면 SCAN 시작 선수각(도크 쪽)으로 되돌린 뒤 /mission/give_up — mission_manager 의
+    직진 후진이 도크에서 멀어지게. 1 s 마다 다시 보낸다 (잃어도 되게)."""
+    gave = []
+    node.give_up_pub.publish = gave.append
+    _scan(node)
+    home = FACING_WALL
+    _odom(node, 0.0, 10.0, yaw=home)
+    _shapes(node)
+    node._tick()
+    assert node.scan_home_yaw == pytest.approx(home)
+    node.search_turned = node.search_max_turns * 2 * math.pi - 1e-3   # 거의 2바퀴
+    _odom(node, 0.0, 10.0, yaw=home + math.radians(120))               # 반전이 섞여 도크를 등진 채 끝남
+    _shapes(node)
+    node._tick()
+    assert node.search_exhausted and gave == []
+    assert node.sent[-1].linear.x == 0.0 and node.sent[-1].angular.z < 0.0   # 도크 쪽으로 되돌림
+    assert 'turning back to scan start heading' in node.reports[-1]['detail']
+    _odom(node, 0.0, 10.0, yaw=home + math.radians(3))
+    _shapes(node)
+    node._tick()
+    assert [m.data for m in gave] == ['dock: target circle not found after 2 turns']
+    assert node.sent[-1].angular.z == 0.0 and 'gave up' in node.reports[-1]['detail']
+    node._tick()
+    assert len(gave) == 1
+    node.give_up_last -= 1.0
+    node._tick()
+    assert len(gave) == 2
+    _det(node, 12.0)                                   # 넘어가기 전에 목표가 보이면 다시 진행
+    node._tick()
+    assert not node.search_exhausted and not node.give_up_sent
+    assert 'turning to circle' in node.reports[-1]['detail']
+
+
+def test_give_up_after_turn_back_time_limit_and_holds_outside_mission_mode(node):
+    gave = []
+    node.give_up_pub.publish = gave.append
+    _scan(node)
+    _odom(node, 0.0, 10.0, yaw=FACING_WALL)
+    _shapes(node)
+    node._tick()
+    node.search_exhausted = True
+    _odom(node, 0.0, 10.0, yaw=FACING_WALL + math.radians(90))        # 바람에 못 돌아옴
+    _shapes(node)
+    node._tick()
+    assert gave == [] and node.sent[-1].angular.z != 0.0
+    node.give_up_since -= 20.0                         # 되돌리기 상한 — 덜 돌았어도 포기
+    node._tick()
+    assert len(gave) == 1 and node.sent[-1].angular.z == 0.0
+    node.give_up_pub = None                            # 미션 모드 아님 (단독 도킹 시험) — 예전처럼 멈춤
+    node._clear_search()
+    node.search_exhausted = True
+    node._tick()
+    assert node.sent[-1].angular.z == 0.0 and 'not found after 2 turns — holding' in node.reports[-1]['detail']
 
 
 def test_search_clockwise_when_nothing_seen_then_follows_first_shapes(node):
@@ -533,7 +611,6 @@ def test_search_stops_when_yolo_status_is_stale(node):
 
 def _oblique_setup(node, x=0.0, y=4.0, bearing=-math.pi / 4):
     """가운데 슬롯(x=0) 정면 y m 에서 오른쪽 옆 슬롯(x=4) 표지 쪽(−45°) 을 목표로 SEEK."""
-    node.slot_pitch = PITCH                            # 시험 도크 간격 (실선 yaml 은 bag 추정 3.55)
     _lock_bearing(node)
     _odom(node, x, y, yaw=bearing)
     node.locked_bearing, node.seek_line_point = bearing, np.array([x, y])
@@ -620,15 +697,81 @@ def test_reposition_ignores_target_lock_closer_than_backoff_limit(node):
     assert node.phase == 'REPOSITION'
 
 
-def test_reposition_needs_a_complete_u_slot(node):
-    """보이는 ㄷ자가 없으면 우회하지 않고 이유를 남긴 채 멈춰 기다린다."""
+def test_reposition_needs_a_complete_u_slot_then_backs_off_and_rescans(node):
+    """보이는 ㄷ자가 없으면 우회는 못 짠다 — 예전엔 그대로 멈춰 섰다. 이제 이유를 남기고 온 길로
+    선수 유지 직진 후진(UNBLOCK) unblock_distance_m 뒤 SCAN 부터 다시."""
     _lock_bearing(node)
-    _odom(node, 0.0, 4.0, yaw=-math.pi / 4)
-    node.locked_bearing, node.seek_line_point = -math.pi / 4, np.array([0.0, 4.0])
+    heading = -math.pi / 4
+    _odom(node, 0.0, 4.0, yaw=heading)
+    node.locked_bearing, node.seek_line_point = heading, np.array([0.0, 4.0])
     node._add_cloud(300.0, np.array([[1.0, 2.5], [1.1, 2.4], [1.2, 2.3]]))   # 칸막이 끝 몇 점뿐
+    _scan(node, ahead_m=1.5)
+    node._tick()
+    assert node.phase == 'SEEK' and node.sent[-1].linear.x == 0.0       # 3 s 전엔 서서 본다
+    node.blocked_since -= 10.0
+    node._tick()
+    assert node.phase == 'UNBLOCK' and node.unblock_count == 1 and not node.reposition_used
+    assert 'no complete U slot in view' in node.reports[-1]['detail']
+    node._tick()
+    assert node.sent[-1].linear.x == -node.retreat_cmd
+    assert node.sent[-1].angular.z == pytest.approx(0.0, abs=1e-6)       # 선수 유지
+    back = np.array([0.0, 4.0]) - 1.0 * np.array([math.cos(heading), math.sin(heading)])
+    _odom(node, *back, yaw=heading)
+    node._tick()
+    assert node.phase == 'UNBLOCK'                                       # 1 m — 아직
+    back = np.array([0.0, 4.0]) - node.unblock_distance * np.array([math.cos(heading), math.sin(heading)])
+    _odom(node, *back, yaw=heading)
+    node._tick()
+    assert node.phase == 'SCAN' and node.sent[-1].linear.x == 0.0
+    assert 're-scanning' in node.reports[-1]['detail'] and node.unblock_count == 1
+
+
+def test_blocked_again_after_reposition_backs_off_instead_of_holding(node):
+    """우회를 이미 한 번 썼는데 또 막혀도 서 있지 않고 후진해 다시 찾는다."""
+    _lock_bearing(node)
+    node.reposition_used = True
+    _scan(node, ahead_m=1.5)
+    node._tick()
+    node.blocked_since -= 10.0
+    node._tick()
+    assert node.phase == 'UNBLOCK' and 'already repositioned once' in node.reports[-1]['detail']
+
+
+def test_unblock_gives_up_after_max_attempts_and_new_dock_resets(node):
+    _lock_bearing(node)
+    node.unblock_count = node.unblock_max
     _scan(node, ahead_m=1.5)
     node._tick()
     node.blocked_since -= 10.0
     node._tick()
     assert node.phase == 'SEEK' and node.sent[-1].linear.x == 0.0
-    assert 'no complete U slot in view' in node.reports[-1]['detail']
+    assert f'gave up after {node.unblock_max} retreats' in node.reports[-1]['detail']
+    node.reposition_used = True
+    node._on_mission_state(String(data='search'))
+    node._on_mission_state(String(data='dock'))                          # 새 도킹 — 횟수 처음부터
+    assert node.unblock_count == 0 and not node.reposition_used
+
+
+def test_reposition_drive_blocked_backs_off_then_rescans_on_time_limit(node):
+    """우회 경유점 가는 길이 막혀도 reposition_after_s 뒤 후진. 후진이 안 나가도(바람) unblock_max_s 면 SCAN."""
+    _oblique_setup(node)
+    _scan(node)
+    node._tick()
+    assert node.phase == 'REPOSITION'
+    node.reposition['stage'] = 'drive'
+    _scan(node, ahead_m=1.5)
+    node._tick()
+    assert node.phase == 'REPOSITION' and 'holding' in node.reports[-1]['detail']
+    node.reposition['blocked_since'] -= 10.0
+    node._tick()
+    assert node.phase == 'UNBLOCK' and node.reposition is None and node.reposition_used
+    node._tick()
+    assert node.sent[-1].linear.x == -node.retreat_cmd
+    node.unblock_since -= node.unblock_max_s                             # 한 자리에서 시간만 감
+    node._tick()
+    assert node.phase == 'SCAN' and node.reposition_used and node.unblock_count == 1
+
+
+def test_slot_pitch_from_yaml_is_the_measured_lidar_pitch(node):
+    """dock_slot.yaml slot_pitch_m = 라이다 실측 슬롯 중심 간격(3.99/4.06) — 표지판 간격(3.55)이 아님."""
+    assert node.slot_pitch == pytest.approx(PITCH, abs=.05)

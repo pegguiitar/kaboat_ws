@@ -270,3 +270,42 @@ def test_cmd_mux_passes_retreat_only_in_retreat_state(ros):
         assert out == [back]
     finally:
         mux.destroy_node()
+
+
+def test_dock_give_up_reverses_out_then_next_mission(ros):
+    """도킹이 2바퀴 돌아도 목표를 못 찾아 포기하면 제한 시간 전이라도 직진 후진 → search (남은 몫 이월)."""
+    rig = Rig(start_state='dock')                      # 이어 도는 실행 (dock → search → avoid)
+    try:
+        rig.complete('approach')
+        rig.odom(10.0, 0.0)
+        rig.at(100.0)
+        rig.node.on_give_up(String(data='dock: target circle not found after 2 turns'))
+        assert rig.node.phase == 'retreat' and rig.states[-1] == 'retreat'
+        assert rig.node.skipped == [('dock', '포기: target circle not found after 2 turns')]
+        rig.node.on_give_up(String(data='dock: target circle not found after 2 turns'))   # 1 s 반복분
+        assert rig.node.phase == 'retreat' and len(rig.node.skipped) == 1
+        rig.odom(7.0, 0.0)
+        rig.clock[0] += UNDOCK_PERIOD
+        rig.node.retreat_step()
+        assert rig.state == ('approach', 'search')
+        assert rig.node.deadline == pytest.approx(T0 + 240.0 + 180.0)   # dock 마감에 search 몫을 이음
+    finally:
+        rig.destroy()
+
+
+@pytest.mark.parametrize('params, signal, approach_done', [
+    ({'single_mission': True}, 'dock: lost', True),     # 단일 시험 — 넘어갈 미션 없음
+    ({'skip_on_give_up': False}, 'dock: lost', True),   # 끔 — 제한 시간까지
+    ({}, 'search: lost', True),                         # 다른 미션 이름
+    ({}, 'dock: lost', False),                          # 아직 접근 중
+])
+def test_give_up_ignored_when_it_does_not_apply(ros, params, signal, approach_done):
+    rig = Rig(start_state='dock', **params)
+    try:
+        if approach_done:
+            rig.complete('approach')
+        before = rig.state
+        rig.node.on_give_up(String(data=signal))
+        assert rig.state == before and rig.node.skipped == [] and 'retreat' not in rig.states
+    finally:
+        rig.destroy()
