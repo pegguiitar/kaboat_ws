@@ -510,3 +510,55 @@ def test_search_stops_when_yolo_status_is_stale(node):
     node._tick()
     assert node.sent[-1].angular.z == 0.0 and node.sent[-1].linear.x == 0.0
     assert node.reports[-1]['detail'] == 'YOLO stale'
+
+
+def test_blocked_without_u_slot_repositions_once_onto_target_axis(node):
+    """가운데 슬롯 4 m 앞에서 오른쪽 옆 슬롯(x=4) 목표 — 45° 비스듬해 목표 ㄷ자 한쪽 면이 안 보이고
+    칸막이에 막힘. 보이는 가운데 ㄷ자를 슬롯 간격만큼 옮겨 임시 목표 ㄷ자(x=4)·경유점(뒷벽 5 m 앞)을
+    잡고, 선회 → 전진 → 정면 선회 → SCAN 다시. 우회는 한 번만."""
+    node.slot_pitch = PITCH                            # 시험 도크 간격 (실선 yaml 은 bag 추정 3.55)
+    _lock_bearing(node)
+    yaw = -math.pi / 4
+    _odom(node, 0.0, 4.0, yaw=yaw)
+    node.locked_bearing, node.seek_line_point = yaw, np.array([0.0, 4.0])
+    node._add_cloud(300.0, _cloud((0.0, 4.0)))
+    _scan(node, ahead_m=1.5)                           # 칸막이가 앞 1.5 m
+    node._tick()
+    assert node.phase == 'SEEK' and 'ahead — holding' in node.reports[-1]['detail']
+    node.blocked_since -= 10.0                         # 3 s 넘게 막힘
+    node._tick()
+    assert node.phase == 'REPOSITION'
+    rp = node.reposition
+    assert rp['steps'] == -1                           # 가운데에서 오른쪽(−x 가 왼쪽) 한 칸
+    assert rp['target'] == pytest.approx([4.0, 0.0], abs=.2)
+    assert rp['waypoint'] == pytest.approx([4.0, node.reposition_distance], abs=.2)
+    assert rp['heading'] == pytest.approx(FACING_WALL, abs=math.radians(3))
+    _scan(node)
+    node._tick()                                       # 경유점 쪽으로 선회 (전진 0)
+    assert node.sent[-1].linear.x == 0.0 and rp['stage'] in ('turn', 'drive')
+    head = math.atan2(rp['waypoint'][1] - 4.0, rp['waypoint'][0])
+    _odom(node, 0.0, 4.0, yaw=head)
+    node._tick()
+    node._tick()
+    assert rp['stage'] == 'drive' and node.sent[-1].linear.x > 0.0
+    _odom(node, *rp['waypoint'], yaw=head)             # 경유점 도착
+    node._tick()
+    assert rp['stage'] == 'face' and node.sent[-1].linear.x == 0.0
+    _odom(node, *rp['waypoint'], yaw=FACING_WALL)      # 임시 ㄷ자 정면
+    node._tick()
+    assert node.phase == 'SCAN' and node.reposition_used
+    assert 're-scanning' in node.reports[-1]['detail']
+
+
+def test_reposition_needs_a_complete_u_slot(node):
+    """보이는 ㄷ자가 없으면 우회하지 않고 이유를 남긴 채 멈춰 기다린다."""
+    _lock_bearing(node)
+    _odom(node, 0.0, 4.0, yaw=-math.pi / 4)
+    node.locked_bearing, node.seek_line_point = -math.pi / 4, np.array([0.0, 4.0])
+    node._add_cloud(300.0, np.array([[1.0, 2.5], [1.1, 2.4], [1.2, 2.3]]))   # 칸막이 끝 몇 점뿐
+    _scan(node, ahead_m=1.5)
+    node._tick()
+    node.blocked_since -= 10.0
+    node._tick()
+    assert node.phase == 'SEEK' and node.sent[-1].linear.x == 0.0
+    assert 'no complete U slot in view' in node.reports[-1]['detail']

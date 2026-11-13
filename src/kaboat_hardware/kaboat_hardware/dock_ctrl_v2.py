@@ -52,6 +52,7 @@ import math
 import os
 import time
 from collections import deque
+from dataclasses import replace
 
 import numpy as np
 import rclpy
@@ -75,7 +76,7 @@ from kaboat_behaviors.slot_axis import scan_points
 from kaboat_behaviors.slot_dimensions import SlotDimensions
 from .dock_one_shot import (LocalGeo, fixed_route, parse_marker_order, retreat_error,
                             retreat_route, stable_bearing, stable_wall_lock,
-                            target_sight, wall_distance, wrap)
+                            straight_samples, target_sight, wall_distance, wrap)
 
 FRONT_MIN_RANGE_M = 0.8      # 이보다 가까운 점은 선체·물보라로 보고 앞 막힘 판정에서 뺀다
 FRONT_MIN_POINTS = 3
@@ -101,6 +102,13 @@ def default_slot_config():
     """kaboat_bringup/config/dock_slot.yaml (슬롯·선체 치수를 정하는 한 곳)."""
     from ament_index_python.packages import get_package_share_directory
     return os.path.join(get_package_share_directory('kaboat_bringup'), 'config', 'dock_slot.yaml')
+
+
+def load_slot_pitch(path, default=3.55):
+    """dock_slot.yaml slot_pitch_m (이웃 슬롯 중심 간격). 없으면 default — 2026-11-13 bag 추정, 실측 아님."""
+    with open(path, encoding='utf-8') as f:
+        dock = yaml.safe_load(f)['docking_ctrl']['ros__parameters']['dock']
+    return float(dock.get('slot_pitch_m', default))
 
 
 def load_slot_dimensions(path):
@@ -180,7 +188,12 @@ class DockCtrlV2(Node):
                     'lock_max_distance_m': 6.0,
                     'lock_goal_spread_m': 0.3, 'lock_normal_spread_deg': 5.0,
                     # BACKOFF
-                    'via_margin_m': 0.5, 'backoff_max_m': 3.0}
+                    'via_margin_m': 0.5, 'backoff_max_m': 3.0,
+                    # REPOSITION: SEEK 가 앞이 막힌 채 이만큼 ㄷ자를 못 잡으면 우회 (한 번만)
+                    'reposition_after_s': 3.0,
+                    # 임시 경유점: 임시 목표 ㄷ자 뒷벽에서 법선 방향 거리. ㄷ자 고정 거리(lock_max_distance_m 6)
+                    # 안이고 BACKOFF 기준(경유점 3.44 + 여유 0.5 = 3.94 m) 밖이라 다시 잠그면 바로 TO_VIA.
+                    'reposition_distance_m': 5.0, 'reposition_tolerance_m': 0.5}
         for name, value in defaults.items():
             self.declare_parameter(name, value)
         p = lambda name: self.get_parameter(name).value
@@ -241,6 +254,7 @@ class DockCtrlV2(Node):
         self.lock_max_distance = float(p('lock_max_distance_m'))
         slot_config = str(p('slot_config')).strip() or default_slot_config()
         self.dims = load_slot_dimensions(slot_config)
+        self.slot_pitch = load_slot_pitch(slot_config)
         self.slot_params = USlotParams(slot_width=self.dims.slot_width,
                                        depth=self.dims.wall_to_mouth,
                                        target_offset=float(p('slot_target_offset_m')),
@@ -250,6 +264,9 @@ class DockCtrlV2(Node):
         self.via_distance = self.dims.wall_to_mouth + self.dims.pre_entry_offset
         self.via_margin = float(p('via_margin_m'))
         self.backoff_max = float(p('backoff_max_m'))
+        self.reposition_after = float(p('reposition_after_s'))
+        self.reposition_distance = float(p('reposition_distance_m'))
+        self.reposition_tol = float(p('reposition_tolerance_m'))
         if not all(math.isfinite(v) and v > 0 for v in
                    (self.stage_radius, self.gps_timeout, self.odom_timeout,
                     self.perception_timeout,
@@ -263,7 +280,8 @@ class DockCtrlV2(Node):
                     self.seek_center, self.seek_max_update,
                     self.front_half_angle, self.cloud_window, self.lock_window,
                     self.lock_goal_spread, self.lock_normal_spread, self.lock_max_distance,
-                    self.via_margin, self.backoff_max)
+                    self.via_margin, self.backoff_max, self.reposition_after,
+                    self.reposition_distance, self.reposition_tol, self.slot_pitch)
                    ) or not math.isfinite(self.retreat_distance) or self.retreat_distance <= 3.0 \
                 or not (math.isfinite(self.camera_latency) and 0 <= self.camera_latency < 2) \
                 or not (math.isfinite(self.scan_kd) and self.scan_kd >= 0) \
@@ -310,6 +328,11 @@ class DockCtrlV2(Node):
         self.seek_line_point = None                 # 목표 방위선이 지나는 점 (odom, 마지막 시선)
         self.lock = None
         self.backoff_start = self.backoff_heading = None
+        self.blocked_since = None                   # SEEK 앞 막힘 시작 (monotonic)
+        self.reposition = None                      # 우회 계획 (임시 ㄷ자·경유점·단계)
+        self.reposition_used = False                # 이번 도킹에서 우회를 이미 했나
+        self.reposition_planned = 0.0               # 마지막 우회 계획 시도 (monotonic)
+        self.reposition_why = ''
         self.phase = 'IDLE'
         self.first_plan = self.final_plan = None
         self.route_enu = None
@@ -510,8 +533,13 @@ class DockCtrlV2(Node):
             return 'odom yaw stale or frame invalid'
         return None
 
-    def _reset_search(self, phase):
+    def _reset_search(self, phase, keep_reposition=False):
         self.phase = phase
+        self.blocked_since = None
+        self.reposition = None
+        if not keep_reposition:
+            self.reposition_used = False
+            self.reposition_why = ''
         self.complete_sent = False
         self.route_enu = None
         self.route_origin_odom = self.route_origin_enu = None
@@ -611,7 +639,7 @@ class DockCtrlV2(Node):
     PHASE_COLORS = {'IDLE': (.7, .7, .7), 'STAGE': (.8, .8, .3), 'SCAN': (1., .7, .1),
                     'SEEK': (.3, .6, 1.), 'BACKOFF': (1., .3, .3), 'TO_VIA': (.2, .9, .4),
                     'ALIGN_VIA': (.2, .9, .8), 'TO_GOAL': (.1, 1., .2), 'REVERSE': (.8, .4, 1.),
-                    'COMPLETE': (1., 1., 1.)}
+                    'COMPLETE': (1., 1., 1.), 'REPOSITION': (1., .2, 1.)}
 
     def _publish_ctrl_markers(self, detail):
         """RViz: 단계 글자·전이 기록, 지연 보상한 목표 시선, SCAN 목표/고정 방위선, SEEK ±가운데."""
@@ -669,6 +697,17 @@ class DockCtrlV2(Node):
                                            math.sin(yaw + side * self.seek_center)])
                 cone.points += [Point(x=float(xy[0]), y=float(xy[1]), z=.3),
                                 Point(x=float(end[0]), y=float(end[1]), z=.3)]
+        if self.reposition is not None:                 # 우회: 임시 목표 ㄷ자(자홍)·경유점
+            rp = self.reposition
+            way = marker(6, Marker.SPHERE, (1., .2, 1.), .45, z=.3)
+            way.pose.position.x, way.pose.position.y = map(float, rp['waypoint'])
+            n = np.asarray(rp['outward'])
+            t = np.array([-n[1], n[0]]) * self.dims.slot_width / 2
+            depth = n * self.dims.wall_to_mouth
+            c = np.asarray(rp['target'])
+            slot = marker(7, Marker.LINE_STRIP, (1., .2, 1.), .08, z=0.0)
+            slot.points = [Point(x=float(x), y=float(y), z=.15)
+                           for x, y in (c + t + depth, c + t, c - t, c - t + depth)]
         self.ctrl_markers_pub.publish(MarkerArray(markers=markers))
 
     def _slot_report(self):
@@ -798,6 +837,112 @@ class DockCtrlV2(Node):
         self._command(0, 0)
         self._report(f'U slot locked {have:.2f}m away; one-shot route fixed')
         return True, 'ok'
+
+    # ── 막히면 우회: 보이는 ㄷ자를 슬롯 간격만큼 옮겨 임시 목표 ㄷ자 → 그 축 위 경유점 ─────────
+    def _visible_u_slot(self, points, boat, yaw):
+        """목표 방위선 제한 없이, 지금 양쪽 면까지 다 보이는 ㄷ자 하나 (점수 최고). 없으면 None.
+
+        find_u_slot 은 앞방향 ±40° 안에서 도크 방향을 찾으므로 선수 기준 −80~+80° 를 20° 씩 본다.
+        """
+        params = replace(self.slot_params, target_offset=self.slot_pitch)
+        best = None
+        for offset in range(-80, 81, 20):
+            direction = (math.cos(yaw + math.radians(offset)), math.sin(yaw + math.radians(offset)))
+            slot, _ = find_u_slot(points, boat, boat, direction, params)
+            if (slot is not None and slot.wall_distance <= self.lock_max_distance
+                    and (best is None or slot.score > best.score)):
+                best = slot
+        return best
+
+    def _plan_reposition(self, xy, yaw):
+        """보이는 ㄷ자 + 목표 방위선 → 임시 목표 ㄷ자·경유점. 성공하면 True (reposition_why 에 이유)."""
+        if not self.cloud or self.locked_bearing is None or self.seek_line_point is None:
+            self.reposition_why = 'no scan cloud or target bearing'
+            return False
+        boat = self._odom_xy()
+        slot = self._visible_u_slot(np.vstack([pts for _, pts in self.cloud]), boat, yaw)
+        if slot is None:
+            self.reposition_why = 'no complete U slot in view to offset from'
+            return False
+        centre, outward = np.asarray(slot.center), np.asarray(slot.outward)
+        along = np.array([-outward[1], outward[0]])          # 뒷벽 따라
+        bearing = np.array([math.cos(self.locked_bearing), math.sin(self.locked_bearing)])
+        # 목표 방위선(seek_line_point + r·bearing)과 뒷벽 선(centre + q·along)의 교점 → q
+        matrix = np.c_[bearing, -along]
+        if abs(np.linalg.det(matrix)) < 1e-6:
+            self.reposition_why = 'target bearing parallel to the dock wall'
+            return False
+        r, q = np.linalg.solve(matrix, centre - np.asarray(self.seek_line_point))
+        steps = int(round(q / self.slot_pitch))
+        if r <= 0 or abs(q - steps * self.slot_pitch) > .4 * self.slot_pitch:
+            self.reposition_why = (f'target bearing hits the wall {q:+.1f}m from the visible slot '
+                                   f'— not a slot position')
+            return False
+        target = centre + steps * self.slot_pitch * along
+        waypoint = target + self.reposition_distance * outward
+        heading = math.atan2(-outward[1], -outward[0])        # 임시 ㄷ자를 정면으로
+        start = self._position()
+        way_enu = start + waypoint - boat                     # 위치 출처(odom/gps) 좌표로
+        try:
+            samples = straight_samples(start, way_enu)
+        except ValueError:
+            self.reposition_why = 'already at the reposition waypoint'
+            return False
+        self.reposition = dict(slot=centre, target=target, outward=outward, steps=steps,
+                               waypoint=waypoint, waypoint_enu=way_enu, heading=heading, stage='turn',
+                               plan=sampled_path(samples, spacing=.1, curvatures=np.zeros(len(samples)),
+                                                 frame_id='dock_enu'),
+                               blocked_since=None)
+        self.reposition_used = True
+        self.follower.reset()
+        self.reposition_why = (f'visible U slot shifted {steps:+d} x {self.slot_pitch:.2f}m → waypoint '
+                               f'{self.reposition_distance:.1f}m out on target axis')
+        return True
+
+    def _reposition_tick(self, xy, yaw):
+        """REPOSITION: 경유점 쪽으로 선회 → 전진(앞 막힘 검사) → 임시 ㄷ자 정면으로 선회 → SCAN."""
+        rp = self.reposition
+        way = rp['waypoint_enu']
+        distance = float(np.linalg.norm(way - xy))
+        if rp['stage'] == 'turn':
+            head = math.atan2(way[1] - xy[1], way[0] - xy[0])
+            error = wrap(head - yaw)
+            if abs(error) <= math.radians(15):
+                rp['stage'] = 'drive'
+            self._command(0, self._scan_turn(head, yaw))
+            self._report(f'reposition: turning to waypoint ({math.degrees(error):+.0f} deg, {distance:.1f}m)')
+            return
+        if rp['stage'] == 'drive':
+            if distance <= self.reposition_tol:
+                rp['stage'] = 'face'
+                self._command(0, 0)
+                self._report('reposition: at waypoint')
+                return
+            if self.scan is None or time.monotonic() - self.scan_received > self.perception_timeout:
+                self._command(0, 0)
+                self._report('reposition: scan stale — holding')
+                return
+            blocked = front_clearance(self.scan, self.front_half_angle, self.front_stop)
+            if blocked is not None:
+                self._command(0, 0)
+                self._report(f'reposition: something {blocked:.2f}m ahead — holding ({distance:.1f}m to go)')
+                return
+            step = self.follower.step(rp['plan'], xy, yaw, self.odom.twist.twist.angular.z,
+                                      thrust_ratio=self.seek_cmd, turn_ratio=self.max_turn)
+            if step.reached:
+                rp['stage'] = 'face'
+            self._command(step.linear, step.angular)
+            self._report(f'reposition: driving to waypoint, {distance:.1f}m to go')
+            return
+        error = wrap(rp['heading'] - yaw)                     # face: 임시 ㄷ자 정면
+        if abs(error) <= self.yaw_tol and abs(self.odom.twist.twist.angular.z) <= math.radians(5):
+            self._reset_search('SCAN', keep_reposition=True)  # 목표 표지가 가운데 — 다시 잠그고 SEEK
+            self.reposition_why = 'already repositioned once — holding'
+            self._command(0, 0)
+            self._report('reposition done — facing temporary U slot, re-scanning')
+            return
+        self._command(0, self._scan_turn(rp['heading'], yaw))
+        self._report(f'reposition: facing temporary U slot ({math.degrees(error):+.0f} deg)')
 
     def _start_seek(self, bearing):
         self.phase = 'SEEK'
@@ -1021,8 +1166,23 @@ class DockCtrlV2(Node):
             blocked = front_clearance(self.scan, self.front_half_angle, self.front_stop)
             if blocked is not None:
                 self._command(0, 0)
-                self._report(f'something {blocked:.2f}m ahead — holding; {wall_why}')
+                now = time.monotonic()
+                if self.blocked_since is None:
+                    self.blocked_since = now
+                note = ''
+                if (not self.reposition_used and now - self.blocked_since >= self.reposition_after
+                        and now - self.reposition_planned >= 1.0):
+                    self.reposition_planned = now
+                    if self._plan_reposition(xy, yaw):
+                        self.phase = 'REPOSITION'
+                        self._report(f'blocked {now - self.blocked_since:.1f}s without U slot — '
+                                     f'{self.reposition_why}')
+                        return
+                if self.reposition_why:
+                    note = f'; reposition: {self.reposition_why}'
+                self._report(f'something {blocked:.2f}m ahead — holding; {wall_why}{note}')
                 return
+            self.blocked_since = None
             if travelled >= self.seek_max_travel - self.via_tol:
                 self._command(0, 0)
                 self._report(f'no U slot within {self.seek_max_travel:.1f}m — holding; {wall_why}')
@@ -1034,6 +1194,9 @@ class DockCtrlV2(Node):
             self._report(f'seeking {math.degrees(self.locked_bearing):.1f} deg '
                          f'({"centred" if centred else f"centring {math.degrees(error):+.1f} deg"}), '
                          f'{travelled:.1f}m; {sight_why}; {wall_why}')
+            return
+        if self.phase == 'REPOSITION':
+            self._reposition_tick(xy, yaw)
             return
         if self.phase == 'BACKOFF':
             have, need = self._via_room(self.lock)
