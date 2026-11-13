@@ -10,7 +10,8 @@ from kaboat_behaviors.los_controller import BSPLINE_TRACK_YAW_KD, BSPLINE_TRACK_
 from kaboat_behaviors import station_keeping
 from kaboat_behaviors.station_keeping import (
     Buoy, StationFsm, StationMap, StationParams, anchor_command, choose_entry_gate,
-    entry_target, estimate_center, find_buoys, square_clearance, square_corners, track_gate)
+    detour_target, entry_target, estimate_center, exit_waypoints, find_buoys, innermost_point,
+    select_corners, square_clearance, square_corners, track_gate)
 from kaboat_behaviors.waypoint_controller import (
     WaypointController, WaypointParams, waypoint)
 
@@ -24,14 +25,14 @@ RANGE_MAX = 20.0
 SHORE = 15.0    # 부표에 안 맞은 빔은 15 m 밖 둑에 맞는다 (무반사 inf 빔은 지도가 안 씀)
 
 
-def scan(lidar_xy, yaw, buoys, radius=BUOY_RADIUS, noise=0.0, rng=None):
+def scan(lidar_xy, yaw, buoys, radius=BUOY_RADIUS, noise=0.0, rng=None, beams=BEAMS):
     """원 기둥 부표에 대한 2D 레이캐스트 → ranges (부표에 안 맞으면 SHORE).
 
     noise: 빔 중 이 비율을 0.8~6 m 무작위 거리 반사(해수면 노이즈)로 바꾼다.
     """
-    ranges = np.full(BEAMS.size, SHORE)
+    ranges = np.full(beams.size, SHORE)
     ox, oy = lidar_xy
-    for k, a in enumerate(BEAMS):
+    for k, a in enumerate(beams):
         dx, dy = math.cos(yaw + a), math.sin(yaw + a)
         for bx, by in buoys:
             fx, fy = ox - bx, oy - by
@@ -45,14 +46,14 @@ def scan(lidar_xy, yaw, buoys, radius=BUOY_RADIUS, noise=0.0, rng=None):
                 ranges[k] = t
     ranges[ranges > RANGE_MAX] = np.inf
     if noise > 0.0:
-        flip = rng.random(BEAMS.size) < noise
+        flip = rng.random(beams.size) < noise
         ranges[flip] = rng.uniform(0.8, 6.0, int(flip.sum()))
     return ranges
 
 
-def add(target, lidar_xy, yaw, buoys, **scan_kw):
-    args = (scan(lidar_xy, yaw, buoys, **scan_kw), -FOV, BEAMS[1] - BEAMS[0], 0.05, RANGE_MAX,
-            lidar_xy, yaw)
+def add(target, lidar_xy, yaw, buoys, beams=BEAMS, **scan_kw):
+    args = (scan(lidar_xy, yaw, buoys, beams=beams, **scan_kw), float(beams[0]),
+            float(beams[1] - beams[0]), 0.05, RANGE_MAX, lidar_xy, yaw)
     if isinstance(target, StationMap):
         target.integrate_scan(*args)
     else:
@@ -116,25 +117,25 @@ def test_sea_clutter_alone_never_becomes_a_buoy():
     assert find_buoys(m) == []
 
 
-def test_buoys_outside_search_radius_are_ignored():
+def test_extra_object_off_the_square_is_not_a_corner():
+    # 사각형 동쪽 5 m 밖 물체도 후보(15 m 안)지만, 묶음은 기록 지점에 가까운 네 꼭짓점
     m = StationMap(CENTER, StationParams())
-    far = (CENTER[0] + 5.0, CENTER[1])         # 반경 4 m 밖
+    far = (CENTER[0] + 5.0, CENTER[1])
     for k in range(36):
         add(m, CENTER, math.radians(10 * k), SQUARE + [far])
-    assert len(find_buoys(m)) == 4
-    assert len(find_buoys(m, near=CENTER)) == 4   # 추정 중심 3 m 반경으로도 5 m 밖은 제외
+    found = find_buoys(m)
+    assert len(found) == 4
+    assert all(min(math.hypot(b.x - x, b.y - y) for x, y in SQUARE) < 0.25 for b in found)
 
 
 def test_square_drifted_off_record_keeps_all_four_buoys():
     # 사각형이 기록 지점에서 (2.3, 1.0) m 밀림 → 먼 모서리 (11.5, 1.5) 는 기록 지점에서 4.55 m.
-    # 기록 지점 4 m 만 보면 3개뿐이고 출구를 엉뚱한 변으로 잡았다.
+    # 예전 4 m 반경은 3개뿐이라 출구를 엉뚱한 변으로 잡았다 — 이제 처음부터 네 개.
     record = (CENTER[0] - 2.3, CENTER[1] - 1.0)
     fsm = StationFsm(record, StationParams())
     for k in range(36):
         add(fsm, CENTER, math.radians(10 * k), SQUARE)
-    assert len(find_buoys(fsm.map)) == 3
-    fsm.step(CENTER, 0.0, 0.0, 0.0)               # 부표 3개 → 추정 중심 = 대각선 중점
-    d = fsm.step(CENTER, 0.0, 0.0, 0.1)           # 추정 중심 3 m 안 → 네 번째도 후보
+    d = fsm.step(CENTER, 0.0, 0.0, 0.0)
     assert len(d.buoys) == 4 and d.center_kind == 'four'
     for bx, by in SQUARE:
         assert min(math.hypot(b.x - bx, b.y - by) for b in d.buoys) < 0.25
@@ -145,19 +146,24 @@ def test_square_drifted_off_record_keeps_all_four_buoys():
 P = StationParams()
 
 
-def test_center_from_four_three_and_diagonal():
+def test_center_is_the_innermost_point_of_the_corners():
     c, kind = estimate_center(SQUARE, (3.0, 0.0), P)
-    assert kind == 'four' and c == pytest.approx(CENTER)
+    assert kind == 'four' and c == pytest.approx(CENTER, abs=0.03)
+    # 3개: 삼각형의 가장 안쪽 점 — 사각형 안이고 세 변에서 같은 거리
     c, kind = estimate_center(SQUARE[:3], (3.0, 0.0), P)
-    assert kind == 'three' and c == pytest.approx(CENTER)
+    tri = square_corners(SQUARE[:3])
+    assert kind == 'three' and square_clearance(c, tri) == pytest.approx(
+        innermost_point(SQUARE[:3])[1], abs=0.02)
+    assert square_clearance(c, SQUARE_ORDERED) > 0.8
+    # 2개는 변인지 대각선인지 모른다 — 대각선이어도 중점 근처라 사각형 안
     c, kind = estimate_center([SQUARE[0], SQUARE[3]], (3.0, 0.0), P)
-    assert kind == 'diagonal' and c == pytest.approx(CENTER)
+    assert kind == 'pair' and square_clearance(c, SQUARE_ORDERED) > 0.0
 
 
 def test_center_from_first_side_is_beyond_it_and_hint_keeps_side():
     near = SQUARE[:2]                          # x=8.5 두 개 (배는 x=3 에서 접근)
     c, kind = estimate_center(near, (3.0, 0.0), P)
-    assert kind == 'side' and c == pytest.approx(CENTER)
+    assert kind == 'pair' and c == pytest.approx(CENTER)   # 간격 3 m → 안쪽 min(1.5, 1.5)
     # 배가 안으로 들어가 변을 지난 뒤에도 직전 중심 쪽을 유지 (배 반대쪽으로 뒤집히지 않음)
     c, _ = estimate_center(near, (10.0, 0.0), P, hint_xy=CENTER)
     assert c == pytest.approx(CENTER)
@@ -171,22 +177,18 @@ def _same_corners(got, want):
     return sorted(map(tuple, np.round(got, 6))) == sorted(map(tuple, np.round(want, 6)))
 
 
-def test_square_corners_fill_missing_buoys():
-    assert _same_corners(square_corners(SQUARE, CENTER, P), SQUARE)
-    for missing in range(4):                    # 3개 → 빠진 꼭짓점을 평행사변형으로
+def test_square_is_only_what_was_seen():
+    # 예전엔 3개면 평행사변형, 2개면 공칭 3 m 로 채웠다 — 비정형 사각형에서 틀린 영역이 돼
+    # 거짓 완료가 났다 (dock2 2차). 이제 보이는 꼭짓점 다각형만, 3개면 삼각형(보수적)
+    assert _same_corners(square_corners(SQUARE), SQUARE)
+    for missing in range(4):
         seen = [q for k, q in enumerate(SQUARE) if k != missing]
-        c, _ = estimate_center(seen, (3.0, 0.0), P)
-        assert _same_corners(square_corners(seen, c, P), SQUARE)
-    side = SQUARE[:2]                           # 한 변 → 중심 쪽 맞은편 변
-    assert _same_corners(square_corners(side, CENTER, P), SQUARE)
-    diagonal = [SQUARE[0], SQUARE[3]]           # 대각선 → 90° 돌린 대각선
-    assert _same_corners(square_corners(diagonal, CENTER, P), SQUARE)
-    assert square_corners([SQUARE[0]], CENTER, P) is None
-    assert square_corners(SQUARE, None, P) is None
+        assert _same_corners(square_corners(seen), seen)
+    assert square_corners(SQUARE[:2]) is None and square_corners([SQUARE[0]]) is None
 
 
 def test_square_clearance_is_inward_distance_to_nearest_side():
-    sq = square_corners(SQUARE, CENTER, P)
+    sq = square_corners(SQUARE)
     assert square_clearance(CENTER, sq) == pytest.approx(1.5)
     assert square_clearance((11.0, 0.3), sq) == pytest.approx(0.5)
     assert square_clearance((12.0, 0.0), sq) == pytest.approx(-0.5)      # 밖
@@ -197,10 +199,10 @@ def test_square_clearance_is_inward_distance_to_nearest_side():
 
 @pytest.fixture
 def exact_buoys(monkeypatch):
-    """전용 지도 대신 부표 위치를 그대로 준다 (지도 추정의 수 cm 치우침 없이 판정만 본다)."""
+    """전용 지도 대신 부표 후보를 그대로 준다 (지도 추정의 수 cm 치우침 없이 판정만 본다)."""
     def use(points):
-        monkeypatch.setattr(station_keeping, 'find_buoys',
-                            lambda _map, _near=None: [Buoy(x, y, 1.0) for x, y in points])
+        monkeypatch.setattr(station_keeping, 'candidate_buoys',
+                            lambda *_args, **_kw: [Buoy(x, y, 1.0) for x, y in points])
     return use
 
 
@@ -231,13 +233,29 @@ def test_hold_completes_only_inside_square_with_margin(exact_buoys):
     assert d.inside and fsm.completed and _same_corners(d.square, SQUARE)
 
 
-def test_hold_uses_square_completed_from_three_buoys(exact_buoys):
+def test_hold_with_three_buoys_waits_then_judges_inside_the_triangle(exact_buoys):
+    # 3개면 three_corner_wait 동안 네 번째를 찾고(완료 판정 안 함), 그 뒤에야 삼각형으로 판정
     exact_buoys(SQUARE[:3])                      # (11.5, 1.5) 안 보임
     fsm = _fsm_holding()
-    d = _hold_until_complete(fsm, (10.95, 0.95))  # 안 보이는 모서리 쪽 — 두 변까지 0.55 m
+    d = _hold_until_complete(fsm, (9.4, -0.6))   # 삼각형 세 변에서 0.85 m 이상이지만 아직 기다림
+    assert not d.inside and not fsm.completed and d.stage == 'LOOK'
+    t0 = P.three_corner_wait
+    for k in range(80):
+        d = fsm.step((10.3, 0.3), 0.0, 0.0, t0 + k * 0.1)   # 사각형 안이지만 삼각형 밖 (보수적)
     assert not d.inside and not fsm.completed
-    d = _hold_until_complete(fsm, (10.3, 0.3))
+    for k in range(80):
+        d = fsm.step((9.4, -0.6), 0.0, 0.0, t0 + 10.0 + k * 0.1)
     assert d.inside and fsm.completed
+
+
+def test_two_buoys_never_hold_or_complete(exact_buoys):
+    # dock2 2차: 서·남 두 큐브로 지은 사각형에서 거짓 '위치유지 달성'. 이제 2개면 HOLD 안 감
+    exact_buoys(SQUARE[:2])
+    fsm = StationFsm(CENTER, StationParams())
+    for k in range(80):
+        d = fsm.step(CENTER, 0.0, 0.0, k * 0.1)
+    assert d.phase == 'ENTER' and d.center_kind == 'pair' and d.square is None
+    assert not fsm.completed
 
 
 def test_hold_follows_square_that_drifted_off_recorded_center(exact_buoys):
@@ -262,12 +280,14 @@ def test_entry_gate_is_nearest_side_and_entry_aligns_first():
     assert gate.normal == pytest.approx((1.0, 0.0))
     # 수직이등분선에서 3 m 옆 → 입구 앞 정렬점 먼저
     target, stage = entry_target((5.0, 3.0), gate, CENTER, P)
-    assert stage == 'ALIGN_GATE' and target == pytest.approx((7.5, 0.0))
+    assert stage == 'ALIGN_GATE' and target == pytest.approx((8.5 - P.pre_gate_distance, 0.0))
     # 이등분선 위면 바로 중심
     target, stage = entry_target((6.0, 0.2), gate, CENTER, P)
     assert stage == 'THROUGH' and target == pytest.approx(CENTER)
-    # 대각선 쌍만 있으면 입구 없음
-    assert choose_entry_gate([SQUARE[0], SQUARE[3]], (3.0, 0.0), P) is None
+    # 2개면 그 쌍이 입구 — 대각선이어도 그 사이는 사각형 안이라 지나도 된다
+    assert choose_entry_gate([SQUARE[0], SQUARE[3]], (3.0, 0.0), P) is not None
+    # 배가 이미 사각형 안이면 입구 없음 (중심으로 바로)
+    assert choose_entry_gate(SQUARE, CENTER, P) is None
 
 
 def test_gate_tracks_bobbing_buoys_and_keeps_inward_side():
@@ -322,7 +342,9 @@ def test_invalid_params_rejected():
     with pytest.raises(ValueError):
         StationParams(min_side=3.5, side_length=3.0)
     with pytest.raises(ValueError):
-        StationParams(inside_margin=1.5)            # 한 변 3 m 의 절반 이상이면 들어갈 곳이 없음
+        StationParams(inside_margin=2.6)            # 공칭 변(5 m)의 절반 이상이면 들어갈 곳이 없음
+    with pytest.raises(ValueError):
+        StationParams(max_side=4.0, side_length=5.0)
     with pytest.raises(ValueError):
         StationParams(inside_margin=-0.1)
 
@@ -422,11 +444,260 @@ def test_fallback_to_goal_when_no_buoys_seen():
     p = StationParams()
     fsm = StationFsm(CENTER, p)
     d = fsm.step((9.5, 0.0), 0.3, 0.0, 0.0)
+    assert d.phase == 'SEARCH'                      # search_timeout 전엔 부표를 더 찾는다
+    d = fsm.step((9.5, 0.0), 0.3, 0.0, p.search_timeout)
     assert d.phase == 'HOLD' and d.center_kind == 'goal'
+    t0 = p.search_timeout
     for k in range(1, 52):
-        d = fsm.step((9.5, 0.0), 0.3, 0.0, k * 0.1)
+        d = fsm.step((9.5, 0.0), 0.3, 0.0, t0 + k * 0.1)
         if d.completed_now:
             break
     assert d.completed_now and fsm.completed
     # 완료는 한 번만
-    assert not fsm.step((9.5, 0.0), 0.3, 0.0, 6.0).completed_now
+    assert not fsm.step((9.5, 0.0), 0.3, 0.0, t0 + 6.0).completed_now
+
+
+# ── 부표 검출 노드 결과 (/detections/buoys) ─────────────────
+
+def test_detected_buoys_fill_in_when_the_map_has_none_yet():
+    # 조류에 밀린 사각형: 전용 지도(6 m 안)에는 아직 없지만 검출 노드가 15 m 밖에서 잡음
+    fsm = StationFsm(CENTER, StationParams())
+    far_boat = (CENTER[0] - 12.0, CENTER[1])
+    d = fsm.step(far_boat, 0.0, 0.0, 0.0)
+    assert d.buoys == [] and fsm.phase == 'SEARCH'
+    near_side = [(8.5, -1.5, 0.9), (8.5, 1.5, 0.8)]           # 배 쪽 한 변
+    d = fsm.step(far_boat, 0.0, 0.0, 0.1, detected=near_side)
+    assert len(d.buoys) == 2 and all(b.source == 'detector' for b in d.buoys)
+    assert fsm.phase == 'ENTER' and d.gate is not None       # 두 개로 입구 고정 → 진입
+
+
+def test_map_buoys_come_first_and_duplicates_merge():
+    m = StationMap(CENTER, StationParams())
+    for k in range(36):
+        add(m, CENTER, math.radians(10 * k), SQUARE)
+    # 검출 노드가 같은 네 부표를 0.3 m 어긋나게 + 반경 밖 하나 더
+    detected = [(x + 0.3, y, 0.99) for x, y in SQUARE] + [(CENTER[0] + 6.0, CENTER[1], 1.0)]
+    found = find_buoys(m, detected=detected)
+    assert len(found) == 4 and all(b.source == 'map' for b in found)
+
+
+def test_detected_buoys_complete_a_partial_square():
+    m = StationMap(CENTER, StationParams())
+    for k in range(18):                                       # 앞쪽 두 부표만 지도에
+        add(m, (CENTER[0] - 4.0, CENTER[1]), math.radians(-10 + 20 * (k % 2)), SQUARE[:2])
+    detected = [(x, y, 0.9) for x, y in SQUARE[2:]]
+    found = find_buoys(m, detected=detected)
+    assert len(found) == 4
+    assert sorted(b.source for b in found) == ['detector', 'detector', 'map', 'map']
+
+
+def test_detected_buoys_can_be_turned_off():
+    fsm = StationFsm(CENTER, StationParams(use_detected_buoys=False))
+    d = fsm.step((CENTER[0] - 12.0, CENTER[1]), 0.0, 0.0, 0.0,
+                 detected=[(8.5, -1.5, 0.9), (8.5, 1.5, 0.9)])
+    assert d.buoys == [] and fsm.phase == 'SEARCH'
+
+
+# ── 2026-11-13 dock2 bag 연습장: 비정형 사각형·기록 지점 밖·밀린 큐브·도크 구조물 ─────────
+
+# 큐브 네 개 (bag 의 검출 노드 추적 평균, 서·북·동·남) — 변 3.9~6.3 m, 내각 60~152°
+DOCK2 = [(152.6, -29.4), (157.05, -24.95), (161.0, -29.7), (157.2, -30.6)]
+DOCK2_CENTER_REC = (155.16, -31.21)      # 기록된 station_center — 사각형 밖 1.1 m
+DOCK2_END = (159.83, -33.02)             # station_end (출구)
+DOCK2_OTHERS = [(160.7, -37.4), (164.7, -38.0), (159.8, -40.2)]   # 남동쪽 도크 쪽 물체 (검출 노드)
+PUSHED_WEST = (153.55, -30.18)           # 배에 밀린 서쪽 큐브가 새로 잡힌 자리 (옛 자리와 1.2 m)
+
+
+def _buoys(points, strength=1.0):
+    return [Buoy(x, y, strength) for x, y in points]
+
+
+def test_dock2_corners_are_the_four_cubes_even_with_clutter_and_a_wrong_record():
+    cands = _buoys(DOCK2 + [PUSHED_WEST] + DOCK2_OTHERS)
+    # 기록 지점이 2 m 씩 (2.8 m) 더 틀려도 (무게중심에서 5.9 m — 부표가 각각 2 m 밀려도 무게중심은
+    # 기록에서 5.1 m 안) 같은 묶음. 그보다 많이 틀리면 옛·새 자리를 둘 다 넣은 묶음과 겨루게 된다
+    # (far_free 5 m 넘으면 감점) — 기록은 그날 사각형 가운데에서
+    for anchor in (DOCK2_CENTER_REC, (DOCK2_CENTER_REC[0] - 2.0, DOCK2_CENTER_REC[1] - 2.0)):
+        got = select_corners(cands, anchor, P)
+        assert len(got) == 4
+        # 큐브마다 꼭짓점 하나 (서쪽은 옛 자리든 밀린 새 자리든)
+        for cube in DOCK2:
+            assert sum(1 for b in got if math.dist((b.x, b.y), cube) < 1.3) == 1
+        assert not any((b.x, b.y) in DOCK2_OTHERS for b in got)
+    # 옛·새 자리 둘이 같은 꼭짓점으로 두 번 뽑히지 않는다 (간격 1.2 m < min_side)
+    got = select_corners(cands, DOCK2_CENTER_REC, P)
+    assert not ({(b.x, b.y) for b in got} >= {DOCK2[0], PUSHED_WEST})
+
+
+def test_dock2_center_is_inside_with_margin_and_record_is_outside():
+    poly = square_corners(DOCK2)
+    c, kind = estimate_center(DOCK2, (145.0, -27.0), P)
+    assert kind == 'four' and square_clearance(c, poly) > 2.1        # 가장 안쪽 ≈ 2.2 m
+    assert square_clearance(np.mean(DOCK2, axis=0), poly) < 1.9      # 평균은 1.8 m
+    assert square_clearance(DOCK2_CENTER_REC, poly) < -1.0           # 기록 지점은 밖
+
+
+def test_dock2_second_attempt_no_false_completion(exact_buoys):
+    # 15:15:52~57: 서·남 두 큐브만으로 '위치유지 달성'. 그 자리는 실제 사각형 변에서 0.16 m
+    exact_buoys([DOCK2[0], DOCK2[3]])
+    fsm = StationFsm(DOCK2_CENTER_REC, StationParams())
+    for k in range(60):
+        d = fsm.step((154.5, -29.73), -1.8, 0.0, k * 0.1)
+    assert d.phase != 'HOLD' and not fsm.completed and d.square is None
+    exact_buoys(DOCK2)                                 # 북·동도 보이면 실제 사각형으로
+    for k in range(60, 120):
+        d = fsm.step((154.5, -29.73), -1.8, 0.0, k * 0.1)
+    assert len(d.buoys) == 4 and d.center_kind == 'four'
+    assert square_clearance((154.5, -29.73), d.square) < P.inside_margin   # 그 자리는 완료 아님
+    assert math.dist(d.center, np.mean(DOCK2, axis=0)) < 0.6
+
+
+def test_detour_goes_around_a_buoy_on_the_way_and_stops_short_of_a_buoy_target():
+    boat, target = (145.5, -27.65), DOCK2_CENTER_REC
+    west = DOCK2[0]                                    # dock2 1차: 기록 지점 쪽 길 위의 서쪽 큐브
+    via = detour_target(boat, target, [west], P)
+    assert via != pytest.approx(target)
+    assert math.dist(via, west) >= P.avoid_clearance
+
+    def seg_dist(p, a, b):
+        p, a, b = (np.asarray(v, float) for v in (p, a, b))
+        t = np.clip(np.dot(p - a, b - a) / np.dot(b - a, b - a), 0.0, 1.0)
+        return float(np.linalg.norm(p - (a + t * (b - a))))
+    assert seg_dist(west, boat, via) >= P.avoid_clearance * 0.99
+    # 길에서 먼 부표·배 뒤 부표는 무시
+    assert detour_target(boat, target, [(150.0, -20.0), (140.0, -26.0)], P) == pytest.approx(target)
+    # 목표가 부표에 붙어 있으면 배 쪽 target_clearance 앞에서 멈춘다 (stop 을 주면 그 거리)
+    stop = detour_target(boat, (152.8, -29.4), [west], P)
+    assert math.dist(stop, west) == pytest.approx(P.target_clearance, abs=1e-6)
+    stop = detour_target(boat, (152.8, -29.4), [west], P, stop=P.standoff)
+    assert math.dist(stop, west) == pytest.approx(P.standoff, abs=1e-6)
+
+
+def test_map_recenter_keeps_what_was_seen():
+    m = StationMap(CENTER, StationParams())
+    for k in range(36):
+        add(m, CENTER, math.radians(10 * k), SQUARE)
+    before = sorted((round(b.x, 1), round(b.y, 1)) for b in find_buoys(m))
+    assert m.recenter((CENTER[0] + 3.04, CENTER[1] - 1.97))
+    assert m.center == pytest.approx((CENTER[0] + 3.0, CENTER[1] - 2.0))
+    after = sorted((round(b.x, 1), round(b.y, 1)) for b in find_buoys(m, near=CENTER))
+    assert after == before
+    assert not m.recenter(m.center)
+
+
+def test_one_buoy_seen_at_the_record_heads_toward_it_slowly(exact_buoys):
+    # 사각형이 통째로 밀려 기록 지점에 없고 큐브 하나만 보이면 그 방위로 standoff 앞까지
+    exact_buoys([(CENTER[0] + 7.0, CENTER[1] + 2.0)])
+    fsm = StationFsm(CENTER, StationParams())
+    d = fsm.step(CENTER, 0.0, 0.0, 0.0)
+    assert d.phase == 'SEARCH' and d.stage == 'TO_BUOY' and d.kind == 'waypoint'
+    assert math.dist(d.target, (CENTER[0] + 7.0, CENTER[1] + 2.0)) == pytest.approx(P.standoff)
+    far = fsm.step((CENTER[0] - 10.0, CENTER[1]), 0.0, 0.0, 0.1)   # 아직 멀면 기록 지점으로
+    assert far.stage == 'TO_GOAL' and far.target == pytest.approx(CENTER)
+
+
+def test_dock2_exit_goes_through_a_side_away_from_the_cubes():
+    c, _ = estimate_center(DOCK2, (145.0, -27.0), P)
+    route = exit_waypoints(_buoys(DOCK2), c, DOCK2_END, P)
+    assert len(route) == 3 and route[-1] == DOCK2_END     # 변 안쪽 점 → 변 밖 경유점 → 출구
+
+    def seg_dist(p, a, b):
+        p, a, b = (np.asarray(v, float) for v in (p, a, b))
+        t = np.clip(np.dot(p - a, b - a) / np.dot(b - a, b - a), 0.0, 1.0)
+        return float(np.linalg.norm(p - (a + t * (b - a))))
+    # 중심 → 변 안쪽 점 → 변 밖 경유점: 큐브에서 1.5 m 넘게 (dock2 2차는 남쪽 큐브 0.42 m)
+    legs = [(c, route[0]), (route[0], route[1])]
+    assert min(seg_dist(q, a, b) for q in DOCK2 for a, b in legs) > 1.5
+    assert square_clearance(route[0], square_corners(DOCK2)) > 1.0      # 안쪽 점은 사각형 안
+
+
+CUBE_RADIUS = 0.3        # 파란 큐브 한 변 약 0.5~0.6 m
+# 실물 라이다: 선미 120° 가림(onboard_scan_filter 120~240°) → 앞 ±120° (위 FOV ±60° 보다 넓다)
+WIDE_BEAMS = np.linspace(-math.radians(120.0), math.radians(120.0), 481)
+
+
+def run_dock2(start_xy, start_yaw, record_xy, shift=(0.0, 0.0), seed=0, seconds=240.0,
+              current=(0.03, -0.02), tau=2.8, detector=True):
+    """dock2 큐브 배치(+shift 만큼 통째로 밀림)에서 폐루프. 검출 노드는 15 m 안 부표·도크 물체를
+    85 % 확률로 낸다. 반환: (단계 순서, 완료 시각, 끝 위치, 큐브까지 최소 중심거리, fsm, 사각형)."""
+    rng = np.random.default_rng(seed)
+    p = StationParams()
+    cubes = [(x + shift[0], y + shift[1]) for x, y in DOCK2]
+    fsm = StationFsm(record_xy, p)
+    wp = WaypointController(WAYPOINT_PARAMS)
+    x, y, yaw = start_xy[0], start_xy[1], start_yaw
+    u = r = 0.0
+    dt = 0.1
+    min_clear, phases, done_at = math.inf, [], None
+    for k in range(int(seconds / dt)):
+        t = k * dt
+        bob = [(bx + 0.2 * math.sin(0.6 * t + i), by + 0.2 * math.cos(0.4 * t + 2 * i))
+               for i, (bx, by) in enumerate(cubes)]
+        seen = [b for b in bob if rng.random() > 0.2]
+        lidar = (x + 0.4 * math.cos(yaw), y + 0.4 * math.sin(yaw))
+        add(fsm, lidar, yaw, seen + DOCK2_OTHERS, beams=WIDE_BEAMS, radius=CUBE_RADIUS,
+            noise=0.03, rng=rng)
+        detected = None
+        if detector:
+            detected = [(bx + rng.normal(0, 0.1), by + rng.normal(0, 0.1), 0.9)
+                        for bx, by in bob + DOCK2_OTHERS
+                        if math.hypot(bx - x, by - y) < 15.0 and rng.random() < 0.85]
+        d = fsm.step((x, y), yaw, r, t, speed=u, detected=detected)
+        if not phases or phases[-1] != d.phase:
+            phases.append(d.phase)
+        if d.completed_now:
+            done_at = t
+        if d.kind == 'waypoint':
+            wp.set_goal(waypoint(d.target[0], d.target[1], None, d.thrust_ratio))
+            s = wp.step(x, y, yaw, r, t, slow_radius=d.slow_radius)
+            lin, ang = s.linear, s.angular
+        else:
+            lin, ang = d.linear, d.angular
+        u += (3.0 * lin - u) * dt / tau
+        r += (2.0 * ang - r) * dt / min(tau, 1.4)
+        yaw += r * dt
+        x += (u * math.cos(yaw) + current[0]) * dt
+        y += (u * math.sin(yaw) + current[1]) * dt
+        min_clear = min(min_clear, *(math.hypot(x - bx, y - by) for bx, by in bob))
+        if done_at is not None and t > done_at + 10.0:
+            break
+    return phases, done_at, (x, y), min_clear, fsm, square_corners(cubes)
+
+
+@pytest.mark.parametrize('start, yaw, shift, seed', [
+    ((145.5, -27.65), math.radians(-38), (0.0, 0.0), 0),     # dock2 1차: 서쪽 큐브가 기록 지점 쪽 길 위
+    ((155.15, -24.48), math.radians(-76), (0.0, 0.0), 1),    # dock2 2차: 북쪽에서 내려옴
+    ((145.5, -27.65), math.radians(-38), (3.0, -2.0), 2),    # 사각형이 통째로 3.6 m 밀림
+    ((145.5, -27.65), math.radians(-38), (-4.0, 4.0), 3),    # 반대로 5.7 m — 기록 지점이 사각형 밖 멀리
+])
+def test_dock2_closed_loop_finds_the_square_holds_and_never_touches_a_cube(start, yaw, shift, seed):
+    phases, done_at, final, min_clear, fsm, poly = run_dock2(start, yaw, DOCK2_CENTER_REC,
+                                                             shift=shift, seed=seed)
+    # 검출 노드가 처음부터 꼭짓점 2개 이상을 보면 첫 틱에 바로 ENTER (SEARCH 는 안 남을 수 있다)
+    assert phases[-1] == 'HOLD' and 'ENTER' in phases and done_at is not None
+    assert square_clearance(final, poly) >= P.inside_margin      # 완료 뒤 10 s 도 안
+    assert min_clear > CUBE_RADIUS + 0.6                          # 선체 반폭 + 여유로 큐브와 안 닿음
+    assert fsm.center_kind == 'four'
+    assert all(min(math.hypot(b.x - x, b.y - y) for x, y in poly) < 0.6 for b in fsm.corners)
+
+
+@pytest.mark.parametrize('start, yaw, seed', [
+    ((145.5, -27.65), math.radians(-38), 0),
+    ((155.15, -24.48), math.radians(-76), 1),   # 북쪽 큐브가 처음부터 옆 — 삼각형(서·남·동)이 얇다
+])
+def test_dock2_map_only_still_completes_without_touching(start, yaw, seed):
+    # 부표 검출 노드가 없을 때(전용 지도만). 얇은 삼각형이면 대각선 건너편을 목표로, 선수를 안 보이는
+    # 꼭짓점 쪽으로 돌려 찾는다 (예전 판단이면 남쪽 큐브 0.4 m 옆에서 버텼다)
+    phases, done_at, final, min_clear, fsm, poly = run_dock2(start, yaw, DOCK2_CENTER_REC,
+                                                             seed=seed, detector=False)
+    assert done_at is not None and fsm.center_kind == 'four'
+    assert square_clearance(final, poly) >= P.inside_margin
+    assert min_clear > CUBE_RADIUS + 0.6
+
+
+def test_gate_buoys_count_as_obstacles_unless_the_path_goes_between_them():
+    from kaboat_behaviors.station_keeping import EntryGate, passes_between
+    gate = EntryGate((0.0, -2.0), (0.0, 2.0), (1.0, 0.0))
+    assert passes_between((-3.0, 0.0), (3.0, 0.5), gate, P)          # 가운데로
+    assert not passes_between((-3.0, 2.3), (3.0, 2.3), gate, P)      # 부표 바깥 연장선 위
+    assert not passes_between((-3.0, 1.6), (3.0, 1.8), gate, P)      # 부표 0.3 m 옆

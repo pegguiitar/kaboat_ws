@@ -1,16 +1,19 @@
 """station_keeper — 위치유지 behavior. 부표 4개 사각형 안에 들어가 hold_time 유지.
 
-경기: 약 3 m × 3 m 사각형 꼭짓점에 부표 4개(흔들림). 그 사이에 들어가 유지하면 된다.
-계산은 station_keeping.py(ROS 무의존)에 있고, 이 노드는 입출력만 맡는다.
+경기: 사각형 꼭짓점에 부표 4개(흔들림). 그 사이에 들어가 유지하면 된다. 2026-11-13 dock2 bag
+연습장은 변 3.9~6.3 m 의 비정형 사각형이고 기록 지점이 사각형 밖이었다 — 크기·모양을 정해 두지
+않고 보이는 부표 묶음으로 잡는다. 계산은 station_keeping.py(ROS 무의존)에 있고, 이 노드는 입출력만.
 
-  SEARCH  부표 2개 전 — /mission/goal(station_end, 사각형 중심에 기록)로 천천히 접근
-  ENTER   처음 보인 한 변(가장 가까운 부표 쌍)을 입구로 고정 → 입구 앞 정렬점 → 중심
+  SEARCH  꼭짓점 2개 전 — 기록 지점(station_center, 없으면 station_end)으로 서행, 와서도 없으면
+          보이는 부표 방위로 standoff(3 m) 앞까지. 가는 길의 아는 부표는 옆으로 돌아간다
+  ENTER   배 쪽 변(꼭짓점 다각형 변)을 입구로 → 입구 앞 정렬점(2 m) → 중심
           (가상 앵커 제어로 주행 — 해류에 밀려 부표에 붙지 않게)
-  HOLD    중심에 가상 앵커(거리 비례 목표 속도 + /odom 속도로 후진 제동, 선수각 PD —
-          선수각은 HOLD 진입 때 방향 유지).
-          배 중심이 부표 사각형 안(각 변에서 inside_margin 0.6 m 안쪽)에 hold_time(5 s)
-          연속이면 /mission/complete 1회 (2026-11-13 경기 조건 — 예전엔 중심 1 m 반경).
-          사각형은 매 틱 보이는 부표로 다시 잡으므로 부표가 흔들리거나 밀려도 따라간다.
+  HOLD    꼭짓점 3개 이상일 때만. 다각형의 가장 안쪽 점에 가상 앵커(거리 비례 목표 속도 +
+          /odom 속도로 후진 제동, 선수각 PD — 선수각은 HOLD 진입 때 방향 유지).
+          배 중심이 꼭짓점 다각형 안(각 변에서 inside_margin 0.6 m 안쪽)에 hold_time(5 s)
+          연속이면 /mission/complete 1회. 판정은 꼭짓점 4개일 때 — 3개면 제자리 회전하며
+          네 번째를 찾고 three_corner_wait(45 s) 지나서야 삼각형으로 판정.
+          꼭짓점은 기억하고 매 틱 가까운 후보로 따라가므로 부표가 흔들리거나 밀려도 따라간다.
           다음 미션 전환은 mission_manager 가 한다(완료 + station_end 2 m 안). 전환 전까지 계속 유지.
 
 출구 (2026-11-12): rec 기록 파일에 station_center 가 있고 station_end 와 다르면, 사각형
@@ -23,7 +26,13 @@
 free_ratio(기본 0.1)배로 줄여 라이다가 앞만 보는 동안 옆·뒤로 간 부표를 잊지 않는다. 작은
 덩어리(노이즈)는 공용 지도와 똑같이 깎는다. 공용 지도·다른 behavior 는 그대로.
 
-입력   /scan/level, /odom, /mission/goal, /mission/state
+부표 검출 노드(buoy_lidar_detector)의 /detections/buoys 도 후보로 더한다 (2026-11-13, use_detected_buoys).
+전용 지도는 6 m 안만 봐서 조류에 밀린 사각형은 가까이 가야 잡혔다 — 검출 노드는 15 m 까지 추적한다.
+후보는 기록 지점 15 m 안이고, 사각형처럼 생긴 묶음(간격·변·대각선·넓이, 오목 허용) 중 점수가 가장
+높은 묶음이 꼭짓점이 된다 (station_keeping.select_corners).
+스테이션이 활성일 때만 구독하므로 그동안만 검출 노드가 계산한다. 1 s 넘게 끊기면 안 쓴다.
+
+입력   /scan/level, /odom, /mission/goal, /mission/state, /detections/buoys (활성일 때만)
 출력   /cmd/station            주행 명령 (station.motion_enabled=false 면 0)
        /station/cmd_preview     계산된 명령 (motion_enabled 와 무관)
        /station/status          단계 변화 (String)
@@ -47,15 +56,18 @@ from kaboat_mission.mission_points import (
     DEFAULT_ORIGIN_FILE, DEFAULT_POINTS_FILE, recorded_point)
 
 from .behavior_base import BehaviorBase, yaw_from_quaternion
-from .station_keeping import StationFsm, StationParams, anchor_command, exit_waypoints
+from .station_keeping import (
+    StationFsm, StationParams, anchor_command, detour_target, exit_waypoints)
 
 GOAL_RESET_DISTANCE = 1.0   # [m] 목표가 이만큼 바뀌면 전용 지도·상태를 새로 시작
+DETECTED_MAX_AGE = 1.0      # [s] 부표 검출 노드 결과가 이보다 오래되면 안 씀
 SCAN_STALE_SEC = 2.0        # [s] /scan/level 이 이보다 오래 끊기면 경고 (지도는 유지)
 
 
 class StationKeeper(BehaviorBase):
     STATE_NAME = 'station'
     CMD_TOPIC = '/cmd/station'
+    USES_BUOYS = True    # 활성일 때만 /detections/buoys 구독 → 그동안만 부표 검출 노드가 돈다
 
     def __init__(self):
         super().__init__()
@@ -84,6 +96,7 @@ class StationKeeper(BehaviorBase):
         self._fsm_at = 0.0
         self._last_status = None
         self._scan_at = None
+        self._buoys_at = float('-inf')   # /detections/buoys 마지막 수신 (monotonic)
         self._last_decision = None
 
         self.status_pub = self.create_publisher(String, '/station/status', 10)
@@ -144,6 +157,10 @@ class StationKeeper(BehaviorBase):
             self.status_pub.publish(String(data=text))
             self.get_logger().info(f'station: {text}')
 
+    def _on_buoys(self, msg):
+        super()._on_buoys(msg)
+        self._buoys_at = time.monotonic()
+
     # ── 스캔 → 전용 지도 ────────────────────────────────
     def _on_scan(self, msg: LaserScan):
         if not self.active or self.fsm is None or not self.waypoint_odom_ready():
@@ -180,7 +197,11 @@ class StationKeeper(BehaviorBase):
         yaw = yaw_from_quaternion(pose.orientation)
         now = self.get_clock().now().nanoseconds * 1e-9
         speed = self.odom.twist.twist.linear.x      # 선체 기준 전진 속도 (GQ7) — 앵커 제동
-        d = self.fsm.step(boat_xy, yaw, self.odom.twist.twist.angular.z, now, speed=speed)
+        detected = None
+        if time.monotonic() - self._buoys_at <= DETECTED_MAX_AGE:
+            detected = [(b.position.x, b.position.y, float(b.confidence)) for b in self.buoys]
+        d = self.fsm.step(boat_xy, yaw, self.odom.twist.twist.angular.z, now, speed=speed,
+                          detected=detected)
         self._last_decision = d
 
         last_scan = self._fsm_at if self._scan_at is None else max(self._scan_at, self._fsm_at)
@@ -251,8 +272,13 @@ class StationKeeper(BehaviorBase):
         elif not self._exit_reported:
             self._status(f'EXIT — ({target[0]:+.2f}, {target[1]:+.2f}) 로 '
                          f'({len(self._exit_targets)}개 남음)')
+        steer = target
+        if len(self._exit_targets) == 1 and self.fsm is not None:
+            # 사각형 밖 경유점 → station_end 구간: 길의 꼭짓점은 옆으로 (첫 구간은 변 가운데를
+            # 지나도록 만든 길이라 그대로 — dock2 2차는 출구로 곧장 가다 남쪽 큐브 0.42 m)
+            steer = detour_target(boat_xy, target, [(b.x, b.y) for b in self.fsm.corners], p)
         linear, angular, _ = anchor_command(
-            boat_xy, yaw, self.odom.twist.twist.angular.z, target, None, p,
+            boat_xy, yaw, self.odom.twist.twist.angular.z, steer, None, p,
             speed=self.odom.twist.twist.linear.x)
         cmd = Twist()
         cmd.linear.x, cmd.angular.z = float(linear), float(angular)

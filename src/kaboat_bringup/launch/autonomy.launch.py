@@ -58,6 +58,10 @@ def stack_plan(get) -> tuple:
     return missions, _bool(get('entry_required'), 'entry_required')
 
 
+# /detections/buoys 를 쓰는 미션 (USES_BUOYS) — 이 중 하나라도 돌면 buoy_lidar_detector 를 띄운다
+BUOY_USERS = {'station', 'search'}
+
+
 def mission_nodes(use_sim_time_value) -> dict:
     """미션 → 그 미션만 쓰는 노드 목록."""
     common_params = {'use_sim_time': use_sim_time_value}
@@ -70,7 +74,7 @@ def mission_nodes(use_sim_time_value) -> dict:
                 'gate.motion_enabled': ParameterValue(
                     L('gate_motion_enabled'), value_type=bool),
             }])],
-        # 스테이션은 자기 전용 지도(/scan/level)로 부표 사각형을 찾는다 — 부표 검출 노드 안 씀
+        # 스테이션은 자기 전용 지도(/scan/level) + 부표 검출 노드(아래 BUOY_USERS)로 부표 사각형을 찾는다
         'station': [Node(
             package='kaboat_behaviors', executable='station_keeper',
             name='station_keeper', output='screen', parameters=[common_params])],
@@ -85,10 +89,6 @@ def mission_nodes(use_sim_time_value) -> dict:
             base_frame=L('dock_base_frame'),
             camera_tf_condition=IfCondition(L('publish_camera_tf'))),
         'search': [
-            # 부표 지도 — 라이다 = 있음·위치, 카메라 RGB = 색. 구독자(탐색 활성 중)가 있을 때만 계산.
-            # 탐색(search_circler, USES_BUOYS)만 쓴다.
-            Node(package='kaboat_perception', executable='buoy_lidar_detector',
-                 name='buoy_lidar_detector', output='screen', parameters=[common_params]),
             # 탐색 목표 색은 대회 당일 공지 — 빨강·초록 우현(시계), 검정 좌현(반시계) 선회
             Node(package='kaboat_behaviors', executable='search_circler',
                  name='search_circler', output='screen', parameters=[common_params, {
@@ -110,6 +110,12 @@ def _stack(context):
 
     per_mission = mission_nodes(use_sim_time_value)
     behaviors = [node for mission in missions for node in per_mission[mission]]
+    if BUOY_USERS & set(missions):
+        # 부표 지도 — 라이다 = 있음·위치, 카메라 RGB = 색. 구독자(USES_BUOYS behavior 가 활성)가
+        # 있을 때만 계산. 스테이션·탐색이 같이 쓰므로 한 번만 띄운다.
+        behaviors.append(Node(package='kaboat_perception', executable='buoy_lidar_detector',
+                              name='buoy_lidar_detector', output='screen',
+                              parameters=[common_params]))
     if approach:
         behaviors.append(Node(
             package='kaboat_behaviors', executable='mission_approach',

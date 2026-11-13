@@ -43,14 +43,14 @@ def _launched(mod, **args):
 
 
 def test_single_mission_launches_only_its_nodes(mod):
-    # test_mission station: 접근(entry_required 기본 true) + 스테이션만
+    # test_mission station: 접근(entry_required 기본 true) + 스테이션 + 부표 검출 (사각형 찾기 보완)
     assert _launched(mod, start_state='station', single_mission='true') == (
-        ALWAYS | {'station_keeper', 'mission_approach'})
+        ALWAYS | {'station_keeper', 'buoy_lidar_detector', 'mission_approach'})
     assert _launched(mod, start_state='gate', single_mission='true') == (
         ALWAYS | {'gate_follower', 'mission_approach'})
     assert _launched(mod, start_state='dock', single_mission='true') == (
         ALWAYS | DOCK | {'mission_approach'})
-    # 부표 검출은 탐색만 쓴다
+    # 부표 검출은 스테이션·탐색이 쓴다
     assert _launched(mod, start_state='search', single_mission='true') == (
         ALWAYS | {'buoy_lidar_detector', 'search_circler', 'mission_approach'})
     assert _launched(mod, start_state='avoid', single_mission='true') == (
@@ -60,7 +60,7 @@ def test_single_mission_launches_only_its_nodes(mod):
 def test_go_mission_without_entry_skips_the_approach_node(mod):
     # go_station·go_search: goto 로 이미 세웠으니 entry_required:=false — 접근 노드 필요 없음
     assert _launched(mod, start_state='station', single_mission='true',
-                     entry_required='false') == ALWAYS | {'station_keeper'}
+                     entry_required='false') == ALWAYS | {'station_keeper', 'buoy_lidar_detector'}
 
 
 def test_full_run_and_later_start_keep_the_remaining_missions(mod):
@@ -80,3 +80,18 @@ def test_unknown_start_state_and_bad_bool_are_refused(mod):
         _launched(mod, start_state='staton', single_mission='true')
     with pytest.raises(RuntimeError, match='single_mission'):
         _launched(mod, start_state='station', single_mission='yes please')
+
+
+def test_buoy_detector_is_launched_once_for_station_and_search(mod):
+    context_nodes = [n.node_executable for n in mod._stack(_context(mod)) if hasattr(n, 'node_executable')]
+    assert context_nodes.count('buoy_lidar_detector') == 1
+
+
+def _context(mod, **args):
+    context = LaunchContext()
+    for action in mod.generate_launch_description().entities:
+        if isinstance(action, DeclareLaunchArgument):
+            context.launch_configurations[action.name] = ''.join(
+                s.perform(context) for s in action.default_value)
+    context.launch_configurations.update(args)
+    return context
