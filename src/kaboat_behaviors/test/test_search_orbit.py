@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from kaboat_behaviors.search_orbit import SearchFsm, SearchParams
+from kaboat_behaviors.search_orbit import SearchFsm, SearchParams, tangent_entry
 
 GOAL = (50.0, 70.0)
 
@@ -13,9 +13,11 @@ def buoy(color, x, y, bid=None):
     return SimpleNamespace(color=color, position=SimpleNamespace(x=x, y=y), id=bid)
 
 
-def fsm(color='red', **kw):
+def fsm(color='red', area=None, **kw):
     kw.setdefault('lock_confirm_sec', 0.0)   # 기존 시나리오는 바로 고정
-    return SearchFsm(SearchParams(target_color=color, **kw), GOAL)
+    kw.setdefault('look_sec', 0.0)           # 기존 시나리오는 시작 둘러보기 없이
+    kw.setdefault('black_needs_field', False)  # 기존 검정 시나리오는 빨강·초록 확인 없이
+    return SearchFsm(SearchParams(target_color=color, **kw), GOAL, area)
 
 
 def orbit(f, center, radius, direction, degrees, buoys=(), start_deg=0.0, now=0.0):
@@ -218,16 +220,268 @@ def test_lock_released_when_target_turns_out_wrong_colour():
 
 
 def test_colour_must_hold_before_locking():
-    f = SearchFsm(SearchParams(target_color='black', lock_confirm_sec=1.0), GOAL)
+    f = SearchFsm(SearchParams(target_color='black', lock_confirm_sec=1.0, look_sec=0.0,
+                                 black_needs_field=False), GOAL)
     assert f.update([buoy('unknown', 51.0, 70.0, 5)], (40, 70), 0.0) == 'SEEK'
     assert f.update([buoy('unknown', 51.0, 70.0, 5)], (40, 70), 0.5) == 'SEEK'
     assert f.update([buoy('unknown', 51.0, 70.0, 5)], (40, 70), 1.1) == 'ORBIT'
 
 
 def test_colour_flicker_restarts_confirm_clock():
-    f = SearchFsm(SearchParams(target_color='black', lock_confirm_sec=1.0), GOAL)
+    f = SearchFsm(SearchParams(target_color='black', lock_confirm_sec=1.0, look_sec=0.0,
+                                 black_needs_field=False), GOAL)
     f.update([buoy('unknown', 51.0, 70.0, 5)], (40, 70), 0.0)
     f.update([buoy('green', 51.0, 70.0, 5)], (40, 70), 0.6)    # 색이 바뀜 — 시계 다시
     f.update([buoy('unknown', 51.0, 70.0, 5)], (40, 70), 0.8)
     assert f.update([buoy('unknown', 51.0, 70.0, 5)], (40, 70), 1.5) == 'SEEK'
     assert f.update([buoy('unknown', 51.0, 70.0, 5)], (40, 70), 1.9) == 'ORBIT'
+
+
+# ---------- 탐색 영역 중심(area) ↔ 출구(goal) 분리 (2026-11-13) ----------
+# 그날 기록: search_entry (168.7, -8.7, 71.9°), search_end (147.1, -2.3) — 탐색 부표는 시작점 앞.
+END_0113 = (147.10, -2.31)
+AREA_0113 = (170.87, -2.52)          # 부표 셋 가운데 (= search_entry 선수 7 m 앞과 0.4 m 차이)
+BUOYS_0113 = [buoy('unknown', 169.3, -5.9, 3), buoy('green', 166.5, -0.2, 4),
+              buoy('red', 174.5, -1.2, 5),
+              buoy('unknown', 150.9, -3.8, 9)]   # 끝점 옆 다른 물체
+
+
+def fsm_0113(color, **kw):
+    kw.setdefault('lock_confirm_sec', 0.0)
+    kw.setdefault('look_sec', 0.0)
+    return SearchFsm(SearchParams(target_color=color, **kw), END_0113, AREA_0113)
+
+
+def test_area_defaults_to_goal():
+    f = fsm('red')
+    assert f.area == GOAL
+
+
+@pytest.mark.parametrize('color, expect', [('red', (174.5, -1.2)), ('green', (166.5, -0.2)),
+                                           ('black', (169.3, -5.9))])
+def test_candidates_come_from_area_not_exit(color, expect):
+    # 예전(끝점 10 m 기준)엔 셋 다 후보 0개 — 끝점에서 20–28 m
+    f = fsm_0113(color)
+    assert f.update(BUOYS_0113, (168.7, -8.9), 0.0) == 'ORBIT'
+    assert f.center == expect
+
+
+def test_old_exit_anchor_found_nothing_in_0113_layout():
+    f = SearchFsm(SearchParams(target_color='red', lock_confirm_sec=0.0, look_sec=0.0,
+                               target_search_radius=10.0), END_0113)
+    assert f.update(BUOYS_0113, (168.7, -8.9), 0.0) == 'SEEK'
+
+
+def test_black_ignores_unknown_object_near_exit():
+    # 끝점 옆 unknown(150.9, -3.8) 은 영역 중심에서 20 m — 검정 후보 아님
+    f = fsm_0113('black')
+    f.update([b for b in BUOYS_0113 if b.id == 9], (150.0, -3.0), 0.0)
+    assert f.phase == 'SEEK'
+
+
+def test_seek_goes_to_area_and_gives_up_there():
+    f = fsm_0113('red', give_up_sec=90.0)
+    assert f.update([], END_0113, 0.0) == 'SEEK'          # 출구에 있어도 영역 중심 도착 아님
+    assert f.update([], END_0113, 500.0) == 'SEEK'
+    f.update([], AREA_0113, 500.0)
+    assert f.update([], AREA_0113, 591.0) == 'GIVE_UP'
+
+
+def test_exit_point_is_still_search_end():
+    f = fsm_0113('red')
+    f.update(BUOYS_0113, (168.7, -8.9), 0.0)
+    assert f.exit_point((172.0, -1.0)) == END_0113
+
+
+# ---------- LOOK (시작 자세에서 둘러보기) ----------
+
+def test_look_then_seek_when_nothing_seen():
+    f = fsm_0113('red', look_sec=15.0)
+    assert f.update([], (168.7, -8.9), 100.0) == 'LOOK'
+    assert f.update([], (168.7, -8.9), 114.9) == 'LOOK'
+    assert f.look_remaining(110.0) == pytest.approx(5.0)
+    assert f.update([], (168.7, -8.9), 115.1) == 'SEEK'
+
+
+def test_red_locks_during_look_as_soon_as_confirmed():
+    f = fsm_0113('red', look_sec=15.0, lock_confirm_sec=1.0)
+    red = [buoy('red', 174.5, -1.2, 5)]
+    assert f.update(red, (168.7, -8.9), 100.0) == 'LOOK'
+    assert f.update(red, (168.7, -8.9), 101.1) == 'ORBIT'
+
+
+def test_black_waits_until_look_ends():
+    # 빨강·초록도 색이 붙기 전 잠깐 unknown — LOOK 동안은 검정 후보로 안 고른다
+    f = fsm_0113('black', look_sec=15.0, lock_confirm_sec=1.0)
+    early = [buoy('unknown', 174.5, -1.2, 5), buoy('unknown', 169.3, -5.9, 3)]
+    assert f.update(early, (168.7, -8.9), 100.0) == 'LOOK'
+    settled = [buoy('red', 174.5, -1.2, 5), buoy('unknown', 169.3, -5.9, 3)]
+    assert f.update(settled, (168.7, -8.9), 110.0) == 'LOOK'
+    assert f.update(settled, (168.7, -8.9), 115.1) == 'ORBIT'
+    assert f.center == (169.3, -5.9)
+
+
+def test_black_can_lock_during_look_when_disabled():
+    f = fsm_0113('black', look_sec=15.0, black_waits_look=False)
+    seen = [buoy('unknown', 169.3, -5.9, 3), buoy('green', 166.5, -0.2, 4)]
+    assert f.update(seen, (168.7, -8.9), 0.0) == 'ORBIT'
+
+
+# ---------- 접선 진입 ----------
+
+def _on_circle(p, c, r):
+    return math.dist(p, c) == pytest.approx(r, abs=1e-9)
+
+
+@pytest.mark.parametrize('direction', ['cw', 'ccw'])
+def test_tangent_point_is_tangent_and_matches_direction(direction):
+    c, r, boat = (10.0, 0.0), 2.0, (0.0, 0.0)
+    pts = tangent_entry(boat, c, r, direction)
+    assert len(pts) == 3 and pts[0] == boat
+    t, lead = pts[1], pts[2]
+    assert _on_circle(t, c, r) and _on_circle(lead, c, r)
+    # 배→접점 직선이 접점 반지름과 수직 (접선)
+    dot = (t[0] - boat[0]) * (t[0] - c[0]) + (t[1] - boat[1]) * (t[1] - c[1])
+    assert dot == pytest.approx(0, abs=1e-9)
+    # 접점 → lead 가 규정 방향 (ccw = 각도 증가)
+    a_t = math.atan2(t[1] - c[1], t[0] - c[0])
+    a_l = math.atan2(lead[1] - c[1], lead[0] - c[0])
+    d = math.atan2(math.sin(a_l - a_t), math.cos(a_l - a_t))
+    assert (d > 0) == (direction == 'ccw')
+
+
+def test_cw_from_west_enters_on_north_side():
+    # 서쪽에서 동쪽 원으로 — 시계 방향이면 원 북쪽(위)으로 들어가 동쪽으로 내려간다
+    pts = tangent_entry((0.0, 0.0), (10.0, 0.0), 2.0, 'cw')
+    assert pts[1][1] > 0
+
+
+def test_no_entry_when_already_on_circle_band():
+    assert tangent_entry((12.5, 0.0), (10.0, 0.0), 2.0, 'cw', skip_band=0.7) is None
+    assert tangent_entry((10.5, 0.0), (10.0, 0.0), 2.0, 'cw') is None    # 원 안
+
+
+def test_entry_detours_around_buoy_on_the_line():
+    c, r, boat = (10.0, 0.0), 2.0, (0.0, 0.0)
+    straight = tangent_entry(boat, c, r, 'cw')
+    t = straight[1]
+    mid = ((boat[0] + t[0]) / 2, (boat[1] + t[1]) / 2)      # 진입 직선 한가운데 부표
+    pts = tangent_entry(boat, c, r, 'cw', [mid], clearance=1.5)
+    assert len(pts) == 4
+    via = pts[1]
+    assert math.dist(via, mid) == pytest.approx(2.0)        # clearance + 0.5
+    assert pts[2] == pytest.approx(t)
+
+
+def test_entry_ignores_far_buoys():
+    pts = tangent_entry((0.0, 0.0), (10.0, 0.0), 2.0, 'cw', [(5.0, -6.0)], clearance=1.5)
+    assert len(pts) == 3
+
+
+def test_0113_red_entry_from_start_pose_clears_black():
+    # 시작 자세에서 빨강(시계)으로 — 3 m 앞 검정을 1.5 m 넘게 비켜 간다
+    boat, red, black, green = (168.7, -8.9), (174.5, -1.2), (169.3, -5.9), (166.5, -0.2)
+    pts = tangent_entry(boat, red, 2.0, 'cw', [black, green], clearance=1.5)
+    for a, b in zip(pts[:-2], pts[1:-1]):
+        n = 200
+        dmin = min(math.dist((a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n), black)
+                   for k in range(n + 1))
+        assert dmin >= 1.5 - 1e-6
+
+
+# ---------- 모양 검사 (blob_shape) ----------
+
+def _grid(cells, size=40):
+    import numpy as np
+    g = np.zeros((size, size), dtype=np.int16)
+    for i, j in cells:
+        g[j, i] = 100
+    return g
+
+
+def test_blob_shape_small_buoy_vs_long_wall():
+    from kaboat_behaviors.search_orbit import blob_shape
+    buoy_cells = [(20 + di, 20 + dj) for di in (-1, 0, 1) for dj in (-1, 0, 1)]
+    s = blob_shape(_grid(buoy_cells), 0.2, (0.0, 0.0), (4.1, 4.1))
+    assert s.cells == 9 and 0.4 < s.extent <= 0.8 and s.ring_cells == 0
+    wall = [(i, 20) for i in range(5, 35)]                           # 6 m 벽
+    w = blob_shape(_grid(wall), 0.2, (0.0, 0.0), (4.1, 4.1))
+    assert w.extent > 5.0 and w.cells == 30
+
+
+def test_blob_shape_counts_separate_neighbours_in_ring():
+    from kaboat_behaviors.search_orbit import blob_shape
+    cells = [(20, 20), (27, 20), (20, 27)]                          # 1.4 m 떨어진 칸 둘
+    s = blob_shape(_grid(cells), 0.2, (0.0, 0.0), (4.1, 4.1))
+    assert s.cells == 1 and s.ring_cells == 2
+
+
+def test_blob_shape_none_outside_grid_or_empty():
+    from kaboat_behaviors.search_orbit import blob_shape
+    assert blob_shape(_grid([]), 0.2, (0.0, 0.0), (4.1, 4.1)) is None
+    assert blob_shape(_grid([(20, 20)]), 0.2, (0.0, 0.0), (100.0, 4.1)) is None
+
+
+# ---------- 검정: 모양 + 빨강·초록 근접 ----------
+
+def _shape(table):
+    return lambda b: table.get(b.id)
+
+
+def test_black_needs_buoy_shape():
+    f = fsm_0113('black')
+    dock = buoy('unknown', 171.0, -4.0, 20)                          # 영역 안 unknown 구조물
+    black = buoy('unknown', 169.3, -5.9, 3)
+    green = buoy('green', 166.5, -0.2, 4)
+    f.update([dock, black, green], (168.7, -8.9), 0.0, _shape({20: False, 3: None}))
+    assert f.phase == 'SEEK'                                         # 검정 모양 아직 모름 → 안 고름
+    f.update([dock, black, green], (168.7, -8.9), 0.1, _shape({20: False, 3: True}))
+    assert f.center == (169.3, -5.9)
+
+
+def test_red_green_only_drop_structures():
+    f = fsm_0113('red')
+    f.update([buoy('red', 174.5, -1.2, 5)], (168.7, -8.9), 0.0, _shape({5: None}))
+    assert f.phase == 'ORBIT'                                        # 멀어서 모름 → 그래도 고름
+    g = fsm_0113('red')
+    g.update([buoy('red', 174.5, -1.2, 5)], (168.7, -8.9), 0.0, _shape({5: False}))
+    assert g.phase == 'SEEK'
+
+
+def test_unlock_when_locked_turns_out_structure():
+    f = fsm_0113('red')
+    red = buoy('red', 174.5, -1.2, 5)
+    f.update([red], (168.7, -8.9), 0.0, _shape({5: None}))
+    assert f.phase == 'ORBIT'
+    f.update([red], (172.0, -3.0), 0.1, _shape({5: False}))
+    assert f.center is None and f.unlocks == 1
+
+
+def test_black_ranked_by_nearest_red_green_not_area_center():
+    # 영역 중심 기준이면 A(중심 3.8 m)를 고르겠지만, 확인된 초록 옆 B(초록 2.3 m)를 고른다
+    f = fsm_0113('black')
+    a = buoy('unknown', 172.5, -6.0, 30)
+    b = buoy('unknown', 168.0, 1.5, 31)
+    green = buoy('green', 166.5, -0.2, 4)
+    f.update([a, b, green], (168.7, -8.9), 0.0, _shape({30: True, 31: True, 4: True}))
+    assert f.center == (168.0, 1.5)
+
+
+def test_black_beyond_field_gap_ignored():
+    # 영역(12 m) 안이지만 빨강에서 10.4 m — 탐색 부표 무리 밖 물체
+    f = fsm_0113('black', field_gap=10.0)
+    lone = buoy('unknown', 178.0, -11.0, 32)
+    green, red = buoy('green', 166.5, -0.2, 4), buoy('red', 174.5, -1.2, 5)
+    f.update([lone, green, red], (168.7, -8.9), 0.0, _shape({32: True}))
+    assert f.phase == 'SEEK'
+
+
+def test_black_needs_red_or_green_seen_by_default():
+    # 부표만 한 도크 조각은 모양으로 못 거른다 — 빨강·초록을 못 봤으면 검정을 안 고름
+    unknowns = [buoy('unknown', 169.3, -5.9, 3), buoy('unknown', 175.0, -8.0, 7)]
+    f = fsm_0113('black')
+    f.update(unknowns, (168.7, -8.9), 0.0, _shape({3: True, 7: True}))
+    assert f.phase == 'SEEK'
+    g = fsm_0113('black', black_needs_field=False)                   # 끄면 영역 중심 거리로
+    g.update(unknowns, (168.7, -8.9), 0.0, _shape({3: True, 7: True}))
+    assert g.center == (169.3, -5.9)

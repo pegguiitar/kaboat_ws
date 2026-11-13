@@ -16,6 +16,9 @@
 발행   /mission/state (String, latched)  — cmd_mux 와 모든 behavior 가 구독
        /mission/goal  (PoseStamped, latched) — 현재 미션의 목표좌표
        /mission/entry_goal (PoseStamped) — 다음 미션 시작 위치/방향
+       /mission/search_center (PoseStamped, latched) — 탐색 영역 중심 (search 시작 때).
+                                            rec search_center, 없으면 search_entry 선수 방향
+                                            search_center_offset(7 m) 앞. search_end 는 출구만.
        /detector/enable (Bool, latched)  — dock_mark_detector YOLO 추론 게이팅
                                             (state == 'dock' 일 때만 true)
 구독   /mission/complete (String) — 완료한 behavior 의 state 이름
@@ -27,6 +30,7 @@
 현장 기록 지점 (rec): points_file(기본 ~/kaboat_mission_points.json)이 있으면
   <미션>_entry → entry_waypoints.<미션> + entry_ready.<미션>=true
   <미션>_end   → waypoints.<미션>
+  search_center → 탐색 영역 중심 (선택)
 으로 mission_params 값을 덮어쓴다(kaboat_mission/mission_points.py). 시작 거부(노드 종료):
   - 파일이 깨졌거나, 기록 당시 원점이 지금 원점 파일(origin_file)과 다를 때
   - 한 미션의 _entry 와 _end 중 하나만 있을 때 (dock_entry 단독은 허용)
@@ -55,7 +59,9 @@ from nav_msgs.msg import Odometry, Path
 
 from kaboat_mission.mission_points import (
     DEFAULT_ORIGIN_FILE, DEFAULT_POINTS_FILE, MISSION_STATES, PointStore,
-    mission_slot, mission_targets, read_origin_file)
+    is_mission_point, mission_targets, read_origin_file, search_center)
+
+SEARCH_CENTER_OFFSET = 7.0   # [m] search_center 미기록 시 search_entry 선수 방향 이만큼 앞
 
 MISSION_ORDER = list(MISSION_STATES)
 
@@ -89,6 +95,10 @@ class MissionManager(Node):
             self.declare_parameter(f'waypoints.{name}', DEFAULT_WAYPOINTS[name])
             self.declare_parameter(f'entry_waypoints.{name}', [0.0, 0.0, 0.0])
             self.declare_parameter(f'entry_ready.{name}', False)
+        # 탐색 영역 중심 — rec search_center 가 있으면 덮어씀. 둘 다 없으면 entry 앞 offset
+        self.declare_parameter('search_center', [0.0, 0.0])
+        self.declare_parameter('search_center_ready', False)
+        self.declare_parameter('search_center_offset', SEARCH_CENTER_OFFSET)
 
         self.radius = float(self.get_parameter('transition_radius').value)
         self.waypoints = {
@@ -104,6 +114,15 @@ class MissionManager(Node):
             for name in MISSION_ORDER
         }
         self.entry_required = bool(self.get_parameter('entry_required').value)
+        self.search_center = (list(self.get_parameter('search_center').value)
+                              if bool(self.get_parameter('search_center_ready').value) else None)
+        self.search_center_offset = float(self.get_parameter('search_center_offset').value)
+        if self.search_center is not None and (
+                len(self.search_center) != 2
+                or not all(math.isfinite(v) for v in self.search_center)):
+            raise ValueError('search_center must be [x, y]')
+        if not math.isfinite(self.search_center_offset):
+            raise ValueError('search_center_offset must be finite')
         self.apply_recorded_points(str(self.get_parameter('points_file').value),
                                    str(self.get_parameter('origin_file').value))
         for name in MISSION_ORDER:
@@ -135,6 +154,8 @@ class MissionManager(Node):
         self.pub_goal = self.create_publisher(PoseStamped, '/mission/goal', latched)
         self.pub_entry_goal = self.create_publisher(
             PoseStamped, '/mission/entry_goal', 10)
+        self.pub_search_center = self.create_publisher(
+            PoseStamped, '/mission/search_center', latched)
         # v5: YOLO 추론 게이팅 — dock_mark_detector 는 이 신호가 true 인 동안만 추론
         self.pub_detector_enable = self.create_publisher(Bool, '/detector/enable', latched)
 
@@ -181,12 +202,17 @@ class MissionManager(Node):
             self.get_logger().info(
                 f'[기록 지점] {state}: 시작 ({entry[0]:+.2f}, {entry[1]:+.2f}, '
                 f'{entry[2]:+.1f}°) → 끝 ({end[0]:+.2f}, {end[1]:+.2f})')
+        center = search_center(store)
+        if center is not None:
+            self.search_center = list(center)
+            self.get_logger().info(
+                f'[기록 지점] 탐색 영역 중심 ({center[0]:+.2f}, {center[1]:+.2f})')
         missing = [s for s in MISSION_ORDER if s not in targets]
         if missing:
             self.get_logger().warning(
                 f'기록 지점이 없는 미션 {missing} — mission_params 값 사용 '
                 '(entry_ready=false 면 그 미션에서 멈춤)')
-        unused = [n for n in store.points if mission_slot(n, MISSION_ORDER) is None]
+        unused = [n for n in store.points if not is_mission_point(n, MISSION_ORDER)]
         if unused:
             self.get_logger().info(f'미션 이름 규칙이 아닌 지점(안 씀): {unused}')
 
@@ -232,11 +258,34 @@ class MissionManager(Node):
         state = MISSION_ORDER[self.idx]
         self.pub_entry_goal.publish(self._pose(*self.entry_waypoints[state]))
 
+    def search_area_center(self):
+        """탐색 영역 중심 [x, y] — 기록/파라미터 search_center, 없으면 search_entry 선수 방향
+        search_center_offset 앞, 그것도 없으면 None (search_circler 가 자기 활성화 자세 앞을 씀)."""
+        if self.search_center is not None:
+            return list(self.search_center)
+        if self.entry_ready['search']:
+            x, y, deg = self.entry_waypoints['search']
+            a = math.radians(deg)
+            return [x + self.search_center_offset * math.cos(a),
+                    y + self.search_center_offset * math.sin(a)]
+        return None
+
     def start_mission(self):
         self.phase = 'mission'
         state = MISSION_ORDER[self.idx]
         if state == 'dock':
             self.dock_route_goal = None
+        if state == 'search':
+            # behavior 가 활성화되기 전에 latched 로 먼저 둔다
+            center = self.search_area_center()
+            if center is not None:
+                self.pub_search_center.publish(self._pose(*center))
+                self.get_logger().info(
+                    f'탐색 영역 중심 ({center[0]:.2f}, {center[1]:.2f}) → /mission/search_center')
+            else:
+                self.get_logger().warning(
+                    '탐색 영역 중심 없음 (search_center·search_entry 둘 다 없음) — '
+                    'search_circler 가 활성화 자세 앞을 씀')
         self.set_state(state)
         self.publish_mission_goal()
         wp = self.waypoints[state]

@@ -99,3 +99,32 @@ def test_refuses_broken_points_file(ros, tmp_path):
     (tmp_path / 'points.json').write_text('{broken')
     with pytest.raises(ValueError):
         _node(tmp_path)
+
+
+def test_search_center_recorded_point_is_used(ros, tmp_path):
+    _files(tmp_path, search_entry=(168.7, -8.73, 71.9), search_end=(147.1, -2.31, 0.0),
+           search_center=(170.9, -2.5, 0.0))
+    node = _node(tmp_path)
+    try:
+        assert node.search_area_center() == [170.9, -2.5]
+        assert node.waypoints['search'] == [147.1, -2.31]        # 끝점은 출구 그대로
+    finally:
+        node.destroy_node()
+
+
+def test_search_center_falls_back_ahead_of_search_entry(ros, tmp_path):
+    _files(tmp_path, search_entry=(0.0, 0.0, 90.0), search_end=(-20.0, 0.0, 0.0))
+    node = _node(tmp_path, search_center_offset=7.0)
+    try:
+        x, y = node.search_area_center()
+        assert x == pytest.approx(0.0, abs=1e-9) and y == pytest.approx(7.0)
+    finally:
+        node.destroy_node()
+
+
+def test_search_center_none_without_entry_or_record(ros, tmp_path):
+    node = _node(tmp_path, points_file='none')
+    try:
+        assert node.search_area_center() is None
+    finally:
+        node.destroy_node()
