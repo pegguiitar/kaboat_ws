@@ -256,6 +256,10 @@ test_mission dock dock_target_class:=circle
 - `test_mission 미션` = 같은 스택에 `start_state:=미션 single_mission:=true`를 더한 것입니다.
   - 그 미션의 `_entry`로 접근(`mission_approach`)한 뒤 미션을 하고 `done`(정지)합니다.
   - 미리 `goto 미션_entry`로 세워 두면 접근이 바로 끝납니다.
+- **접근 출력 상한 = `goto`** (2026-11-14): 전진 0.4·회전 0.4 (상한 1.0 × `approach.thrust_ratio` 0.4).
+  예전 전진 0.0202·회전 0.062 는 물살에 밀려 시작 자세에 못 갔습니다(11-13 bag: `search_entry`에서 2.6 → 9.3 m).
+  미션 사이 이동(`run_autonomy`)·`test_mission`·`test_*_outdoor approach:=true` 모두 이 값입니다
+  (`mission_approach.py`의 `APPROACH_THRUST_RATIO`).
 - **이번에 돌 미션의 노드만 띄웁니다** (`only_mission_nodes:=true` 기본). `start_state`부터 끝까지,
   `single_mission:=true`면 그 미션 하나만. 미션 매니저·`cmd_mux`는 항상, `mission_approach`는
   `entry_required:=true`(기본)일 때만 뜹니다. 런치를 켜면 `[autonomy] 미션 … — 띄우는 노드: …` 한 줄로 보입니다.

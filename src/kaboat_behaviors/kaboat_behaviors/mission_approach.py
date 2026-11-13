@@ -4,6 +4,11 @@
 settle_time(0.5 s) 유지. 회전 속도 조건은 없다(approach.settle_yaw_rate 0). 공용 waypoint() 기본값
 (0.35 m / 8° / 0.1 rad/s)은 바람·물살이 있는 야외 시작 자세 맞추기에 너무 엄격해
 approach 에서 gate 등 미션으로 넘어가지 못했다. 다른 behavior 의 waypoint() 는 그대로.
+
+출력 상한 (2026-11-14): goto(outdoor_waypoint)와 같은 값 — 상한 1.0 × thrust_ratio 0.4 = 전진 0.4·회전 0.4.
+예전엔 공용 behavior 스케일(전진 0.101·회전 0.31) × 0.2 = 전진 0.0202·회전 0.062 라 야외에서 물살에
+밀려 시작 자세에 못 갔다(2026-11-13 dock_test1 bag: search_entry 에서 2.6 → 9.3 m 멀어짐, 시뮬에서
+접근 90 s 초과로 search 를 15번 중 9번 건너뜀).
 """
 
 import dataclasses
@@ -18,16 +23,26 @@ from .waypoint_controller import WaypointController, WaypointParams
 APPROACH_POSITION_TOLERANCE = 2.0      # [m] (1.0 → 2.0, 2026-11-13)
 APPROACH_HEADING_TOLERANCE_DEG = 30.0  # [deg] 좌우 (15 → 30, 2026-11-13)
 APPROACH_SETTLE_YAW_RATE = 0.0         # [rad/s] 0 = 회전 속도 조건 없음
+# 출력 상한 — goto(outdoor_waypoint.launch.py 기본 max_linear·max_angular 1.0, thrust_ratio 0.4)와 같게
+APPROACH_MAX_LINEAR = 1.0
+APPROACH_MAX_ANGULAR = 1.0
+APPROACH_THRUST_RATIO = 0.4             # (0.2 → 0.4, 2026-11-14) → 전진·회전 상한 0.4
 
 
 def approach_params(base: WaypointParams, position_tolerance: float,
                     heading_tolerance_deg: float,
-                    settle_yaw_rate: float) -> WaypointParams:
-    """공용 waypoint 제어 값(게인·상한)은 그대로, 도착 조건만 approach 값으로."""
+                    settle_yaw_rate: float, *, max_linear: float | None = None,
+                    max_angular: float | None = None) -> WaypointParams:
+    """공용 waypoint 제어 값(게인)은 그대로, 도착 조건과 (주면) 출력 상한만 approach 값으로."""
+    caps = {}
+    if max_linear is not None:
+        caps['max_linear'] = float(max_linear)
+    if max_angular is not None:
+        caps['max_angular'] = float(max_angular)
     return dataclasses.replace(
         base, position_tolerance=float(position_tolerance),
         heading_tolerance_deg=float(heading_tolerance_deg),
-        settle_yaw_rate=float(settle_yaw_rate))
+        settle_yaw_rate=float(settle_yaw_rate), **caps)
 
 
 class MissionApproach(BehaviorBase):
@@ -37,7 +52,9 @@ class MissionApproach(BehaviorBase):
     def __init__(self):
         super().__init__()
         self.declare_parameter('approach.motion_enabled', False)
-        self.declare_parameter('approach.thrust_ratio', 0.2)
+        self.declare_parameter('approach.thrust_ratio', APPROACH_THRUST_RATIO)
+        self.declare_parameter('approach.max_linear', APPROACH_MAX_LINEAR)
+        self.declare_parameter('approach.max_angular', APPROACH_MAX_ANGULAR)
         self.declare_parameter('approach.position_tolerance',
                                APPROACH_POSITION_TOLERANCE)
         self.declare_parameter('approach.heading_tolerance_deg',
@@ -53,14 +70,20 @@ class MissionApproach(BehaviorBase):
             self._waypoint_controller.params,
             self.get_parameter('approach.position_tolerance').value,
             self.get_parameter('approach.heading_tolerance_deg').value,
-            self.get_parameter('approach.settle_yaw_rate').value)
+            self.get_parameter('approach.settle_yaw_rate').value,
+            max_linear=self.get_parameter('approach.max_linear').value,
+            max_angular=self.get_parameter('approach.max_angular').value)
         self._waypoint_controller = WaypointController(params)
+        # _tick 이 자르는 전체 스케일 — 공용 behavior 스케일(전진 0.101·회전 0.31) 대신 approach 상한
+        self._full_scale = (params.max_linear, params.max_angular)
         yaw_rate = (f'{params.settle_yaw_rate:.2f} rad/s 이하' if params.settle_yaw_rate > 0
                     else '조건 없음')
         self.get_logger().info(
             f'approach 도착 조건: {params.position_tolerance:.2f} m 안, 선수각 '
             f'±{params.heading_tolerance_deg:.0f}° 안, 회전 속도 {yaw_rate}, '
-            f'{params.settle_time:.1f} s 유지')
+            f'{params.settle_time:.1f} s 유지 | 출력 상한 전진 '
+            f'{params.max_linear * self.thrust_ratio:.3f}·회전 '
+            f'{params.max_angular * self.thrust_ratio:.3f} (goto 와 같음)')
         self.entry_goal = None
         self.preview_pub = self.create_publisher(
             Twist, '/mission/approach_cmd_preview', 10)
@@ -97,6 +120,7 @@ class MissionApproach(BehaviorBase):
         angle_deg = math.degrees(yaw_from_quaternion(q))
         cmd, reached = self.waypoint(
             point.x, point.y, angle_deg, thrust_ratio=self.thrust_ratio)
+        self._command_full_scale = self._full_scale
         self.preview_pub.publish(cmd)
         if not self.motion_enabled:
             return Twist()
