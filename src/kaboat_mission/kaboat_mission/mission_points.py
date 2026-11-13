@@ -27,6 +27,9 @@ point_recorder(kaboat_hardware)가 쓰고, mission_manager 가 읽어서 entry_w
     <미션>_end     미션 끝 지점 [x, y]          → waypoints.<미션>
     <미션> = gate, station, dock, search, avoid.  예) gate_entry, gate_end
     한 미션은 _entry 와 _end 를 둘 다 기록해야 한다(하나만 있으면 mission_manager 가 시작 거부).
+    search_center  탐색 영역 중심 [x, y] (선택) → /mission/search_center. 탐색 부표 셋 가운데쯤에서
+                   기록 (부표가 바람에 흔들려도 반경 12 m 영역이라 대략이면 된다). 없으면
+                   search_entry 선수 방향 7 m 앞을 쓴다.
     이 규칙이 아닌 이름(p1, start 등)은 저장만 되고 미션에는 안 쓰인다.
 
 사용 예:
@@ -50,6 +53,7 @@ DEFAULT_ORIGIN_FILE = '~/kaboat_geo_origin.yaml'   # geo_origin /geo/set_origin 
 MISSION_STATES = ('gate', 'station', 'dock', 'search', 'avoid')
 ENTRY_SUFFIX = '_entry'
 END_SUFFIX = '_end'
+SEARCH_CENTER_NAME = 'search_center'   # 탐색 영역 중심 (선택, _entry/_end 쌍 규칙 밖)
 FORMAT_VERSION = 1
 FRAME_ID = 'odom'
 # 같은 원점으로 볼 거리 [m]. 원점 파일은 GNSS 평균이라 다시 잡으면 이보다 크게 바뀐다.
@@ -136,6 +140,17 @@ def mission_slot(name: str, states=MISSION_STATES):
         if name.endswith(suffix) and name[:-len(suffix)] in states:
             return name[:-len(suffix)], kind
     return None
+
+
+def is_mission_point(name: str, states=MISSION_STATES) -> bool:
+    """mission_manager 가 읽는 이름인가 (<미션>_entry/_end 또는 search_center)."""
+    return mission_slot(name, states) is not None or name == SEARCH_CENTER_NAME
+
+
+def search_center(store: 'PointStore'):
+    """rec 로 기록한 탐색 영역 중심 [x, y]. 없으면 None."""
+    point = store.points.get(SEARCH_CENTER_NAME)
+    return None if point is None else point.xy()
 
 
 def mission_targets(store: 'PointStore', states=MISSION_STATES) -> dict:

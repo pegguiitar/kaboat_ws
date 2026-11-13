@@ -7,17 +7,30 @@
   으로 나오므로(소거법, BUOY_DETECTOR.md), 검정 목표는 unknown 부표에서 고른다 (MATCH_COLORS).
   기록(3구간)은 "목표부표에서 원을 그리는 선회기동 수행이 완료되는 순간"까지.
 
+두 기준점 (2026-11-13 분리)
+  area     탐색 영역 중심 — 후보 부표는 여기서 target_search_radius(12 m) 안만, SEEK 는 여기로 간다.
+           mission_manager 가 /mission/search_center 로 준다(rec search_center, 없으면
+           search_entry 선수 방향 7 m 앞). 안 주면 goal 과 같다(예전 동작).
+  goal     search_end — 완료 뒤 빠져나갈 출구만 (mission_manager 전환 = 완료 + 2 m 안).
+  2026-11-13 bag: search_end 를 탐색 부표에서 22 m 떨어진 곳(다음 미션 쪽)에 기록해, 끝점 10 m
+  안 후보가 끝까지 0개였다. 출구와 탐색 영역을 한 점으로 겸하지 않는다.
+
 단계
-  SEEK     목표 색 부표를 아직 못 찾음 — 탐색 목표점(search_end)으로 가고, 도착하면
-           제자리 선회로 둘러본다.
-  ORBIT    목표 부표 고정 — 부표 중심 반경 orbit_radius 원을 LOS 로 추종한다. 원 띠
+  LOOK     활성화 직후 look_sec(15 s) 동안 그 자리를 지키며(노드가 위치·선수각 유지) 둘러본다.
+           부표 트래커는 search 가 활성이 돼야 켜진다 — 같은 bag 을 search 시작부터 트래커를
+           켜고 재생하면 시작 자세에서 검정 +0.8 s, 초록 +6.2 s, 빨강 +14.1 s 에 들어왔다.
+           빨강·초록 목표는 확인되는 즉시 고정한다. 검정 목표(unknown)는 LOOK 이 끝날 때까지
+           기다렸다 고른다 — 빨강·초록도 색이 붙기 전 잠깐 unknown 을 거치므로(같은 bag 빨강 1.3 s).
+  SEEK     LOOK 이 끝나도 못 찾음 — 탐색 영역 중심(area)으로 가고, 도착하면 제자리 선회로 둘러본다.
+  ORBIT    목표 부표 고정 — 부표 중심 반경 orbit_radius 원을 LOS 로 추종한다. 원 밖에서는 규정
+           방향 접선으로 들어가는 진입 경로(tangent_entry)를 먼저 따라간다. 원 띠
            (|거리 − orbit_radius| ≤ orbit_band) 안에 있을 때만 부표 둘레를 규정 방향으로
            돈 각도를 쌓고, laps 바퀴가 되면 DONE.
-  DONE     완료 — 노드가 완료 신호 1회 + 탐색 목표점으로 (mission_manager 전환 = 완료 +
+  DONE     완료 — 노드가 완료 신호 1회 + 출구(goal)로 (mission_manager 전환 = 완료 +
            search_end 2 m 안). search_end 가 목표 부표 위(done_clearance 안)에 찍혀 있으면
            부표에 들이받지 않게 부표에서 배 쪽으로 done_clearance 떨어진 점으로 간다
            (exit_point — 그래도 search_end 2 m 안이다).
-  GIVE_UP  SEEK 에서 목표점에 도착하고 give_up_sec 동안 못 찾음 — 완료 신호를 내고 다음
+  GIVE_UP  SEEK 에서 영역 중심에 도착하고 give_up_sec 동안 못 찾음 — 완료 신호를 내고 다음
            미션으로 넘긴다 (탐색 점수는 없지만 15분 제한 안에 회피를 하러 간다).
 
 목표 부표 고정: 부표 검출 노드(buoy_lidar_detector)는 배에서 멀어진 부표를 지우고 색이 잠깐씩
@@ -26,20 +39,22 @@
   사라지면 relock_radius(0.6 m) 안 같은 색 부표를 이어받는다 — 1.2 m 붙은 초록·검정 쌍에서
   옆 부표로 끌려가지 않게. 고정한 부표가 목표 아닌 빨강·초록으로 분명히 바뀌면 고정을 풀고
   다시 찾는다. 목표 색이 lock_confirm_sec(1 s) 이어진 부표만 고른다.
-후보: 목표 색 부표 중 탐색 목표점에서 target_search_radius 안, 목표점에 가장 가까운 것.
-  각도를 쌓기 시작하기 전에는 목표점에 switch_margin 이상 더 가까운 후보가 나오면 바꾼다
+후보: 목표 색 부표 중 탐색 영역 중심에서 target_search_radius 안, 중심에 가장 가까운 것.
+  각도를 쌓기 시작하기 전에는 중심에 switch_margin 이상 더 가까운 후보가 나오면 바꾼다
   — 경기장 주황 부표는 부표 검출에서 빨강으로 나오므로(BUOY_DETECTOR.md), 멀리서
   주황 부표를 먼저 고른 뒤 진짜 목표가 보이는 경우를 위한 것이다.
 """
 import math
 from dataclasses import dataclass
-from typing import Optional, Tuple
+from typing import List, Optional, Sequence, Tuple
 
 TARGET_COLORS = ('red', 'green', 'black')
 # 규정 5.2(6): 빨강·초록 우현(시계), 검정(구 노랑) 좌현(반시계)
 TURN_DIRECTION = {'red': 'cw', 'green': 'cw', 'black': 'ccw'}
 # 목표 색 → 부표맵에서 받아들일 색. 검정 = 빨강·초록 아닌 물체(unknown).
 MATCH_COLORS = {'red': ('red',), 'green': ('green',), 'black': ('unknown', 'black')}
+
+XY = Tuple[float, float]
 
 
 @dataclass(frozen=True)
@@ -48,7 +63,9 @@ class SearchParams:
     orbit_radius: float = 2.0         # 부표 중심 → 선회 원 반경 [m] (선체 1.1 m + 부표 반경 여유)
     orbit_band: float = 1.0           # 원에서 이만큼 안쪽·바깥에 있을 때만 선회 각도를 센다 [m]
     laps: float = 1.1                 # 완료 바퀴 수 — 한 바퀴 + 36° 여유 (원이 확실히 닫히게)
-    target_search_radius: float = 10.0  # 탐색 목표점에서 이 안의 부표만 후보 [m]
+    target_search_radius: float = 12.0  # 탐색 영역 중심에서 이 안의 부표만 후보 [m]
+                                      # (10 → 12, 2026-11-13: 영역 중심 기준. 같은 bag 에서 탐색 부표는
+                                      #  중심 3.6–4.7 m, 다른 물체는 16.8 m 이상)
     relock_radius: float = 0.6        # 고정한 부표 ID 가 사라지면 이 안의 같은 색 부표를 이어받음 [m]
                                       # (1.2 m 붙은 초록·검정 쌍보다 작게 — 예전 1.5 는 옆 부표로 끌려갔다)
     lock_confirm_sec: float = 1.0     # 목표 색이 이만큼 이어진 부표만 고른다 — 검출 노드는 카메라
@@ -56,30 +73,46 @@ class SearchParams:
                                       # 정해진 초록·빨강 부표를 잡지 않게
     refine_alpha: float = 0.2         # 다시 보일 때 고정 위치 보정 비율 (tick 당)
     recenter_distance: float = 0.3    # 고정 위치가 이만큼 바뀌면 원 경로를 다시 만든다 [m]
-    switch_margin: float = 2.0        # 목표점에 이만큼 더 가까운 후보가 나오면 바꾼다 [m]
-    arrive_radius: float = 1.5        # 부표 못 찾았을 때 목표점 도착 반경 → 제자리 둘러보기 [m]
+    switch_margin: float = 2.0        # 영역 중심에 이만큼 더 가까운 후보가 나오면 바꾼다 [m]
+    arrive_radius: float = 1.5        # 부표 못 찾았을 때 영역 중심 도착 반경 → 제자리 둘러보기 [m]
     scan_turn: float = 0.15           # 제자리 둘러보기 회전 명령 (최대 추력 비율)
-    give_up_sec: float = 90.0         # 목표점 도착 후 이만큼 못 찾으면 포기 [s]
+    give_up_sec: float = 90.0         # 영역 중심 도착 후 이만큼 못 찾으면 포기 [s]
     orbit_thrust: float = 0.25        # 선회 LOS 직진 (공용 LOS 직진 0.25)
     orbit_turn: float = 0.31          # 선회 LOS 회전 상한 (공용 LOS 회전 0.31)
     ignore_radius: float = 1.0        # 선회 중 회피 반발에서 뺄 목표 부표 둘레 반경 [m]
     done_clearance: float = 1.5       # 완료 뒤 목표 부표에 이보다 가까이 안 감 [m]
                                       # (mission_manager transition_radius 2.0 보다 작게)
+    look_sec: float = 15.0            # 활성화 직후 제자리에서 둘러보는 시간 [s] (0 = 안 함)
+    black_waits_look: bool = True     # 검정(unknown) 목표는 LOOK 이 끝난 뒤에 고른다
+    hold_linear: float = 0.25         # LOOK 제자리 유지 전진 상한 — 바람 0.25 m/s 를 이기게
+                                      # (behavior 기본 0.101 ≈ 0.35 m/s 로는 겨우 버팀)
+    center_offset: float = 7.0        # 영역 중심을 못 받았을 때 활성화 자세 선수 방향 이만큼 앞 [m]
+    tangent_entry: bool = True        # 선회 원에 규정 방향 접선으로 진입
+    entry_lead: float = 0.8           # 접점에서 원을 따라 이만큼 더 간 점까지 진입 경로 [m]
+    entry_clearance: float = 1.5      # 진입 직선이 다른 부표와 이보다 가까우면 비켜 가는 경유점 [m]
+    entry_skip_band: float = 0.7      # 원에서 이만큼 안이면 진입 경로 없이 원을 바로 추종 [m]
 
     def __post_init__(self):
         if self.target_color not in ('',) + TARGET_COLORS:
             raise ValueError(f"search.target_color must be one of {TARGET_COLORS} or ''")
         positive = (self.orbit_radius, self.orbit_band, self.laps, self.target_search_radius,
                     self.relock_radius, self.recenter_distance, self.arrive_radius,
-                    self.give_up_sec, self.ignore_radius, self.done_clearance)
+                    self.give_up_sec, self.ignore_radius, self.done_clearance, self.entry_lead)
         if not all(math.isfinite(v) and v > 0.0 for v in positive):
-            raise ValueError('search radii, laps and give_up_sec must be finite and > 0')
-        unit = (self.refine_alpha, self.scan_turn, self.orbit_thrust, self.orbit_turn)
+            raise ValueError('search radii, laps, give_up_sec and entry_lead '
+                             'must be finite and > 0')
+        unit = (self.refine_alpha, self.scan_turn, self.orbit_thrust, self.orbit_turn,
+                self.hold_linear)
         if not all(math.isfinite(v) and 0.0 <= v <= 1.0 for v in unit):
-            raise ValueError('search refine_alpha / scan_turn / orbit_thrust / orbit_turn '
-                             'must be in [0, 1]')
-        if not (math.isfinite(self.switch_margin) and self.switch_margin >= 0.0):
-            raise ValueError('search.switch_margin must be finite and >= 0')
+            raise ValueError('search refine_alpha / scan_turn / orbit_thrust / orbit_turn / '
+                             'hold_linear must be in [0, 1]')
+        non_negative = (self.switch_margin, self.look_sec, self.entry_clearance,
+                        self.entry_skip_band)
+        if not all(math.isfinite(v) and v >= 0.0 for v in non_negative):
+            raise ValueError('search switch_margin / look_sec / entry_clearance / '
+                             'entry_skip_band must be finite and >= 0')
+        if not math.isfinite(self.center_offset):
+            raise ValueError('search.center_offset must be finite')
         if self.ignore_radius >= self.orbit_radius:
             raise ValueError('search.ignore_radius must be smaller than orbit_radius')
 
@@ -92,27 +125,97 @@ def _wrap(a: float) -> float:
     return math.atan2(math.sin(a), math.cos(a))
 
 
-def _xy(buoy) -> Tuple[float, float]:
+def _xy(buoy) -> XY:
     return float(buoy.position.x), float(buoy.position.y)
+
+
+def _segment_closest(p: XY, q: XY, o: XY) -> Tuple[XY, float]:
+    """선분 p–q 위에서 o 에 가장 가까운 점과 그 거리."""
+    vx, vy = q[0] - p[0], q[1] - p[1]
+    n2 = vx * vx + vy * vy
+    t = 0.0 if n2 < 1e-12 else max(0.0, min(1.0, ((o[0] - p[0]) * vx + (o[1] - p[1]) * vy) / n2))
+    c = (p[0] + t * vx, p[1] + t * vy)
+    return c, math.hypot(c[0] - o[0], c[1] - o[1])
+
+
+def tangent_entry(boat: XY, center: XY, radius: float, direction: str,
+                  obstacles: Sequence[XY] = (), *, lead: float = 0.8,
+                  clearance: float = 1.5, skip_band: float = 0.7) -> Optional[List[XY]]:
+    """배 → 선회 원 규정 방향 접선 진입 경로의 꼭짓점 [배, (경유점), 접점, 접점+lead].
+
+    배에서 원에 그은 두 접선 중 접점에서 원을 direction(cw/ccw)으로 이어 돌 수 있는 쪽을 고른다
+    — 원으로 곧장 들어가 반대로 꺾거나 원 안을 가로지르지 않는다. 마지막 점은 접점에서 원을
+    따라 lead 만큼 더 간 점이라, 진입 경로 끝의 진행 방향이 이미 원의 접선 방향이다.
+    배가 이미 원 띠(radius + skip_band) 안이면 None — 원을 바로 추종한다.
+    배 → 접점 직선이 obstacles(목표 아닌 부표)와 clearance 안으로 지나가면 가장 가까운 부표
+    바깥쪽으로 clearance + 0.5 m 비킨 경유점을 하나 넣는다.
+    """
+    if direction not in ('cw', 'ccw'):
+        raise ValueError("direction must be 'cw' or 'ccw'")
+    px, py = float(boat[0]), float(boat[1])
+    cx, cy = float(center[0]), float(center[1])
+    d = math.hypot(px - cx, py - cy)
+    if d <= radius + skip_band:
+        return None
+    phi = math.atan2(py - cy, px - cx)
+    alpha = math.acos(radius / d)
+    sign = 1.0 if direction == 'ccw' else -1.0
+    chosen = None
+    for s in (1.0, -1.0):
+        th = phi + s * alpha
+        tx, ty = cx + radius * math.cos(th), cy + radius * math.sin(th)
+        # 원을 direction 으로 돌 때 접점에서의 진행 방향
+        ux, uy = -sign * math.sin(th), sign * math.cos(th)
+        if (tx - px) * ux + (ty - py) * uy > 0.0:
+            chosen = (th, tx, ty)
+            break
+    th, tx, ty = chosen
+    th2 = th + sign * lead / radius
+    lead_pt = (cx + radius * math.cos(th2), cy + radius * math.sin(th2))
+    pts: List[XY] = [(px, py)]
+    worst = None
+    for o in obstacles:
+        c, dist = _segment_closest((px, py), (tx, ty), (float(o[0]), float(o[1])))
+        if dist < clearance and (worst is None or dist < worst[2]):
+            worst = (o, c, dist)
+    if worst is not None:
+        (ox, oy), (qx, qy), dist = worst
+        if dist > 1e-6:
+            nx, ny = (qx - ox) / dist, (qy - oy) / dist
+        else:   # 부표가 직선 위 — 원 중심에서 먼 쪽 수직 방향으로
+            sx, sy = tx - px, ty - py
+            n = math.hypot(sx, sy)
+            nx, ny = -sy / n, sx / n
+            plus = (ox + nx - cx) ** 2 + (oy + ny - cy) ** 2
+            minus = (ox - nx - cx) ** 2 + (oy - ny - cy) ** 2
+            if plus < minus:
+                nx, ny = -nx, -ny
+        k = clearance + 0.5
+        pts.append((ox + nx * k, oy + ny * k))
+    pts += [(tx, ty), lead_pt]
+    return pts
 
 
 class SearchFsm:
     """탐색 단계 판정. 매 tick update() 를 부르고 phase/center 를 읽어 주행한다.
 
     buoys 는 color 와 position.x/.y 를 가진 객체 (kaboat_msgs/Buoy 또는 같은 모양).
+    goal_xy = 출구(search_end), area_xy = 탐색 영역 중심 (None 이면 goal 과 같음 — 예전 동작).
     """
 
-    def __init__(self, params: SearchParams, goal_xy):
+    def __init__(self, params: SearchParams, goal_xy, area_xy=None):
         if params.direction is None:
             raise ValueError('search.target_color is not set')
         self.p = params
         self.goal = (float(goal_xy[0]), float(goal_xy[1]))
-        self.phase = 'SEEK'
-        self.center: Optional[Tuple[float, float]] = None
+        self.area = self.goal if area_xy is None else (float(area_xy[0]), float(area_xy[1]))
+        self.phase = 'LOOK' if params.look_sec > 0.0 else 'SEEK'
+        self.center: Optional[XY] = None
         self.swept = 0.0          # 규정 방향으로 돈 각도 [rad]
         self.counting = False     # 한 번이라도 원 띠 안에서 각도를 셌는가
         self._prev_theta = None
         self._scan_since = None
+        self._look_since = None
         self.switches = 0
         self.locked_id = None     # 고정한 부표의 검출 노드 ID (없으면 위치로만)
         self.unlocks = 0
@@ -134,8 +237,14 @@ class SearchFsm:
     def target_laps(self) -> float:
         return self.swept / (2.0 * math.pi)
 
-    def exit_point(self, boat_xy) -> Tuple[float, float]:
-        """완료 뒤 갈 점 — 보통 탐색 목표점, 목표점이 부표 위면 부표에서 배 쪽으로 비킨 점."""
+    def look_remaining(self, now: float) -> float:
+        """LOOK 남은 시간 [s] (시작 전이면 look_sec)."""
+        if self._look_since is None:
+            return self.p.look_sec
+        return max(0.0, self.p.look_sec - (now - self._look_since))
+
+    def exit_point(self, boat_xy) -> XY:
+        """완료 뒤 갈 점 — 보통 출구(goal), 출구가 부표 위면 부표에서 배 쪽으로 비킨 점."""
         if self.center is None or math.dist(self.goal, self.center) >= self.p.done_clearance:
             return self.goal
         cx, cy = self.center
@@ -146,11 +255,11 @@ class SearchFsm:
         k = self.p.done_clearance / n
         return (cx + vx * k, cy + vy * k)
 
-    def _dist_goal(self, xy) -> float:
-        return math.hypot(xy[0] - self.goal[0], xy[1] - self.goal[1])
+    def _dist_area(self, xy) -> float:
+        return math.hypot(xy[0] - self.area[0], xy[1] - self.area[1])
 
     def candidates(self, buoys, now: Optional[float] = None):
-        """목표 색(MATCH_COLORS)이고 목표점 target_search_radius 안 — 목표점에 가까운 순
+        """목표 색(MATCH_COLORS)이고 영역 중심 target_search_radius 안 — 중심에 가까운 순
         [(xy, id)]. now 를 주면 목표 색이 lock_confirm_sec 이상 이어진 부표만."""
         out, seen = [], set()
         for b in buoys:
@@ -159,7 +268,7 @@ class SearchFsm:
             xy = _xy(b)
             if not all(math.isfinite(v) for v in xy):
                 continue
-            d = self._dist_goal(xy)
+            d = self._dist_area(xy)
             if d > self.p.target_search_radius:
                 continue
             bid = getattr(b, 'id', None)
@@ -175,6 +284,13 @@ class SearchFsm:
         out.sort(key=lambda t: t[0])
         return [(xy, bid) for _, xy, bid in out]
 
+    def _looking(self, now: float) -> bool:
+        if self.p.look_sec <= 0.0:
+            return False
+        if self._look_since is None:
+            self._look_since = now
+        return now - self._look_since < self.p.look_sec
+
     def update(self, buoys, boat_xy, now: float) -> str:
         if self.done:
             return self.phase
@@ -182,16 +298,22 @@ class SearchFsm:
         if self.center is not None and not self._refine(buoys):
             self._unlock()                 # 고정한 부표가 목표 아닌 색으로 바뀜 — 다시 찾기
         if self.center is None:
-            if cands:
+            looking = self._looking(now)
+            wait = looking and self.p.black_waits_look and self.p.target_color == 'black'
+            if cands and not wait:
                 self._lock(*cands[0])
             else:
+                if looking:
+                    self.phase = 'LOOK'
+                    return self.phase
+                self.phase = 'SEEK'
                 self._seek(boat_xy, now)
                 return self.phase
         elif not self.counting and cands:
             best, bid = cands[0]
             far_from_lock = math.dist(best, self.center) > self.p.relock_radius
-            closer = (self._dist_goal(best) + self.p.switch_margin
-                      < self._dist_goal(self.center))
+            closer = (self._dist_area(best) + self.p.switch_margin
+                      < self._dist_area(self.center))
             if far_from_lock and closer:
                 self._lock(best, bid)
                 self.switches += 1
@@ -219,8 +341,8 @@ class SearchFsm:
         self.unlocks += 1
 
     def _seek(self, boat_xy, now):
-        if self._dist_goal(boat_xy) > self.p.arrive_radius:
-            return   # 목표점 접근 중 — 포기 시계는 도착해야 돈다
+        if self._dist_area(boat_xy) > self.p.arrive_radius:
+            return   # 영역 중심 접근 중 — 포기 시계는 도착해야 돈다
         if self._scan_since is None:
             self._scan_since = now
         elif now - self._scan_since >= self.p.give_up_sec:

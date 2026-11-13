@@ -7,7 +7,7 @@ import pytest
 
 from kaboat_mission.mission_points import (
     MissionPoint, PointStore, auto_name, check_name, mission_slot, mission_targets,
-    origin_distance_m, read_origin_file, same_origin)
+    origin_distance_m, read_origin_file, same_origin, is_mission_point, search_center)
 
 ORIGIN = (35.1234567, 129.0456789, 12.5)
 
@@ -131,3 +131,14 @@ def test_mission_targets_refuses_half_pair():
         mission_targets(_store(gate_entry=(1.0, 2.0, 90.0)))
     with pytest.raises(ValueError, match='station_entry'):
         mission_targets(_store(station_end=(1.0, 2.0, 0.0)))
+
+
+def test_search_center_is_a_mission_point_outside_entry_end_pairs():
+    assert is_mission_point('search_center')
+    assert is_mission_point('search_entry') and is_mission_point('gate_end')
+    assert not is_mission_point('p1')
+    store = PointStore()
+    assert search_center(store) is None
+    store, _ = store.with_point('search_center', MissionPoint(170.9, -2.5, 0.0), None)
+    assert search_center(store) == [170.9, -2.5]
+    assert 'search' not in mission_targets(store)       # 단독으로는 미션 쌍이 아님
