@@ -86,7 +86,8 @@ class SearchParams:
     black_waits_look: bool = True     # 검정(unknown) 목표는 LOOK 이 끝난 뒤에 고른다
     hold_linear: float = 0.25         # LOOK 제자리 유지 전진 상한 — 바람 0.25 m/s 를 이기게
                                       # (behavior 기본 0.101 ≈ 0.35 m/s 로는 겨우 버팀)
-    center_offset: float = 7.0        # 영역 중심을 못 받았을 때 활성화 자세 선수 방향 이만큼 앞 [m]
+    require_grid: bool = True         # /occupancy_grid 없거나 끊기면 정지 (gate 와 같은 규칙)
+    grid_timeout_sec: float = 0.7     # 지도가 이보다 오래 안 오면 끊긴 것으로 [s] (gate 0.7 과 같음)
     tangent_entry: bool = True        # 선회 원에 규정 방향 접선으로 진입
     entry_lead: float = 0.8           # 접점에서 원을 따라 이만큼 더 간 점까지 진입 경로 [m]
     entry_clearance: float = 1.5      # 진입 직선이 다른 부표와 이보다 가까우면 비켜 가는 경유점 [m]
@@ -111,8 +112,8 @@ class SearchParams:
         if not all(math.isfinite(v) and v >= 0.0 for v in non_negative):
             raise ValueError('search switch_margin / look_sec / entry_clearance / '
                              'entry_skip_band must be finite and >= 0')
-        if not math.isfinite(self.center_offset):
-            raise ValueError('search.center_offset must be finite')
+        if not (math.isfinite(self.grid_timeout_sec) and self.grid_timeout_sec > 0.0):
+            raise ValueError('search.grid_timeout_sec must be finite and > 0')
         if self.ignore_radius >= self.orbit_radius:
             raise ValueError('search.ignore_radius must be smaller than orbit_radius')
 

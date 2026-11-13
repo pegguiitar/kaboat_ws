@@ -17,9 +17,15 @@
   GIVE_UP  영역 중심에서 give_up_sec 동안 못 찾음 → 완료 신호 내고 search_end 로
 
 탐색 영역 중심: /mission/search_center (mission_manager — rec search_center, 없으면 search_entry
-  선수 방향 7 m 앞). 못 받으면 활성화 자세 선수 방향 search.center_offset 앞 (경고).
-  search_end(/mission/goal)는 완료 뒤 출구로만 쓴다 (2026-11-13: 끝점 10 m 안에서 후보를 찾다
-  22 m 떨어진 탐색 부표를 끝까지 못 골랐다).
+  선수 방향 7 m 앞). 못 받으면(search_entry 도 없는 시뮬·mission_params 흐름) 예전처럼
+  search_end 를 영역 중심으로 쓴다 (경고). 받으면 search_end(/mission/goal)는 완료 뒤 출구로만
+  쓴다 (2026-11-13: 끝점 10 m 안에서 후보를 찾다 22 m 떨어진 탐색 부표를 끝까지 못 골랐다).
+
+점유지도 필수 (gate 와 같은 규칙): /occupancy_grid 가 search.grid_timeout_sec(0.7 s) 넘게 끊기거나
+  frame 이 odom 이 아니면 정지 — run_map 을 안 켜면 반발 회피 없이 도는 걸 막는다.
+  search.require_grid:=false 로 끌 수 있다(지도 없는 수조·시험).
+반발 조향(apply_repulsion): SEEK 이동·접선 진입·선회·출구 이동, LOOK 은 전진할 때만
+  (탐색 부표 쪽을 보고 제자리 회전할 때 걸면 앞 부표 때문에 선수각을 못 맞춘다).
 
 입력   /detections/buoys, /odom, /mission/goal, /mission/search_center, /mission/state,
        /occupancy_grid
@@ -77,6 +83,7 @@ class SearchCircler(BehaviorBase):
         # LOOK 위치 유지 전용 — 공용 waypoint() 는 그대로 두고 전진 상한만 hold_linear 로 다른 것
         self._hold_ctrl = WaypointController(dataclasses.replace(
             self._waypoint_controller.params, max_linear=self.params.hold_linear))
+        self._grid_at = None          # 마지막 /occupancy_grid 수신 시각 (monotonic)
         self._reset_run()
 
         latched = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
@@ -114,7 +121,7 @@ class SearchCircler(BehaviorBase):
         self._entry_points = None
         self._hold = None              # LOOK 에서 지킬 (x, y, 선수각 deg)
         self._hold_ctrl.reset()
-        self._fallback_area = None
+        self._warned_no_center = False
         self._last_status = None
 
     # ── 활성화 ──────────────────────────────────────────
@@ -123,6 +130,16 @@ class SearchCircler(BehaviorBase):
 
     def on_deactivate(self):
         self._reset_run()
+
+    def _on_grid(self, msg):
+        super()._on_grid(msg)
+        self._grid_at = time.monotonic()
+
+    def _grid_ok(self, now: float) -> bool:
+        grid = self.occupancy_grid
+        return (grid is not None and grid.header.frame_id == 'odom'
+                and self._grid_at is not None
+                and now - self._grid_at <= self.params.grid_timeout_sec)
 
     def _on_search_center(self, msg: PoseStamped):
         p = msg.pose.position
@@ -135,20 +152,16 @@ class SearchCircler(BehaviorBase):
             self.status_pub.publish(String(data=text))
             self.get_logger().info(f'search: {text}')
 
-    def _area_xy(self):
-        """탐색 영역 중심 — /mission/search_center, 못 받았으면 활성화 자세 선수 방향 앞."""
+    def _area_xy(self, goal):
+        """탐색 영역 중심 — /mission/search_center, 못 받았으면 예전처럼 search_end(goal)."""
         if self.search_center is not None:
             return self.search_center
-        if self._fallback_area is None:
-            pose = self.odom.pose.pose
-            yaw = yaw_from_quaternion(pose.orientation)
-            d = self.params.center_offset
-            self._fallback_area = (pose.position.x + d * math.cos(yaw),
-                                   pose.position.y + d * math.sin(yaw))
+        if not self._warned_no_center:
+            self._warned_no_center = True
             self.get_logger().warning(
-                f'/mission/search_center 없음 — 활성화 자세 선수 방향 {d:.1f} m 앞 '
-                f'({self._fallback_area[0]:.1f}, {self._fallback_area[1]:.1f}) 을 탐색 영역 중심으로')
-        return self._fallback_area
+                '/mission/search_center 없음 — search_end 를 탐색 영역 중심으로 씀 '
+                '(현장에선 rec search_entry 또는 search_center 를 기록)')
+        return goal
 
     # ── 제어 ─────────────────────────────────────────────
     def compute_cmd(self):
@@ -159,8 +172,17 @@ class SearchCircler(BehaviorBase):
             self.get_logger().error('search.target_color 미설정 — 정지',
                                     throttle_duration_sec=5.0)
             return Twist()
+        now = time.monotonic()
+        if self.params.require_grid and not self._grid_ok(now):
+            # gate 와 같은 규칙 — 지도 없이(반발 회피 없이) 움직이지 않는다
+            self._status('점유지도 없음·끊김 — 정지 (run_map 확인)')
+            self.get_logger().error(
+                f'search: /occupancy_grid 가 {self.params.grid_timeout_sec:.1f} s 넘게 없음 — 정지. '
+                'run_map 을 켜거나, 지도 없는 시험이면 search.require_grid:=false',
+                throttle_duration_sec=5.0)
+            return Twist()
         goal = (self.goal.pose.position.x, self.goal.pose.position.y)
-        area = self._area_xy()
+        area = self._area_xy(goal)
         if (self.fsm is None or math.dist(goal, self.fsm.goal) > GOAL_RESET_DISTANCE
                 or math.dist(area, self.fsm.area) > GOAL_RESET_DISTANCE):
             self.fsm = SearchFsm(self.params, goal, area)
@@ -175,7 +197,6 @@ class SearchCircler(BehaviorBase):
         pos = self.odom.pose.pose.position
         boat = (pos.x, pos.y)
         fsm = self.fsm
-        now = time.monotonic()
         phase = fsm.update(self.buoys, boat, now)
 
         if fsm.done:
@@ -269,6 +290,9 @@ class SearchCircler(BehaviorBase):
                                     self.odom.twist.twist.angular.z, time.monotonic())
         cmd = Twist()
         cmd.linear.x, cmd.angular.z = step.linear, step.angular
+        if cmd.linear.x > 0.0:
+            # 밀려서 제자리로 돌아갈 때만 — 제자리 회전(선수각 맞추기)엔 걸지 않는다
+            cmd = apply_repulsion(cmd, self.occupancy_grid, self.odom)
         return cmd
 
     def _go_goal(self, target):

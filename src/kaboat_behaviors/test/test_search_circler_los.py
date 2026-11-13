@@ -7,6 +7,7 @@ from geometry_msgs.msg import PoseStamped, Twist
 import numpy as np
 import pytest
 
+import kaboat_behaviors.search_circler as search_circler_mod
 from kaboat_behaviors.search_circler import SearchCircler
 from kaboat_behaviors.behavior_base import DEFAULT_MAX_LINEAR, WAYPOINT_MAX_ANGULAR
 from kaboat_behaviors.search_orbit import SearchParams
@@ -26,10 +27,11 @@ def make_state(color, buoys, boat=(45.0, 70.0), yaw=0.0, search_center=(50.0, 70
     calls = []
     params.setdefault('lock_confirm_sec', 0.0)
     params.setdefault('look_sec', 0.0)
+    params.setdefault('require_grid', False)   # 지도 규칙은 아래 따로 시험
     state = SimpleNamespace(
         goal=goal, odom=odom, occupancy_grid=None, buoys=buoys,
         params=SearchParams(target_color=color, **params), fsm=None,
-        search_center=search_center, _fallback_area=None, _hold=None,
+        search_center=search_center, _warned_no_center=False, _hold=None, _grid_at=None,
         _circle_path=None, _circle_center=None, _last_status=None,
         _entry_path=None, _entry_points=None, _entry_done=False,
         _los_follower=SimpleNamespace(reset=lambda: None),
@@ -44,7 +46,7 @@ def make_state(color, buoys, boat=(45.0, 70.0), yaw=0.0, search_center=(50.0, 70
     state.los = lambda path, ratio, turn: (calls.append((path, ratio, turn)) or Twist(), False)
     state.waypoint = lambda x, y, *a, **kw: (calls.append(('wp', x, y, *a, kw)) or Twist(), False)
     state.report_complete = lambda: state.completed.append(True)
-    for name in ('_status', '_go_goal', '_area_xy', '_plan_entry', '_hold_pose'):
+    for name in ('_status', '_go_goal', '_area_xy', '_plan_entry', '_hold_pose', '_grid_ok'):
         setattr(state, name, (lambda n: lambda *a: getattr(SearchCircler, n)(state, *a))(name))
     state._hold_ctrl = WaypointController(WaypointParams(
         max_linear=state.params.hold_linear, max_angular=WAYPOINT_MAX_ANGULAR,
@@ -108,11 +110,12 @@ def test_no_target_drives_to_area_center():
     assert state.calls[0][:3] == ('wp', 60.0, 75.0)
 
 
-def test_area_falls_back_ahead_of_activation_pose():
-    state = make_state('green', [], yaw=math.pi / 2, search_center=None, center_offset=7.0)
+def test_area_falls_back_to_search_end_without_center():
+    # search_entry·search_center 없는 시뮬·mission_params 흐름 — 예전처럼 search_end 중심
+    state = make_state('green', [buoy('green', 55.0, 70.0)], search_center=None)
     SearchCircler.compute_cmd(state)
-    _, x, y = state.calls[0][:3]
-    assert (x, y) == (45.0 + 7.0 * math.cos(math.pi / 2), 77.0)
+    assert state.fsm.area == (50.0, 70.0)
+    assert state.fsm.center == (55.0, 70.0)
 
 
 def test_look_holds_activation_pose_facing_area_with_hold_cap():
@@ -138,3 +141,41 @@ def test_unset_colour_stops():
     state = make_state('', [buoy('red', 52.0, 71.0)])
     cmd = SearchCircler.compute_cmd(state)
     assert cmd == Twist() and state.calls == []
+
+
+# ---------- 점유지도 필수 (gate 와 같은 규칙) ----------
+
+def grid_msg(frame='odom'):
+    return SimpleNamespace(header=SimpleNamespace(frame_id=frame))
+
+
+@pytest.mark.parametrize('grid, age', [(None, None), (grid_msg(), 1.0), (grid_msg('map'), 0.0)])
+def test_stops_without_fresh_odom_grid(grid, age):
+    state = make_state('red', [buoy('red', 52.0, 71.0)], require_grid=True, grid_timeout_sec=0.7)
+    state.occupancy_grid = grid
+    state._grid_at = None if age is None else search_circler_mod.time.monotonic() - age
+    cmd = SearchCircler.compute_cmd(state)
+    assert cmd == Twist() and state.calls == [] and state.fsm is None
+    assert '점유지도' in state._last_status
+
+
+def test_runs_with_fresh_grid():
+    state = make_state('red', [buoy('red', 52.0, 71.0)], boat=(54.0, 71.0), require_grid=True)
+    state.occupancy_grid = grid_msg()
+    state._grid_at = search_circler_mod.time.monotonic()
+    SearchCircler.compute_cmd(state)
+    assert state.calls and state.calls[0][0].closed
+
+
+# ---------- LOOK 반발: 전진할 때만 ----------
+
+def test_look_repulsion_only_while_moving(monkeypatch):
+    seen = []
+    monkeypatch.setattr(search_circler_mod, 'apply_repulsion',
+                        lambda cmd, grid, odom, ignore=None: seen.append(cmd.linear.x) or cmd)
+    state = make_state('red', [], search_center=(60.0, 70.0), look_sec=15.0)
+    SearchCircler.compute_cmd(state)          # 제자리 — 선수각만 (이미 영역 쪽) → 반발 안 걸림
+    assert seen == []
+    move(state, 43.0, 70.0)                   # 2 m 밀림 → 제자리로 전진 → 반발
+    SearchCircler.compute_cmd(state)
+    assert len(seen) == 1 and seen[0] > 0.0
