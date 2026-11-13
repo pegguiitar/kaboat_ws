@@ -14,7 +14,7 @@
 입력   /scan/level, /odom, 컬러 영상(color_topic, color_compressed), /camera/camera_info,
        /imu/data (창 투영 롤·피치)
 출력   /detections/buoys (BuoyArray, 확정 + 카메라에 찍힌 것만 — unseen 은 publish_unseen),
-       ~/markers (덩어리 점·중심·버린 노이즈 점·확정 부표 중심과 확률), ~/debug_image (창·표)
+       ~/markers (확정 부표 중심 = 둥근 점, 색 = 부표 색, 존재 확률 글자), ~/debug_image (창·표)
 """
 import collections
 import dataclasses
@@ -36,9 +36,8 @@ from kaboat_msgs.msg import Buoy, BuoyArray
 from kaboat_perception.buoy_color import ColorParams, classify_colors, vote_colors
 from kaboat_perception.buoy_evidence import EvidenceParams, EvidenceTracker, LidarView
 from kaboat_perception.buoy_localize import BuoyGeometry, lidar_blobs, lidar_points
+from kaboat_perception.buoy_pointmap import PointMapParams, PointMapTracker
 
-BLOB_GREY = (0.75, 0.75, 0.75)    # 확정 부표에 안 붙은 덩어리 (후보·새 것)
-NOISE_GREY = (0.35, 0.35, 0.4)    # 노이즈로 버린 덩어리
 RGB = {'red': (1.0, 0.15, 0.15), 'green': (0.1, 0.9, 0.2), 'unknown': (0.15, 0.15, 0.15),
        'unseen': (0.55, 0.55, 0.85)}
 BGR_VOTE = {'red': (40, 40, 255), 'green': (40, 220, 40), 'unknown': (200, 200, 200),
@@ -90,8 +89,16 @@ class BuoyLidarDetector(Node):
                                  min_blob_width=float(gp('cand_min_width')),
                                  max_cluster_width=float(gp('cand_max_width')))
         self.cp = self._params_from('color', ColorParams)
+        # 트래커: pointmap = 원본 덩어리 점마다 log-odds 를 붙여 남겨 두고 굳은 점을 군집화 (기본),
+        #         scan = 스캔마다 그 스캔 덩어리만 군집화해 부표 중심(최근 중앙값)에 연결 (예전)
+        self.declare_parameter('tracker', 'pointmap')
         self.ep = self._params_from('evidence', EvidenceParams)
-        self.tracker = EvidenceTracker(self.ep)
+        if self.get_parameter('tracker').value == 'scan':
+            self.tracker = EvidenceTracker(self.ep)
+        else:
+            self.pp = self._params_from('pointmap', PointMapParams)
+            self.tracker = PointMapTracker(self.pp)
+        self.ep = getattr(self, 'pp', self.ep)
         self.image_max_age = float(self.get_parameter('image_max_age').value)
         self.publish_unseen = bool(self.get_parameter('publish_unseen').value)
         self.show_tentative = bool(self.get_parameter('show_tentative').value)
@@ -194,10 +201,9 @@ class BuoyLidarDetector(Node):
         if pose is None:
             return
         g = self.geom
-        rejected = []
         found = [(xy, r, cl) for cl, xy, r in lidar_blobs(
                      lidar_points(s.ranges, s.angle_min, s.angle_increment,
-                                  s.range_min, s.range_max, g), g, s.angle_increment, rejected)
+                                  s.range_min, s.range_max, g), g, s.angle_increment)
                  if self.cand_min_range
                  <= math.hypot(xy[0] - g.lidar_offset_x, xy[1] - g.lidar_offset_y)
                  <= self.cand_max_range]
@@ -235,8 +241,7 @@ class BuoyLidarDetector(Node):
                                     in zip(world, votes, spawn, world_pts)], t, view)
         self._publish(s.header.stamp, conf)
         if self.marker_pub.get_subscription_count() > 0:
-            self._publish_markers(s.header.stamp, world_pts, [cl @ rot.T + np.array([px, py])
-                                                              for cl, _xy, _r, _why in rejected])
+            self._publish_markers(s.header.stamp)
         if self.debug_pub.get_subscription_count() > 0 and self.image is not None:
             self._publish_debug()
 
@@ -255,68 +260,41 @@ class BuoyLidarDetector(Node):
             out.buoys.append(b)
         self.pub.publish(out)
 
-    def _publish_markers(self, stamp, blob_pts, rejected_pts):
-        """덩어리를 군집된 그대로 그린다 — 원 대신 점.
-          blobs     이번 스캔 덩어리 점. 확정 부표에 붙으면 그 색, 아니면(후보·새 것) 회색
-          centroid  이번 스캔 덩어리 중심 (작은 점)
-          noise     버린 덩어리 점 (점 수·폭·덮는 폭·채움비) — 어두운 작은 점
-          buoy      확정 부표 위치 (최근 덩어리 중심 중앙값, 큰 점) + 존재 확률 글자
-        """
+    def _publish_markers(self, stamp):
+        """부표 중심만 둥근 점으로 (색 = 부표 색) + 존재 확률 글자."""
         arr = MarkerArray()
         clear = Marker()
         clear.action = Marker.DELETEALL
         arr.markers.append(clear)
-        by_id = {t.id: t for t in self.tracker.tracks}
-
-        def points(ns, mid, size, z):
-            m = Marker()
-            m.header.frame_id, m.header.stamp = 'odom', stamp
-            m.ns, m.id = ns, mid
-            m.type, m.action = Marker.POINTS, Marker.ADD
-            m.pose.orientation.w = 1.0
-            m.scale.x = m.scale.y = size
-            m.pose.position.z = z      # 높이는 마커 자세로 (점은 z = 0)
-            return m
-
-        def add(m, x, y, rgb, a=1.0):
-            pt = Point()
-            pt.x, pt.y = float(x), float(y)
-            c = ColorRGBA()
-            c.r, c.g, c.b, c.a = float(rgb[0]), float(rgb[1]), float(rgb[2]), a
-            m.points.append(pt)
-            m.colors.append(c)
-
-        pts_m = points('blobs', 0, 0.07, 0.05)
-        cen_m = points('centroid', 0, 0.14, 0.1)
-        for i, wp in enumerate(blob_pts):
-            tr = by_id.get(self.tracker.last_assoc.get(i, -1))
-            rgb = RGB.get(tr.color, RGB['unknown']) if tr is not None and tr.confirmed else BLOB_GREY
-            for x, y in wp:
-                add(pts_m, x, y, rgb)
-            cx, cy = np.mean(wp, axis=0)
-            add(cen_m, cx, cy, (1.0, 1.0, 1.0))
-        noise_m = points('noise', 0, 0.05, 0.02)
-        for wp in rejected_pts:
-            for x, y in wp:
-                add(noise_m, x, y, NOISE_GREY, 0.8)
-        buoy_m = points('buoy', 0, 0.3, 0.15)
+        cen = Marker()
+        cen.header.frame_id, cen.header.stamp = 'odom', stamp
+        cen.ns, cen.id = 'buoy', 0
+        cen.type, cen.action = Marker.SPHERE_LIST, Marker.ADD
+        cen.pose.orientation.w = 1.0
+        cen.pose.position.z = 0.15
+        cen.scale.x = cen.scale.y = cen.scale.z = 0.3
         for tr in self.tracker.tracks:
             if not tr.confirmed and not self.show_tentative:
                 continue
-            add(buoy_m, tr.x, tr.y, RGB.get(tr.color, RGB['unknown']), 1.0 if tr.confirmed else 0.35)
+            r, gg, b = RGB.get(tr.color, RGB['unknown'])
+            pt = Point()
+            pt.x, pt.y = float(tr.x), float(tr.y)
+            col = ColorRGBA()
+            col.r, col.g, col.b, col.a = r, gg, b, 1.0 if tr.confirmed else 0.35
+            cen.points.append(pt)
+            cen.colors.append(col)
             txt = Marker()
-            txt.header.frame_id, txt.header.stamp = 'odom', stamp
+            txt.header = cen.header
             txt.ns, txt.id = 'label', tr.id
             txt.type, txt.action = Marker.TEXT_VIEW_FACING, Marker.ADD
-            txt.pose.position.x, txt.pose.position.y, txt.pose.position.z = tr.x, tr.y, 0.8
+            txt.pose.position.x, txt.pose.position.y, txt.pose.position.z = tr.x, tr.y, 0.7
             txt.pose.orientation.w = 1.0
             txt.scale.z = 0.35
             txt.color.r = txt.color.g = txt.color.b = txt.color.a = 1.0
             txt.text = f'{tr.probability:.2f}'   # 존재 확률만
             arr.markers.append(txt)
-        for m in (noise_m, pts_m, cen_m, buoy_m):
-            if m.points:
-                arr.markers.append(m)
+        if cen.points:
+            arr.markers.append(cen)
         self.marker_pub.publish(arr)
 
     def _publish_debug(self):

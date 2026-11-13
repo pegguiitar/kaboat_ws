@@ -14,6 +14,7 @@
   <exec_depend>visualization_msgs</exec_depend>
   <exec_depend>kaboat_msgs</exec_depend>
   <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-scipy</exec_depend>
   <exec_depend>cv_bridge</exec_depend>
   <exec_depend>message_filters</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
