@@ -81,6 +81,110 @@ def test_refuses_far_from_start_or_facing_away(node):
     assert not ok and 'heading' in why
 
 
+def _drive_along(n, steps=30, step_m=0.3):
+    """시작점에서 목표 쪽으로 몇 m 움직이며 tick — FSM 이 지나온 궤적을 기록한다."""
+    c, s = math.cos(GOAL_BEARING), math.sin(GOAL_BEARING)
+    for k in range(steps):
+        _feed(n, START[0] + c * step_m * k, START[1] + s * step_m * k, GOAL_BEARING)
+        n._tick()
+
+
+def _far_point():
+    """시작점에서 목표 쪽으로 20 m — 출발 검사(3 m)로는 출발 못 하는 자리."""
+    return (START[0] + 20.0 * math.cos(GOAL_BEARING), START[1] + 20.0 * math.sin(GOAL_BEARING))
+
+
+def test_mid_run_disarm_resumes_from_here_and_keeps_the_trail(node):
+    """주행 중 풀리면(센서 끊김·경로 이탈) 시작점에 돌아가야만 다시 출발했고, 다시 출발할 때 지나온
+    궤적까지 지워 ESCAPE 가 후진하지 못했다 (2026-11-13 야외 회피). 이제 지금 자리에서 이어 간다."""
+    assert node.resume_after_disarm                   # outdoor_avoid_test.yaml 에서 켬
+    _feed(node, *START, GOAL_BEARING)
+    node._tick()
+    assert node._arm()[0]
+    _drive_along(node)
+    trail_m = node.fsm.trail.length()
+    assert trail_m > 5.0
+    node._disarm('cross-track error 1.80 m')
+    assert not node.started and node.resume_pending
+    assert node.fsm.trail.length() == pytest.approx(trail_m)     # 풀려도 궤적 유지
+    _feed(node, *_far_point(), GOAL_BEARING + math.radians(120))   # 시작점 20 m·목표에서 120° 틀어짐
+    node._tick()
+    assert node.started and not node.resume_pending                # 시작점·방위 검사 없이 이어 감
+    assert node.fsm.trail.length() == pytest.approx(trail_m)
+
+
+def test_resume_does_not_need_a_preview_path(node):
+    """경로를 못 만드는 자리에서 풀렸어도 이어 간다 — FSM 이 찾고, 못 찾으면 ESCAPE 로 후진."""
+    _feed(node, *START, GOAL_BEARING)
+    node._tick()
+    assert node._arm()[0]
+    _drive_along(node)
+    node._disarm('/scan stale (0.62 s)')
+    node._generate_plan = lambda *a, **k: None
+    _feed(node, *_far_point(), GOAL_BEARING)
+    node._tick()
+    assert node.started
+
+
+def test_resumed_escape_retraces_the_kept_trail(node):
+    """이어 간 뒤 경로를 못 찾으면 ESCAPE 가 남긴 궤적을 되짚어 후진한다."""
+    _feed(node, *START, GOAL_BEARING)
+    node._tick()
+    assert node._arm()[0]
+    _drive_along(node)
+    end = (START[0] + math.cos(GOAL_BEARING) * 0.3 * 29, START[1] + math.sin(GOAL_BEARING) * 0.3 * 29)
+    node._disarm('cross-track error 1.80 m')
+    _feed(node, *end, GOAL_BEARING)
+    node._tick()
+    assert node.started
+    out = node.fsm._enter_escape(0.0, 'test', end)
+    assert out.state == 'ESCAPE' and node.fsm._retrace is not None    # 되짚을 길이 있음
+
+
+def test_escape_recovery_does_not_disarm_the_test(node):
+    """ESCAPE 에서 회복하는 순간 로거 예외('Logger severity cannot be changed between calls')가
+    계획기 오류로 잡혀 시험이 풀렸다 (2026-11-13 bag 10:22:34). 진입·복귀를 두 번 오가도 그대로."""
+    from kaboat_behaviors.avoid_fsm import StepOut
+    _feed(node, *START, GOAL_BEARING)
+    node._tick()
+    assert node._arm()[0]
+    for st, ev in (('ESCAPE', 'escape_panic'), ('FOLLOW', 'escape_recovered'),
+                   ('ESCAPE', 'escape_panic'), ('FOLLOW', 'escape_recovered')):
+        node.fsm.step = lambda *a, st=st, ev=ev: StepOut(0.0, 0.0, st, None, ev)
+        _feed(node, *START, GOAL_BEARING)
+        node._tick()
+        assert node.started, st
+
+
+def test_emergency_stop_does_not_resume(node):
+    from std_msgs.msg import Bool
+    _feed(node, *START, GOAL_BEARING)
+    node._tick()
+    assert node._arm()[0]
+    _drive_along(node)
+    node._on_estop(Bool(data=True))
+    node._on_estop(Bool(data=False))
+    assert not node.resume_pending
+    _feed(node, *_far_point(), GOAL_BEARING)
+    node._tick()
+    ok, why = node._arm()
+    assert not ok and 'from the start point' in why
+
+
+def test_resume_off_keeps_the_old_start_check(node):
+    node.resume_after_disarm = False
+    _feed(node, *START, GOAL_BEARING)
+    node._tick()
+    assert node._arm()[0]
+    _drive_along(node)
+    node._disarm('cross-track error 1.80 m')
+    assert not node.resume_pending
+    _feed(node, *_far_point(), GOAL_BEARING)
+    node._tick()
+    ok, why = node._arm()
+    assert not ok and 'from the start point' in why
+
+
 @pytest.fixture
 def launch_mod():
     spec = importlib.util.spec_from_file_location('outdoor_avoid_launch', LAUNCH)

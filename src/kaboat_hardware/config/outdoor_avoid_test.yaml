@@ -5,6 +5,9 @@ real_obstacle_avoid_test:
   ros__parameters:
     drive_enabled: false
     allow_escape: true                   # 경로를 못 만들면 후진 탈출(ESCAPE). false 면 정지
+    # 주행 중 센서 끊김·경로 이탈·계획기 예외로 풀리면 시작점 검사 없이 지금 자리에서 이어 감
+    # (지나온 궤적 유지 → ESCAPE 후진 가능). 비상정지·/start_mission false·도착은 제외
+    resume_after_disarm: true
 
     # 출발 조건: 배가 시작점 start_tolerance 안 + 선수가 목표 방향에서
     # start_heading_tolerance_deg 이내 (goto <시작점> 으로 세운 뒤 켜면 바로 출발)
@@ -22,7 +25,9 @@ real_obstacle_avoid_test:
     max_linear_cmd: 0.2                  # 전진 상한 = fsm.cmd_full 0.2 (수조 0.25 → 2026-11-13 야외 0.2)
     max_angular_cmd: 0.35                # 회전 상한 (수조 0.31 → 2026-11-13 야외 0.35)
     odom_timeout_sec: 0.5
-    scan_timeout_sec: 0.5
+    # 0.5 → 1.0 (2026-11-13 bag): 라이다는 정상(헤더 간격 0.1~0.2 s)인데 전달이 0.67~0.84 s 몰려
+    # 와서 주행 중 두 번 풀렸다. 진짜 끊김(드라이버 'Failed to get scan')은 수 초라 그대로 잡힌다
+    scan_timeout_sec: 1.0
     grid_timeout_sec: 0.5
     viz_dri_scale: 4.0
 

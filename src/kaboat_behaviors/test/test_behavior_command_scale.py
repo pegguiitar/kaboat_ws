@@ -145,3 +145,36 @@ def test_avoid_output_uses_los_thrust_ratio_not_waypoint_scale(monkeypatch):
     assert FsmParams().cmd_full == pytest.approx(0.2)
     assert cmd.linear.x == pytest.approx(0.2)                 # 전진 0.2 상한
     assert cmd.angular.z == pytest.approx(-0.35)              # 회전은 0.35 까지
+
+
+def test_escape_entry_then_recovery_logs_without_raising(monkeypatch):
+    """ESCAPE 진입(warn)·복귀(info)를 한 줄에서 찍으면 rclpy 가 'Logger severity cannot be
+    changed between calls' 를 내 종합 회피 노드가 죽었다 (2026-11-13 bag). 실제 로거로 확인."""
+    import rclpy
+    from kaboat_behaviors import obstacle_planner
+    from kaboat_behaviors.avoid_fsm import FsmParams, StepOut
+
+    monkeypatch.setattr(obstacle_planner, 'build_dri', lambda *a, **k: None)
+    rclpy.init()
+    node = rclpy.create_node('escape_log_test')
+    try:
+        state, sent = make_state(0.0, 0.0, 0.0,
+                                 lambda s: obstacle_planner.ObstaclePlanner.compute_cmd(s))
+        state.get_logger = node.get_logger
+        state.goal = SimpleNamespace(pose=SimpleNamespace(
+            position=SimpleNamespace(x=10.0, y=0.0)))
+        state.occupancy_grid = object()
+        state.dri_params = None
+        state.thrust_ratio = FsmParams().cmd_full
+        state.turn_ratio = 0.35
+        state.distance_to_goal = lambda: 10.0
+        state._publish_debug = lambda *a: None
+        state.fsm = SimpleNamespace(escape_detail='막힘')
+        for st, ev in (('ESCAPE', 'escape_panic'), ('FOLLOW', 'escape_recovered'),
+                       ('ESCAPE', 'escape_panic'), ('FOLLOW', 'escape_recovered')):
+            state.fsm.step = lambda *a, st=st, ev=ev: StepOut(0.0, 0.0, st, None, ev)
+            tick(state)                                   # 예외 없이
+        assert len(sent) == 4
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()

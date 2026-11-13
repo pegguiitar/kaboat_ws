@@ -49,6 +49,11 @@ class RealObstacleAvoidTest(Node):
         # 경로를 5초 넘게 못 만들거나 위험이 해소되지 않으면 후진 탈출(ESCAPE).
         # false 면 그때 정지(해제)한다. 후진 중에도 수조 경계 정지는 그대로 동작.
         self.declare_parameter('allow_escape', True)
+        # 주행 중 복구 가능한 이유(센서 끊김·경로 이탈·계획기 예외)로 풀리면 시작점·방위·미리보기
+        # 경로 검사 없이 지금 자리에서 이어 간다 — 지나온 궤적도 남겨 ESCAPE 가 후진할 수 있게.
+        # 예전엔 풀린 뒤 시작점 3 m 안에서만 다시 출발해 코스 중간에서 영영 멈췄다 (2026-11-13 야외).
+        # 비상정지·/start_mission false·도착은 이어 가지 않는다. false = 예전처럼 (수조·도킹 기본).
+        self.declare_parameter('resume_after_disarm', False)
         self.declare_parameter('final_goal_topic', '')
         self.declare_parameter('goal_topic', '')
         self.declare_parameter('dock_waypoints_topic', '')
@@ -95,6 +100,7 @@ class RealObstacleAvoidTest(Node):
         self.drive_enabled = bool(self.get_parameter('drive_enabled').value)
         self.wait_for_start = bool(self.get_parameter('wait_for_start').value)
         self.allow_escape = bool(self.get_parameter('allow_escape').value)
+        self.resume_after_disarm = bool(self.get_parameter('resume_after_disarm').value)
         final_goal_topic = str(self.get_parameter('final_goal_topic').value)
         self.final_goal_pub = (self.create_publisher(
             PointStamped, final_goal_topic, QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT))
@@ -233,6 +239,7 @@ class RealObstacleAvoidTest(Node):
         self.started = False
         self.finished = False
         self.estopped = False
+        self.resume_pending = False      # 주행 중 풀림 — 지금 자리에서 이어 갈 차례
         self.goal = None
         self.preview_goal = None
         self.preview_plan = None
@@ -513,7 +520,7 @@ class RealObstacleAvoidTest(Node):
         if msg.data:
             self._arm()
         else:
-            self._disarm('start_mission false')
+            self._disarm('start_mission false', resume=False)
 
     def _on_start_service(self, _request, response):
         response.success, response.message = self._arm()
@@ -542,7 +549,8 @@ class RealObstacleAvoidTest(Node):
                     return False, (f'goal is {goal_edge:.2f} m from the tank '
                                    f'boundary (stop margin '
                                    f'{self.tank_stop_margin:.2f} m)')
-        if self.fixed_goal_enabled or self.goal_topic:
+        resume = self.resume_pending
+        if (self.fixed_goal_enabled or self.goal_topic) and not resume:
             pos = self.odom.pose.pose.position
             if self.fixed_goal_enabled and self.start_tolerance > 0.0:
                 off = math.hypot(pos.x - self.fixed_start_xy[0],
@@ -563,7 +571,13 @@ class RealObstacleAvoidTest(Node):
                         f'boat heading is {math.degrees(err):.0f} deg off the goal '
                         f'direction; allowed '
                         f'{math.degrees(self.start_heading_tolerance):.0f} deg')
-        if (self.preview_plan is None or self.preview_goal is None
+        if resume:
+            # 이어 가기: 미리보기 경로가 없어도 출발 — FSM 이 경로를 다시 찾고, 못 찾으면
+            # t_retry 뒤 ESCAPE 로 남겨 둔 궤적을 되짚어 후진하며 계속 찾는다
+            if (self.preview_goal is None or self.preview_received is None
+                    or now - self.preview_received > 0.3):
+                return False, 'wait for the goal before resuming'
+        elif (self.preview_plan is None or self.preview_goal is None
                 or self.preview_received is None
                 or now - self.preview_received > 0.3):
             return False, 'wait for a valid preview B-spline path'
@@ -581,9 +595,15 @@ class RealObstacleAvoidTest(Node):
         self.observed_goal_on_arm=((self.external_goal.point.x,self.external_goal.point.y) if self.goal_topic else None)
         self.goal = self.preview_goal
         self.latched_dock_waypoints=copy.deepcopy(self.dock_waypoints) if self.dock_waypoints_topic else None
-        self.fsm.reset()
+        self.fsm.reset(keep_trail=resume)
         self.started = True
         self.finished = False
+        self.resume_pending = False
+        if resume:
+            self.get_logger().warn(
+                f'이어서 출발 — 지금 자리에서 목표 ({self.goal[0]:.2f}, {self.goal[1]:.2f}) 로 '
+                f'(시작점 검사 없음, 지나온 궤적 {self.fsm.trail.length():.1f} m 유지)')
+            return True, 'avoidance test resumed'
         self.trajectory_history.clear()
         self.get_logger().info(
             f'Test armed: goal=({self.goal[0]:.2f}, {self.goal[1]:.2f}), '
@@ -593,19 +613,25 @@ class RealObstacleAvoidTest(Node):
     def _on_estop(self, msg):
         if msg.data:
             self.estopped = True
-            self._disarm('emergency_stop')
+            self._disarm('emergency_stop', resume=False)
         else:
             self.estopped = False
 
-    def _disarm(self, reason):
+    def _disarm(self, reason, resume=True):
+        """주행 해제. resume(기본)이고 resume_after_disarm 이면 지금 자리에서 이어 갈 차례로 표시한다."""
         if self.started:
-            self.get_logger().warn(f'avoidance test disarmed: {reason}')
+            self.resume_pending = bool(resume and self.resume_after_disarm)
+            self.get_logger().warn(
+                f'avoidance test disarmed: {reason}'
+                + (' — 풀리면 지금 자리에서 이어서 출발' if self.resume_pending else ''))
+        elif not resume:
+            self.resume_pending = False
         self.started = False
         self.finished = False
         self.goal = None
         self.preview_plan = None
         self.preview_received = None
-        self.fsm.reset()
+        self.fsm.reset(keep_trail=self.resume_pending)
         self.latched_dock_waypoints=None
         self.observed_goal_on_arm=None
         self._publish_command(Twist())
@@ -735,10 +761,11 @@ class RealObstacleAvoidTest(Node):
                 self.preview_obstacle_distance = self._front_obstacle_distance(
                     dri.occ_xy, boat, yaw, goal)
                 start_text = ''
-                if not self.wait_for_start:
+                if not self.wait_for_start or self.resume_pending:
                     # 즉시 출발 모드에서 출발이 막힌 이유를 상태·로그에 남긴다
                     # (전엔 버려져서 배가 왜 안 움직이는지 알 수 없었다).
-                    if plan is None:
+                    # 이어 가기는 경로가 없어도 출발 (FSM 이 찾고, 못 찾으면 ESCAPE 로 후진)
+                    if plan is None and not self.resume_pending:
                         why = 'no valid preview B-spline path (NO PLAN)'
                     else:
                         ok, why = self._arm()
@@ -772,6 +799,7 @@ class RealObstacleAvoidTest(Node):
             if aligned and math.hypot(goal[0] - boat[0], goal[1] - boat[1]) <= self.goal_tolerance:
                 self.started = False
                 self.finished = True
+                self.resume_pending = False
                 self._publish_command(Twist())
                 self._publish_debug(dri, self.fsm.plan, goal)
                 self._publish_status('FINISHED', 'goal tolerance reached')
@@ -782,14 +810,21 @@ class RealObstacleAvoidTest(Node):
                 # 상태 전환(ESCAPE 진입·복귀)은 거르지 않고 이유와 함께 — 1 s throttle 에 묻혀
                 # ESCAPE 진입이 로그에 안 남은 적이 있다 (2026-11-12 영상 분석)
                 detail = self.fsm.escape_detail if out.state == 'ESCAPE' else ''
-                log = self.get_logger().warn if out.state == 'ESCAPE' else self.get_logger().info
-                log(f'[{out.state}] {out.event or ""}' + (f' — {detail}' if detail else ''))
+                text = f'[{out.state}] {out.event or ""}' + (f' — {detail}' if detail else '')
+                # 경고·정보를 서로 다른 줄에서 — rclpy 는 한 줄(호출 위치)에서 등급이 바뀌면
+                # 'Logger severity cannot be changed between calls' 예외를 낸다. 예전엔 한 줄에서
+                # warn(ESCAPE 진입)·info(복귀)를 번갈아 불러, ESCAPE 에서 회복하는 순간 회피 시험이
+                # 풀리고(planner error) 종합 회피 노드는 죽었다 (2026-11-13 bag 10:22:34).
+                if out.state == 'ESCAPE':
+                    self.get_logger().warn(text)
+                else:
+                    self.get_logger().info(text)
             elif out.event:
                 self.get_logger().info(f'[{out.state}] {out.event}',
                                        throttle_duration_sec=1.0)
             self._last_fsm_state = out.state
             if out.state == 'ESCAPE' and not self.allow_escape:
-                self._disarm('ESCAPE requested; reverse motion disabled')
+                self._disarm('ESCAPE requested; reverse motion disabled', resume=False)
                 self._publish_debug(dri, None, goal)
                 self._publish_status('STOP', 'ESCAPE requested')
                 return
@@ -913,7 +948,8 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
     finally:
-        node._publish_command(Twist())
+        if rclpy.ok():                 # Ctrl+C 로 context 가 먼저 닫혔으면 발행 못 함
+            node._publish_command(Twist())
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()

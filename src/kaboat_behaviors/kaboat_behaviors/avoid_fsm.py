@@ -341,8 +341,14 @@ class AvoidFsm:
         self.yaw_kd = yaw_kd
         self.reset()
 
-    def reset(self) -> None:
-        """비활성→재활성 전이 시 노드가 호출 — 낡은 plan·상태 이월 금지."""
+    def reset(self, keep_trail: bool = False) -> None:
+        """비활성→재활성 전이 시 노드가 호출 — 낡은 plan·상태 이월 금지.
+
+        keep_trail: 지나온 궤적은 남긴다 — 주행 중 잠깐 풀렸다(센서 끊김·경로 이탈) 지금 자리에서
+        이어 갈 때. 지우면 다음 ESCAPE 가 되짚을 길이 없어 후진하지 않고 제자리에 섰다
+        (2026-11-13 야외 회피). 새 시험을 시작할 때는 지운다(예전 길은 근거가 아님).
+        """
+        trail = self.trail if keep_trail and hasattr(self, 'trail') else None
         self.state = 'FOLLOW'
         self.plan: Plan | None = None
         self._no_plan_t0 = None    # plan 부재가 시작된 시각 — t_retry 판정
@@ -352,8 +358,9 @@ class AvoidFsm:
         self._escape_ok = 0        # ESCAPE 중 generate 연속 성공 tick 수
         self.escape_detail = ''    # 마지막 ESCAPE 진입 이유 (노드 로그용 — 위반 거리·막힌 시간)
         self._a2_since = None      # 트리거 (a') 조건이 처음 참이 된 시각 — trigger_a2_hold 판정
-        # 지나온 궤적 — 재활성화 때 지운다 (이전 activation 의 길은 근거가 아님)
-        self.trail = Trail(self.fsm.trail_spacing, self.fsm.trail_max_length)
+        # 지나온 궤적 — 재활성화 때 지운다 (이전 activation 의 길은 근거가 아님). keep_trail 이면 유지
+        self.trail = trail if trail is not None else Trail(self.fsm.trail_spacing,
+                                                           self.fsm.trail_max_length)
         self._retrace = None       # ESCAPE 되짚기 샘플 (지금 위치 → 오래된 점)
         self._retrace_idx = 0
         self._retrace_stopped = False   # 궤적 없음/끝 — 정지 이벤트 1회만

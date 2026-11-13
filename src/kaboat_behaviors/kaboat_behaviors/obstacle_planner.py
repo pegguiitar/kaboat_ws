@@ -114,8 +114,15 @@ class ObstaclePlanner(BehaviorBase):
             # 상태 전환(ESCAPE 진입·복귀)은 거르지 않고 이유와 함께 — 1 s throttle 에 묻혀
             # ESCAPE 진입이 로그에 안 남은 적이 있다 (2026-11-12 영상 분석)
             detail = self.fsm.escape_detail if out.state == 'ESCAPE' else ''
-            log = self.get_logger().warn if out.state == 'ESCAPE' else self.get_logger().info
-            log(f'[{out.state}] {out.event or ""}' + (f' — {detail}' if detail else ''))
+            text = f'[{out.state}] {out.event or ""}' + (f' — {detail}' if detail else '')
+            # 경고·정보를 서로 다른 줄에서 — rclpy 는 한 줄(호출 위치)에서 등급이 바뀌면
+            # 'Logger severity cannot be changed between calls' 예외를 낸다. 예전엔 한 줄에서
+            # warn(ESCAPE 진입)·info(복귀)를 번갈아 불러, ESCAPE 에서 회복하는 순간 회피 시험이
+            # 풀리고(planner error) 종합 회피 노드는 죽었다 (2026-11-13 bag 10:22:34).
+            if out.state == 'ESCAPE':
+                self.get_logger().warn(text)
+            else:
+                self.get_logger().info(text)
         elif out.event is not None:
             self.get_logger().info(f'[{out.state}] {out.event}',
                                    throttle_duration_sec=1.0)
