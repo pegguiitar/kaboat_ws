@@ -20,9 +20,11 @@
                             뒷벽 약 4.2 m 안)만 생긴다. 치우친 반대쪽으로 돈다: 가려진 옆 도형 중
                             화면 가장자리에 더 가까운 쪽이라 가장 적게 돌아 단서가 나온다. 정확히 가운데면
                             시계방향. (예전 후진으로 시야 넓히기는 뺐다 — 라이다가 120~240° 를 가려 뒤를 못 봄.)
-            도형 1개로 정한 방향으로 search_reverse_deg(90°) 돌 동안 새 도형이 안 나오면 한 번 반대로
-                            (보이던 도형이 끝 슬롯이면 그쪽엔 더 없다). 그 뒤 도형 2개 간격 규칙은 이미
-                            비어 있던 쪽 후보를 뺀다 (시뮬: 빼지 않으면 빈 쪽을 골라 30~45 s 더 돎).
+            정한 방향으로 돌아도 새 도형이 안 나오면 한 번 반대로 — 도형 1개로 정했으면
+                            search_reverse_deg(90°), 도형 2개(간격 규칙)로 정했으면 예측 위치가 광축
+                            가운데에 올 때까지(예측 각도, 최소 20°). 간격 규칙은 끝 슬롯에서 틀린다
+                            (시뮬: 끝 슬롯 앞에서 반대로 330° 돎). 반전한 쪽은 비어 있다고 보고, 그 뒤 간격
+                            규칙도 그쪽 후보를 뺀다.
             아무것도 없음 — 시계방향.
           YOLO 상태 자체가 끊기면(stale) 멈춘다. 누적 search_max_turns(2)바퀴를 돌아도 목표가 없으면
           멈추고 상태에 'not found after 2 turns' 를 남긴다(목표가 보이면 다시 시작).
@@ -312,7 +314,8 @@ class DockCtrlV2(Node):
         self.scan_heading_received = 0.0
         self.search_dir = None                      # 목표 탐색 선회 방향 (+1 왼쪽, -1 오른쪽)
         self.search_rank = 0                        # 방향 근거: 0 없음, 1 도형 1개, 2 도형 2개
-        self.search_since_decision = 0.0            # 도형 1개로 방향을 정한 뒤 돈 각 [rad]
+        self.search_since_decision = 0.0            # 도형으로 방향을 정한 뒤 돈 각 [rad]
+        self.search_limit = 0.0                     # 이만큼 돌아도 새 도형이 없으면 반대로 [rad]
         self.search_names = set()                   # 그때까지 본 다른 도형 이름
         self.search_reversed = False
         self.search_empty_side = None               # 90° 돌아 봐도 새 도형이 없던 쪽 (+1/−1)
@@ -1107,6 +1110,7 @@ class DockCtrlV2(Node):
     def _clear_search(self):
         self.search_dir = None
         self.search_rank = 0
+        self.search_limit = 0.0
         self.search_since_decision = 0.0
         self.search_names = set()
         self.search_reversed = False
@@ -1160,8 +1164,14 @@ class DockCtrlV2(Node):
             # 이미 90° 훑어 비어 있던 쪽 후보는 뺀다 (끝 슬롯 너머엔 도형이 없다)
             if self.search_empty_side is not None:
                 outside = [c for c in outside if (1 if c > 0 else -1) != self.search_empty_side] or outside
-            self.search_dir = 1 if min(outside, key=abs) == left else -1
+            predicted = min(outside, key=abs)
+            self.search_dir = 1 if predicted == left else -1
             self.search_rank = 2
+            # 예측 위치가 광축 가운데에 올 때까지(= 예측 각도만큼) 돌아도 새 도형이 없으면 반대로.
+            # 같은 간격 가정의 예측 오차(시뮬 −30~+40°)가 반화각 40° 안이라 맞는 쪽이면 그 안에 보인다.
+            self.search_limit = max(math.radians(abs(predicted)), math.radians(20.0))
+            self.search_since_decision = 0.0
+            new_shape = False
         elif len(seen) == 1 and self.search_rank < 1:
             (bearing,) = seen.values()
             if abs(bearing) >= self.search_centre:
@@ -1171,6 +1181,7 @@ class DockCtrlV2(Node):
             else:
                 self.search_dir = -1 if bearing > 0 else 1      # 치우친 반대쪽
             self.search_rank = 1
+            self.search_limit = self.search_reverse
             self.search_since_decision = 0.0
             new_shape = False
         if self.search_dir is None:
@@ -1179,9 +1190,9 @@ class DockCtrlV2(Node):
         self.search_prev_yaw = yaw
         self.search_turned += step
         reversed_now = False
-        if self.search_rank == 1:
+        if self.search_rank >= 1:
             self.search_since_decision = 0.0 if new_shape else self.search_since_decision + step
-            if not self.search_reversed and self.search_since_decision >= self.search_reverse:
+            if not self.search_reversed and self.search_since_decision >= self.search_limit:
                 self.search_empty_side = self.search_dir
                 self.search_dir = -self.search_dir   # 그쪽엔 더 없다 (끝 슬롯) — 한 번만 뒤집기
                 self.search_reversed = reversed_now = True

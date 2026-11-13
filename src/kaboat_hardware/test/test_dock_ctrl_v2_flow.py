@@ -486,6 +486,25 @@ def test_pair_rule_skips_side_already_swept_empty(node):
     assert node.search_rank == 2 and node.sent[-1].angular.z < 0
 
 
+def test_pair_rule_reverses_when_predicted_position_reaches_centre_empty(node):
+    """시뮬 케이스 2 (삼각 끝 슬롯 앞, 목표 사각): 원 +40°·삼각 −1° → 간격 41° 로 후보 +81°/−42°,
+    가까운 −42°(오른쪽)를 고르지만 삼각은 오른쪽 끝이라 거기엔 없다. 예측 위치(−42°)가 광축 가운데에
+    올 때까지(42°) 돌아도 새 도형이 없으면 한 번 반대로 — 예전엔 반전 없이 330° 돌았다."""
+    node.target = 'square'
+    _scan(node)
+    yaw = FACING_WALL
+    _odom(node, 0.0, 4.0, yaw=yaw)
+    _shapes(node, circle=40.0, triangle=-1.0)
+    node._tick()
+    assert node.search_rank == 2 and node.sent[-1].angular.z < 0
+    assert math.degrees(node.search_limit) == pytest.approx(42.0, abs=1.0)
+    yaw = _turn_search(node, yaw, 30, triangle=20.0)
+    assert node.sent[-1].angular.z < 0 and not node.search_reversed      # 아직 42° 전
+    yaw = _turn_search(node, yaw, 20, triangle=35.0)
+    assert node.search_reversed and node.search_empty_side == -1
+    assert node.sent[-1].angular.z > 0 and 'reversed' in node.reports[-1]['detail']
+
+
 def test_new_shape_before_90deg_switches_to_pair_rule_without_reversal(node):
     node.target = 'triangle'
     _scan(node)
