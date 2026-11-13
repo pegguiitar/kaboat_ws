@@ -178,6 +178,7 @@ class DockMarkDetector(Node):
         # 이 sight_rays 를 만든 RGB 촬영 시각 — 도킹 제어가 그 시각의 선수각으로 방위를 세계 방위로
         # 바꾼다(촬영→상태 발행 약 0.2 s, 2026-11-13 bag; 도는 중이면 그만큼 방위가 밀린다).
         extra['image_stamp_s'] = getattr(self, 'frame_stamp_s', None)
+        extra['image_half_fov_deg'] = getattr(self, 'image_half_fov', None)
         msg = String()
         msg.data = json.dumps({'valid': valid, 'reason': reason,
                                'target_class': self.target_class,
@@ -296,6 +297,11 @@ class DockMarkDetector(Node):
         if min(fx, fy) <= 0 or not all(map(math.isfinite, (fx, fy, cx, cy))):
             self._status(False, 'invalid_intrinsics')
             return
+        # 이 영상의 수평 반화각 [deg] (핀홀) — 도킹 제어가 "화면 밖 후보" 판단에 쓴다.
+        # D455 640x480 실측 fx 377·cx 317 → 왼쪽 40.0°, 오른쪽 40.6° (2026-11-13 bag).
+        self.image_half_fov = {
+            'left': round(math.degrees(math.atan2(cx, fx)), 2),
+            'right': round(math.degrees(math.atan2(info_msg.width - cx, fx)), 2)}
         if (any(abs(value) > 0 for value in info_msg.d)
                 and info_msg.distortion_model not in ('plumb_bob', 'rational_polynomial')):
             self._status(False, 'unsupported_distortion_model')

@@ -355,14 +355,61 @@ def test_search_far_pair_turns_past_the_group(node):
 
 
 def test_search_close_pair_uses_spacing_not_mean(node):
-    """2026-11-13 시뮬 5.5 m: 사각 +32°, 원 −2° — 평균(+15°)은 왼쪽이지만 삼각은 −36° (오른쪽 바로 밖)."""
+    """가까우면 양쪽에 걸쳐 보임: 사각 +36°, 원 −3° — 평균(+16.5°)은 왼쪽이지만 간격(39°)으로 보면
+    삼각은 −42° (오른쪽 화면 바로 밖, 반화각 40°), 왼쪽 후보 +75° 는 더 멀다."""
     node.target = 'triangle'
     _odom(node, 0.0, 5.5)
     _scan(node)
-    _shapes(node, square=32.0, circle=-2.0)
+    _shapes(node, square=36.0, circle=-3.0)
     node._tick()
     assert node.sent[-1].angular.z == pytest.approx(-node.search_turn)
     assert node.sent[-1].linear.x == 0.0
+
+
+def test_search_excludes_candidate_inside_real_fov(node):
+    """45d5c46 검토 예시: 원 −2°·사각 +30° → 후보 +62° / −34°. 실제 반화각 40° 면 −34° 는 화면 안
+    (보였을 것)이라 목표가 아니다 → 왼쪽. 예전 34.5° 가정이면 오른쪽으로 잘못 돌았다."""
+    node.target = 'triangle'
+    _odom(node, 0.0, 6.0)
+    _scan(node)
+    _shapes(node, square=30.0, circle=-2.0)
+    node._tick()
+    assert node.sent[-1].angular.z == pytest.approx(node.search_turn)
+
+
+def test_search_uses_half_fov_from_detection_status(node):
+    """검출 상태의 image_half_fov_deg 가 있으면 그것 — 좌우 30° 면 −34° 후보는 화면 밖 → 오른쪽."""
+    node.target = 'triangle'
+    _odom(node, 0.0, 6.0)
+    _scan(node)
+    node._det(String(data=json.dumps({'image_half_fov_deg': {'left': 30.0, 'right': 30.0}, 'sight_rays': {
+        name: {'confidence': .9, 'pixel_uv': [320 - 4 * b, 220], 'bearing_left_deg': b}
+        for name, b in (('square', 30.0), ('circle', -2.0))}})))
+    node._tick()
+    assert node.sent[-1].angular.z == pytest.approx(-node.search_turn)
+
+
+def test_search_stops_after_two_turns_and_resumes_when_target_seen(node):
+    _scan(node)
+    yaw = 0.0
+    for k in range(80):                                # 10°씩 돌며 800° — 720° 에서 멈춰야 함
+        _odom(node, 0.0, 10.0, yaw=yaw)
+        _shapes(node)
+        node._tick()
+        yaw = math.atan2(math.sin(yaw - math.radians(10)), math.cos(yaw - math.radians(10)))
+        if node.search_exhausted:
+            break
+    assert node.search_exhausted and 690 <= math.degrees(node.search_turned) <= 740
+    assert node.sent[-1].angular.z == 0.0 and node.sent[-1].linear.x == 0.0
+    assert 'not found after 2 turns' in node.reports[-1]['detail']
+    _odom(node, 0.0, 10.0, yaw=yaw)
+    _shapes(node)
+    node._tick()
+    assert node.sent[-1].angular.z == 0.0               # 멈춘 채 기다림 (다시 돌지 않음)
+    _det(node, 12.0)                                   # 목표가 보이면 정상 SCAN 으로
+    node._tick()
+    assert node.sent[-1].angular.z > 0.0 and not node.search_exhausted
+    assert 'turning to circle' in node.reports[-1]['detail']
 
 
 def test_search_clockwise_when_nothing_seen_then_follows_first_shapes(node):
@@ -390,7 +437,7 @@ def test_single_centred_shape_backs_off_to_widen_view_then_decides(node):
     assert node.sent[-1].linear.x == pytest.approx(-node.retreat_cmd)
     assert 'widening view' in node.reports[-1]['detail']
     _odom(node, 0.0, 6.5)                              # 1 m 물러남
-    _shapes(node, square=31.0, circle=-1.0)            # 사각이 들어옴 → 삼각은 오른쪽 밖
+    _shapes(node, square=37.0, circle=-3.0)            # 사각이 들어옴 → 삼각은 −43° (오른쪽 화면 밖)
     node._tick()
     assert node.sent[-1].linear.x == 0.0
     assert node.sent[-1].angular.z == pytest.approx(-node.search_turn)

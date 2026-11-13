@@ -283,3 +283,12 @@ def test_missing_detection_deletes_bearing_arrow_and_missing_tf_does_not_hide_it
     frame(node)
     array=node.bearing_viz_pub.publish.call_args.args[0]
     assert all(m.action==m.DELETE for m in array.markers)
+
+
+def test_status_reports_image_time_and_half_fov():
+    """도킹 제어용: 촬영 시각과 이 영상의 좌우 반화각 (cx 40, fx 100, 폭 80 → 각 21.8°)."""
+    node = Harness()
+    frame(node, np.zeros((80, 80), dtype=np.uint16))
+    status = json.loads(node.status_pub.publish.call_args.args[0].data)
+    assert status['image_half_fov_deg'] == {'left': 21.8, 'right': 21.8}
+    assert 'image_stamp_s' in status

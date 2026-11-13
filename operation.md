@@ -451,12 +451,16 @@ test_dock_outdoor approach:=true             # dock_entry 접근(직선, 회피 
      - 목표 도형이 안 보이면 `search_turn_cmd`(기본 0.06, 약 8°/s)로 선회각 제한 없이 돌며 찾습니다. 방향은:
        - 다른 도형 **2개**: 슬롯은 같은 간격이라 목표는 두 도형 화면 간격만큼 바깥 어느 한쪽. 화면 안 후보는
          빼고(보였을 것) 가운데에 가까운 쪽. 가까우면 도형이 양쪽에 걸쳐 보여 평균 쪽은 틀립니다(시뮬 5.5 m).
+         화면 안/밖은 검출기가 `camera_info`로 계산해 함께 보내는 좌우 반화각(`image_half_fov_deg`, D455
+         640x480 실측 왼쪽 40.0°·오른쪽 40.6°)으로 판단하고, 없으면 `camera_half_fov_deg`(40.0)를 씁니다.
        - 다른 도형 **1개**가 가운데 ±10° 밖: 그 도형 쪽(목표는 그 너머).
        - 다른 도형 1개가 **가운데 근처**: 단서가 없으니 선수 유지 후진으로 시야를 넓힙니다(최대 3 m, 뒤 1.5 m
          안 장애물이면 중단). 두 번째 도형이 보이면 위 규칙, 끝까지 하나면 그 도형 쪽.
        - **아무것도 없음**: 시계방향.
        - 정한 방향은 목표를 볼 때까지 유지(돌면 보이던 도형이 반대로 밀려나므로)하고, 더 좋은 근거(1개 → 2개)가
          처음 생길 때만 다시 정합니다. YOLO 상태 자체가 끊기면(`YOLO stale`) 멈춥니다.
+       - 누적 `search_max_turns`(기본 2)바퀴를 돌아도 목표가 없으면 멈추고 `/dock/status`에
+         `target … not found after 2 turns — holding`을 남깁니다(한 바퀴 약 45 s). 목표가 보이면 다시 진행합니다.
        - 시뮬(11/13 bag 식별 모델) 확인: 멀리서 목표가 좌/우 화면 밖, 가까이(5.5 m)서 양 끝이 화면 밖, 도크
          반대 방향으로 시작, 바람 편향 ±4°/s — 모두 맞는 슬롯에 COMPLETE. 단 옆 슬롯 정면 5.5 m에서 두 칸 떨어진
          슬롯이 목표면(축과 49°) SEEK에서 ㄷ자 한쪽 면이 안 보여 앞 부교 2 m 앞에서 멈춥니다(아래 40° 주의).
@@ -482,8 +486,9 @@ test_dock_outdoor approach:=true             # dock_entry 접근(직선, 회피 
      (3 m 이상·좌우 0.75 m 안) → `/mission/complete=dock` → 이탈점 2 m 안이면 `done`(정지).
 - ⚠️ 양쪽 면이 보이려면 슬롯을 **40° 안쪽**에서 바라봐야 합니다(`dock_entry`는 가운데 슬롯 정면, 8~12 m).
   RViz에서 찾은 ㄷ자는 `/dock/slot_markers`(초록 선), 상태는 `/dock/status`의 `slot`(찾았는지, 이유, 면별 점 비율).
-- ⚠️ SCAN에는 시간 제한이 없습니다. 목표 도형이 안 보이면 전진 0으로 제자리 탐색 선회를 계속합니다
-  (`/dock/status`의 `detail`: `searching left/right … (other shapes …)`). YOLO가 꺼져 있으면 멈춰 기다립니다.
+- ⚠️ 목표 도형이 안 보이면 전진 0으로 제자리 탐색 선회합니다(`/dock/status`의 `detail`: `searching left/right …
+  (other shapes …; turned …/720 deg)`). 누적 2바퀴면 멈추고 `not found after 2 turns — holding`을 남깁니다
+  (`dock_target_class`·조명 확인). YOLO가 꺼져 있으면 멈춰 기다립니다. 미션 매니저에는 도킹 시간 제한이 없습니다.
 - RViz(`scripts/demo/rviz_dock.sh --real` → `dock_real.rviz`): `/dock/ctrl_markers` — 배 위에 단계·상세·명령, 그 위에 단계 전이 기록. 초록/노랑 선 = 지연 보상한 목표
   시선(초록이면 방위 고정 표본 ±8° 안), 주황 = SCAN 목표 방위, 빨강 = 고정 방위선, 하늘색 = SEEK 선수 ±8°.
 - 도킹 전에 마스크만 따로 확인: `bash scripts/run_dock_yolo.sh`(카메라 이미 켰으면 `start_camera:=false`) →
