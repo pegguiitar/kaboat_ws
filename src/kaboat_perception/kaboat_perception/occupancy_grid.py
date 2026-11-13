@@ -351,7 +351,7 @@ class OccupancyGridNode(Node):
                                         self.wall_offset)
         desc = ', '.join(f'{n} ({xy[0, 0]:.1f}, {xy[0, 1]:.1f})→({xy[-1, 0]:.1f}, {xy[-1, 1]:.1f})'
                          for n, xy in self.walls_xy.items())
-        gaps = ', '.join(f'{n} 변 {side} 가운데 {w:.1f} m'
+        gaps = ', '.join(f'{n} 변 {side} ' + ('전체' if math.isinf(w) else f'가운데 {w:.1f} m')
                          for n, a in self.arenas_latlon.items()
                          for side, w in sorted(a['openings'].items()))
         self.get_logger().info(f'가상 벽 {len(self.walls_xy)}줄 — {desc} m, '

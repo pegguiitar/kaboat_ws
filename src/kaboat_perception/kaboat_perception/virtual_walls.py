@@ -64,21 +64,29 @@ def load_walls(path):
 
 
 def load_arenas(path):
-    """yaml 의 arenas: {이름: {corners: [[lat, lon], …], openings: {변 번호: 폭 m}}}.
+    """yaml 의 arenas: {이름: {corners: [[lat, lon], …], openings: {변 번호: 폭 m | all}}}.
 
     corners 는 둘레 순서, 변 i = 모서리 i → i+1 (마지막 → 처음). openings 의 변은 가운데를
-    그 폭만큼 비우고 나머지 변은 전부 벽. 파일 없으면 {}.
+    그 폭만큼 비우고(all = 변 전체를 비움 → inf) 나머지 변은 전부 벽. 파일 없으면 {}.
     """
     arenas = {}
     for name, spec in (_read_yaml(path).get('arenas') or {}).items():
         corners = _latlon_points(name, (spec or {}).get('corners') or [], 3)
         openings = {}
         for side, width in ((spec or {}).get('openings') or {}).items():
-            side, width = int(side), float(width)
+            side = int(side)
             if not 0 <= side < len(corners):
                 raise ValueError(f'경기장 {name!r}: 변 번호 {side} 는 0~{len(corners) - 1}')
+            if isinstance(width, str) and width.strip().lower() == 'all':
+                openings[side] = math.inf          # 변 전체 비움 (arena_walls 가 변 길이로 자름)
+                continue
+            try:
+                width = float(width)
+            except (TypeError, ValueError):
+                width = math.nan
             if not (math.isfinite(width) and width > 0):
-                raise ValueError(f'경기장 {name!r}: 변 {side} 비우는 폭이 잘못됨 ({width})')
+                raise ValueError(f'경기장 {name!r}: 변 {side} 비우는 폭이 잘못됨 ({width}) — '
+                                 '양수 [m] 또는 all')
             openings[side] = width
         arenas[str(name)] = {'corners': corners, 'openings': openings}
     return arenas

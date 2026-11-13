@@ -329,7 +329,8 @@ test_avoid_outdoor start_point:=gate_entry goal_point:=gate_end   # 다른 지�
 **가상 벽:** 토너먼트 경기장 둘레도 `virtual_walls.yaml`의 `arenas.tournament`에 들어 있어 `run_map`이
 회피 경기장과 함께 칠합니다.
 - 경기장 크기: 약 10.7 × 28.1 m 직사각형이고, 긴 변은 남서–북동입니다. 2026-11-12 Space 기록 #1~#4입니다.
-- 벽 모양: 긴 두 변은 전부 벽, 짧은 두 변(남서 끝·북동 끝)은 가운데 3 m만 비웁니다.
+- 벽 모양: **긴 두 변만 벽**이고 짧은 두 변(남서 끝·북동 끝)에는 벽이 없습니다 (`openings: {0: all, 2: all}`).
+  2026-11-13에 가운데 3 m만 비우던 짧은 변 벽을 뺐습니다. `run_map` 로그: `비움: … tournament 변 0 전체, tournament 변 2 전체`.
 - 바깥 오프셋: 0.6 m(`virtual_wall_outward_offset`)는 회피 경기장과 같습니다.
 - 반영: `virtual_walls.yaml`을 바꾸면 젯슨에서 `cb` 후 `run_map`을 다시 켭니다(설치 폴더의 설정은 복사본).
 
@@ -344,8 +345,7 @@ test_tournament                                  # 3) 실제 주행: 출발 조�
 - 출발 조건(3 m·±45°), 목표 2 m, 경로 이탈 1.5 m 정지, 후진 탈출은 `test_avoid_outdoor`와 같고 같은 인자로
   바꿉니다. 예) `test_tournament max_cross_track_error:=2.5`.
 - 상태: `ros2 topic echo /real_avoid_test/status`.
-- **가상 벽은 회피 경기장(`arenas.avoid`)만 있습니다.** 토너먼트 경기장 둘레 로프(라이다에 안 잡힘)는
-  아직 지도에 없습니다. 두 경기장이 가까워 회피 경기장 벽이 지도에 걸리면 `run_map -p virtual_walls_file:=none`.
+- 가상 벽을 다 끄려면 `run_map -p virtual_walls_file:=none` (회피·토너먼트 경기장 벽 모두 꺼짐).
 
 **야외 게이트 시험** (`test_gate_outdoor`, 자율주행과 같은 `gate_follower` + `cmd_mux`, 게이트 미션 하나만)
 

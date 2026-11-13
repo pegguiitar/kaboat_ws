@@ -1,5 +1,6 @@
 """가상 벽: 위도·경도 → 원점 기준 x·y (현장 Space 기록과 일치), 지도 칠하기, 노드 반영."""
 
+import math
 import os
 
 import numpy as np
@@ -250,12 +251,13 @@ def test_shipped_tournament_arena_is_the_field_rectangle():
     arena = load_arenas(CONFIG)['tournament']
     corners = np.array([latlon_to_local(lat, lon, ORIGIN) for lat, lon in arena['corners']])
     np.testing.assert_allclose(corners, [xy for _, xy in TOURNAMENT], atol=0.01)
-    assert arena['openings'] == {0: 3.0, 2: 3.0}                         # 짧은 두 변
+    assert arena['openings'] == {0: math.inf, 2: math.inf}               # 짧은 두 변 = 벽 없음
     sides = [np.linalg.norm(corners[(i + 1) % 4] - corners[i]) for i in range(4)]
     np.testing.assert_allclose(sides, [10.51, 27.78, 10.82, 28.51], atol=0.01)   # 약 10.7 × 28.1 m
 
 
-def test_tournament_walls_long_sides_closed_short_sides_open_three_metres():
+def test_tournament_walls_are_the_two_long_sides_only():
+    """2026-11-13: 짧은 두 변(가운데 3 m 만 비우던 벽)은 빼고 긴 두 변만 벽."""
     walls = _shipped()
     a, b = walls['tournament_0'], walls['tournament_1']
     raw = [latlon_to_local(lat, lon, ORIGIN) for lat, lon in load_arenas(CONFIG)['tournament']['corners']]
@@ -264,8 +266,33 @@ def test_tournament_walls_long_sides_closed_short_sides_open_three_metres():
     grown = [np.linalg.norm(corners[(i + 1) % 4] - corners[i]) for i in range(4)]
     raw_sides = [np.linalg.norm(np.subtract(raw[(i + 1) % 4], raw[i])) for i in range(4)]
     np.testing.assert_allclose(np.subtract(grown, raw_sides), 1.2, atol=.05)
-    # 각 줄 = 짧은 변 토막 → 긴 변 → 짧은 변 토막, 두 줄 사이 틈은 짧은 변 가운데 3 m
-    assert len(a) == len(b) == 4
-    for gap, (i, j) in (((a[0], b[-1]), (0, 1)), ((a[-1], b[0]), (2, 3))):
-        assert np.linalg.norm(gap[0] - gap[1]) == pytest.approx(3.0, abs=1e-6)
-        np.testing.assert_allclose((gap[0] + gap[1]) / 2, (corners[i] + corners[j]) / 2, atol=1e-6)
+    # 긴 변(#2→#3, #4→#1) 하나씩, 넓힌 둘레 모서리 끝까지 곧은 벽
+    np.testing.assert_allclose(a, [corners[1], corners[2]])
+    np.testing.assert_allclose(b, [corners[3], corners[0]])
+    # 지도에 칠해 보면 긴 변 가운데는 벽, 짧은 변 가운데는 비어 있다
+    res, cells = 0.2, 250
+    center = corners.mean(axis=0)
+    anchor = (int(np.floor(center[0] / res)) - cells // 2, int(np.floor(center[1] / res)) - cells // 2)
+    mask = wall_mask({'a': a, 'b': b}, anchor, cells, res, 0.3)
+
+    def painted(p, radius=0.4):
+        ix, iy = int(np.floor(p[0] / res)) - anchor[0], int(np.floor(p[1] / res)) - anchor[1]
+        r = int(np.ceil(radius / res))
+        return mask[iy - r:iy + r + 1, ix - r:ix + r + 1].any()
+
+    for i in (1, 3):                                            # 긴 변
+        assert painted((corners[i] + corners[(i + 1) % 4]) / 2)
+    for i in (0, 2):                                            # 짧은 변 (남서·북동 끝)
+        assert not painted((corners[i] + corners[(i + 1) % 4]) / 2, radius=3.0)
+
+
+def test_opening_all_clears_the_whole_side(tmp_path):
+    f = tmp_path / 'a.yaml'
+    f.write_text('arenas:\n  a:\n    corners: [[35.0, 128.0], [35.0, 128.001], [35.001, 128.001]]\n'
+                 '    openings: {0: all, 1: 2.5}\n')
+    assert load_arenas(str(f))['a']['openings'] == {0: math.inf, 1: 2.5}
+    f.write_text('arenas:\n  a:\n    corners: [[35.0, 128.0], [35.0, 128.001], [35.001, 128.001]]\n'
+                 '    openings: {0: half}\n')
+    with pytest.raises(ValueError, match='all'):
+        load_arenas(str(f))
+
