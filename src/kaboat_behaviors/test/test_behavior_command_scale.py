@@ -121,7 +121,7 @@ def test_scale_flag_resets_every_tick():
 
 
 def test_avoid_output_uses_los_thrust_ratio_not_waypoint_scale(monkeypatch):
-    """obstacle_planner 상한: 전진 fsm.cmd_full(0.25), 회전 avoid.max_angular_ratio(0.31).
+    """obstacle_planner 상한: 전진 fsm.cmd_full(0.2), 회전 avoid.max_angular_ratio(0.35).
 
     예전엔 waypoint 상한(전진 0.101·회전 0.025)에 잘려 경로를 못 따라갔다.
     """
@@ -136,12 +136,12 @@ def test_avoid_output_uses_los_thrust_ratio_not_waypoint_scale(monkeypatch):
     state.occupancy_grid = object()
     state.dri_params = None
     state.thrust_ratio = FsmParams().cmd_full
-    state.turn_ratio = 0.31
+    state.turn_ratio = 0.35
     state.fsm = SimpleNamespace(step=lambda *a: StepOut(0.25, -0.8, 'FOLLOW', None))
     state.distance_to_goal = lambda: 10.0
     state._publish_debug = lambda *a: None
     tick(state)
     cmd = sent[-1]
-    assert FsmParams().cmd_full == pytest.approx(0.25)
-    assert cmd.linear.x == pytest.approx(0.25)                # 전진 0.25 상한
-    assert cmd.angular.z == pytest.approx(-0.31)              # 회전은 0.31 까지
+    assert FsmParams().cmd_full == pytest.approx(0.2)
+    assert cmd.linear.x == pytest.approx(0.2)                 # 전진 0.2 상한
+    assert cmd.angular.z == pytest.approx(-0.35)              # 회전은 0.35 까지

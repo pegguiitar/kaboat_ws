@@ -26,13 +26,13 @@ def control():
 
 def test_existing_avoidance_fsm_follows_entry_at_existing_output_limits(control):
     node=control
-    assert node.max_linear_cmd==.25 and node.max_angular_cmd==.31
+    assert node.max_linear_cmd==.2 and node.max_angular_cmd==.35
     assert node.preview_plan is not None and node.preview_goal==(-6.,0.)
     assert node._arm()[0]
     node._tick();node._tick()
     assert node.fsm.plan is not None
     assert any(m.linear.x>0 for m in node.commands)
-    assert all(abs(m.linear.x)<=.25 and abs(m.angular.z)<=.31 for m in node.commands)
+    assert all(abs(m.linear.x)<=.2 and abs(m.angular.z)<=.35 for m in node.commands)
 
 
 def test_latched_entry_does_not_need_new_yolo_goal_frames(control):

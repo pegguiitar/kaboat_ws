@@ -19,8 +19,8 @@ real_obstacle_avoid_test:
     require_front_obstacle: false
     front_corridor_half_width: 1.0
     max_cross_track_error: 1.5           # 수조 0.7 — 바람·물살로 경로에서 밀리는 것을 감안
-    max_linear_cmd: 0.25                 # 전진 상한 = fsm.cmd_full 0.25 (수조 실물 튜닝)
-    max_angular_cmd: 0.31                # 회전 상한 (2026-11-06 실물 튜닝)
+    max_linear_cmd: 0.2                  # 전진 상한 = fsm.cmd_full 0.2 (수조 0.25 → 2026-11-13 야외 0.2)
+    max_angular_cmd: 0.35                # 회전 상한 (수조 0.31 → 2026-11-13 야외 0.35)
     odom_timeout_sec: 0.5
     scan_timeout_sec: 0.5
     grid_timeout_sec: 0.5

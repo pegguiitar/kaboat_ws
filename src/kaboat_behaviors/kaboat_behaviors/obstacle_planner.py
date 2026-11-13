@@ -36,9 +36,9 @@ class ObstaclePlanner(BehaviorBase):
         self.planner_params = self._params_from('planner', PlannerParams)
         self.fsm_params = self._params_from('fsm', FsmParams)
         # 경로 추종은 수조에서 검증한 LOS(test_los) 와 같은 요 PD 1.4/0.16.
-        # 전진: fsm.cmd_full(0.25) 이 전진 기준이자 전진 상한.
-        # 회전: avoid.max_angular_ratio(0.31) 상한 (2026-11-06 실물 튜닝).
-        self.declare_parameter('avoid.max_angular_ratio', 0.31)
+        # 전진: fsm.cmd_full(0.2) 이 전진 기준이자 전진 상한.
+        # 회전: avoid.max_angular_ratio(0.35) 상한 (2026-11-06 0.31 → 2026-11-13 0.35, 야외).
+        self.declare_parameter('avoid.max_angular_ratio', 0.35)
         ratio = float(self.fsm_params.cmd_full)
         turn = float(self.get_parameter('avoid.max_angular_ratio').value)
         if not all(math.isfinite(v) and 0.0 < v <= 1.0 for v in (ratio, turn)):
