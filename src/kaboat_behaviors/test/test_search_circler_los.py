@@ -322,3 +322,21 @@ def test_exit_stops_inside_arrive_radius():
     n = len(state.calls)
     cmd = SearchCircler.compute_cmd(state)
     assert cmd == Twist() and len(state.calls) == n
+
+
+def test_search_node_uses_measured_speed_curve_and_can_turn_it_off():
+    """search 노드만 LOS 속도 → 명령을 실물 곡선으로 (2026-11-14). search.measured_speed:=false 면 예전."""
+    import rclpy
+    for args, expected in (([], True), (['--ros-args', '-p', 'search.measured_speed:=false'], False)):
+        rclpy.init(args=args)
+        try:
+            node = SearchCircler()
+            try:
+                assert node.params.measured_speed is expected
+                assert node._los_follower.measured_speed is expected
+                assert node._los_follower.ratio_limits_only is True
+            finally:
+                node.destroy_node()
+        finally:
+            rclpy.shutdown()
+    assert SearchParams().measured_speed is True

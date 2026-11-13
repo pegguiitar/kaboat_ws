@@ -229,3 +229,38 @@ def test_sota_defaults_and_separate_turn_cap():
     same = LosFollower.bspline_track().step(path, tuple(p), tangent + math.radians(40),
                                             0.0, 0.25)
     assert abs(same.angular) == pytest.approx(0.25)     # turn_ratio 생략 = thrust_ratio
+
+
+# ── 실물 추력 곡선 (search 가 씀, 2026-11-14) ─────────────────────────────
+
+def _circle_off_heading(heading_offset_deg):
+    """반경 2 m 원 위의 배, 진행 방향에서 heading_offset 만큼 틀어진 선수."""
+    path = circle_path(0.0, 0.0, 2.0, direction='cw', target_laps=None)
+    yaw = -math.pi / 2 + math.radians(heading_offset_deg)   # (2, 0) 에서 시계 방향 진행 = -y
+    return path, (2.0, 0.0), yaw
+
+
+def test_measured_speed_needs_ratio_limits_mode():
+    with pytest.raises(ValueError):
+        LosFollower(measured_speed=True)
+
+
+@pytest.mark.parametrize('offset, old, new', [
+    (0.0, 0.140, 0.25),     # 원 위, 선수 맞음: 곡률 감속 1.04 m/s — 공용 0.140, 실물 곡선은 상한 0.25
+    (90.0, 0.032, 0.117),   # 선수각 오차 > 60°: 0.42 m/s 요청 — 공용 0.032(실물 0.16 m/s), 실물 곡선 0.117
+])
+def test_measured_speed_commands_match_real_curve(offset, old, new):
+    from kaboat_behaviors.los_controller import MEASURED_SPEED_EXP, MEASURED_SPEED_SCALE
+    path, boat, yaw = _circle_off_heading(offset)
+    shared = LosFollower.bspline_track().step(path, boat, yaw, 0.0, 0.25, 0.31)
+    real = LosFollower.bspline_track(measured_speed=True).step(path, boat, yaw, 0.0, 0.25, 0.31)
+    assert shared.linear == pytest.approx(old, abs=0.004)
+    assert real.linear == pytest.approx(new, abs=0.004)
+    assert real.linear <= 0.25 + 1e-12                       # thrust_ratio 는 그대로 상한
+    assert real.angular == pytest.approx(shared.angular)     # 조향은 안 바뀜
+    if new < 0.25:                                            # 상한 아래면 실물 곡선 그대로
+        assert MEASURED_SPEED_SCALE * real.linear ** MEASURED_SPEED_EXP == pytest.approx(0.3 * 1.4, abs=0.01)
+
+
+def test_shared_follower_default_is_unchanged():
+    assert LosFollower.bspline_track().measured_speed is False

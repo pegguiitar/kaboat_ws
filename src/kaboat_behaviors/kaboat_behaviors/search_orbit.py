@@ -81,8 +81,16 @@ class SearchParams:
     arrive_radius: float = 1.5        # 부표 못 찾았을 때 영역 중심 도착 반경 → 제자리 둘러보기 [m]
     scan_turn: float = 0.15           # 제자리 둘러보기 회전 명령 (최대 추력 비율)
     give_up_sec: float = 90.0         # 영역 중심 도착 후 이만큼 못 찾으면 포기 [s]
-    orbit_thrust: float = 0.25        # 선회 LOS 직진 (공용 LOS 직진 0.25)
+    orbit_thrust: float = 0.25        # 선회·접선 진입 LOS 전진 상한 (공용 LOS 0.25) — 실물 0.75 m/s
     orbit_turn: float = 0.31          # 선회 LOS 회전 상한 (공용 LOS 회전 0.31)
+    # LOS 속도 → 명령을 실물 곡선으로 (2026-11-14, los_controller.MEASURED_SPEED_*). 공용 변환은 상한 0.25 에서
+    # 1.48 m/s(Gazebo 맞춤)를 가정해 감속 구간 명령이 실물보다 3~4 배 작았다 — 선수각 오차 60° 넘으면 0.032
+    # (실물 0.16 m/s), 굽이 하한 0.018(0.10 m/s)로 조류 0.15 m/s 에 원으로 못 돌아오고 부표에 닿았다.
+    # 폐루프 시뮬(scripts/e2e_sim, 탐색만, 조류 없음·남남서·동북동 0.15 m/s): 공용 변환 1 판씩 탐색 226 s·406 s·
+    # 출구 못 감, 선회 중 부표 접촉 2 판 → 실물 곡선 2 판씩 141–178·158–233·132–282 s, 명령 0.03 미만 시간
+    # 27~39 % → 1~5 %, 선회 중 접촉 0. 출구(선회 뒤 search_end 까지)는 여전히 71–170 s·접촉 3 번 (SEARCH_MISSION.md
+    # §7.8). false = 예전 공용 변환.
+    measured_speed: bool = True
     ignore_radius: float = 1.0        # 선회 중 회피 반발에서 뺄 목표 부표 둘레 반경 [m]
     done_clearance: float = 1.5       # 완료 뒤 목표 부표에 이보다 가까이 안 감 [m]
                                       # (mission_manager transition_radius 2.0 보다 작게)
@@ -121,7 +129,7 @@ class SearchParams:
                                       # 진입 120° 쪽으로 크게 돌다 반발 조향에 밀려 검정 반대편으로 돌아 중심 0.61 m
     exit_cone_deg: float = 75.0       # 완료 뒤, 부표→배 방향과 배→출구 방향 사이가 이 안일 때 원을 벗어난다 [deg]
                                       # (그 전에는 원을 이어 돈다 — 출구 직선이 방금 돈 부표를 스치지 않게)
-    exit_thrust: float = 0.25         # 완료·포기 뒤 출구 직선 LOS 직진 상한 (선회와 같음). 예전 공용 waypoint()
+    exit_thrust: float = 0.25         # 완료·포기 뒤 출구 직선 LOS 직진 상한 (선회와 같음, 실물 0.75 m/s). 예전 공용 waypoint()
                                       # 0.101 은 조류 0.25 m/s 에서 22 m 에 125 s, 0.15 m/s 에서 옆으로 밀려 0.43 m
     exit_arrive_radius: float = 0.4   # 출구점이 search_end 에서 비킨 점일 때 도착 반경 [m]
                                       # (done_clearance + 이것 < mission_manager 전환 반경 2.0)

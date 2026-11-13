@@ -168,6 +168,17 @@ LOS_FORWARD_RATIO = 0.25
 LOS_TURN_RATIO = 0.31
 LOS_LOOKAHEAD = 0.8   # 경로 위 목표점 전방 거리 [m]
 
+# 실물 추력 곡선 (2026-11-14): 정지 수면 속도 v ≈ MEASURED_SPEED_SCALE × 명령^MEASURED_SPEED_EXP [m/s]
+# (명령 = 좌우 평균 추력 비율). dock_test1·dock2(11-13)·run(11-12) 야외 bag 의 명령 → thruster_driver 믹서
+# PWM → /odom 속도로 맞춘 값 (scripts/e2e_sim/nomoto.json a·pw). 진행 방향별 대지속도로 물살을 분리해 확인:
+# 0.40 → 1.06 m/s(107 s, 6 방위, 물살 0.03), 0.467 → 1.21 m/s(72 s, 물살 0.01). 0.10 → 약 0.34 m/s(두 방향만).
+# 0.07~0.33 은 여러 방향 직진 자료가 없어 곡선 보간이다.
+# 공용 변환 FsmParams(cmd = 상한 × (v / 1.48)^1.64)는 Gazebo 시뮬 맞춤값이라 상한 0.25 에서 1.48 m/s 를
+# 가정하지만 실물은 0.75 m/s — 저속 구간 명령이 실물보다 3~4 배 작게 나온다. 지금은 탐색만 이 곡선을 쓴다
+# (LosFollower measured_speed, SearchParams.measured_speed).
+MEASURED_SPEED_SCALE = 2.15   # [m/s] 명령 1.0 일 때 (외삽)
+MEASURED_SPEED_EXP = 0.76
+
 
 class LosFollower:
     """Stateful, ROS-free progress tracker around the shared LOS control law.
@@ -177,6 +188,12 @@ class LosFollower:
     ratio 배로 줄어든다. True 면 bspline_track_test 와 같이 게인은 그대로 두고
     ratio 를 **출력 한계**(전진 cmd_full·상한, 회전 상한)에만 적용한다. 이때
     max_linear/max_angular 는 ratio=1 일 때의 전체 스케일이다.
+
+    ``measured_speed`` (ratio_limits_only 일 때만): 원하는 속도 → 전진 명령을 공용 변환
+    (상한 × (v/1.48)^1.64 — 상한에서 1.48 m/s 가정) 대신 실물 곡선
+    (v / MEASURED_SPEED_SCALE)^(1/MEASURED_SPEED_EXP) 로 바꾸고 thrust_ratio 는 상한으로만 쓴다.
+    직선·선회처럼 빠른 구간은 둘 다 상한에 걸려 같고, 선수각 오차·급한 굽이·목표 근처처럼
+    속도를 줄이는 구간에서 명령이 실물에 맞게 커진다 (탐색 상한 0.25: 0.42 m/s 요청에 0.032 → 0.117).
     """
 
     def __init__(self, *, params: FsmParams | None = None,
@@ -185,7 +202,10 @@ class LosFollower:
                  max_linear: float = 12.0 / 118.6,
                  max_angular: float = 3.0 / 118.6,
                  goal_tolerance: float = 0.4,
-                 ratio_limits_only: bool = False):
+                 ratio_limits_only: bool = False,
+                 measured_speed: bool = False):
+        if measured_speed and not ratio_limits_only:
+            raise ValueError('measured_speed needs ratio_limits_only (thrust_ratio is then a cap)')
         self.params = params or replace(FsmParams(), lookahead=LOS_LOOKAHEAD,
                                         slow_radius=1.5,
                                         cmd_full=max_linear)
@@ -193,19 +213,23 @@ class LosFollower:
         self.max_linear, self.max_angular = max_linear, max_angular
         self.goal_tolerance = goal_tolerance
         self.ratio_limits_only = ratio_limits_only
+        self.measured_speed = measured_speed
         self.reset()
 
     @classmethod
-    def bspline_track(cls, *, goal_tolerance: float = 0.4) -> 'LosFollower':
+    def bspline_track(cls, *, goal_tolerance: float = 0.4,
+                      measured_speed: bool = False) -> 'LosFollower':
         """bspline_track_test 와 같은 제어 상수·출력 규칙의 follower.
 
         step(thrust_ratio=r, turn_ratio=t) 이면 전진 상한과 cmd_full 이 r, 회전 상한이 t
         (생략하면 r) 이고 게인은 kp 1.4 / kd 0.16, lookahead 0.8 m 다
         (bspline_track_test 는 kp 1.5 / kd 0.15, lookahead 1.0).
+        measured_speed 면 cmd_full 대신 실물 곡선으로 속도 → 명령 (클래스 설명).
         """
         return cls(yaw_kp=BSPLINE_TRACK_YAW_KP, yaw_kd=BSPLINE_TRACK_YAW_KD,
                    max_linear=1.0, max_angular=1.0,
-                   goal_tolerance=goal_tolerance, ratio_limits_only=True)
+                   goal_tolerance=goal_tolerance, ratio_limits_only=True,
+                   measured_speed=measured_speed)
 
     def reset(self):
         self.path = None
@@ -294,9 +318,14 @@ class LosFollower:
             # 요 PD 게인은 그대로.
             linear_cap = self.max_linear * ratio
             angular_cap = self.max_angular * turn
+            if self.measured_speed:
+                # 실물 곡선 cmd = (v / scale)^(1/exp) — 아래에서 linear_cap 으로 자른다
+                speed_curve = replace(self.params, cmd_full=1.0, v_full=MEASURED_SPEED_SCALE,
+                                      cmd_exp=1.0 / MEASURED_SPEED_EXP)
+            else:
+                speed_curve = replace(self.params, cmd_full=linear_cap)
             linear, angular = follow_cmd(
-                plan, boat, yaw, yaw_rate, waypoint_xy,
-                replace(self.params, cmd_full=linear_cap),
+                plan, boat, yaw, yaw_rate, waypoint_xy, speed_curve,
                 self.yaw_kp, self.yaw_kd)
             return LosStep(
                 linear=min(max(linear, 0.0), linear_cap),

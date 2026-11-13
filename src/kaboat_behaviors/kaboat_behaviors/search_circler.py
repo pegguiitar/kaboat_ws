@@ -48,8 +48,8 @@ from std_msgs.msg import String
 from visualization_msgs.msg import Marker, MarkerArray
 
 from .behavior_base import BehaviorBase, WAYPOINT_MAX_ANGULAR, yaw_from_quaternion
-from .los_controller import (BSPLINE_TRACK_YAW_KD, BSPLINE_TRACK_YAW_KP, circle_path,
-                             sampled_path)
+from .los_controller import (BSPLINE_TRACK_YAW_KD, BSPLINE_TRACK_YAW_KP, LosFollower,
+                             circle_path, sampled_path)
 from .obstacle_avoidance_utils import apply_repulsion
 from .search_orbit import (SearchFsm, SearchParams, detour_via, exit_clear, measure_shapes,
                            tangent_entry)
@@ -72,7 +72,7 @@ def polyline_path(points, spacing=ENTRY_SPACING, fillet_radius=None):
 
     fillet_radius 를 주면 안쪽 꼭짓점을 그 반경 호로 둥글게 잇는다 (붙은 두 구간 길이의 45 % 와
     꼭짓점에서 ENTRY_FILLET_OFFSET 안으로 줄임). 꺾은선 그대로면 샘플 곡률이 꼭짓점에서 튀어
-    (24° 꺾임에 κ 4.5) LOS 가 모서리 2 m 앞부터 최저 속도(명령 0.018)로 떨어졌고, 조류 0.15 m/s 에서
+    (24° 꺾임에 κ 4.5) LOS 가 모서리 2 m 앞부터 최저 속도(공용 변환 명령 0.018 — 실물 곡선이면 0.075)로 떨어졌고, 조류 0.15 m/s 에서
     진행 위치가 모서리 앞에 묶인 채 밀려나 접선 진입이 끝나지 않았다 (2026-11-14 닫힌 루프 시뮬).
     """
     P = [np.asarray(p, dtype=np.float64) for p in points]
@@ -137,6 +137,9 @@ class SearchCircler(BehaviorBase):
     def __init__(self):
         super().__init__()
         self.params = self._params_from('search', SearchParams)
+        # 진입·선회·출구 LOS 의 속도 → 명령을 실물 곡선으로 (search.measured_speed, 기본 켬 — SearchParams 설명).
+        # 다른 미션(gate·avoid·dock)의 LOS 는 그대로 공용 변환.
+        self._los_follower = LosFollower.bspline_track(measured_speed=self.params.measured_speed)
         self.fsm = None
         self.search_center = None     # /mission/search_center (x, y)
         # LOOK 위치 유지 전용 — 공용 waypoint() 는 그대로 두고 전진 상한만 hold_linear 로 다른 것
@@ -160,7 +163,9 @@ class SearchCircler(BehaviorBase):
             self.get_logger().info(
                 f'search: 목표 {p.target_color} → {p.direction} 선회, 반경 {p.orbit_radius} m, '
                 f'{p.laps} 바퀴, 영역 반경 {p.target_search_radius} m, 시작 둘러보기 '
-                f'{p.look_sec:.0f} s, 접선 진입 {"켬" if p.tangent_entry else "끔"}')
+                f'{p.look_sec:.0f} s, 접선 진입 {"켬" if p.tangent_entry else "끔"}, '
+                f'LOS 속도 변환 {"실물 곡선" if p.measured_speed else "공용(시뮬 맞춤)"} '
+                f'(전진 상한 {p.orbit_thrust:.2f})')
 
     def _params_from(self, prefix, cls):
         defaults = cls()
