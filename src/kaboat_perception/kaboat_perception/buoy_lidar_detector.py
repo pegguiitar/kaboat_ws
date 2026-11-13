@@ -14,7 +14,7 @@
 입력   /scan/level, /odom, 컬러 영상(color_topic, color_compressed), /camera/camera_info,
        /imu/data (창 투영 롤·피치)
 출력   /detections/buoys (BuoyArray, 확정 + 카메라에 찍힌 것만 — unseen 은 publish_unseen),
-       ~/markers (확정 부표 중심 = 둥근 점, 색 = 부표 색, 존재 확률 글자), ~/debug_image (창·표)
+       ~/markers (부표 중심 = 큰 둥근 점, 덩어리 점 = 작은 둥근 점, 색 = 부표 색, 존재 확률 글자), ~/debug_image (창·표)
 """
 import collections
 import dataclasses
@@ -261,7 +261,7 @@ class BuoyLidarDetector(Node):
         self.pub.publish(out)
 
     def _publish_markers(self, stamp):
-        """부표 중심만 둥근 점으로 (색 = 부표 색) + 존재 확률 글자."""
+        """부표 중심 = 큰 둥근 점, 부표 덩어리 점 = 작은 둥근 점 (색 = 부표 색), 존재 확률 글자."""
         arr = MarkerArray()
         clear = Marker()
         clear.action = Marker.DELETEALL
@@ -295,6 +295,32 @@ class BuoyLidarDetector(Node):
             arr.markers.append(txt)
         if cen.points:
             arr.markers.append(cen)
+        # 부표 덩어리 점 (점 지도의 굳은 점) — 작은 둥근 점, 부표 색 (확정 전 후보는 회색, 흐리게)
+        blob_pts = getattr(self.tracker, 'blob_points', {})
+        if blob_pts:
+            pts = Marker()
+            pts.header = cen.header
+            pts.ns, pts.id = 'blob_points', 0
+            pts.type, pts.action = Marker.SPHERE_LIST, Marker.ADD
+            pts.pose.orientation.w = 1.0
+            pts.pose.position.z = 0.05
+            pts.scale.x = pts.scale.y = pts.scale.z = 0.06
+            by_id = {t.id: t for t in self.tracker.tracks}
+            for tid, bp in blob_pts.items():
+                tr = by_id.get(tid)
+                if tr is None:
+                    continue
+                r, gg, b = RGB.get(tr.color, RGB['unknown']) if tr.confirmed else (0.7, 0.7, 0.7)
+                a = 1.0 if tr.confirmed else 0.5
+                for x, y in bp:
+                    pt = Point()
+                    pt.x, pt.y = float(x), float(y)
+                    col = ColorRGBA()
+                    col.r, col.g, col.b, col.a = r, gg, b, a
+                    pts.points.append(pt)
+                    pts.colors.append(col)
+            if pts.points:
+                arr.markers.append(pts)
         self.marker_pub.publish(arr)
 
     def _publish_debug(self):
