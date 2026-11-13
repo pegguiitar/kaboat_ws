@@ -43,6 +43,8 @@ class FsmParams:
 
     v↔cmd 캘리브레이션(cmd_full·v_full)은 물리 결합층(SKELETON §6) — 실물 전환 시
     이 두 값만 재실측하면 speed_to_cmd 가 통째로 교체 지점이다.
+    v_full·cmd_exp 는 아직 Gazebo 시뮬 맞춤값이다. 야외 실측(2026-11-14)은 los_controller.MEASURED_SPEED_*
+    (0.40 → 1.06 m/s) — 탐색만 그 곡선을 쓰고(LosFollower measured_speed), 회피·게이트·도킹 LOS 는 이 값.
     """
     # 경로 추종 상수 slow_radius 는 수조에서 검증한 LOS(LosFollower.bspline_track) 와 같은
     # 값 (2026-11-04 실물 튜닝). lookahead 는 LOS 의 1.0 에서 0.8 로 줄임 (2026-11-06,
@@ -58,7 +60,7 @@ class FsmParams:
     # 2.8 s(2:21~2:50 은 2.4 s)마다라 경로가 자주 갈아엎혔다. 멀쩡한 경로는 더 오래 따라간다.
     t_backstop: float = 5.0
     d_panic: float = 2.0          # 📝 위반까지 경로거리 이 값 미만이면 즉시 ESCAPE [m]
-    #   근거: 전속 1.48 에서 타력 감쇠 실측(3s 에 0.11 로) → 제동거리 ~2m + 여유 (예전 3.0).
+    #   근거: 전속 1.48(Gazebo 맞춤 속도 v_full)에서 타력 감쇠 실측(3s 에 0.11 로) → 제동거리 ~2m + 여유 (예전 3.0).
     #   3.0 → 2.0 (2026-11-12): 붐이 추가된 회피 코스가 촘촘해 3 m 안에 장애물이 늘 있어
     #   수리·재생성을 시도할 틈 없이 후진 탈출이 잦을 것으로 봄. 회피 추종 출력 상한(0.25)
     #   에서는 전속보다 느려 제동거리가 짧다. 빠르게 달리는 구간에서는 여유가 없음에 주의.
@@ -106,11 +108,15 @@ class FsmParams:
     # 2026-11-13 야외: 0.25 → 0.2 (직선 전진 0.18, 모든 전진 출력 0.8배) — 회전 상한을
     # 0.31 → 0.35 로 올리면서 덜 빠르게 더 잘 꺾게.
     cmd_full: float = 0.2
-    v_full: float = 1.48          # ✅ 실측 속도 [m/s] — 2026-11-06 cmd_full 0.25 일 때. 계수만 낮춰
-    #   (v_full 그대로) 모든 전진 출력을 같은 비율로 줄인다
-    cmd_exp: float = 1.64         # ✅ v↔cmd 멱지수 — sim 2점 fit (12N→1.480,
+    v_full: float = 1.48          # 📝 cmd_full 에서 낼 속도로 가정하는 값 [m/s] — Gazebo 시뮬 맞춤(아래
+    #   cmd_exp 와 같은 2 점), 실물로 다시 잰 적 없음. 2026-11-06 엔 계수(cmd_full)만 낮추고 이 값은 그대로 둬
+    #   모든 전진 출력을 같은 비율로 줄였다. 야외 실측(2026-11-14, 진행 방향별로 물살 분리): 명령 0.40 → 1.06 m/s,
+    #   0.467 → 1.21 m/s 라 상한 0.2~0.25 에서 1.48 m/s 는 안 나온다(실물 곡선으로 0.25 → 약 0.75 m/s) —
+    #   감속 구간 명령이 실물보다 3~4 배 작다. 회피·게이트·도킹 LOS 는 아직 이 값, 탐색은 실물 곡선
+    #   (los_controller.MEASURED_SPEED_*, SEARCH_MISSION.md §7.8).
+    cmd_exp: float = 1.64         # 📝 v↔cmd 멱지수 — Gazebo 시뮬 2점 fit (12N→1.480,
     #   6N→0.970 m/s, 2026-07-18). 정상상태 추력=항력 균형이 순수 2차 항력이면
-    #   2.0, 실측은 선형 항력 섞여 1.64. 실물 전환 시 cmd_full·v_full 과 함께 재실측.
+    #   2.0, 시뮬은 선형 항력 섞여 1.64. 야외 bag 맞춤 곡선은 v ≈ 2.15·cmd^0.76 → 지수 1/0.76 = 1.32.
 
 
 @dataclass
@@ -151,7 +157,7 @@ def follow_cmd(plan: Plan | SampledPlan, boat_xy, yaw: float, yaw_rate: float, w
 
     조향은 공통 waypoint 와 같은 PD(게인도 노드가 같은 값 주입), 목표점만
     경로 위 lookahead 점. 감속은 전방 창 max κ 로 v = clamp(ω_max/κ, v_min,
-    v_max) — κ_avail = ω/v 라 교정 전속(1.48)에선 0.35, 현재 회피 상한
+    v_max) — κ_avail = ω/v 라 Gazebo 교정 전속(1.48)에선 0.35, 현재 회피 상한
     1.1m/s에서도 0.47뿐인데 경로는 κ 0.9~1.2가 필요해(실측) 조향만으론
     물리적으로 못 따라간다.
     heading 오차 비례 감속 항은 v1 제외 — 위치 waypoint 의 이산 규칙(오차 >60°

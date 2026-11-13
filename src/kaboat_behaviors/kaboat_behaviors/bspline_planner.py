@@ -26,7 +26,8 @@
   되돌아가 옆 후보로 바꾼다. 최저 비용 곡선이 안전하면 예전과 같은 경로다. 안전한
   곡선이 없으면 None — 전진 반평면에 답이 없다는 뜻이고, 그 답은 ESCAPE(후진)다.
 
-  t_look=1.0s 는 실측 전속 1.48 m/s 기준 재산출값(§3-2) — 5.0s 초안은
+  t_look=1.0s 는 전속 1.48 m/s(Gazebo 시뮬 맞춤 — 야외 실측은 명령 0.40 → 1.06 m/s,
+  los_controller.MEASURED_SPEED_*) 기준 재산출값(§3-2) — 5.0s 초안은
   p1 이 7.4m 로 튀어 스플라인이 나갔다 되돌아오는 첨점을 만들었다.
 """
 from dataclasses import dataclass, field, replace
