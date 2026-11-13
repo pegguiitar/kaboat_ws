@@ -8,7 +8,8 @@
 source "$(dirname "${BASH_SOURCE[0]}")/_env.sh"
 BAG=${1:?bag 폴더를 주세요}; RATE=${2:-1.0}
 ros2 run kaboat_perception buoy_lidar_detector --ros-args -p use_sim_time:=true \
-  -p color_topic:=/camera/camera/color/image_raw/compressed -p color_compressed:=true &
+  -p color_topic:=/camera/camera/color/image_raw/compressed -p color_compressed:=true \
+  -p depth_topic:=/camera/camera/aligned_depth_to_color/image_raw/compressedDepth -p depth_compressed:=true &
 rviz2 -d "$HERE/buoy_lidar.rviz" --ros-args -p use_sim_time:=true &
 sleep 3
 exec python3 "$HERE/loop_bag_play.py" "$BAG" "$RATE"

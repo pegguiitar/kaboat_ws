@@ -1,9 +1,9 @@
 """buoy_lidar_detector — 라이다 중심 부표 검출 (라이다 = 있음·위치, 카메라 RGB = 색).
 
-예전 buoy_detector(카메라 프레임 중심, 뎁스 경로)를 대신한다 — 그 노드는 지웠다.
+예전 buoy_detector(카메라 프레임 중심, 뎁스 경로)를 대신한다 — 그 노드는 지웠다. 뎁스는 부표를 찾는 데는
+안 쓰고, 라이다 창 픽셀 중 그 부표 자리에 떨어지는 것만 고르는 데 쓴다 (buoy_color.refine_with_depth).
 결과를 보는 쪽(/detections/buoys·마커·디버그 영상 구독자)이 있을 때만 계산한다 — 대회 스택에서는
-탐색 behavior 가 search 상태일 때만 구독하므로 그동안만 돈다. 윤슬·반사에서 뎁스가 크게 튀어
-(2026-11-12 현장) 뎁스는 쓰지 않는다. 계산은 순수 모듈에 있다:
+탐색 behavior 가 search 상태일 때만 구독하므로 그동안만 돈다. 계산은 순수 모듈에 있다:
   buoy_localize   lidar_points / lidar_blobs — 원시 스캔 → 부표 크기 덩어리 (거리 군집화, 선체 프레임)
   buoy_color      덩어리 → 영상 창 → 색 표 (가림·판정 불가는 표 없음)
   buoy_evidence   부표별 존재 log-odds — 라이다 연결로 올리고, 빔이 자리를 지나가면 깎음
@@ -33,7 +33,8 @@ from std_msgs.msg import ColorRGBA
 from visualization_msgs.msg import Marker, MarkerArray
 
 from kaboat_msgs.msg import Buoy, BuoyArray
-from kaboat_perception.buoy_color import ColorParams, classify_colors, vote_colors
+from kaboat_perception.buoy_color import ColorParams, classify_colors, refine_with_depth, vote_colors
+from kaboat_perception.depth_utils import depth_to_meters
 from kaboat_perception.buoy_evidence import EvidenceParams, EvidenceTracker, LidarView
 from kaboat_perception.buoy_localize import BuoyGeometry, lidar_blobs, lidar_points
 from kaboat_perception.buoy_pointmap import PointMapParams, PointMapTracker
@@ -59,6 +60,9 @@ class BuoyLidarDetector(Node):
         self.declare_parameter('color_topic', '/camera/color/image_raw')
         self.declare_parameter('color_compressed', False)
         self.declare_parameter('info_topic', '/camera/camera_info')
+        # 정렬 뎁스 — 창 픽셀 중 그 부표 자리에 떨어지는 것만 고른다 (color.use_depth). 없으면 창 전체.
+        self.declare_parameter('depth_topic', '/camera/depth/image_raw')
+        self.declare_parameter('depth_compressed', False)   # bag 의 compressedDepth
         self.declare_parameter('output_topic', '/detections/buoys')
         self.declare_parameter('image_max_age', 0.2)   # [s] 스캔과 이만큼 넘게 차이 나면 색 표 안 넣음
         # 카메라에 한 번도 안 찍힌 확정 부표(unseen)도 내보낼지 — 기본은 안 냄 (검정=unknown 오염 방지)
@@ -111,6 +115,7 @@ class BuoyLidarDetector(Node):
         self.K = None
         self.image = None       # (t, bgr)
         self.label = None       # (t, label)
+        self.depth = None       # (t, 미터 H×W)
         self.roll = self.pitch = 0.0
         self.last_votes = []
         self._was_wanted = None
@@ -125,6 +130,12 @@ class BuoyLidarDetector(Node):
                                      qos_profile_sensor_data)
         else:
             self.create_subscription(Image, g('color_topic'), self._on_image, qos_profile_sensor_data)
+        if self.cp.use_depth:
+            if bool(g('depth_compressed')):
+                self.create_subscription(CompressedImage, g('depth_topic'), self._on_depth_compressed,
+                                         qos_profile_sensor_data)
+            else:
+                self.create_subscription(Image, g('depth_topic'), self._on_depth, qos_profile_sensor_data)
         self.pub = self.create_publisher(BuoyArray, g('output_topic'), 10)
         self.marker_pub = self.create_publisher(MarkerArray, '~/markers', 1)
         self.debug_pub = self.create_publisher(Image, '~/debug_image', 1)
@@ -166,6 +177,25 @@ class BuoyLidarDetector(Node):
         img = np.frombuffer(m.data, np.uint8).reshape(m.height, m.step)[:, :m.width * 3]
         img = img.reshape(m.height, m.width, 3)
         self.image = (_stamp(m.header), img[..., ::-1].copy() if m.encoding == 'rgb8' else img)
+
+    def _on_depth(self, m: Image):
+        if not self._wanted():
+            return
+        try:
+            dt = np.uint16 if m.encoding.upper() == '16UC1' else np.float32
+            arr = np.frombuffer(m.data, dt).reshape(m.height, -1)[:, :m.width]
+            self.depth = (_stamp(m.header), depth_to_meters(arr, m.encoding))
+        except (ValueError, TypeError) as e:
+            self.get_logger().error(f'뎁스 변환 실패: {e}', throttle_duration_sec=5.0)
+
+    def _on_depth_compressed(self, m: CompressedImage):
+        if not self._wanted():
+            return
+        buf = bytes(m.data)
+        k = buf.find(b'\x89PNG')               # compressedDepth: 12 바이트 헤더 + PNG
+        d = cv2.imdecode(np.frombuffer(buf[k:], np.uint8), cv2.IMREAD_UNCHANGED) if k >= 0 else None
+        if d is not None:
+            self.depth = (_stamp(m.header), d.astype(np.float32) * 0.001)
 
     def _pose_at(self, t):
         if not self.poses:
@@ -224,6 +254,9 @@ class BuoyLidarDetector(Node):
                 dx, dy = wx - ipose[0], wy - ipose[1]
                 cands.append(((ic * dx + isn * dy, -isn * dx + ic * dy), r))
             res = vote_colors(self.label[1], cands, self.K, g, self.cp, self.roll, self.pitch)
+            if self.depth is not None and abs(self.depth[0] - self.image[0]) <= 0.07:
+                res = refine_with_depth(self.label[1], res, cands, self.depth[1], self.K, g, self.cp,
+                                        self.roll, self.pitch)
             votes = list(res)   # ColorVote — 트래커가 픽셀 수를 누적
             self.last_votes = res
 

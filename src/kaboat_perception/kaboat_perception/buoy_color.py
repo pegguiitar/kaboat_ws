@@ -2,9 +2,8 @@
 
 라이다 중심 부표 파이프라인(buoy_lidar_detector)의 색 단계. 부표가 있는지·어디 있는지는
 라이다가 정하고, 여기서는 후보 자리를 영상에 투영한 창의 픽셀로 색 표 하나를 낸다.
-뎁스는 쓰지 않는다 — 윤슬·반사에서 뎁스가 크게 튀었고(2026-11-12 현장), 탐색 bag 에서 붙은 쌍 색이
-틀린 프레임은 모두 RGB 탓이었다 (아래 초록 H 하한). 그 픽셀은 뎁스로도 검정 캡슐 거리에 있어 뎁스로 걸러도
-안 없어지고, 뎁스는 라이다보다 0.5~1.3 m 멀게 나오고 물체 가장자리로 번져 픽셀 단위 거르기에 못 쓴다.
+뎁스는 창 픽셀을 고르는 데만 쓴다 (refine_with_depth) — 창 픽셀마다 뎁스로 수평 좌표를 구해 그 부표 반경
+안인 픽셀만 센다. 뎁스가 없거나 고른 픽셀이 적으면 창 전체 (vote_colors 결과 그대로).
 
 표 (ColorVote.color):
   'red' / 'green'  창 안 빨강·초록 픽셀이 min_color_px 이상이고 한쪽이 dominance 배 이상
@@ -38,6 +37,7 @@ import cv2
 import numpy as np
 
 from kaboat_perception.buoy_localize import BuoyGeometry, level_to_pixel
+from kaboat_perception.camera_obstacles import CameraObstacleParams, pixels_to_level
 
 
 @dataclass(frozen=True)
@@ -62,6 +62,15 @@ class ColorParams:
     min_visible_frac: float = 0.6  # 창의 이 비율 이상이 보여야 판정 — 앞 부표에 대부분 가리면 표 없음
     min_color_px: int = 6         # 빨강·초록 판정 최소 픽셀 (step 후)
     dominance: float = 2.0        # 1위 색이 2위의 이 배 이상이어야 판정 (섞이면 None)
+    # 뎁스로 창 픽셀 고르기 (refine_with_depth) — 창 픽셀 중 뎁스로 수평 좌표를 구해 그 부표 반경 안인 것만
+    use_depth: bool = True
+    depth_tol: float = 0.5        # 부표 반폭 + 이만큼 안 [m]
+    depth_max: float = 8.0        # 이보다 먼 뎁스 픽셀은 안 씀 [m]
+    depth_scale: float = 1.092    # D455 뎁스 ≈ scale × 라이다 + bias (2026-11-12 gate bag 부표 픽셀 773 창 실측)
+    depth_bias: float = 0.28
+    depth_min_px: int = 20        # 고른 픽셀이 이보다 적으면 창 전체로 (지금 방식)
+    depth_z_min: float = -0.3     # 수면 아래로 계산된 픽셀(뎁스 매칭 오류) 버림 [m]
+    depth_z_max: float = 1.2
 
 
 @dataclass
@@ -72,6 +81,7 @@ class ColorVote:
     green: int = 0
     visible: int = 0
     usable: bool = False          # 픽셀 수를 누적해도 되는 프레임 (보임·가림·번짐 조건 통과)
+    depth: bool = False           # 뎁스로 고른 픽셀로 셌나 (refine_with_depth)
 
 
 def classify_colors(bgr, p: ColorParams):
@@ -147,11 +157,64 @@ def vote_colors(label, candidates: Sequence[Tuple[Tuple[float, float], float]], 
             out.append(vote)
             continue
         vote.usable = True
-        best, other_n = (('red', red), green) if red >= green else (('green', green), red)
-        if best[1] >= p.min_color_px:
-            if best[1] >= p.dominance * other_n:
-                vote.color = best[0]
-        elif red + green < p.min_color_px:
-            vote.color = 'unknown'
+        _decide(vote, p)
         out.append(vote)
     return out
+
+
+def _decide(vote: ColorVote, p: ColorParams):
+    best, other_n = (('red', vote.red), vote.green) if vote.red >= vote.green else (('green', vote.green), vote.red)
+    vote.color = None
+    if best[1] >= p.min_color_px:
+        if best[1] >= p.dominance * other_n:
+            vote.color = best[0]
+    elif vote.red + vote.green < p.min_color_px:
+        vote.color = 'unknown'
+
+
+def refine_with_depth(label, votes: List[ColorVote], candidates, depth_m, K, g: BuoyGeometry,
+                      p: ColorParams, roll=0.0, pitch=0.0) -> List[ColorVote]:
+    """창 픽셀 중 정렬 뎁스로 수평 좌표를 구해(camera_obstacles 와 같은 역투영) 그 부표 반경
+    (반폭 + depth_tol) 안에 떨어지는 픽셀만으로 색을 다시 센다. 픽셀은 가장 가까운 부표 하나에만 —
+    앞 부표에 가린 뒤 부표 창의 픽셀은 앞 부표로 간다. 고른 픽셀이 depth_min_px 보다 적으면 그 창은
+    지금 방식(창 전체) 그대로.
+
+    라이다 창은 실제 부표에서 어긋난다 (gate bag: 부표 픽셀 중 창 안 비율 중앙 49~67 %) — 창 안 물·옆 부표
+    픽셀을 뎁스로 걸러낸다. 2026-11-12 gate bag 5 m 안 1993 창: 프레임 색 맞음 79 → 88 %, 정답 색 비율
+    57 → 71 %. 뎁스는 라이다보다 멀게 나와(≈ 1.092 × 라이다 + 0.28) 보정해서 쓴다.
+    """
+    if depth_m is None or not p.use_depth:
+        return votes
+    s = max(1, int(p.step))
+    D = np.asarray(depth_m, dtype=np.float32)[::s, ::s][:label.shape[0], :label.shape[1]]
+    cam = CameraObstacleParams(offset_x=g.cam_offset_x, offset_y=g.cam_offset_y, height=g.cam_height,
+                               mount_pitch_deg=g.cam_mount_pitch_deg)
+    C = np.array([c for c, _r in candidates], dtype=float).reshape(-1, 2)
+    R = np.array([max(float(r), p.min_half_width) for _c, r in candidates])
+    for k, v in enumerate(votes):
+        if v.rect is None:
+            continue
+        u0, v0, u1, v1 = v.rect
+        c0, c1 = max(u0 // s, 0), min(u1 // s + 1, label.shape[1])
+        r0, r1 = max(v0 // s, 0), min(v1 // s + 1, label.shape[0])
+        if c0 >= c1 or r0 >= r1:
+            continue
+        d = D[r0:r1, c0:c1]
+        rr, cc = np.nonzero(np.isfinite(d) & (d > 0.3) & (d <= p.depth_max))
+        if len(rr) < p.depth_min_px:
+            continue
+        dd = (d[rr, cc] - p.depth_bias) / p.depth_scale
+        pts = pixels_to_level((cc + c0) * s, (rr + r0) * s, dd, K, cam, roll, pitch)
+        dist = np.hypot(pts[:, None, 0] - C[None, :, 0], pts[:, None, 1] - C[None, :, 1]) - R[None, :]
+        sel = ((dist.argmin(axis=1) == k) & (dist[:, k] <= p.depth_tol)
+               & (pts[:, 2] >= p.depth_z_min) & (pts[:, 2] <= p.depth_z_max))
+        if int(sel.sum()) < p.depth_min_px:
+            continue
+        lv = label[rr[sel] + r0, cc[sel] + c0]
+        if int(np.sum(lv == 3)) > p.max_tint_frac * len(lv):
+            continue
+        v.red, v.green, v.visible = int(np.sum(lv == 1)), int(np.sum(lv == 2)), int(len(lv))
+        v.usable = True
+        v.depth = True
+        _decide(v, p)
+    return votes
