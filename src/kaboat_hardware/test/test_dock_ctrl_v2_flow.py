@@ -452,8 +452,8 @@ def _turn_search(node, yaw, deg, step=10.0, **shapes):
     return yaw
 
 
-def test_single_shape_direction_reverses_after_90deg_without_new_shape(node):
-    """끝 슬롯(사각)만 보이고 그쪽엔 더 없다 — 90° 돌아도 새 도형이 없으면 한 번 반대로."""
+def test_single_shape_direction_reverses_after_75deg_without_new_shape(node):
+    """끝 슬롯(사각)만 보이고 그쪽엔 더 없다 — 75° 돌아도 새 도형이 없으면 한 번 반대로."""
     node.target = 'triangle'
     _scan(node)
     yaw = FACING_WALL
@@ -461,9 +461,9 @@ def test_single_shape_direction_reverses_after_90deg_without_new_shape(node):
     _shapes(node, square=-3.0)
     node._tick()
     assert node.sent[-1].angular.z > 0                  # 왼쪽부터
-    yaw = _turn_search(node, yaw, 80, square=-40.0)
-    assert node.sent[-1].angular.z > 0                  # 아직 90° 전
-    yaw = _turn_search(node, yaw, 20)
+    yaw = _turn_search(node, yaw, 70, square=-40.0)
+    assert node.sent[-1].angular.z > 0                  # 아직 75° 전
+    yaw = _turn_search(node, yaw, 10)
     assert node.sent[-1].angular.z < 0 and node.search_reversed
     assert 'reversed' in node.reports[-1]['detail']
     _turn_search(node, yaw, 200)                       # 다시는 안 뒤집는다
@@ -471,7 +471,7 @@ def test_single_shape_direction_reverses_after_90deg_without_new_shape(node):
 
 
 def test_pair_rule_skips_side_already_swept_empty(node):
-    """끝 슬롯(사각)만 보여 왼쪽 90° 를 훑었는데 없었다 → 뒤집어 돌다 사각 +1°·원 −39° 가 보이면
+    """끝 슬롯(사각)만 보여 왼쪽 75° 를 훑었는데 없었다 → 뒤집어 돌다 사각 +1°·원 −39° 가 보이면
     간격 후보 +41°(왼쪽, 더 가까움)는 이미 비어 있던 쪽이라 빼고 −79°(오른쪽)로. 시뮬 c_sqend_tri."""
     node.target = 'triangle'
     _scan(node)
@@ -505,7 +505,7 @@ def test_pair_rule_reverses_when_predicted_position_reaches_centre_empty(node):
     assert node.sent[-1].angular.z > 0 and 'reversed' in node.reports[-1]['detail']
 
 
-def test_new_shape_before_90deg_switches_to_pair_rule_without_reversal(node):
+def test_new_shape_before_75deg_switches_to_pair_rule_without_reversal(node):
     node.target = 'triangle'
     _scan(node)
     yaw = FACING_WALL

@@ -21,7 +21,7 @@
                             화면 가장자리에 더 가까운 쪽이라 가장 적게 돌아 단서가 나온다. 정확히 가운데면
                             시계방향. (예전 후진으로 시야 넓히기는 뺐다 — 라이다가 120~240° 를 가려 뒤를 못 봄.)
             정한 방향으로 돌아도 새 도형이 안 나오면 한 번 반대로 — 도형 1개로 정했으면
-                            search_reverse_deg(90°), 도형 2개(간격 규칙)로 정했으면 예측 위치가 광축
+                            search_reverse_deg(75°), 도형 2개(간격 규칙)로 정했으면 예측 위치가 광축
                             가운데에 올 때까지(예측 각도, 최소 20°). 간격 규칙은 끝 슬롯에서 틀린다
                             (시뮬: 끝 슬롯 앞에서 반대로 330° 돎). 반전한 쪽은 비어 있다고 보고, 그 뒤 간격
                             규칙도 그쪽 후보를 뺀다.
@@ -168,7 +168,9 @@ class DockCtrlV2(Node):
                     # 목표 탐색 선회 명령 (식별 모델: 0.06 → 약 8°/s, 바람 편향 2.2°/s 보다 충분히 큼)
                     'search_turn_cmd': 0.06,
                     # 도형 1개가 이 안이면 방향 단서가 없다고 보고 후진해 시야를 넓힌다 (최대 거리)
-                    'search_centre_deg': 10.0, 'search_reverse_deg': 90.0,
+                    # 도형 1개로 정한 방향으로 이만큼 돌아도 새 도형이 없으면 반대로. 시뮬 격자 4070가지에서
+                    # 맞는 쪽이면 새 도형이 최대 68°(p99 58°) 안에 보였다 → 75° (예전 90°)
+                    'search_centre_deg': 10.0, 'search_reverse_deg': 75.0,
                     # 검출 상태에 image_half_fov_deg 가 없을 때의 카메라 수평 반화각. D455 640x480 실측
                     # fx 377·cx 317 → 왼쪽 40.0°, 오른쪽 40.6° (2026-11-13 bag, 검출 광선 1272개 맞춤)
                     'camera_half_fov_deg': 40.0,
@@ -318,7 +320,7 @@ class DockCtrlV2(Node):
         self.search_limit = 0.0                     # 이만큼 돌아도 새 도형이 없으면 반대로 [rad]
         self.search_names = set()                   # 그때까지 본 다른 도형 이름
         self.search_reversed = False
-        self.search_empty_side = None               # 90° 돌아 봐도 새 도형이 없던 쪽 (+1/−1)
+        self.search_empty_side = None               # 돌아 봐도 새 도형이 없던 쪽 (+1/−1)
         self.search_turned = 0.0                    # 이번 탐색에서 누적 선회 [rad]
         self.search_prev_yaw = None
         self.search_exhausted = False               # search_max_turns 를 다 돌았다
@@ -1114,7 +1116,7 @@ class DockCtrlV2(Node):
         self.search_since_decision = 0.0
         self.search_names = set()
         self.search_reversed = False
-        self.search_empty_side = None               # 90° 돌아 봐도 새 도형이 없던 쪽 (+1/−1)
+        self.search_empty_side = None               # 돌아 봐도 새 도형이 없던 쪽 (+1/−1)
         self.search_turned = 0.0
         self.search_prev_yaw = None
         self.search_exhausted = False
@@ -1161,7 +1163,7 @@ class DockCtrlV2(Node):
             left, right = high + gap, low - gap
             outside = [c for c in (left, right)
                        if abs(c) > self._half_fov(1 if c > 0 else -1) - 3.0] or [left, right]
-            # 이미 90° 훑어 비어 있던 쪽 후보는 뺀다 (끝 슬롯 너머엔 도형이 없다)
+            # 이미 훑어 비어 있던 쪽 후보는 뺀다 (끝 슬롯 너머엔 도형이 없다)
             if self.search_empty_side is not None:
                 outside = [c for c in outside if (1 if c > 0 else -1) != self.search_empty_side] or outside
             predicted = min(outside, key=abs)
