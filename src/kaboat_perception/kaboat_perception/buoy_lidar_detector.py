@@ -4,11 +4,11 @@
 결과를 보는 쪽(/detections/buoys·마커·디버그 영상 구독자)이 있을 때만 계산한다 — 대회 스택에서는
 탐색 behavior 가 search 상태일 때만 구독하므로 그동안만 돈다. 윤슬·반사에서 뎁스가 크게 튀어
 (2026-11-12 현장) 뎁스는 쓰지 않는다. 계산은 순수 모듈에 있다:
-  buoy_localize   lidar_points / lidar_clusters — 원시 스캔 → 부표 크기 군집 (선체 프레임)
-  buoy_color      군집 → 영상 창 → 색 표 (가림·판정 불가는 표 없음)
+  buoy_localize   lidar_points / lidar_blobs — 원시 스캔 → 부표 크기 덩어리 (거리 군집화, 선체 프레임)
+  buoy_color      덩어리 → 영상 창 → 색 표 (가림·판정 불가는 표 없음)
   buoy_evidence   부표별 존재 log-odds — 라이다 연결로 올리고, 빔이 자리를 지나가면 깎음
 
-박자는 스캔이다: 스캔마다 ① 군집 ② 최신 영상(image_max_age 안)으로 색 ③ 스캔 시각 odom 으로
+박자는 스캔이다: 스캔마다 ① 덩어리 ② 최신 영상(image_max_age 안)으로 색 ③ 스캔 시각 odom 으로
 전역 ④ 트래커. 영상 시각과 스캔 시각 사이 배 이동은 odom 으로 보정해 창을 잡는다.
 
 입력   /scan/level, /odom, 컬러 영상(color_topic, color_compressed), /camera/camera_info,
@@ -33,7 +33,7 @@ from visualization_msgs.msg import Marker, MarkerArray
 from kaboat_msgs.msg import Buoy, BuoyArray
 from kaboat_perception.buoy_color import ColorParams, classify_colors, vote_colors
 from kaboat_perception.buoy_evidence import EvidenceParams, EvidenceTracker, LidarView
-from kaboat_perception.buoy_localize import BuoyGeometry, lidar_cluster_points, lidar_points
+from kaboat_perception.buoy_localize import BuoyGeometry, lidar_blobs, lidar_points
 
 RGB = {'red': (1.0, 0.15, 0.15), 'green': (0.1, 0.9, 0.2), 'unknown': (0.15, 0.15, 0.15),
        'unseen': (0.55, 0.55, 0.85)}
@@ -62,21 +62,29 @@ class BuoyLidarDetector(Node):
         self.declare_parameter('publish_unseen', False)
         # RViz 마커에 확정 전 후보도 그릴지 — 기본은 확정만 (후보가 부표처럼 보여 헷갈림)
         self.declare_parameter('show_tentative', False)
-        # 새 부표는 이 거리 안 라이다 군집에서만 만든다. 시야 제한(spawn_half_fov_deg)은 기본 끔(180) —
+        # 새 부표는 이 거리 안 라이다 덩어리에서만 만든다. 시야 제한(spawn_half_fov_deg)은 기본 끔(180) —
         # 배가 부표를 옆으로 지나가는 일이 많아, 카메라 정면에서만 만들면 점유지도보다 10~20 s
         # 늦었다 (2026-11-12 bag). 카메라에 안 찍힌 건 unseen 이라 /detections/buoys 로 안 나간다.
         self.declare_parameter('spawn_half_fov_deg', 180.0)
         self.declare_parameter('spawn_max_range', 15.0)
-        # 부표 후보가 될 라이다 군집 — 수면·물보라·선수파 hit(빔 2개, 폭 몇 cm, 배 옆 1~1.5 m)를 거른다.
+        # 부표 후보가 될 라이다 덩어리 — 두 점이 cand_eps 안이면 같은 덩어리 (거리 군집화, 원형 가정 없음).
+        # 수면·물보라·선수파 hit(빔 2개, 폭 몇 cm, 배 옆 1~1.5 m)는 점 수·폭으로 거른다.
         # 2026-11-12 bag: 진짜 부표는 빔 8~21개·폭 0.2~0.33 m, 가짜는 빔 2개·폭 1~6 cm.
+        # 너무 넓은 덩어리(cand_max_width 넘음)는 벽·물가·배라 버린다.
+        self.declare_parameter('cand_eps', 0.35)
         self.declare_parameter('cand_min_beams', 3)
         self.declare_parameter('cand_min_width', 0.1)
+        self.declare_parameter('cand_max_width', 1.5)
         # 1.5 m — 탐색 선회(반경 2 m)에서 라이다~부표 표면이 1.6~1.8 m 라 2.0 이면 선회 중 목표가
         # 빠졌다. 배 옆 물보라·선수파 hit 는 1.0~1.4 m (2026-11-12 bag) 라 계속 걸러진다.
         self.declare_parameter('cand_min_range', 1.5)
-        # 보는 거리 — 이보다 먼 군집은 안 씀 (먼 부표는 빔이 적고 물가·배가 섞임). evidence.max_range 와 같게.
+        # 보는 거리 — 이보다 먼 덩어리는 안 씀 (먼 부표는 빔이 적고 물가·배가 섞임). evidence.max_range 와 같게.
         self.declare_parameter('cand_max_range', 15.0)
-        self.geom = BuoyGeometry()
+        gp = lambda n: self.get_parameter(n).value  # noqa: E731
+        self.geom = BuoyGeometry(cluster_eps=float(gp('cand_eps')),
+                                 lidar_min_points=int(gp('cand_min_beams')),
+                                 min_blob_width=float(gp('cand_min_width')),
+                                 max_cluster_width=float(gp('cand_max_width')))
         self.cp = self._params_from('color', ColorParams)
         self.ep = self._params_from('evidence', EvidenceParams)
         self.tracker = EvidenceTracker(self.ep)
@@ -85,8 +93,6 @@ class BuoyLidarDetector(Node):
         self.show_tentative = bool(self.get_parameter('show_tentative').value)
         self.spawn_half_fov = math.radians(float(self.get_parameter('spawn_half_fov_deg').value))
         self.spawn_max_range = float(self.get_parameter('spawn_max_range').value)
-        self.cand_min_beams = int(self.get_parameter('cand_min_beams').value)
-        self.cand_min_width = float(self.get_parameter('cand_min_width').value)
         self.cand_min_range = float(self.get_parameter('cand_min_range').value)
         self.cand_max_range = float(self.get_parameter('cand_max_range').value)
 
@@ -184,11 +190,10 @@ class BuoyLidarDetector(Node):
         if pose is None:
             return
         g = self.geom
-        found = [(xy, r, cl) for cl, xy, r in lidar_cluster_points(
+        found = [(xy, r, cl) for cl, xy, r in lidar_blobs(
                      lidar_points(s.ranges, s.angle_min, s.angle_increment,
-                                  s.range_min, s.range_max, g), g, s.angle_increment)
-                 if len(cl) >= self.cand_min_beams and 2.0 * r >= self.cand_min_width
-                 and self.cand_min_range
+                                  s.range_min, s.range_max, g), g)
+                 if self.cand_min_range
                  <= math.hypot(xy[0] - g.lidar_offset_x, xy[1] - g.lidar_offset_y)
                  <= self.cand_max_range]
         clusters = [(xy, r, len(cl)) for xy, r, cl in found]

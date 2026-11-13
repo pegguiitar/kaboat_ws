@@ -166,47 +166,61 @@ def test_time_jump_back_resets():
     assert tk.tracks == []
 
 
-# ---------- 원 맞추기 (반지름 고정 이동 → 안 맞으면 키움) ----------
+# ---------- 위치·크기 (덩어리) ----------
 
-def arc(center, r, viewer, half_deg=60.0, noise=0.01, rng=None):
-    """viewer 에서 본 원의 앞면 호 점 (가장자리 half_deg 까지만 보임)."""
-    rng = rng or np.random.default_rng(0)
-    c = np.asarray(center, float)
-    los = math.atan2(viewer[1] - c[1], viewer[0] - c[0])
-    a = los + np.radians(np.linspace(-half_deg, half_deg, 15))
-    pts = np.column_stack((c[0] + r * np.cos(a), c[1] + r * np.sin(a)))
-    return pts + rng.normal(0, noise, pts.shape)
+def blob(center, half, n=9, along=(0.0, 1.0)):
+    """중심 center, 반폭 half 의 직선 덩어리 점 (along 방향)."""
+    c, u = np.asarray(center, float), np.asarray(along, float)
+    return c + np.outer(np.linspace(-half, half, n), u)
 
 
-def run_arcs(true_r, viewers, center=(8.0, 0.0)):
+def test_position_is_median_of_blob_centres():
+    # 스캔마다 0.15 m 흔들리고, 가끔 한 스캔이 크게 튀어도 중심은 거의 그대로
+    rng = np.random.default_rng(2)
     tk = EvidenceTracker(P)
-    rng = np.random.default_rng(1)
-    for k, vw in enumerate(viewers):
-        pts = arc(center, true_r, vw, rng=rng)
-        m = pts.mean(axis=0)
-        tk.update([(m[0], m[1], None, True, pts)], 0.1 * k, view({}, x=vw[0], y=vw[1]))
-    return tk.tracks[0]
-
-
-PASS_BY = [(x, -6.0) for x in np.linspace(0.0, 16.0, 40)]   # 옆을 지나가며 여러 방향
-
-
-def test_radius_grows_to_true_size_when_seen_from_many_directions():
-    t = run_arcs(0.3, PASS_BY)
-    assert t.grown and t.radius == pytest.approx(0.3, abs=0.04)
-    assert math.hypot(t.x - 8.0, t.y) < 0.05
-
-
-def test_radius_never_shrinks_below_prior():
-    t = run_arcs(0.12, PASS_BY)
-    assert not t.grown and t.radius == pytest.approx(P.radius_prior)
+    for k in range(30):
+        c = np.array([8.0, 0.0]) + rng.normal(0, 0.15, 2)
+        if k % 10 == 5:
+            c = c + (0.6, 0.0)                           # 튄 스캔
+        tk.update([(c[0], c[1], None, True, blob(c, 0.2))], 0.1 * k)
+    t = tk.tracks[0]
     assert math.hypot(t.x - 8.0, t.y) < 0.1
 
 
-def test_one_direction_grows_only_to_chord_lower_bound():
-    # 한 방향 ±60° 호 — 호 폭 2·0.3·sin60 = 0.52 → 반지름 하한 0.26. 원 맞추기로 더 키우지는 않는다
-    t = run_arcs(0.3, [(2.0, 0.0)] * 40)
-    assert t.radius == pytest.approx(0.26, abs=0.02)
+def test_size_is_upper_percentile_of_blob_half_widths():
+    tk = EvidenceTracker(P)
+    for k in range(20):
+        half = 0.25 if k % 4 else 0.1                    # 가끔 일부만 맞은 좁은 덩어리
+        tk.update([(8.0, 0.0, None, True, blob((8.0, 0.0), half))], 0.1 * k)
+    assert tk.tracks[0].radius == pytest.approx(0.25, abs=0.01)
+
+
+def test_size_capped_and_floored():
+    big, small = EvidenceTracker(P), EvidenceTracker(P)
+    for k in range(5):
+        big.update([(8.0, 0.0, None, True, blob((8.0, 0.0), 1.2))], 0.1 * k)
+        small.update([(8.0, 0.0, None, True, blob((8.0, 0.0), 0.02, n=3))], 0.1 * k)
+    assert big.tracks[0].radius == pytest.approx(P.radius_max)
+    assert small.tracks[0].radius == pytest.approx(P.radius_min)
+
+
+def test_non_round_blob_is_still_a_buoy():
+    # L 자·삼각 덩어리(캡슐·옆에서 본 원뿔) — 원이 아니어도 하나의 부표, 크기는 덩어리 폭
+    pts = np.array([[8.0, -0.3], [8.0, -0.1], [8.0, 0.1], [8.2, 0.1], [8.4, 0.1]])
+    tk = EvidenceTracker(P)
+    for k in range(4):
+        tk.update([(8.1, 0.0, None, True, pts)], 0.1 * k)
+    assert len(tk.confirmed()) == 1
+    assert tk.confirmed()[0].radius == pytest.approx(0.5 * math.hypot(0.4, 0.4), abs=0.01)
+
+
+def test_wide_buoy_blob_associates_by_its_size():
+    # 반폭 0.5 m 덩어리가 한 스캔에서 0.8 m 옆(한쪽 끝만 맞음)으로 와도 같은 부표 (반폭 + gate)
+    tk = EvidenceTracker(P)
+    for k in range(5):
+        tk.update([(8.0, 0.0, None, True, blob((8.0, 0.0), 0.5))], 0.1 * k)
+    tk.update([(8.0, 0.8, None, True, blob((8.0, 0.8), 0.15))], 0.6)
+    assert len(tk.tracks) == 1 and tk.tracks[0].hits == 6
 
 
 def test_far_track_not_freed_beyond_max_range():
@@ -215,28 +229,6 @@ def test_far_track_not_freed_beyond_max_range():
         tk.update([(12.0, 0.0, None)], 0.1 * k)
     run(tk, view({0: 20.0}), 10.0)                   # 12 m 부표 자리를 빔이 지나가도
     assert len(tk.confirmed()) == 1                  # clamp 밖이라 안 깎음
-
-
-def test_surface_points_associate_to_fitted_centre():
-    # 부표 중심 (8, 0) r 0.3 — 앞면 점 평균은 중심에서 ~0.25 m 앞. 중심끼리 재면 gate 0.2 밖이라
-    # 새 부표가 됐지만, 원 둘레 기준이면 같은 부표.
-    tk = EvidenceTracker(EvidenceParams(gate_radius=0.2, radius_prior=0.3))
-    pts = arc((8.0, 0.0), 0.3, (2.0, 0.0), noise=0.0)
-    for k in range(5):
-        tk.update([(8.0, 0.0, None, True, pts)], 0.1 * k)
-    assert len(tk.tracks) == 1
-
-
-def test_centre_stays_behind_surface_even_if_points_curve_toward_lidar():
-    # 번짐으로 점 무더기가 라이다(서쪽 (2, 0)) 쪽으로 오목 — 원 (7, 0) r 0.6 의 동쪽 호처럼 생김.
-    # 그대로 맞추면 중심이 점보다 라이다 쪽에 놓인다. 중심은 점들보다 라이다에서 멀어야 한다.
-    a = np.radians(np.linspace(-40, 40, 15))
-    pts = np.column_stack((7.0 + 0.6 * np.cos(a), 0.6 * np.sin(a)))
-    tk = EvidenceTracker(P)
-    for k in range(20):
-        tk.update([(7.6, 0.0, None, True, pts)], 0.1 * k, view({}, x=2.0, y=0.0))
-    t = tk.tracks[0]
-    assert t.x > pts[:, 0].mean()                      # 면 뒤
 
 
 # ---------- 색: 픽셀 수 누적 ----------
@@ -279,17 +271,7 @@ def test_buoy_forgotten_when_boat_far_away():
     assert tk.tracks == []
 
 
-def test_smeared_blob_does_not_grow():
-    # 스캔 번짐으로 0.4 m 두께 덩어리가 된 점 — 원호가 아니니 키우지 않는다
-    rng = np.random.default_rng(3)
-    tk = EvidenceTracker(P)
-    for k, vw in enumerate(PASS_BY):
-        pts = np.array([8.0, 0.0]) + rng.uniform(-0.2, 0.2, (15, 2))
-        tk.update([(8.0, 0.0, None, True, pts)], 0.1 * k, view({}, x=vw[0], y=vw[1]))
-    assert tk.tracks[0].radius <= 0.22                # 호 폭 하한(≈0.2) 이상으로 안 커짐
-
-
-# ---------- 중복 생성 막기·호 폭 하한 ----------
+# ---------- 중복 생성 막기 ----------
 
 def test_no_new_buoy_right_next_to_existing():
     tk = EvidenceTracker(EvidenceParams(gate_radius=0.1))
@@ -304,14 +286,6 @@ def test_adjacent_pair_at_1_2m_gets_two_buoys():
     for k in range(4):
         tk.update([(8.0, 0.0, 'green'), (9.3, 0.0, None)], 0.1 * k)   # 탐색 bag 쌍 중심 간격 ≥ 1.37 m
     assert len(tk.confirmed()) == 2
-
-
-def test_radius_grows_to_chord_lower_bound():
-    tk = EvidenceTracker(P)
-    pts = np.column_stack((np.full(9, 8.0), np.linspace(-0.25, 0.25, 9)))   # 호 폭 0.5 m
-    for k in range(12):
-        tk.update([(8.0, 0.0, None, True, pts)], 0.1 * k, view({}, x=0.0, y=0.0))
-    assert tk.tracks[0].radius == pytest.approx(0.25, abs=0.01)
 
 
 def test_split_cluster_in_one_scan_makes_one_buoy():

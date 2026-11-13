@@ -1,12 +1,10 @@
-"""buoy_localize.py 단독 테스트 — 부표용 라이다 군집·카메라 투영 기하 (ROS 없이 돈다)."""
+"""buoy_localize.py 단독 테스트 — 부표용 라이다 덩어리·카메라 투영 기하 (ROS 없이 돈다)."""
 import math
 
 import numpy as np
 import pytest
 
-from kaboat_perception.buoy_localize import (
-    BuoyGeometry, level_to_pixel, lidar_cluster_points, lidar_clusters, lidar_points,
-    surface_center)
+from kaboat_perception.buoy_localize import BuoyGeometry, level_to_pixel, lidar_blobs, lidar_points
 from kaboat_perception.camera_obstacles import CameraObstacleParams, pixels_to_level
 
 K = (380.0, 380.0, 320.0, 240.0)   # 640×480 D455 근사
@@ -36,38 +34,45 @@ def _scan(circles, inc_deg=0.5, range_max=40.0, g=G):
 INC = math.radians(0.5)
 
 
-# ---------- 라이다 군집 ----------
+# ---------- 라이다 덩어리 ----------
 
-def test_lidar_clusters_skip_wide_wall():
+def test_blobs_skip_wide_wall():
     pts = _scan([(5.0, 0.0, 0.25), (12.0, 0.0, 4.0)])
-    clusters = lidar_clusters(pts, G, INC)
-    assert len(clusters) == 1
-    assert math.hypot(*(clusters[0][0] - (5.0, 0.0))) < 0.05
+    blobs = lidar_blobs(pts, G)
+    assert len(blobs) == 1
+    _pts, c, half = blobs[0]
+    assert math.hypot(*(c - (5.0, 0.0))) < 0.3          # 중심 = 앞면 점 평균 (부표 반지름 안)
+    assert half == pytest.approx(0.25, abs=0.03)
 
 
-def test_cluster_points_match_clusters():
+def test_two_buoys_two_blobs_regardless_of_point_order():
     pts = _scan([(5.0, 1.0, 0.25), (8.0, -2.0, 0.3)])
-    with_pts = lidar_cluster_points(pts, G, INC)
-    plain = lidar_clusters(pts, G, INC)
-    assert len(with_pts) == len(plain) == 2
-    for (cl, c1, r1), (c2, r2, n) in zip(with_pts, plain):
-        assert np.allclose(c1, c2) and r1 == r2 and len(cl) == n
+    rng = np.random.default_rng(0)
+    a = sorted(round(float(c[0]), 3) for _p, c, _h in lidar_blobs(pts, G))
+    b = sorted(round(float(c[0]), 3) for _p, c, _h in lidar_blobs(rng.permutation(pts), G))
+    assert len(a) == 2 and a == b
+
+
+def test_missing_beam_in_middle_still_one_blob():
+    pts = _scan([(6.0, 0.0, 0.3)])
+    pts = np.delete(pts, len(pts) // 2, axis=0)          # 가운데 빔 하나 빠짐
+    assert len(lidar_blobs(pts, G)) == 1
+
+
+def test_adjacent_pair_with_gap_is_two_blobs():
+    # 탐색 bag 붙은 쌍 — 중심 1.37 m, 표면 사이 0.5 m 이상 → 덩어리 둘
+    pts = _scan([(6.0, 0.0, 0.3), (6.0, 1.37, 0.3)])
+    assert len(lidar_blobs(pts, G)) == 2
+
+
+def test_sparse_and_narrow_hits_dropped():
+    pts = np.array([[3.0, 0.0], [3.01, 0.0], [7.0, 2.0]])   # 빔 2개 물보라 + 점 1개
+    assert lidar_blobs(pts, G) == []
 
 
 def test_lidar_points_include_mount_offset():
     pts = lidar_points([5.0], 0.0, INC, 0.1, 40.0, G)           # 정면 빔 1개
     assert pts[0] == pytest.approx((G.lidar_offset_x + 5.0, G.lidar_offset_y))
-
-
-# ---------- 중심 ----------
-
-def test_surface_center_from_front_arc():
-    r, c = 0.3, np.array([6.0, 0.0])
-    lateral = np.linspace(-r, r, 41)
-    pts = np.column_stack((c[0] - np.sqrt(r * r - lateral ** 2), c[1] + lateral))
-    center, rad = surface_center(pts, np.zeros(2), G)
-    assert rad == pytest.approx(r)
-    assert np.hypot(*(center - c)) < 0.01
 
 
 # ---------- 카메라 기하 ----------

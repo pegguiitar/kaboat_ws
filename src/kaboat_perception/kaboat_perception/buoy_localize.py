@@ -1,12 +1,15 @@
-"""buoy_localize — 부표용 라이다 군집과 카메라 투영 기하 (ROS 무의존 순수 모듈).
+"""buoy_localize — 부표용 라이다 덩어리와 카메라 투영 기하 (ROS 무의존 순수 모듈).
 
 부표 지도는 buoy_lidar_detector 가 만든다: 라이다 = 있음·위치, 카메라 RGB = 색 (buoy_color),
 존재 확률 = 부표별 log-odds (buoy_evidence). 여기는 그 노드가 쓰는 기하만 둔다.
-  lidar_points          LaserScan → 선체 수평 프레임 점 (라이다 장착 위치 반영, 빔 순서 유지)
-  lidar_clusters        점 → 부표 크기 군집 [(중심, 반지름, 빔 수)] (넓은 벽·물가 제외)
-  lidar_cluster_points  같은 군집, 군집 점까지
-  surface_center        앞면 점 → 중심·반지름 (한 스캔 추정 — 트래커가 원 맞추기로 다시 잡는다)
-  level_to_pixel        선체 수평 프레임 3D 점 → 영상 픽셀 (카메라 장착·롤·피치)
+  lidar_points    LaserScan → 선체 수평 프레임 점 (라이다 장착 위치 반영)
+  lidar_blobs     점 → 덩어리 (거리 기반 군집화) [(점 N×2, 중심, 반폭)] — 원형으로 가정하지 않는다
+  level_to_pixel  선체 수평 프레임 3D 점 → 영상 픽셀 (카메라 장착·롤·피치)
+
+덩어리: 두 점 사이가 cluster_eps 안이면 같은 물체 (단일 연결 — 스캔 순서와 무관해서 빔이 중간에
+빠져도 한 덩어리로 이어진다). 점 lidar_min_points 개 이상, 폭 min_blob_width ~ max_cluster_width
+만 남긴다 — 너무 넓으면 벽·물가·배. 중심은 점 평균, 반폭은 가장 먼 두 점 거리의 절반.
+(예전엔 빔 순서대로 이어 가다 0.3 m 벌어지면 자르고 원의 앞면으로 보고 중심을 뒤로 밀었다.)
 
 2026-11-12 이전의 카메라 프레임 중심 buoy_detector(뎁스로 물체를 따는 경로)는 윤슬·반사에서
 뎁스가 크게 튀어 지웠다.
@@ -33,31 +36,11 @@ class BuoyGeometry:
     # 선체 라이다 — occupancy_grid·gate_follower 의 lidar_offset_x/y 와 같은 값.
     lidar_offset_x: float = camera_mount.LIDAR_X
     lidar_offset_y: float = 0.0
-    # 라이다 군집
-    max_radius: float = 0.5           # 한 스캔 반지름 추정 상한 [m]
-    max_cluster_width: float = 1.5    # 이보다 넓은 군집은 부표 아님 (벽·물가·배) [m]
-    cluster_gap: float = 0.3          # 이웃 라이다 점 간격이 이보다 크면 다른 물체 [m]
-    lidar_min_points: int = 2         # 라이다 군집 최소 빔 수 (1빔은 물보라·노이즈)
-
-
-def surface_center(pts, origin, g: BuoyGeometry, robust=False, pad=0.0):
-    """앞면 점들 (N×2) → (중심 x·y, 추정 반지름). origin = 그 점들을 본 센서 위치.
-
-    반지름 = (시선 수직 폭 + pad) / 2 (robust 면 5~95 백분위 폭 — 뎁스 가장자리 튐 대비),
-    중심 = 점 평균 + (π/4)·r̂ · 시선 방향. pad 는 표본 간격 보정 — 실제 가장자리는
-    양 끝 표본에서 반 칸씩 바깥이라 라이다는 빔 한 칸(거리·각분해능)을 더한다.
-    """
-    mean = pts.mean(axis=0)
-    los = mean - origin
-    los = los / max(float(np.hypot(*los)), 1e-6)
-    lateral = (pts - mean) @ np.array([-los[1], los[0]])
-    if robust:
-        lo, hi = np.percentile(lateral, [5.0, 95.0])
-    else:
-        lo, hi = lateral.min(), lateral.max()
-    r = min(0.5 * (float(hi - lo) + pad), g.max_radius)
-    return mean + (math.pi / 4.0) * r * los, r
-
+    # 라이다 덩어리
+    cluster_eps: float = 0.35         # 두 점이 이 안이면 같은 덩어리 [m]
+    lidar_min_points: int = 3         # 덩어리 최소 점 수 (1~2 빔은 물보라·수면)
+    min_blob_width: float = 0.1       # 이보다 좁으면 부표 아님 (수면 hit) [m]
+    max_cluster_width: float = 1.5    # 이보다 넓으면 부표 아님 (벽·물가·배) [m]
 
 
 def lidar_points(ranges, angle_min, angle_inc, range_min, range_max, g: BuoyGeometry):
@@ -69,29 +52,55 @@ def lidar_points(ranges, angle_min, angle_inc, range_min, range_max, g: BuoyGeom
                             g.lidar_offset_y + r[ok] * np.sin(a[ok])))
 
 
-def lidar_clusters(points, g: BuoyGeometry, angle_inc=0.0):
-    """라이다 점 → 부표 크기 군집들의 [(중심 x·y, 반지름, 빔 수)] (넓은 벽·물가 제외).
+def lidar_blobs(points, g: BuoyGeometry):
+    """점 N×2 → 부표 크기 덩어리 [(점, 중심, 반폭)]. 두 점이 cluster_eps 안이면 같은 덩어리.
 
-    angle_inc = 스캔 각분해능 [rad] — 먼 부표는 빔 몇 개뿐이라 폭을 빔 한 칸만큼 보정.
+    격자(칸 = cluster_eps)에 점을 나눠 이웃 칸끼리만 거리를 재는 union-find — 점 수에 거의 선형.
     """
-    return [(center, r, len(cl)) for cl, center, r in lidar_cluster_points(points, g, angle_inc)]
-
-
-def lidar_cluster_points(points, g: BuoyGeometry, angle_inc=0.0):
-    """lidar_clusters 와 같은 군집 — [(군집 점 N×2, 중심, 반지름)] (점까지 필요할 때)."""
-    if points is None or len(points) == 0:
+    pts = np.asarray(points, dtype=float).reshape(-1, 2)
+    n = len(pts)
+    if n == 0:
         return []
-    origin = np.array([g.lidar_offset_x, g.lidar_offset_y])
-    gaps = np.hypot(*np.diff(points, axis=0).T) > g.cluster_gap
-    out = []
-    for cl in np.split(points, np.nonzero(gaps)[0] + 1):
-        if len(cl) < g.lidar_min_points or np.hypot(*(cl[-1] - cl[0])) > g.max_cluster_width:
-            continue
-        pad = float(np.hypot(*(cl.mean(axis=0) - origin))) * abs(angle_inc)
-        center, r = surface_center(cl, origin, g, pad=pad)
-        out.append((cl, center, r))
-    return out
+    eps = g.cluster_eps
+    parent = list(range(n))
 
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    cells = {}
+    keys = np.floor(pts / eps).astype(np.int64)
+    for i, (cx, cy) in enumerate(keys):
+        cells.setdefault((int(cx), int(cy)), []).append(i)
+    eps2 = eps * eps
+    for (cx, cy), idx in cells.items():
+        cand = []
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                cand.extend(cells.get((cx + dx, cy + dy), ()))
+        cand = np.array(cand)
+        for i in idx:
+            d2 = np.sum((pts[cand] - pts[i]) ** 2, axis=1)
+            for j in cand[d2 <= eps2]:
+                ri, rj = find(i), find(int(j))
+                if ri != rj:
+                    parent[ri] = rj
+    groups = {}
+    for i in range(n):
+        groups.setdefault(find(i), []).append(i)
+    out = []
+    for idx in groups.values():
+        if len(idx) < g.lidar_min_points:
+            continue
+        b = pts[idx]
+        diff = b[:, None, :] - b[None, :, :]
+        width = float(np.sqrt(np.max(np.sum(diff ** 2, axis=2))))   # 가장 먼 두 점
+        if not (g.min_blob_width <= width <= g.max_cluster_width):
+            continue
+        out.append((b, b.mean(axis=0), 0.5 * width))
+    return out
 
 
 def level_to_pixel(pts, K, g: BuoyGeometry, roll=0.0, pitch=0.0):
