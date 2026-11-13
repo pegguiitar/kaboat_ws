@@ -15,8 +15,17 @@
   2026-11-13 dock bag: test_mission station 이 파이썬 노드 12개를 한꺼번에 띄워 배가 첫 명령을
   받기까지 8 s(도킹 시험 런치 약 7개는 3 s) — 그동안 0.1~0.2 m/s 로 밀렸다.
   only_mission_nodes:=false 면 예전처럼 전부 띄운다.
+
+출발 직진 (undock_sec, 기본 3 s): 대회 출발은 슬롯 안에서 한다. 처음부터 도는 전체 실행
+(start_state 없음, single_mission:=false)이고 approach_motion_enabled:=true(run_autonomy)면
+mission_manager 가 텔레옵 4단계 직진(좌우 1700 µs)을 3 s 낸 뒤 gate_entry 로 접근한다.
+test_mission·go_* 는 해당 없음. 끄려면 run_autonomy undock_sec:=0.
+
+미션 제한 시간 (mission_timeouts, 기본 true): 경기 15 분을 gate 3·station 2·dock 4·search 3·avoid 3 분으로
+나눠(mission_params.yaml time_limit.*), 넘거나 시작 자세가 없으면 그 미션을 건너뛴다 (mission_manager 설명).
 """
 
+import math
 import os
 
 from ament_index_python.packages import get_package_share_directory
@@ -102,11 +111,26 @@ def mission_nodes(use_sim_time_value) -> dict:
     }
 
 
+def undock_seconds(get) -> float:
+    """출발 직진(슬롯 탈출) 시간 — 접근 주행이 켜진 실행(run_autonomy)만. 미리보기
+    (approach_motion_enabled:=false, 기본)에서는 배를 움직이지 않으므로 0."""
+    try:
+        sec = float(get('undock_sec'))
+    except ValueError:
+        sec = float('nan')
+    if not (math.isfinite(sec) and sec >= 0.0):
+        raise RuntimeError(f"undock_sec:= 는 0 이상 초 — 받은 값 {get('undock_sec')!r}")
+    if not _bool(get('approach_motion_enabled'), 'approach_motion_enabled'):
+        return 0.0
+    return sec
+
+
 def _stack(context):
     get = lambda name: context.launch_configurations.get(name, '')  # noqa: E731
     use_sim_time_value = LaunchConfiguration('use_sim_time')
     common_params = {'use_sim_time': use_sim_time_value}
     missions, approach = stack_plan(get)
+    undock_sec = undock_seconds(get)
 
     per_mission = mission_nodes(use_sim_time_value)
     behaviors = [node for mission in missions for node in per_mission[mission]]
@@ -149,12 +173,22 @@ def _stack(context):
                           'single_mission': ParameterValue(
                               LaunchConfiguration('single_mission'), value_type=bool),
                           'entry_required': ParameterValue(
-                              LaunchConfiguration('entry_required'), value_type=bool)}]),
+                              LaunchConfiguration('entry_required'), value_type=bool),
+                          # 출발 직진 (슬롯 탈출) — 처음부터 도는 전체 실행에서만 mission_manager 가 씀
+                          'undock_sec': undock_sec,
+                          'undock_linear': ParameterValue(
+                              LaunchConfiguration('undock_linear'), value_type=float),
+                          # 미션 제한 시간 (값은 mission_params.yaml time_limit.*)
+                          'mission_timeouts': ParameterValue(
+                              LaunchConfiguration('mission_timeouts'), value_type=bool)}]),
     ]
     names = [str(getattr(a, 'node_executable', '?')) for a in behaviors if isinstance(a, Node)]
+    full_run = not get('start_state') and not _bool(get('single_mission'), 'single_mission')
     summary = LogInfo(msg=(
         f"[autonomy] 미션 {' → '.join(missions)} — 띄우는 노드: {', '.join(names)}, "
-        f"cmd_mux, mission_manager"))
+        f"cmd_mux, mission_manager"
+        + (f" | 출발 직진 {undock_sec:.1f} s 뒤 gate_entry 접근" if full_run and undock_sec > 0
+           else '')))
     return [summary, *perception, *behaviors, *control, *mission]
 
 
@@ -193,6 +227,18 @@ def generate_launch_description():
             'entry_required', default_value='true',
             description='false = 미션 시작 자세 접근(approach) 없이 바로 시작 — go_station·go_search 처럼 '
                         'goto 로 이미 세운 뒤 켤 때'),
+        DeclareLaunchArgument(
+            'undock_sec', default_value='3.0',
+            description='출발 직진 시간 [s] — 슬롯 안에서 출발하므로 처음부터 도는 전체 실행(run_autonomy)은 '
+                        '이만큼 직진한 뒤 gate_entry 로 접근. 모터가 AUTO 인 시간만 셈. 0 = 끔. '
+                        'approach_motion_enabled:=false(미리보기)면 안 함'),
+        DeclareLaunchArgument(
+            'undock_linear', default_value='0.4667',
+            description='출발 직진 명령 — 0.4667 = 텔레옵 4단계(좌우 1700 µs)'),
+        DeclareLaunchArgument(
+            'mission_timeouts', default_value='true',
+            description='true = 이어 도는 실행에서 미션별 제한 시간(15 분 배분, mission_params.yaml '
+                        'time_limit.*)을 넘거나 시작 자세가 없으면 그 미션을 건너뜀. 단일 미션 시험은 해당 없음'),
         DeclareLaunchArgument(
             'gate_params_file', default_value=gate_params,
             description='게이트 쌍 수와 라이다/DRI 임계값 YAML'),

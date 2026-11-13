@@ -1,6 +1,8 @@
 """cmd_mux — 현재 state 의 behavior 명령만 /cmd_vel 로 통과시키는 선택 스위치.
 
-입력   /cmd/approach /cmd/gate /cmd/station /cmd/dock /cmd/search /cmd/avoid (Twist)
+입력   /cmd/undock /cmd/approach /cmd/gate /cmd/station /cmd/dock /cmd/search /cmd/avoid (Twist)
+       (/cmd/undock = mission_manager 의 출발 직진 — 슬롯에서 나오는 처음 3 s,
+        /cmd/retreat = dock 제한 시간 초과 때 mission_manager 의 직진 후진)
        /mission/state (String, latched)
 출력   /cmd_vel (Twist) → twist2thrust → 좌우 추력
 
@@ -18,6 +20,8 @@ from geometry_msgs.msg import Twist
 
 # state 이름 → 해당 behavior 의 명령 토픽
 STATE_TOPIC_MAP = {
+    'undock':   '/cmd/undock',
+    'retreat':  '/cmd/retreat',
     'approach': '/cmd/approach',
     'gate':    '/cmd/gate',
     'station': '/cmd/station',

@@ -25,6 +25,18 @@ mission_manager:
     transition_radius: 2.0   # [m] behavior 완료 신호 + 목표점 이내 진입 시 전환 (RTK, 예전 5.0)
     auto_start: true
 
+    # 미션 제한 시간 [s] — 경기 전체 15 분(900 s) 배분. 이어 도는 실행(run_autonomy)에서만.
+    # 그 미션의 접근부터 세고, 넘으면 건너뛰고 다음 미션으로(dock 은 먼저 3 m 직진 후진).
+    # 마감 = 전체 시작 + 앞 미션 몫의 합 — 일찍 끝난 미션의 남은 시간은 다음 미션으로 넘어간다.
+    # 0 = 그 미션 제한 없음. 전부 끄기: autonomy.launch.py mission_timeouts:=false
+    time_limit:
+      gate:    180.0
+      station: 120.0
+      dock:    240.0
+      search:  180.0
+      avoid:   180.0
+    approach_timeout_sec: 90.0   # 시작 자세 접근만 이만큼 넘으면 그 미션을 건너뜀
+
     # 각 미션 시작 자세 [odom x(m), y(m), 선수각(deg)]. 값이 미정이라
     # entry_ready=false 로 둔다. 실측값을 넣고 해당 항목을 true 로 바꿔야
     # 접근 단계가 시작된다. 0도=+X, 90도=+Y, 반시계 방향이 양수.

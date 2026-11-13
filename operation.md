@@ -240,6 +240,19 @@ test_mission dock dock_target_class:=circle
 
 - `run_autonomy` = `autonomy.launch.py gate_motion_enabled:=true approach_motion_enabled:=true dock_motion_enabled:=true`.
   뒤에 붙인 인자가 이깁니다.
+- **출발 직진 (슬롯 탈출):** 대회 출발은 슬롯 안에서 하므로 `run_autonomy`는 먼저 3초 직진한 뒤 `gate_entry`로 접근합니다.
+  - 직진 세기는 텔레옵 4단계와 같습니다(좌우 1700 µs, 명령 0.4667). 상태 `undock`, 명령 `/cmd/undock`.
+  - 3초는 모터가 자율(`/teleop/status` = `AUTO`)일 때만 셉니다. 텔레옵·비상 정지 중이면 기다렸다가 놓으면 남은 만큼 이어서 갑니다.
+  - 처음부터 도는 전체 실행만 해당합니다(`test_mission`·`go_*`·`start_state:=…`는 안 함). 미리보기(`approach_motion_enabled:=false`)도 안 합니다.
+  - 끄기 `run_autonomy undock_sec:=0`, 시간 바꾸기 `undock_sec:=4.0`.
+- **미션 제한 시간 (경기 15분):** 한 미션이 실패해 계속 기다리거나 재시도하면 뒤 미션을 못 하므로, 시간을 넘으면 건너뜁니다.
+  - 몫: gate 3분, station 2분, dock 4분, search 3분, avoid 3분 (합 15분, `mission_params.yaml`의 `time_limit.*`).
+  - 그 미션의 접근부터 셉니다. 마감은 "전체 시작 + 앞 미션 몫의 합"이라, 일찍 끝난 미션의 남은 시간은 다음 미션이 씁니다.
+  - 접근만 1.5분(`approach_timeout_sec`)을 넘어도 그 미션을 건너뜁니다. 시작 자세(`_entry`)를 기록 안 한 미션도 멈추지 않고 건너뜁니다.
+  - dock 미션 중에 시간을 넘으면 먼저 직진 후진으로 3 m(최대 30초) 빠져나온 뒤 넘어갑니다. 상태 `retreat`, 명령 `/cmd/retreat`.
+  - 전체 시작은 출발 직진이 실제로 시작된 때입니다. 마지막에 건너뛴 미션과 이유가 로그 한 줄로 나옵니다.
+  - `test_mission`·`go_*`(단일 미션)은 해당 없습니다. 끄기 `run_autonomy mission_timeouts:=false`.
+  - 넘어갈 때 다음 접근은 직선이고 회피가 없습니다. 게이트 중간이나 부표 사이에서 넘어가면 부표 쪽을 지나갈 수 있으니 지켜보세요.
 - `test_mission 미션` = 같은 스택에 `start_state:=미션 single_mission:=true`를 더한 것입니다.
   - 그 미션의 `_entry`로 접근(`mission_approach`)한 뒤 미션을 하고 `done`(정지)합니다.
   - 미리 `goto 미션_entry`로 세워 두면 접근이 바로 끝납니다.
