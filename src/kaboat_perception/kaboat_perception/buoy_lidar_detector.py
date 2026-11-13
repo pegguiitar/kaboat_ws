@@ -305,7 +305,7 @@ class BuoyLidarDetector(Node):
         cen.type, cen.action = Marker.SPHERE_LIST, Marker.ADD
         cen.pose.orientation.w = 1.0
         cen.pose.position.z = 0.15
-        cen.scale.x = cen.scale.y = cen.scale.z = 0.3
+        cen.scale.x = cen.scale.y = cen.scale.z = 0.12
         for tr in self.tracker.tracks:
             if not tr.confirmed and not self.show_tentative:
                 continue
