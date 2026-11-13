@@ -63,6 +63,16 @@ class ReplayLogger:
         pass
 
 
+def _compressed(bag) -> bool:
+    import yaml
+    meta = os.path.join(bag, 'metadata.yaml')
+    if not os.path.exists(meta):
+        return False
+    with open(meta, encoding='utf-8') as f:
+        info = yaml.safe_load(f).get('rosbag2_bagfile_information', {})
+    return bool(info.get('compression_mode'))
+
+
 def kst_seconds(bag_start_ns, hhmmss):
     day = dt.datetime.fromtimestamp(bag_start_ns * 1e-9, KST)
     h, m, s = (int(v) for v in hhmmss.split(':'))
@@ -91,7 +101,9 @@ def replay(bag, start=None, end=None, params_file=DEFAULT_PARAMS, overrides=(), 
     logger = ReplayLogger(clock, out)
     node.get_logger = lambda: logger
 
-    reader = rosbag2_py.SequentialReader()
+    # rec_bag 은 압축 영상 토픽이 없으면 메시지마다 zstd 로 녹화한다 — 그때는 압축 읽기
+    reader = (rosbag2_py.SequentialCompressionReader() if _compressed(bag)
+              else rosbag2_py.SequentialReader())
     reader.open(rosbag2_py.StorageOptions(uri=bag, storage_id='sqlite3'),
                 rosbag2_py.ConverterOptions('', ''))
     types = {t.name: t.type for t in reader.get_all_topics_and_types()}

@@ -11,7 +11,8 @@ from nav_msgs.msg import OccupancyGrid, Odometry
 from sensor_msgs.msg import LaserScan
 from std_msgs.msg import String
 
-from kaboat_behaviors.gate_follower import GateFollower
+from kaboat_behaviors.gate_corridor import GatePair
+from kaboat_behaviors.gate_follower import GateFollower, nearer_lone_post
 from test_gate_corridor import gate_grid
 
 
@@ -331,10 +332,31 @@ def test_seek_is_only_for_the_first_gate(monkeypatch):
         rclpy.shutdown()
 
 
-def test_seek_waits_when_posts_are_in_the_pair_window(monkeypatch):
-    # 앞 창(6 m) 안에 부표가 보이는데 쌍이 안 됨(왼쪽 둘, 간격 1 m) → 다가가지 않고 기다림.
-    # 보이는데 다가가면 게이트 1 이 쌍이 되기 전에 게이트 2 를 먼저 골라 첫 게이트를 건너뛰었다.
+def test_seek_creeps_until_close_posts_are_two_metres_ahead(monkeypatch):
+    # 앞 창(6 m) 안에 부표가 보이는데 쌍이 안 됨(왼쪽 둘, 간격 1 m) → 가장 가까운 부표가 2.0 m
+    # 앞에 올 때까지 다가가고 거기서 섬 (2026-11-14 — 예전엔 4.5 m 안에 보이면 바로 섰다)
     rclpy.init()
+    node = None
+    try:
+        farther = [(x, y) for x in (9.5, 11.5, 13.5) for y in (-1.8, 1.8)]   # 2.3 m 가도 앞 창 밖
+        node, clock, previews = _seek_node(monkeypatch, [(4.0, 2.5), (5.0, 2.6), *farther],
+                                           goal_x=16.0)
+        _tick_at(node, clock, 1000.0)
+        _tick_at(node, clock, 1002.5)
+        assert node._status_text == 'SEEK_FIRST_PAIR'
+        assert previews[-1].linear.x == pytest.approx(node.seek_thrust)
+        _tick_at(node, clock, 1002.8, x=1.8)                 # 가장 가까운 부표(지도 4.2) 2.4 m 앞
+        assert node._status_text == 'SEEK_FIRST_PAIR'
+        _tick_at(node, clock, 1003.0, x=2.3)                 # 1.9 m 앞 — 섬
+        assert node._status_text == 'WAIT_GATE_PAIR' and previews[-1].linear.x == 0.0
+    finally:
+        if node is not None:
+            node.destroy_node()
+        rclpy.shutdown()
+
+
+def test_old_wait_is_back_when_close_stop_equals_wait_within(monkeypatch):
+    rclpy.init(args=['--ros-args', '-p', 'gate.seek_close_stop_along:=4.5'])
     node = None
     try:
         node, clock, previews = _seek_node(monkeypatch, [(4.0, 2.5), (5.0, 2.6), *FAR_GATES])
@@ -358,6 +380,101 @@ def test_seek_leans_toward_posts_seen_beyond_the_window(monkeypatch):
         _tick_at(node, clock, 1002.5)
         assert node._status_text == 'SEEK_FIRST_PAIR'
         assert previews[-1].angular.z > 0.0                              # 왼쪽(부표 쪽)으로
+    finally:
+        if node is not None:
+            node.destroy_node()
+        rclpy.shutdown()
+
+
+# ── 첫 게이트 지키기 (2026-11-14) ─────────────────────────────
+
+# 게이트 1 은 왼쪽 부표 하나만 보임 (오른쪽 짝이 안 잡힘), 게이트 2·3 은 둘 다 보임
+LONE_G1 = (3.0, 1.5)
+GATES_2_3 = [(x, y) for x in (5.3, 7.6) for y in (-1.5, 1.5)]
+
+
+def _ticks(node, clock, t0, n, x=0.0):
+    for k in range(n):
+        _tick_at(node, clock, t0 + 0.1 * k, x=x)
+
+
+def test_nearer_lone_post_geometry():
+    gate2 = GatePair((5.3, 1.5), (5.3, -1.5), (5.3, 0.0), 3.0, (1.0, 0.0))
+    assert nearer_lone_post(gate2, (0.0, 0.0), [LONE_G1, *GATES_2_3], 1.2) == LONE_G1
+    # 쌍 자신·게이트선에 가까운 것(1.2 m 안)·배 뒤·옆으로 먼 것은 아님
+    assert nearer_lone_post(gate2, (0.0, 0.0), [(5.3, 1.5), (4.5, 0.5)], 1.2) is None
+    assert nearer_lone_post(gate2, (0.0, 0.0), [(-1.0, 1.0)], 1.2) is None
+    assert nearer_lone_post(gate2, (0.0, 0.0), [(3.0, 4.5)], 1.2) is None
+    assert nearer_lone_post(gate2, (0.0, 0.0), [LONE_G1], 0.0) is None          # 0 = 끔
+
+
+def test_first_guard_refuses_gate_two_and_creeps_toward_gate_one(monkeypatch):
+    rclpy.init()
+    node = None
+    try:
+        node, clock, previews = _seek_node(monkeypatch, [LONE_G1, *GATES_2_3])
+        _ticks(node, clock, 1000.0, 3)        # 짝 없는 부표가 3번 잡혀 확정되면 고른 게이트 2 를 버림
+        assert node._status_text == 'WAIT_GATE_PAIR' and node._pair is None
+        _tick_at(node, clock, 1002.5)
+        # 게이트 1 중점 짐작 (3.2, 0.1) 의 2.0 m 앞 대기점 (1.2, 0.1) 으로 감
+        assert node._status_text == 'SEEK_FIRST_PAIR'
+        assert previews[-1].linear.x == pytest.approx(node.seek_thrust)
+        _tick_at(node, clock, 1003.0, x=0.8)                  # 대기점 0.4 m — 도착, 게이트 1 보며 섬
+        assert node._status_text == 'WAIT_GATE_PAIR' and previews[-1].linear.x == 0.0
+        # 게이트 1 짝이 잡히면 게이트 1 을 고름
+        node._test_posts = [LONE_G1, (3.0, -1.5), *GATES_2_3]
+        _tick_at(node, clock, 1003.5, x=0.8)
+        assert node._status_text.startswith('FOLLOW_GATE_1/')
+        assert node._pair.midpoint[0] == pytest.approx(3.0, abs=0.3)
+    finally:
+        if node is not None:
+            node.destroy_node()
+        rclpy.shutdown()
+
+
+def test_first_guard_gives_up_after_max_sec(monkeypatch):
+    # 게이트 1 짝이 영영 안 잡힘 → 15 s 뒤 지키기를 풀고 게이트 2 로 (영원히 서 있지 않게)
+    rclpy.init()
+    node = None
+    try:
+        node, clock, previews = _seek_node(monkeypatch, [LONE_G1, *GATES_2_3])
+        _ticks(node, clock, 1000.0, 3)
+        assert node._pair is None
+        _tick_at(node, clock, 1014.0, x=0.6)
+        assert node._pair is None
+        _tick_at(node, clock, 1015.5, x=0.6)
+        assert node._status_text.startswith('FOLLOW_GATE_1/')
+        assert node._pair.midpoint[0] == pytest.approx(5.3, abs=0.3)
+    finally:
+        if node is not None:
+            node.destroy_node()
+        rclpy.shutdown()
+
+
+def test_first_guard_ignores_posts_far_to_the_side(monkeypatch):
+    rclpy.init()
+    node = None
+    try:
+        # 옆 5.5 m — 쌍 폭(3 m)/2 + 1 m 밖. (게이트 2 왼 부표와는 좌우 치우침으로 쌍이 안 됨)
+        node, clock, previews = _seek_node(monkeypatch, [(3.0, 5.5), *GATES_2_3])
+        _ticks(node, clock, 1000.0, 4)
+        assert node._status_text.startswith('FOLLOW_GATE_1/')
+        assert node._pair.midpoint[0] == pytest.approx(5.3, abs=0.3)
+    finally:
+        if node is not None:
+            node.destroy_node()
+        rclpy.shutdown()
+
+
+def test_first_guard_is_only_for_the_first_gate(monkeypatch):
+    rclpy.init()
+    node = None
+    try:
+        node, clock, previews = _seek_node(monkeypatch, [LONE_G1, *GATES_2_3])
+        node._passed_midpoints = [(-1.0, 0.0)]
+        node._passed_directions = [(1.0, 0.0)]
+        _ticks(node, clock, 1000.0, 4)
+        assert node._pair is not None and node._pair.midpoint[0] == pytest.approx(5.3, abs=0.3)
     finally:
         if node is not None:
             node.destroy_node()

@@ -27,6 +27,21 @@ SCENARIOS = {
     'clutter3': {'clutter_scale': 3.0},           # 배 근처 잡음 3배
     'start_off': {'start_dyaw': 25.0, 'start_dy': 1.0},   # 시작 선수 25°·옆 1 m 틀어짐
     'noisy_pose': {'pose_sigma': 0.15, 'yaw_sigma_deg': 4.0},
+    # 첫 게이트 쌍이 안 잡히는 경우 (2026-11-14 첫 게이트 지키기·가까이 다가가기 검증)
+    # post_detect: 부표 번호(gates.json 순서, 0·1 = 게이트 1 왼·오) → 검출률 배수
+    'start_back3': {'start_back': 3.0},                          # 첫 게이트 약 6.7 m
+    'start_back6': {'start_back': 6.0},                          # 첫 게이트 약 9.7 m
+    'faint_g1L': {'post_detect': {0: 0.15}},                     # 게이트 1 왼 부표가 잘 안 보임
+    'faint_g1R': {'post_detect': {1: 0.15}},                     # 게이트 1 오른 부표가 잘 안 보임
+    'faint_g1R_wind10': {'post_detect': {1: 0.15}, 'wind': (0.0, 0.10)},
+    'faint_g1R_back3': {'post_detect': {1: 0.15}, 'start_back': 3.0},
+    'dead_g1R': {'post_detect': {1: 0.0}},                       # 게이트 1 오른 부표가 영영 안 보임
+    # post_range: 부표 번호 → 이 거리 [m] 안에서만 보임 (작고 낮은 부표 — 가까이 가야 잡힘)
+    'short_g1L': {'post_range': {0: 4.0}},
+    'short_g1R': {'post_range': {1: 4.0}},
+    'short_g1R_wind10': {'post_range': {1: 4.0}, 'wind': (0.0, 0.10)},
+    'short_g1R_back3': {'post_range': {1: 4.0}, 'start_back': 3.0},
+    'short3_g1R': {'post_range': {1: 3.0}},                      # 더 심함: 3 m 안에서만
 }
 
 
@@ -66,6 +81,8 @@ class Lidar:
         rel = np.mod(np.degrees(self.ang), 360.0)
         self.masked = (rel >= 120.0) & (rel <= 240.0)
         self.far_p = 0.6
+        self.post_detect = sc.get('post_detect', {})
+        self.post_range = sc.get('post_range', {})
 
     def scan(self, world, x, y, yaw, lidar_x=0.4):
         ox, oy = x + lidar_x * math.cos(yaw), y + lidar_x * math.sin(yaw)
@@ -84,10 +101,13 @@ class Lidar:
         ok = (first >= 0) & (self.rng.random(self.N) < self.far_p)
         ranges[ok] = steps[first[ok]] + self.rng.normal(0, 0.1, ok.sum())
         # 부표: 스캔마다 거리별 확률로 보임
-        for (px_, py_), rad in zip(world.posts, world.radius):
+        for i, ((px_, py_), rad) in enumerate(zip(world.posts, world.radius)):
             vx, vy = px_ - ox, py_ - oy
             d = math.hypot(vx, vy)
-            if d < 0.3 or self.rng.random() > interp_rate(self.bins, self.rates, d):
+            rate = interp_rate(self.bins, self.rates, d) * self.post_detect.get(i, 1.0)
+            if d > self.post_range.get(i, math.inf):
+                rate = 0.0
+            if d < 0.3 or self.rng.random() > rate:
                 continue
             proj = vx * dx + vy * dy
             perp2 = d * d - proj * proj
@@ -182,6 +202,8 @@ def main(argv=None):
     lidar = Lidar(calib, rng, sc)
     sx, sy, syaw = spec.get('start', (108.80, -14.45, -6.4))
     gx, gy = spec.get('goal', (131.57, -22.08))
+    back = sc.get('start_back', 0.0)       # 처음 선수 방향 뒤로 [m]
+    sx, sy = sx - back * math.cos(math.radians(syaw)), sy - back * math.sin(math.radians(syaw))
     yaw0 = math.radians(syaw + sc.get('start_dyaw', 0.0))
     boat = Boat(calib, sx - math.sin(yaw0) * sc.get('start_dy', 0.0),
                 sy + math.cos(yaw0) * sc.get('start_dy', 0.0), yaw0, sc.get('wind', (0.0, 0.0)))
