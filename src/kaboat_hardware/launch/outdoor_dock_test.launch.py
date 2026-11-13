@@ -9,10 +9,16 @@ YOLO 는 젯슨 CUDA venv 가 필요하므로 scripts/run_dock_mission.sh (단�
   test_dock_outdoor motion_enabled:=false      # 2) 미리보기: 경로(/dock/one_shot_path)만 고정·표시
   test_dock_outdoor target_class:=circle       # 3) 실제 도킹
 
-순서 (dock_ctrl_v2): SCAN — 제자리에서 벽 법선 쪽으로만 돌며 YOLO 마커 3개(가운데가 화면 중앙, 양쪽
-대칭)와 RANSAC 법선 3개가 안정될 때까지 기다림 → 경로 한 번 고정 → 경유점(목표 슬롯 뒷벽 앞 3 m)
-→ 정지점(1 m) → 선수 유지 후진 3.25 m → /mission/complete=dock → mission_manager done(정지).
-approach:=true 면 dock_entry 까지 미션 접근(직선, 회피 없음, 1 m·±15°)부터 한다.
+순서 (dock_ctrl_v2, 2026-11-13):
+  SCAN  제자리에서 목표 도형만 화면 가운데로 돌려 그 방위(RGB 픽셀 방위)를 고정 = 세 슬롯 중 어디로 갈지
+  SEEK  그 방위 직선을 seek_cmd 로 서행. 라이다는 슬롯 벽을 약 6 m 안에서만 잡으므로(스캔면이 수면 위
+        0.14 m) 최근 1 s 스캔에서 고정 치수 ㄷ자 슬롯(dock_slot.yaml)을 찾아, 목표 방위선 가까운 슬롯이
+        뒷벽 8 m 안에서 1 s 넘게 같은 자리·법선이면 진입 기하 고정 (kaboat_behaviors/dock_u_slot.py).
+        앞 2 m 안에 뭔가 있으면 멈춤, 10 m 가도 못 잡으면 멈춰 기다림
+  → 경로 한 번 고정 (너무 가까우면 먼저 선수 유지 후진) → 경유점(입구 밖 1.5 m) → ㄷ자 중심선과
+  평행하게 선수 정렬 → 정지점(뒷벽 앞 1 m) → 선수 유지 후진 3.25 m → /mission/complete=dock → done(정지).
+배는 목표 슬롯을 40° 안쪽에서 바라봐야 양쪽 면이 보인다 — dock_entry 는 가운데 슬롯 정면.
+approach:=true 면 dock_entry 까지 미션 접근(직선, 회피 없음, 2 m·±30°)부터 한다.
 YOLO 결과는 /dock/detection_status(JSON)·/dock/debug_image(마스크 영상) 등으로 나오고 rec_bag 이 저장한다.
 """
 
@@ -30,6 +36,7 @@ ARGS = [
     ('target_class', 'triangle', '목표 슬롯 도형: triangle / circle / square'),
     ('motion_enabled', 'true', 'false = 미리보기 (경로만 고정·표시, 모터 명령 안 냄)'),
     ('approach', 'false', 'true = dock_entry 까지 접근부터 (직선, 회피 없음)'),
+    ('seek_cmd', '0.07', '목표 도형 방위로 서행 — 라이다 벽이 잡힐 때까지 (0.07 ≈ 1551 µs)'),
     ('approach_cmd', '0.10', '경유점까지 LOS 직진 상한 (0.10 ≈ 1562 µs)'),
     ('final_cmd', '0.05', '정지점까지 LOS 직진 상한 (0.05 ≈ 1544 µs)'),
     ('retreat_cmd', '0.05', '후진 출력 (0.05 ≈ 1456 µs)'),
@@ -107,6 +114,7 @@ def dock_arguments(get) -> dict:
         raise RuntimeError('dock_weights:= 가 비어 있음 (kaboat_perception/models/best.pt)')
     return dict(target_class=target, motion_enabled=_bool(get('motion_enabled'), 'motion_enabled'),
                 weights=weights, device=get('dock_device').strip() or '0',
+                seek_cmd=_ratio(get('seek_cmd'), 'seek_cmd'),
                 approach_cmd=_ratio(get('approach_cmd'), 'approach_cmd'),
                 final_cmd=_ratio(get('final_cmd'), 'final_cmd'),
                 retreat_cmd=_ratio(get('retreat_cmd'), 'retreat_cmd'),

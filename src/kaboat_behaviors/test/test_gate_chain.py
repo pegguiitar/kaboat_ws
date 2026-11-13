@@ -273,3 +273,42 @@ def test_pair_found_diagonal_by_a_late_post_is_dropped_and_reselected():
         if node is not None:
             node.destroy_node()
         rclpy.shutdown()
+
+
+def test_held_pair_is_still_chained_as_the_next_gate():
+    """출발 때 게이트 1 이 아직 안 잡혀 게이트 2 를 먼저 골랐다가(게이트 1 부표에 막혀) 버리면
+    게이트 2 가 보류된다. 그 뒤 게이트 1 을 고르고 사슬을 이을 때 보류를 적용하면 게이트 2 를
+    건너뛰고 게이트 3 을 "2번"으로 이어, 7개를 다 지나고도 6/7 로 끝없이 기다렸다
+    (2026-11-13 녹화 기반 시뮬, 라이다 약함·위치 잡음). 보류는 지금 게이트 고르기에만."""
+    import time
+    rclpy.init()
+    node = None
+    try:
+        node = _ready_node(STAGGERED)
+        node._on_goal(_goal(13.0, 0.0))
+        node._rejected = [(MIDS[1], time.monotonic() + 3.0)]   # 게이트 2 보류 중
+        node.compute_cmd()
+        assert _near(node._pair.midpoint, MIDS[0])
+        assert _near([q.midpoint for q in node._chain], MIDS)   # 게이트 2 를 건너뛰지 않음
+    finally:
+        if node is not None:
+            node.destroy_node()
+        rclpy.shutdown()
+
+
+def test_expired_hold_is_cleared_while_following_a_path():
+    import time
+    rclpy.init()
+    node = None
+    try:
+        node = _ready_node(STAGGERED)
+        node._on_goal(_goal(13.0, 0.0))
+        node.compute_cmd()
+        assert node._path is not None
+        node._rejected = [((20.0, 0.0), time.monotonic() - 0.1)]   # 경로를 따르는 중에 만료
+        node.compute_cmd()
+        assert node._rejected == []
+    finally:
+        if node is not None:
+            node.destroy_node()
+        rclpy.shutdown()

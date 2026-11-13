@@ -10,10 +10,13 @@
 `mission_manager`가 기록된 `dock_entry`에 접근해 `mission_approach`의 도착
 신호를 받으면 `/mission/state=dock`을 발행한다. YOLO가 켜지고
 `dock_ctrl_v2`가 이전 경로를 지우고 `SCAN`으로 시작한다. 이때 360도 회전하지
-않는다. 카메라에서 세 마커가 안정적으로 검출되고 LiDAR의 세 독립 RANSAC
-법선이 안정적으로 나올 때, 관측 법선에 맞춰 선수각을 미세 조정한다.
-안정화된 순간 GPS와 LiDAR로 시작점→경유점→정지점→이탈점 경로를 **한 번만**
-고정한다. 목표 슬롯 뒷벽 앞 3 m가 경유점, 1 m가 정지점이다. 전진 두 구간은
+않는다. `SCAN`은 YOLO로 **목표 도형만** 찾아 화면 가운데로 선수를 돌리고, 그
+화면 방위(세 슬롯 중 어디로 갈지)를 고정한다. `SEEK`에서 그 방위 직선을 서행한다.
+실선 라이다는 스캔면이 수면 위 약 0.14 m라 슬롯 벽을 약 6 m 안에서만 잡는다
+(2026-11-12 bag). 최근 1초 스캔을 쌓아 고정 치수(`dock_slot.yaml`) ㄷ자 슬롯을 찾고,
+목표 방위선에 가까운 슬롯이 뒷벽 8 m 안에서 1초 넘게 같은 자리·법선이면 GPS와 LiDAR로
+시작점→경유점→정지점→이탈점 경로를 **한 번만** 고정한다(이미 경유점보다 가까우면 먼저
+후진). 입구 밖 `pre_entry_offset`이 경유점, 뒷벽 앞 `berth_distance`가 정지점이다. 전진 두 구간은
 기존 LOS 제어를 사용한다. 경유점에서 정지점 방향으로 선수를 정렬하고 진입한다.
 정지점 도착 즉시 선수 방향을 유지하며 GPS 위치·방향 오차로 후진한다. 정지점에서
 3 m 이상 물러나고 횡오차가 0.75 m 이내일 때 `/mission/complete=dock`을
@@ -102,8 +105,8 @@ ros2 launch kaboat_bringup real_docking_test.launch.py \
 ```
 
 목표 도형은 `dock_target_class:=circle` 또는 `:=square`로 바꾼다. 각
-도형에서 `dock/lidar/status`의 세 마커 법선 상태와 `/dock/status`의
-`route_fixed`를 확인한다. `dock_motion_enabled:=false`로 먼저 경로만 볼 수
+도형에서 `dock/lidar/status`의 목표 마커 법선 상태와 `/dock/status`의
+`phase`(`SCAN`→`SEEK`→`TO_VIA`…)·`route_fixed`를 확인한다. `dock_motion_enabled:=false`로 먼저 경로만 볼 수
 있지만, 그 설정에서는 실제 이동이나 도킹 완료를 기대하면 안 된다.
 
 터미널 3: RViz 표시:

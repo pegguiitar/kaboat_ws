@@ -8,7 +8,8 @@
   test_avoid_outdoor drive_enabled:=false           # 2) 미리보기: 경로만 (RViz /real_avoid_test/path)
   test_avoid_outdoor                                # 3) 출발 조건이 맞으면 바로 출발
 
-출발 조건: 시작점 start_tolerance(3 m) 안, 선수가 목표 방향에서 45° 이내.
+출발 조건: 시작점 start_tolerance(3 m) 안, 선수가 목표 방향에서 45° 이내 (회피·토너먼트는 다른 미션의
+2 m·±30° 보다 널널하게).
 start_point:=gate_entry goal_point:=gate_end 처럼 다른 지점 쌍도 쓸 수 있다.
 토너먼트 회피 경기장(종합 미션과 별개)은 outdoor_tournament_test.launch.py (test_tournament).
 지도는 run_map 으로 따로 하나만 켠다(기본). 따로 켠 게 없을 때만 start_occupancy_grid:=true.

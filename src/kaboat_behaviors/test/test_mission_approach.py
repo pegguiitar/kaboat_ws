@@ -1,4 +1,4 @@
-"""mission_approach 도착 조건: 1 m 안, 선수각 ±15° 안, 회전 속도 조건 없음, 0.5 s 유지."""
+"""mission_approach 도착 조건: 2 m 안, 선수각 ±30° 안, 회전 속도 조건 없음, 0.5 s 유지."""
 
 import math
 
@@ -18,9 +18,9 @@ def controller():
         APPROACH_SETTLE_YAW_RATE))
 
 
-def test_defaults_are_one_metre_fifteen_degrees_no_yaw_rate_check():
-    assert APPROACH_POSITION_TOLERANCE == 1.0
-    assert APPROACH_HEADING_TOLERANCE_DEG == 15.0
+def test_defaults_are_two_metres_thirty_degrees_no_yaw_rate_check():
+    assert APPROACH_POSITION_TOLERANCE == 2.0
+    assert APPROACH_HEADING_TOLERANCE_DEG == 30.0
     assert APPROACH_SETTLE_YAW_RATE == 0.0
 
 
@@ -33,23 +33,23 @@ def test_only_arrival_condition_changes():
     assert WaypointParams().position_tolerance == 0.35   # 다른 behavior 기본값은 그대로
 
 
-def test_reaches_within_one_metre_and_fifteen_degrees_while_turning():
+def test_reaches_within_two_metres_and_thirty_degrees_while_turning():
     ctrl = controller()
     ctrl.set_goal(waypoint(10.0, 0.0, 90.0))
-    # 0.9 m 떨어짐, 선수각 14° 어긋남, 0.5 rad/s 로 돌고 있음
-    first = ctrl.step(9.1, 0.0, math.radians(76), 0.5, 0.0)
+    # 1.9 m 떨어짐, 선수각 29° 어긋남, 0.5 rad/s 로 돌고 있음
+    first = ctrl.step(8.1, 0.0, math.radians(61), 0.5, 0.0)
     assert first.phase == 'SETTLING'
-    assert ctrl.step(9.1, 0.0, math.radians(76), 0.5, 0.6).reached
+    assert ctrl.step(8.1, 0.0, math.radians(61), 0.5, 0.6).reached
 
 
-def test_outside_one_metre_keeps_approaching():
+def test_outside_two_metres_keeps_approaching():
     ctrl = controller()
     ctrl.set_goal(waypoint(10.0, 0.0, 90.0))
-    assert ctrl.step(8.9, 0.0, math.radians(90), 0.0, 0.0).phase == 'APPROACH'
+    assert ctrl.step(7.9, 0.0, math.radians(90), 0.0, 0.0).phase == 'APPROACH'
 
 
-@pytest.mark.parametrize('heading_deg', [74.0, 106.0])
-def test_heading_beyond_fifteen_degrees_keeps_aligning(heading_deg):
+@pytest.mark.parametrize('heading_deg', [59.0, 121.0])
+def test_heading_beyond_thirty_degrees_keeps_aligning(heading_deg):
     ctrl = controller()
     ctrl.set_goal(waypoint(10.0, 0.0, 90.0))
     step = ctrl.step(9.5, 0.0, math.radians(heading_deg), 0.0, 0.0)

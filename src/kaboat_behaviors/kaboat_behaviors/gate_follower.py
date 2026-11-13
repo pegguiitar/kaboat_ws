@@ -42,7 +42,7 @@ def _xy(point) -> str:
 HOLD_YAW_KP = 0.8
 HOLD_YAW_KD = 0.3
 HOLD_ALONG_KP = 0.3
-GATE_LOS_THRUST_RATIO = 0.3   # 게이트 통과(LOS) 직진 상한 — config/gate_params.yaml 과 같게
+GATE_LOS_THRUST_RATIO = 0.35  # 게이트 통과(LOS) 직진 상한 — config/gate_params.yaml 과 같게 (0.3 → 0.35, 2026-11-13)
 
 
 class GateFollower(BehaviorBase):
@@ -338,8 +338,13 @@ class GateFollower(BehaviorBase):
             return False
         last = self._chain[-1]
         before = [*self._passed_midpoints, *(q.midpoint for q in self._chain[:-1])]
-        nxt = next_gate_after(posts, last, goal, before, p,
-                              excluded_midpoints=[m for m, _ in self._rejected])
+        # 버린 쌍 보류(_rejected)는 여기 적용하지 않는다. 보류는 "배 자리에서 그 쌍으로 가는
+        # 길이 막혔다"는 뜻인데, 사슬은 앞 게이트를 거쳐 가므로 그 이유가 없다. 적용하면 바로
+        # 그 게이트를 건너뛴다: 출발 때 게이트 1 이 아직 안 잡혀 게이트 2 를 먼저 골랐다가
+        # (게이트 1 부표에 막혀) 버림 → 게이트 1 을 고른 뒤 사슬이 보류 중인 게이트 2 를 빼고
+        # 게이트 3 을 "2번"으로 이음 → 7개를 다 지나고도 6/7 로 끝없이 대기 (2026-11-13
+        # 녹화 기반 시뮬, 라이다 약함·위치 잡음 3판; 만료된 보류도 경로가 있는 동안 안 지워졌다).
+        nxt = next_gate_after(posts, last, goal, before, p)
         if nxt is None:
             return False
         chain = [*self._chain[1:], nxt] if self._crossed else [*self._chain, nxt]
@@ -537,8 +542,9 @@ class GateFollower(BehaviorBase):
             self._publish_debug()
             return self._output(cmd)
 
+        # 만료된 보류는 경로가 있는 동안에도 지운다 (예전엔 경로 없을 때만 지워 남아 있었다)
+        self._rejected = [(m, until) for m, until in self._rejected if until > now]
         if self._path is None:
-            self._rejected = [(m, until) for m, until in self._rejected if until > now]
             stats = {}
             pair = select_gate_pair_from_posts(
                 posts, boat, goal, self._passed_midpoints, self.gate_params,

@@ -144,6 +144,7 @@ ros2 launch kaboat_hardware real_sensors.launch.py outdoor:=true rtk:=true \
 | `check_yolo` | `python3 scripts/check_yolo_masks.py` | 도킹 YOLO **마스크만** 확인 (뎁스·라이다 무관). `bash scripts/run_dock_yolo.sh`(D455 + YOLO, 모터 없음)를 먼저 켜 둔다. 1초마다 도형별 ✓신뢰도·화면 위치·방위각·최근 검출률, 추론 ms. 마스크 그린 영상을 5초마다 `~/kaboat_yolo_checks/날짜_시각/`에 PNG (`--save-every 0` 끔). Ctrl+C로 요약 |
 | `test_avoid_outdoor` | `ros2 launch kaboat_hardware outdoor_avoid_test.launch.py` | 야외 회피 시험 `avoid_entry` → `avoid_end`, **조건이 맞으면 즉시 출발**. 5절 참고 |
 | `test_tournament` | `ros2 launch kaboat_hardware outdoor_tournament_test.launch.py` | 토너먼트 회피(종합 미션과 별개 경기장) `tournament_entry` → `tournament_end`. `test_avoid_outdoor`와 같은 노드·조건·인자, **조건이 맞으면 즉시 출발**. 5절 참고 |
+| `go_tournament` / `go_avoid` / `go_gate` / `go_dock` / `go_station` / `go_search` | `python3 scripts/go_and_test.py 미션` | **`goto 미션_entry` → 시작 조건을 0.5 s 유지하면 goto 를 끄고 그 미션 시험을 바로 켬** (goto 를 손으로 안 끔). 시험은 각각 `test_tournament`·`test_avoid_outdoor`·`test_gate_outdoor`·`test_dock_outdoor`·`test_mission station`·`test_mission search`(접근 단계 없이 `entry_required:=false`). 기본 조건(각 미션 시작 조건과 같음): 게이트·도킹·스테이션·탐색 **2 m·기록 선수각 ±30°**, 회피·토너먼트 **3 m·`_end` 방향 ±45°**. 옵션 → 시험 인자 순: `go_tournament --dist 1.5 --heading 20 --goto thrust_ratio:=0.3 drive_enabled:=false`. 회피·토너먼트는 넘기는 동안 흐를 여유로 시험 출발 검사를 0.5 m·5° 넓혀 넘김(`start_tolerance`·`start_heading_tolerance_deg` 를 직접 주면 그 값). 넘기는 몇 초(도킹은 YOLO 로딩이라 더 김)는 명령이 없어 배가 조금 흐를 수 있음. Ctrl+C = 켜진 쪽 끄고 끝 |
 | `test_straight` / `test_circle` / `test_bspline` / `test_station` / `test_waypoint` / `test_los` / `test_avoid` | 각 `*_test.launch.py … wait_for_start:=false` | 단독 주행 시험, **실행 즉시 출발** ([TANK_TESTS_GUIDE.md](TANK_TESTS_GUIDE.md)) |
 
 ---
@@ -220,10 +221,19 @@ ros2 topic pub --once /start_mission  std_msgs/msg/Bool '{data: true}'    # 출�
 **자율주행 스택**
 
 ```bash
-ros2 launch kaboat_bringup autonomy.launch.py                          # 기본: gate·approach 는 미리보기만
-ros2 launch kaboat_bringup autonomy.launch.py \
-    gate_motion_enabled:=true approach_motion_enabled:=true             # 실제로 움직임
+ros2 launch kaboat_bringup autonomy.launch.py                          # 기본: gate·approach·dock 미리보기만
+run_autonomy search_target_color:=red dock_target_class:=circle        # 전체 실제 주행 (게이트→…→회피)
+test_mission station                                                   # 미션 하나만, 끝나면 done(정지)
+test_mission search search_target_color:=red
+test_mission dock dock_target_class:=circle
 ```
+
+- `run_autonomy` = `autonomy.launch.py gate_motion_enabled:=true approach_motion_enabled:=true dock_motion_enabled:=true`.
+  뒤에 붙인 인자가 이깁니다.
+- `test_mission 미션` = 같은 스택에 `start_state:=미션 single_mission:=true`를 더한 것입니다.
+  - 그 미션의 `_entry`로 접근(`mission_approach`)한 뒤 미션을 하고 `done`(정지)합니다.
+  - 미리 `goto 미션_entry`로 세워 두면 접근이 바로 끝납니다.
+- `approach_motion_enabled:=false`면 접근이 끝나지 않아 미션이 시작되지 않습니다(접근 명령은 미리보기만 나감).
 
 `dock_weights:=<.pt 절대경로>`, `dock_device:=0`(젯슨 CUDA), `mission_params_file:=<yaml>`로 바꿉니다.
 탐색 목표 부표 색(대회 당일 공지)은 **`search_target_color:=red|green|black`** 로 넣습니다 — 안 넣으면
@@ -266,7 +276,7 @@ test_avoid_outdoor                               # 3) 실제 주행: 출발 조�
 test_avoid_outdoor start_point:=gate_entry goal_point:=gate_end   # 다른 지점 쌍
 ```
 
-- 출발 조건: 시작점에서 3 m(`start_tolerance`) 안, 선수가 목표 방향에서 45° 안. 안 맞으면
+- 출발 조건: 시작점에서 3 m(`start_tolerance`) 안, 선수가 목표 방향에서 ±45° 안(다른 미션 2 m·±30° 보다 널널하게). 안 맞으면
   `ros2 topic echo /real_avoid_test/status`에 `start_blocked=…` 이유가 나옵니다.
 - 목표 2 m(`goal_tolerance`) 안이면 `FINISHED`로 정지. 경로에서 1.5 m(`max_cross_track_error`) 넘게
   벗어나면 정지, 경로가 5초 넘게 없으면 후진 탈출(`allow_escape:=false`면 정지).
@@ -291,6 +301,13 @@ test_avoid_outdoor start_point:=gate_entry goal_point:=gate_end   # 다른 지�
 `tournament_end`입니다. 종합 미션(`mission_manager`)은 이 두 이름을 읽지 않습니다 — 그래서 `rec` 할 때
 `(미션 이름 규칙 아님 …)`이 붙어 나오는 게 정상입니다.
 
+**가상 벽:** 토너먼트 경기장 둘레도 `virtual_walls.yaml`의 `arenas.tournament`에 들어 있어 `run_map`이
+회피 경기장과 함께 칠합니다.
+- 경기장 크기: 약 10.7 × 28.1 m 직사각형이고, 긴 변은 남서–북동입니다. 2026-11-12 Space 기록 #1~#4입니다.
+- 벽 모양: 긴 두 변은 전부 벽, 짧은 두 변(남서 끝·북동 끝)은 가운데 3 m만 비웁니다.
+- 바깥 오프셋: 0.6 m(`virtual_wall_outward_offset`)는 회피 경기장과 같습니다.
+- 반영: `virtual_walls.yaml`을 바꾸면 젯슨에서 `cb` 후 `run_map`을 다시 켭니다(설치 폴더의 설정은 복사본).
+
 ```bash
 rec tournament_entry                             # 0) 노트북: 경기장 입구에 진행 방향으로 세우고 기록
 rec tournament_end                               #    도착(목표) 지점에서 기록
@@ -299,7 +316,7 @@ test_tournament drive_enabled:=false             # 2) 미리보기: RViz /real_a
 test_tournament                                  # 3) 실제 주행: 출발 조건이 맞으면 바로 출발
 ```
 
-- 출발 조건(3 m·45°), 목표 2 m, 경로 이탈 1.5 m 정지, 후진 탈출은 `test_avoid_outdoor`와 같고 같은 인자로
+- 출발 조건(3 m·±45°), 목표 2 m, 경로 이탈 1.5 m 정지, 후진 탈출은 `test_avoid_outdoor`와 같고 같은 인자로
   바꿉니다. 예) `test_tournament max_cross_track_error:=2.5`.
 - 상태: `ros2 topic echo /real_avoid_test/status`.
 - **가상 벽은 회피 경기장(`arenas.avoid`)만 있습니다.** 토너먼트 경기장 둘레 로프(라이다에 안 잡힘)는
@@ -320,9 +337,10 @@ test_gate_outdoor approach:=true             # gate_entry 접근(직선, 회피 
 
 - 기록: `gate_entry` = 첫 게이트 앞 통로 중심(진행 방향으로 세워서), `gate_end` = 마지막 게이트 뒤
   **2~3 m** 통로 중심. 모든 쌍을 지난 뒤 `gate_end`가 4 m 안이어야 그리로 가고 2 m 안이면 완료.
-- 추력: 게이트 통과(LOS) 직진 상한 **0.3**(약 1637 µs, `gate.los_thrust_ratio`)·회전 0.31. 0.4(1675 µs)는
-  실측 약 1.0 m/s 로 간격 3~4 m 게이트에 빨라 내림. 현장에서 바꿔 보기: `test_gate_outdoor los_thrust:=0.25`.
-- `approach:=true` → 게이트 시작 조건: `gate_entry` **1 m 안 + 선수각 ±15° 안**을 0.5초 유지(회전 속도
+- 추력: 게이트 통과(LOS) 직진 상한 **0.35**(약 1656 µs, `gate.los_thrust_ratio`)·회전 0.31. 0.4(1675 µs)는
+  실측 약 1.0 m/s 로 간격 3~4 m 게이트에 빨라 0.3(1638 µs)으로 내렸다가 조금 올림(2026-11-13).
+  현장에서 바꿔 보기: `test_gate_outdoor los_thrust:=0.3`.
+- `approach:=true` → 게이트 시작 조건: `gate_entry` **2 m 안 + 선수각 ±30° 안**을 0.5초 유지(회전 속도
   조건 없음). 모든 미션의 시작 자세 접근(`mission_approach`)이 같은 조건. 미리보기
   (`motion_enabled:=false`)에서는 도착 신호를 안 내서 `gate`로 넘어가지 않습니다.
 - 쌍 고르기: 두 부표를 잇는 선이 진행 방향(직전 게이트 방향, 첫 게이트는 배→`gate_end`)의 수직에서
@@ -376,28 +394,46 @@ YOLO가 젯슨 CUDA venv를 써야 해서 `ros2 launch`가 아니라 `scripts/ru
 `run_gq7_rtk`, `run_lidar`, `run_camera`, `run_map`, `run_motor`. 녹화는 `rec_bag dock_test`.
 
 ```bash
-goto dock_entry                              # 1) 도크 정면, 세 도형이 다 보이는 곳에 세움 → Ctrl+C
-test_dock_outdoor motion_enabled:=false      # 2) 미리보기: SCAN 통과·경로 고정만 (RViz /dock/one_shot_path)
+goto dock_entry                              # 1) 도크 정면, 세 도형이 다 보이는 곳(뒷벽에서 8~12 m)에 세움 → Ctrl+C
+test_dock_outdoor motion_enabled:=false      # 2) 미리보기: 배가 안 도니 목표가 화면 가운데 ±6°면 방위 고정까지 (/dock/status)
 test_dock_outdoor target_class:=circle       # 3) 실제 도킹 (기본 triangle)
 test_dock_outdoor approach:=true             # dock_entry 접근(직선, 회피 없음)부터
 ```
 
-- 순서 (`dock_ctrl_v2`): **SCAN** 제자리에서 벽 법선 쪽으로만 돌며 YOLO 마커 3개(가운데 마커가 화면
-  중앙 ±8%, 양쪽 대칭)와 라이다 RANSAC 법선 3개가 5스캔·0.8초 안정 → 경로 **한 번** 고정 → 경유점
-  (목표 슬롯 뒷벽 앞 3 m) → 선수 정렬 → 정지점(1 m) → 선수 유지 후진 3.25 m(3 m 이상·좌우 0.75 m 안)
-  → `/mission/complete=dock` → 이탈점 2 m 안이면 `done`(정지).
-- ⚠️ SCAN에는 시간 제한이 없습니다. 마커가 안 보이면 추진 0으로 계속 기다립니다(`/dock/status`의 `detail`).
+- 순서 (`dock_ctrl_v2`, 2026-11-13):
+  1. **SCAN**: 제자리에서 목표 도형만 화면 가운데(±6°)로 돌리고, 회전이 멎은 채 5프레임 방위가 3° 안이면
+     그 방위를 고정합니다. 세 슬롯 중 어디로 갈지는 이것으로 정합니다.
+  2. **SEEK**: 그 방위 직선을 `seek_cmd`(기본 0.07)로 서행합니다. 라이다 스캔면이 수면 위 0.14 m라 슬롯 벽은
+     **약 6 m 안에서만** 잡힙니다(2026-11-12 bag: 6 m 안 91~100%, 8 m 밖 거의 0).
+     - 최근 1초의 `/scan/level`을 odom에 쌓아 **고정 치수 ㄷ자 슬롯**을 찾습니다(`dock_slot.yaml`:
+       폭 2.97 m, 깊이 1.94 m). 뒷벽, 양쪽 안쪽 면(가려지면 칸막이 끝), 비어 있는 슬롯 안을 한꺼번에 맞춥니다.
+     - 목표 방위선에서 1.6 m 안의 ㄷ자만 봅니다. YOLO는 세 슬롯 중 어디인지만 정하고, 중심은 라이다로 잡습니다.
+     - 뒷벽 8 m 안에서 같은 ㄷ자가 1초 넘게 같은 자리(0.3 m)·법선(5°)이면 경로를 **한 번** 고정합니다.
+     - 앞 ±25°·2 m 안에 점이 있거나, 10 m를 가도 못 잡으면 멈춰 기다립니다.
+     - 예전 방식(마커 시선 + 직선 하나)은 뒷벽과 평행한 칸막이 끝면(1.94 m 앞)을 벽으로 잡았습니다.
+       2026-11-12 bag 기준으로 접근 첫 고정 8번 중 5번이 정지점 2 m 짧음, 옆으로 0.8~2.3 m 어긋남이었습니다.
+       ㄷ자 방식은 같은 bag에서 첫 고정 13번 중 12번이 깊이 0.24 m·좌우 0.38 m·법선 2.8° 안이었습니다.
+       나머지 1번은 화면 끝 YOLO 검출로 옆 슬롯을 고른 경우인데, SCAN은 화면 가운데에서만 방위를 고정합니다.
+  3. 고정할 때 이미 경유점 + 0.5 m보다 가까우면 먼저 선수 유지 후진(**BACKOFF**, 최대 3 m)합니다.
+  4. 경유점(입구 밖 `pre_entry_offset` 1.5 m = 뒷벽 앞 3.44 m) → ㄷ자 중심선과 평행하게 선수 정렬 →
+     정지점(뒷벽 앞 `berth_distance` 1.0 m, 선체 중심) → 선수 유지 후진 3.25 m
+     (3 m 이상·좌우 0.75 m 안) → `/mission/complete=dock` → 이탈점 2 m 안이면 `done`(정지).
+- ⚠️ 양쪽 면이 보이려면 슬롯을 **40° 안쪽**에서 바라봐야 합니다(`dock_entry`는 가운데 슬롯 정면, 8~12 m).
+  RViz에서 찾은 ㄷ자는 `/dock/slot_markers`(초록 선), 상태는 `/dock/status`의 `slot`(찾았는지, 이유, 면별 점 비율).
+- ⚠️ SCAN에는 시간 제한이 없습니다. 목표 도형이 안 보이면 추진 0으로 계속 기다립니다(`/dock/status`의 `detail`).
 - 도킹 전에 마스크만 따로 확인: `bash scripts/run_dock_yolo.sh`(카메라 이미 켰으면 `start_camera:=false`) →
-  다른 창에서 `check_yolo`. 세 도형이 모두 ✓이고 검출률이 높아야 SCAN을 통과합니다(신뢰도 0.55 이상 필요).
-- 도형 배치: 기본은 순서를 안 봄(화면 위치로 가운데 마커). 대회 배치를 알면
-  `marker_order:=square,triangle,circle`(화면 왼쪽부터)로 확인을 켭니다.
+  다른 창에서 `check_yolo`. 목표 도형이 신뢰도 0.55 이상으로 꾸준히 잡혀야 합니다.
+- 도형 배치: 기본은 순서를 안 봄. 대회 배치를 알면 `marker_order:=square,triangle,circle`(화면 왼쪽부터)로
+  켭니다. 그러면 같이 보이는 마커들의 좌우 순서가 어긋난 프레임은 목표 방위에서 뺍니다. 화면 끝의 엉뚱한
+  도형 오검출을 거르는 용도입니다.
 - 위치: 기본 `/odom`(GQ7 RTK 필터 25 Hz, 선체 중심). `position_source:=gps`는 `/gps/fix` 원시(2 Hz, 늦음).
-- 추력 (`approach_cmd` / `final_cmd` / `retreat_cmd`, 기본 0.10 / 0.05 / 0.05 ≈ 1562 / 1544 / 1456 µs)은
+- 추력 (`seek_cmd` / `approach_cmd` / `final_cmd` / `retreat_cmd`, 기본 0.07 / 0.10 / 0.05 / 0.05
+  ≈ 1551 / 1562 / 1544 / 1456 µs)은
   teleop 1단계(1550 µs)와 비슷해 바람에 약합니다. 미리보기 뒤 바람을 보고 올립니다
   (참고: 0.2 ≈ 1600 µs, goto 기본 0.4 ≈ 1675 µs).
 - 카메라 TF(라이다 → `camera_link`, 뒤 0.615·위 0.635 m, 수평)는 이 런치가 냅니다. 값은
   `src/kaboat_perception/kaboat_perception/camera_mount.py` 한곳(카메라 층·`dock_yolo`와 공유).
-- 상태: `ros2 topic echo /dock/status` (`phase`: `SCAN` → `TO_VIA` → `ALIGN_VIA` → `TO_GOAL` → `REVERSE` →
+- 상태: `ros2 topic echo /dock/status` (`phase`: `SCAN` → `SEEK` → (`BACKOFF`) → `TO_VIA` → `ALIGN_VIA` → `TO_GOAL` → `REVERSE` →
   `COMPLETE`), YOLO `/dock/detection_status`, 라이다 `/dock/lidar/status`. RViz `bash scripts/demo/rviz_dock.sh --real`.
 - 전체 미션(`autonomy.launch.py`)의 도킹도 같은 노드(`kaboat_perception/dock_nodes.py`)라 같은 인자
   (`dock_target_class`, `dock_marker_order`, `dock_retreat_cmd` …)를 받습니다. 그냥 `ros2 launch`로 켜도

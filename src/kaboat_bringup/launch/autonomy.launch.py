@@ -70,7 +70,8 @@ def generate_launch_description():
         target_class=L('dock_target_class'), motion_enabled=L('dock_motion_enabled'),
         weights=L('dock_weights'), device=L('dock_device'),
         approach_cmd=L('dock_approach_cmd'), final_cmd=L('dock_final_cmd'),
-        retreat_cmd=L('dock_retreat_cmd'), marker_order=L('dock_marker_order'),
+        retreat_cmd=L('dock_retreat_cmd'), seek_cmd=L('dock_seek_cmd'),
+        marker_order=L('dock_marker_order'),
         position_source=L('dock_position_source'), use_sim_time=use_sim_time_value,
         base_frame=L('dock_base_frame'),
         camera_tf_condition=IfCondition(L('publish_camera_tf'))))
@@ -89,7 +90,14 @@ def generate_launch_description():
              name='mission_manager', output='screen',
              parameters=[LaunchConfiguration('mission_params_file'), common_params,
                          {'points_file': ParameterValue(
-                             LaunchConfiguration('mission_points_file'), value_type=str)}]),
+                             LaunchConfiguration('mission_points_file'), value_type=str),
+                          # 미션 하나만 시험: start_state:=station single_mission:=true
+                          'start_state': ParameterValue(
+                              LaunchConfiguration('start_state'), value_type=str),
+                          'single_mission': ParameterValue(
+                              LaunchConfiguration('single_mission'), value_type=bool),
+                          'entry_required': ParameterValue(
+                              LaunchConfiguration('entry_required'), value_type=bool)}]),
     ]
 
     return LaunchDescription([
@@ -108,6 +116,16 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'mission_points_file', default_value='~/kaboat_mission_points.json',
             description='현장 rec 기록 지점 JSON — entry/end 쌍, dock_entry 단독 허용. none 이면 안 읽음'),
+        DeclareLaunchArgument(
+            'start_state', default_value='',
+            description="이 미션부터 시작 (gate / station / dock / search / avoid). '' = 처음(gate)부터"),
+        DeclareLaunchArgument(
+            'single_mission', default_value='false',
+            description='true = start_state 하나만 하고 done(정지) — 미션 하나씩 시험'),
+        DeclareLaunchArgument(
+            'entry_required', default_value='true',
+            description='false = 미션 시작 자세 접근(approach) 없이 바로 시작 — go_station·go_search 처럼 '
+                        'goto 로 이미 세운 뒤 켤 때'),
         DeclareLaunchArgument(
             'gate_params_file', default_value=gate_params,
             description='게이트 쌍 수와 라이다/DRI 임계값 YAML'),
@@ -130,6 +148,8 @@ def generate_launch_description():
             'dock_device', default_value='0',
             description="Ultralytics device: 젯슨 CUDA '0' (기본, YOLO venv 필요 — scripts/run_dock_mission.sh 참고) 또는 cpu"),
         DeclareLaunchArgument('dock_base_frame', default_value='base_link'),
+        DeclareLaunchArgument('dock_seek_cmd', default_value='0.07',
+                              description='목표 도형 방위로 서행 (라이다 벽이 잡힐 때까지)'),
         DeclareLaunchArgument('dock_approach_cmd', default_value='0.10',
                               description='경유점까지 LOS 직진 상한'),
         DeclareLaunchArgument('dock_final_cmd', default_value='0.05',

@@ -6,8 +6,11 @@
   SEARCH  부표 2개 전 — /mission/goal(station_end, 사각형 중심에 기록)로 천천히 접근
   ENTER   처음 보인 한 변(가장 가까운 부표 쌍)을 입구로 고정 → 입구 앞 정렬점 → 중심
           (가상 앵커 제어로 주행 — 해류에 밀려 부표에 붙지 않게)
-  HOLD    중심에 가상 앵커(위치 P + 선수각 PD, 선수각은 HOLD 진입 때 방향 유지).
-          중심 hold_radius(1 m) 안에 hold_time(5 s) 연속이면 /mission/complete 1회.
+  HOLD    중심에 가상 앵커(거리 비례 목표 속도 + /odom 속도로 후진 제동, 선수각 PD —
+          선수각은 HOLD 진입 때 방향 유지).
+          배 중심이 부표 사각형 안(각 변에서 inside_margin 0.6 m 안쪽)에 hold_time(5 s)
+          연속이면 /mission/complete 1회 (2026-11-13 경기 조건 — 예전엔 중심 1 m 반경).
+          사각형은 매 틱 보이는 부표로 다시 잡으므로 부표가 흔들리거나 밀려도 따라간다.
           다음 미션 전환은 mission_manager 가 한다(완료 + station_end 2 m 안). 전환 전까지 계속 유지.
 
 출구 (2026-11-12): rec 기록 파일에 station_center 가 있고 station_end 와 다르면, 사각형
@@ -93,7 +96,8 @@ class StationKeeper(BehaviorBase):
         self.create_timer(0.5, self._publish_debug)
         p = self.params
         self.get_logger().info(
-            f'station: 유지 반경 {p.hold_radius} m · {p.hold_time} s, 부표 간격 {p.side_length} m, '
+            f'station: 유지 = 부표 사각형 변에서 {p.inside_margin} m 안쪽 {p.hold_time} s, '
+            f'목표 속도 ≤ {p.max_speed} m/s (제동 ≤ {p.max_brake}), 부표 간격 {p.side_length} m, '
             f'전용 지도 감쇠 {p.l_free} (큰 덩어리 {p.big_min_cells}칸↑ × {p.free_ratio}), '
             f'motion_enabled={self.motion_enabled}')
 
@@ -175,7 +179,8 @@ class StationKeeper(BehaviorBase):
         boat_xy = (pose.position.x, pose.position.y)
         yaw = yaw_from_quaternion(pose.orientation)
         now = self.get_clock().now().nanoseconds * 1e-9
-        d = self.fsm.step(boat_xy, yaw, self.odom.twist.twist.angular.z, now)
+        speed = self.odom.twist.twist.linear.x      # 선체 기준 전진 속도 (GQ7) — 앵커 제동
+        d = self.fsm.step(boat_xy, yaw, self.odom.twist.twist.angular.z, now, speed=speed)
         self._last_decision = d
 
         last_scan = self._fsm_at if self._scan_at is None else max(self._scan_at, self._fsm_at)
@@ -193,22 +198,28 @@ class StationKeeper(BehaviorBase):
         # HOLD 의 앵커 세부 단계(RETURN/ALIGN/BACK)는 자주 바뀌어 아래 1 s 로그로만 본다
         phase = d.phase if d.phase == 'HOLD' else f'{d.phase}/{d.stage}'
         self._status(f'{phase} — 부표 {len(d.buoys)}개, 중심 {d.center_kind or "없음"}')
-        if d.phase == 'HOLD':
-            self.get_logger().info(
-                f'station HOLD/{d.stage}: 중심까지 {math.dist(boat_xy, d.center):.2f} m, '
-                f'유지 {d.hold_elapsed:.1f}/{self.params.hold_time:.1f} s, 부표 {len(d.buoys)}개',
-                throttle_duration_sec=1.0)
-        if d.completed_now:
-            self.get_logger().info(
-                f'위치유지 달성 — 중심 {self.params.hold_radius} m 이내 '
-                f'{self.params.hold_time} s 유지 (부표 {len(d.buoys)}개, 중심 {center})')
-            if exit_xy is None:
-                self.report_complete()
+        p = self.params
+        if d.phase == 'HOLD':        # HOLD 에서는 중심이 항상 있다 (SEARCH 는 없을 수 있음)
+            if d.clearance is not None:
+                rule = f'사각형 변에서 {p.inside_margin:.2f} m 안쪽'
+                where = f'변까지 {d.clearance:+.2f} m ({"안" if d.inside else "밖"})'
             else:
-                self._exit_targets = exit_waypoints(
-                    d.buoys, d.center or center_xy, exit_xy, self.params)
-                route = ' → '.join(f'({x:+.2f}, {y:+.2f})' for x, y in self._exit_targets)
-                self.get_logger().info(f'station: 출구로 나감 — {route}')
+                rule = f'중심 {p.hold_radius:.1f} m 안 (부표 사각형 없음)'
+                where = f'중심까지 {math.dist(boat_xy, d.center):.2f} m'
+            self.get_logger().info(
+                f'station HOLD/{d.stage}: {where}, 유지 {d.hold_elapsed:.1f}/{p.hold_time:.1f} s, '
+                f'부표 {len(d.buoys)}개', throttle_duration_sec=1.0)
+            if d.completed_now:
+                self.get_logger().info(
+                    f'위치유지 달성 — {rule} {p.hold_time} s 유지 '
+                    f'(부표 {len(d.buoys)}개, 중심 {center})')
+                if exit_xy is None:
+                    self.report_complete()
+                else:
+                    self._exit_targets = exit_waypoints(
+                        d.buoys, d.center or center_xy, exit_xy, self.params)
+                    route = ' → '.join(f'({x:+.2f}, {y:+.2f})' for x, y in self._exit_targets)
+                    self.get_logger().info(f'station: 출구로 나감 — {route}')
 
         if self._exit_targets is not None:
             return self._exit_cmd(boat_xy, yaw)
@@ -241,7 +252,8 @@ class StationKeeper(BehaviorBase):
             self._status(f'EXIT — ({target[0]:+.2f}, {target[1]:+.2f}) 로 '
                          f'({len(self._exit_targets)}개 남음)')
         linear, angular, _ = anchor_command(
-            boat_xy, yaw, self.odom.twist.twist.angular.z, target, None, p)
+            boat_xy, yaw, self.odom.twist.twist.angular.z, target, None, p,
+            speed=self.odom.twist.twist.linear.x)
         cmd = Twist()
         cmd.linear.x, cmd.angular.z = float(linear), float(angular)
         self._command_full_scale = (p.max_forward, p.max_turn)
@@ -296,6 +308,13 @@ class StationKeeper(BehaviorBase):
             mk = marker('center', 0, Marker.SPHERE, (0.1, 0.9, 0.3, 0.9), (0.25, 0.25, 0.25))
             mk.pose.position.x, mk.pose.position.y = d.center
             out.markers.append(mk)
+        if d.square is not None:
+            # 부표 사각형 (노랑) — 완료 판정 영역은 이 변들에서 inside_margin 안쪽
+            outline = marker('square', 0, Marker.LINE_STRIP, (1.0, 0.85, 0.1, 0.8),
+                             (0.04, 0.0, 0.0))
+            outline.points = [Point(x=x, y=y, z=0.02) for x, y in [*d.square, d.square[0]]]
+            out.markers.append(outline)
+        elif d.center is not None:
             ring = marker('hold_radius', 0, Marker.LINE_STRIP, (1.0, 0.85, 0.1, 0.8),
                           (0.04, 0.0, 0.0))
             r = self.params.hold_radius
