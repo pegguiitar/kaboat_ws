@@ -242,6 +242,22 @@ test_mission dock dock_target_class:=circle
 - `test_mission 미션` = 같은 스택에 `start_state:=미션 single_mission:=true`를 더한 것입니다.
   - 그 미션의 `_entry`로 접근(`mission_approach`)한 뒤 미션을 하고 `done`(정지)합니다.
   - 미리 `goto 미션_entry`로 세워 두면 접근이 바로 끝납니다.
+- **이번에 돌 미션의 노드만 띄웁니다** (`only_mission_nodes:=true` 기본). `start_state`부터 끝까지,
+  `single_mission:=true`면 그 미션 하나만. 미션 매니저·`cmd_mux`는 항상, `mission_approach`는
+  `entry_required:=true`(기본)일 때만 뜹니다. 런치를 켜면 `[autonomy] 미션 … — 띄우는 노드: …` 한 줄로 보입니다.
+
+  | 미션 | 띄우는 노드 |
+  |---|---|
+  | gate | `gate_follower` |
+  | station | `station_keeper` (부표는 전용 지도로 찾음 — 부표 검출 노드 안 씀) |
+  | dock | 카메라 TF·`dock_mark_detector`·`dock_lidar_markers`·`dock_marker_goal`·`dock_ctrl_v2` |
+  | search | `buoy_lidar_detector`·`search_circler` |
+  | avoid | `obstacle_planner` |
+
+  2026-11-13 dock bag: `test_mission station`이 파이썬 노드 12개를 한꺼번에 띄워 배가 첫 명령을 받기까지
+  **8 s**(노드 약 7개인 도킹 시험 런치는 **3 s**) 걸렸고 그동안 0.1~0.2 m/s로 밀렸습니다.
+  예전처럼 전부 띄우려면 `only_mission_nodes:=false`. 알 수 없는 `start_state`(오타)는 런치가 거부합니다
+  (예전엔 미션 매니저가 오류를 내고 gate부터 시작).
 - `approach_motion_enabled:=false`면 접근이 끝나지 않아 미션이 시작되지 않습니다(접근 명령은 미리보기만 나감).
 
 `dock_weights:=<.pt 절대경로>`, `dock_device:=0`(젯슨 CUDA), `mission_params_file:=<yaml>`로 바꿉니다.

@@ -130,6 +130,20 @@ def recorded_point(name: str, points_file: str = DEFAULT_POINTS_FILE,
     return point
 
 
+def missions_to_run(start_state: str = '', single_mission: bool = False) -> tuple:
+    """이번 실행에서 mission_manager 가 돌 미션들 — autonomy.launch.py 가 이 미션의 노드만 띄운다.
+
+    mission_manager 와 같은 규칙: start_state 부터 순서대로, single_mission 이면 그 하나만.
+    start_state '' = 처음(gate)부터. 알 수 없는 이름은 ValueError — mission_manager 는 오류를
+    내고 gate 부터 시작하므로, 오타(staton 등)로 엉뚱한 미션이 움직이기 전에 launch 에서 막는다.
+    """
+    if start_state and start_state not in MISSION_STATES:
+        raise ValueError(f"start_state='{start_state}' 는 알 수 없는 미션 "
+                         f"(가능한 값: {', '.join(MISSION_STATES)})")
+    first = MISSION_STATES.index(start_state) if start_state else 0
+    return MISSION_STATES[first:first + 1] if single_mission else MISSION_STATES[first:]
+
+
 def mission_slot(name: str, states=MISSION_STATES):
     """지점 이름 → (미션, 'entry' | 'end'). 미션 이름 규칙이 아니면 None."""
     for kind, suffix in (('entry', ENTRY_SUFFIX), ('end', END_SUFFIX)):

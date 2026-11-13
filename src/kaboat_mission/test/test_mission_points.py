@@ -7,7 +7,7 @@ import pytest
 
 from kaboat_mission.mission_points import (
     MissionPoint, PointStore, auto_name, check_name, mission_slot, mission_targets,
-    origin_distance_m, read_origin_file, same_origin)
+    missions_to_run, origin_distance_m, read_origin_file, same_origin)
 
 ORIGIN = (35.1234567, 129.0456789, 12.5)
 
@@ -131,3 +131,19 @@ def test_mission_targets_refuses_half_pair():
         mission_targets(_store(gate_entry=(1.0, 2.0, 90.0)))
     with pytest.raises(ValueError, match='station_entry'):
         mission_targets(_store(station_end=(1.0, 2.0, 0.0)))
+
+
+def test_missions_to_run_follows_mission_manager_order():
+    """종합 스택이 띄울 미션 — start_state 부터 끝까지, single_mission 이면 그 하나."""
+    every = ('gate', 'station', 'dock', 'search', 'avoid')
+    assert missions_to_run() == every
+    assert missions_to_run('', single_mission=True) == ('gate',)      # '' = gate 부터
+    assert missions_to_run('station', single_mission=True) == ('station',)
+    assert missions_to_run('dock') == ('dock', 'search', 'avoid')
+    assert missions_to_run('avoid', single_mission=True) == ('avoid',)
+
+
+def test_missions_to_run_refuses_unknown_start_state():
+    # mission_manager 는 오류 뒤 gate 부터 시작한다 — 오타로 게이트가 움직이기 전에 막는다
+    with pytest.raises(ValueError, match='staton'):
+        missions_to_run('staton', single_mission=True)
