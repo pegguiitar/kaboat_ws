@@ -104,3 +104,14 @@ def test_far_points_forgotten():
     assert len(tk.P) == 0
     tk.update([], 2.5, view(x=-12.0))                # 부표는 track_grace(1 s) 뒤 지움
     assert tk.tracks == []
+
+
+def test_cell_mode_snaps_points_to_cell_centres():
+    tk = PointMapTracker(PointMapParams(cell=0.1))
+    run(tk, [(8.0, 0.0)])
+    assert len(tk.confirmed()) == 1
+    frac = tk.P / 0.1 - 0.5
+    assert np.allclose(frac, np.round(frac), atol=1e-9)        # 모든 점이 칸 중심
+    n = len(tk.P)
+    tk.update([det(arc((8.0, 0.0)) + 0.02)], 0.8)            # 같은 칸 안으로 조금 움직여도 점이 안 늘어남
+    assert len(tk.P) <= n + 2

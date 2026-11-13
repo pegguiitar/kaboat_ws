@@ -36,6 +36,7 @@ from kaboat_perception.buoy_evidence import TIME_JUMP_BACK, MAX_STEP, EvTrack, E
 @dataclass(frozen=True)
 class PointMapParams:
     merge_radius: float = 0.05      # 새 점이 기존 점 이 안이면 그 점을 다시 본 것 [m]
+    cell: float = 0.0               # > 0 이면 칸 방식 — 점을 이 크기 칸 중심으로 옮겨 칸마다 log-odds [m]
     l_hit: float = 0.8
     l_free_rate: float = -2.0       # 빔이 점 자리를 지나감 [/s]
     l_solid: float = 1.5            # 이 이상이면 굳은 점 — 덩어리에 들어감 (2 번 보임)
@@ -110,9 +111,13 @@ class PointMapTracker:
                 det_hits.append(np.zeros(0, dtype=int))
                 continue
             pts = np.asarray(pts, dtype=float).reshape(-1, 2)
+            r_merge = p.merge_radius
+            if p.cell > 0.0:               # 칸 방식: 칸 중심으로 옮기고, 같은 칸이면 같은 점
+                pts = np.unique((np.floor(pts / p.cell) + 0.5) * p.cell, axis=0)
+                r_merge = 0.25 * p.cell
             if tree is not None:
-                d, j = tree.query(pts, distance_upper_bound=p.merge_radius)
-                old = d <= p.merge_radius
+                d, j = tree.query(pts, distance_upper_bound=r_merge)
+                old = d <= r_merge
                 hit[j[old]] = True
                 det_hits.append(np.unique(j[old]))
                 fresh = pts[~old]
@@ -134,7 +139,7 @@ class PointMapTracker:
         new_idx = {}
         if new_pts:
             q = np.vstack(new_pts)
-            keys = np.floor(q / p.merge_radius).astype(np.int64)
+            keys = np.floor(q / (p.cell if p.cell > 0.0 else p.merge_radius)).astype(np.int64)
             _, first = np.unique(keys, axis=0, return_index=True)
             first = np.sort(first)
             base = len(self.P)
