@@ -158,7 +158,10 @@ class DockCtrlV2(Node):
                     'stable_samples': 5,
                     'max_turn_cmd': 0.20,
                     'approach_cmd': 0.10, 'final_cmd': 0.05,
-                    'retreat_cmd': 0.05, 'retreat_distance_m': 3.25,
+                    # 후진 (REVERSE·BACKOFF·UNBLOCK·포기 전 정렬 뒤). 0.20 = 1400 µs = 텔레옵 후진 2단계
+                    # (2026-11-14, 예전 0.05 = 1456 µs 는 후진 1단계 1450 µs 보다 약해 도크 쪽 물살
+                    # 0.15 m/s 에서 슬롯을 못 빠져나왔다 — 폐루프 시뮬 scripts/e2e_sim)
+                    'retreat_cmd': 0.20, 'retreat_distance_m': 3.25,
                     'via_tolerance_m': 0.30, 'goal_tolerance_m': 0.25,
                     'yaw_tolerance_deg': 8.0, 'target_class': 'triangle',
                     'position_source': 'odom', 'marker_order': '',

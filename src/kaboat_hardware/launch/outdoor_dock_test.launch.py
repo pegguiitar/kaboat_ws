@@ -39,7 +39,7 @@ ARGS = [
     ('seek_cmd', '0.07', '목표 도형 방위로 서행 — 라이다 벽이 잡힐 때까지 (0.07 ≈ 1551 µs)'),
     ('approach_cmd', '0.10', '경유점까지 LOS 직진 상한 (0.10 ≈ 1562 µs)'),
     ('final_cmd', '0.05', '정지점까지 LOS 직진 상한 (0.05 ≈ 1544 µs)'),
-    ('retreat_cmd', '0.05', '후진 출력 (0.05 ≈ 1456 µs)'),
+    ('retreat_cmd', '0.20', '후진 출력 (0.20 ≈ 1400 µs = 텔레옵 후진 2단계)'),
     ('marker_order', '', "화면 왼쪽부터 도형 순서를 알면 square,triangle,circle 처럼. '' = 순서 안 봄"),
     ('position_source', 'odom', 'odom (GQ7 RTK 필터, 기본) 또는 gps (/gps/fix 원시 2 Hz)'),
     ('dock_device', '0', "YOLO 장치: 젯슨 CUDA '0' 또는 cpu"),

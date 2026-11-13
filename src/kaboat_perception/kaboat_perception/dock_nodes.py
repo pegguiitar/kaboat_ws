@@ -83,7 +83,7 @@ def default_weights():
 
 
 def docking_nodes(*, target_class, motion_enabled, weights, device='0',
-                  approach_cmd=0.10, final_cmd=0.05, retreat_cmd=0.05, seek_cmd=0.07,
+                  approach_cmd=0.10, final_cmd=0.05, retreat_cmd=0.20, seek_cmd=0.07,
                   marker_order='', position_source='odom', use_sim_time=False,
                   base_frame='base_link', camera_tf=True, camera_tf_condition=None,
                   debug_image=True, detector_env=None):

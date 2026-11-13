@@ -558,7 +558,7 @@ test_dock_outdoor approach:=true             # dock_entry 접근(직선, 회피 
          안정되면 경유점 전에 바로 TO_VIA.
        - 최종 경로·정지점은 목표 ㄷ자를 다시 잠가 정한다.
      - **막힘 후진(UNBLOCK):** 앞이 3초 넘게 막혔는데 우회를 못 짜거나(보이는 ㄷ자 없음 등) 이미 썼거나, 우회
-       경유점 가는 길이 3초 막히면 — 예전엔 그 자리에 계속 섰다 — 선수를 유지한 채 `retreat_cmd`(0.05)로
+       경유점 가는 길이 3초 막히면 — 예전엔 그 자리에 계속 섰다 — 선수를 유지한 채 `retreat_cmd`(0.20)로
        온 길을 `unblock_distance_m`(2 m) 직진 후진하고(30 s 넘으면 덜 갔어도) SCAN부터 다시 합니다.
        뒤는 라이다가 못 보므로 방금 온 길을 되짚는 것만 합니다(BACKOFF·REVERSE와 같은 가정). 도킹 한 번에
        `unblock_max_attempts`(3)번까지, 다 쓰면 멈추고 `detail`에 `gave up after 3 retreats`를 남깁니다
@@ -585,10 +585,16 @@ test_dock_outdoor approach:=true             # dock_entry 접근(직선, 회피 
   켭니다. 그러면 같이 보이는 마커들의 좌우 순서가 어긋난 프레임은 목표 방위에서 뺍니다. 화면 끝의 엉뚱한
   도형 오검출을 거르는 용도입니다.
 - 위치: 기본 `/odom`(GQ7 RTK 필터 25 Hz, 선체 중심). `position_source:=gps`는 `/gps/fix` 원시(2 Hz, 늦음).
-- 추력 (`seek_cmd` / `approach_cmd` / `final_cmd` / `retreat_cmd`, 기본 0.07 / 0.10 / 0.05 / 0.05
-  ≈ 1551 / 1562 / 1544 / 1456 µs)은
+- 추력 (`seek_cmd` / `approach_cmd` / `final_cmd`, 기본 0.07 / 0.10 / 0.05
+  ≈ 1551 / 1562 / 1544 µs)은
   teleop 1단계(1550 µs)와 비슷해 바람에 약합니다. 미리보기 뒤 바람을 보고 올립니다
   (참고: 0.2 ≈ 1600 µs, goto 기본 0.4 ≈ 1675 µs).
+- 후진 `retreat_cmd` 기본 **0.20 ≈ 1400 µs = teleop 후진 2단계** (2026-11-14, REVERSE·BACKOFF·UNBLOCK 모두).
+  예전 0.05 ≈ 1456 µs 는 후진 1단계(1450 µs)보다 약해, 폐루프 시뮬(`scripts/e2e_sim`)에서 도크 쪽 물살
+  0.15~0.25 m/s 면 정지점에서 슬롯을 못 빠져나와 도킹 제한 시간까지 갇혔습니다(0.20 이면 3판 모두 8~15 s에 3.25 m).
+  뒤는 라이다가 못 보므로(120~240° 가림) 후진은 온 길·슬롯 축을 되짚을 때만 씁니다. 되돌리기 `retreat_cmd:=0.05`
+  (`run_autonomy dock_retreat_cmd:=0.05`). dock 시간 초과 때 mission_manager 의 직진 후진(`timeout_retreat_cmd`)은
+  0.05 그대로입니다.
 - 카메라 TF(라이다 → `camera_link`, 뒤 0.615·위 0.635 m, 수평)는 이 런치가 냅니다. 값은
   `src/kaboat_perception/kaboat_perception/camera_mount.py` 한곳(카메라 층·`dock_yolo`와 공유).
 - 상태: `ros2 topic echo /dock/status` (`phase`: `SCAN` → `SEEK` → (`BACKOFF`) → `TO_VIA` → `ALIGN_VIA` → `TO_GOAL` → `REVERSE` →

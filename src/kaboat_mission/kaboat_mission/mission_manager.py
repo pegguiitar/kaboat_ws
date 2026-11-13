@@ -102,7 +102,7 @@ MISSION_TIME_LIMITS = {'gate': 180.0, 'station': 120.0, 'dock': 240.0,
                        'search': 180.0, 'avoid': 180.0}
 APPROACH_TIMEOUT = 90.0         # [s] 시작 자세 접근만의 상한
 TIMEOUT_RETREAT_M = 3.0         # [m] dock 시간 초과 시 직진 후진 거리
-TIMEOUT_RETREAT_CMD = 0.05      # 그 후진 출력 (dock_retreat_cmd 와 같은 값)
+TIMEOUT_RETREAT_CMD = 0.05      # 그 후진 출력 (dock_retreat_cmd 는 2026-11-14 부터 0.20 — 이 값은 따로)
 TIMEOUT_RETREAT_MAX_SEC = 30.0  # [s] 후진 상한 (못 움직여도 넘어간다)
 
 MISSION_ORDER = list(MISSION_STATES)

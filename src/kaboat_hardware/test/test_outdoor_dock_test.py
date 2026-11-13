@@ -62,7 +62,7 @@ def test_dock_arguments_defaults_and_validation(mod, tmp_path):
     dock = mod.dock_arguments(_get(mod, tmp_path))
     assert dock == dict(target_class='triangle', motion_enabled=True, weights='/models/best.pt',
                         device='0', seek_cmd=0.07, approach_cmd=0.10, final_cmd=0.05,
-                        retreat_cmd=0.05, marker_order='', position_source='odom')
+                        retreat_cmd=0.20, marker_order='', position_source='odom')
     for bad in (dict(target_class='star'), dict(marker_order='square,triangle'),
                 dict(position_source='filter'), dict(final_cmd='0'), dict(retreat_cmd='1.5'),
                 dict(seek_cmd='0'),
