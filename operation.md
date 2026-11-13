@@ -262,6 +262,13 @@ test_mission dock dock_target_class:=circle
 검정은 색으로 판정하지 않고 "빨강·초록이 아닌 부표 크기 물체(unknown)"에서 고릅니다 — 빨강·초록도
 색이 붙기 전 잠깐 unknown 이라, 검정 목표는 LOOK 15 초가 끝난 뒤에 고릅니다. 흰 기둥·심판 보트도
 unknown 이 되니 `search_center`를 탐색 부표 가운데에 찍어 두세요.
+검정 후보는 두 조건을 더 통과해야 합니다 — ① **부표 모양**: 점유지도 덩어리 긴 축 ≤ 2.0 m·칸 ≤ 25·
+주변 1–2 m 고리 ≤ 12 칸 (배 6 m 안에서 지도마다 재고 최근 60 % 이상 통과. 2026-11-13 bag 실측: 누운 부표
+포함 부표 최대 1.28 m·19 칸, 도크 벽·줄부표 2.6–9.5 m·20–155 칸) ② **탐색 부표 무리 안**: 영역 안에서 색이
+확인된 빨강·초록 중 가장 가까운 것까지 10 m 안, 가까운 순 (같은 bag 탐색 부표 사이 6.2–8.1 m). 빨강·초록을
+하나도 못 봤으면 검정을 고르지 않습니다 — 부표만 한 도크 조각(1.35 m·14 칸)은 모양으로 못 거르기 때문
+(`search.black_needs_field:=false`로 끔). 빨강·초록 목표는 구조물로 판정된 것만 뺍니다.
+끄기: `search.shape_check:=false`, 값: `search.shape_max_extent`·`search.field_gap` 등.
 기록 지점 파일은 `mission_points_file:=<json>`으로 바꾸고, `mission_points_file:=none`이면 읽지 않습니다.
 
 **웨이포인트 1개 시험** (`goto`, 미션 스택 없이 `waypoint()` 제어기만)

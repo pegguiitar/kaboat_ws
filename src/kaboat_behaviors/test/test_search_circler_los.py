@@ -28,10 +28,13 @@ def make_state(color, buoys, boat=(45.0, 70.0), yaw=0.0, search_center=(50.0, 70
     params.setdefault('lock_confirm_sec', 0.0)
     params.setdefault('look_sec', 0.0)
     params.setdefault('require_grid', False)   # 지도 규칙은 아래 따로 시험
+    params.setdefault('shape_check', False)    # 모양 검사는 test_search_orbit 에서
+    params.setdefault('black_needs_field', False)
     state = SimpleNamespace(
         goal=goal, odom=odom, occupancy_grid=None, buoys=buoys,
         params=SearchParams(target_color=color, **params), fsm=None,
         search_center=search_center, _warned_no_center=False, _hold=None, _grid_at=None,
+        _shape_hist={}, _shape_grid_at=None,
         _circle_path=None, _circle_center=None, _last_status=None,
         _entry_path=None, _entry_points=None, _entry_done=False,
         _los_follower=SimpleNamespace(reset=lambda: None),
@@ -46,7 +49,8 @@ def make_state(color, buoys, boat=(45.0, 70.0), yaw=0.0, search_center=(50.0, 70
     state.los = lambda path, ratio, turn: (calls.append((path, ratio, turn)) or Twist(), False)
     state.waypoint = lambda x, y, *a, **kw: (calls.append(('wp', x, y, *a, kw)) or Twist(), False)
     state.report_complete = lambda: state.completed.append(True)
-    for name in ('_status', '_go_goal', '_area_xy', '_plan_entry', '_hold_pose', '_grid_ok'):
+    for name in ('_status', '_go_goal', '_area_xy', '_plan_entry', '_hold_pose', '_grid_ok',
+                 '_update_shapes', '_shape_ok'):
         setattr(state, name, (lambda n: lambda *a: getattr(SearchCircler, n)(state, *a))(name))
     state._hold_ctrl = WaypointController(WaypointParams(
         max_linear=state.params.hold_linear, max_angular=WAYPOINT_MAX_ANGULAR,
@@ -179,3 +183,36 @@ def test_look_repulsion_only_while_moving(monkeypatch):
     move(state, 43.0, 70.0)                   # 2 m 밀림 → 제자리로 전진 → 반발
     SearchCircler.compute_cmd(state)
     assert len(seen) == 1 and seen[0] > 0.0
+
+
+# ---------- 모양 판정 (지도 → 부표별 다수결) ----------
+
+def real_grid(cells, size=100, res=0.2, origin=(40.0, 60.0)):
+    data = [0] * (size * size)
+    for i, j in cells:
+        data[j * size + i] = 100
+    return SimpleNamespace(header=SimpleNamespace(frame_id='odom'), data=data, info=SimpleNamespace(
+        width=size, height=size, resolution=res,
+        origin=SimpleNamespace(position=SimpleNamespace(x=origin[0], y=origin[1]))))
+
+
+def idbuoy(color, x, y, bid):
+    return SimpleNamespace(color=color, position=SimpleNamespace(x=x, y=y), id=bid)
+
+
+def test_shape_votes_accumulate_per_new_grid():
+    # (45, 70) 에 3×3 칸 부표, 5 m 떨어진 y = 75 에 5 m 벽 (x 42~47) — 두 번째 unknown 이 그 위
+    buoy_cells = [(25 + di, 50 + dj) for di in (-1, 0, 1) for dj in (-1, 0, 1)]
+    wall_cells = [(i, 75) for i in range(10, 35)]
+    state = make_state('black', [idbuoy('unknown', 45.0, 70.0, 1),
+                                 idbuoy('unknown', 45.0, 75.0, 2)],
+                       boat=(44.0, 70.0), shape_check=True)
+    state.occupancy_grid = real_grid(buoy_cells + wall_cells)
+    for k in range(6):
+        state._grid_at = 100.0 + k                     # 새 지도 메시지마다 한 번씩
+        SearchCircler._update_shapes(state, (44.0, 70.0), (50.0, 70.0))
+    SearchCircler._update_shapes(state, (44.0, 70.0), (50.0, 70.0))   # 같은 지도 — 안 셈
+    assert len(state._shape_hist[1]) == 6
+    assert SearchCircler._shape_ok(state, idbuoy('unknown', 45.0, 70.0, 1)) is True
+    assert SearchCircler._shape_ok(state, idbuoy('unknown', 45.0, 75.0, 2)) is False
+    assert SearchCircler._shape_ok(state, idbuoy('unknown', 0, 0, 9)) is None

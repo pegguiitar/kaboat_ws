@@ -34,6 +34,7 @@
        /search/markers       목표 부표·선회 원·탐색 영역·진입 경로 (RViz, odom)
 파라미터 search.<SearchParams 필드>
 """
+from collections import deque
 import dataclasses
 import math
 import time
@@ -48,7 +49,7 @@ from visualization_msgs.msg import Marker, MarkerArray
 from .behavior_base import BehaviorBase, WAYPOINT_MAX_ANGULAR, yaw_from_quaternion
 from .los_controller import circle_path, sampled_path
 from .obstacle_avoidance_utils import apply_repulsion
-from .search_orbit import SearchFsm, SearchParams, tangent_entry
+from .search_orbit import SearchFsm, SearchParams, blob_shape, tangent_entry
 from .waypoint_controller import WaypointController, waypoint as make_waypoint
 
 GOAL_RESET_DISTANCE = 1.0   # [m] 출구·영역 중심이 이만큼 바뀌면 탐색을 새로 시작
@@ -122,6 +123,8 @@ class SearchCircler(BehaviorBase):
         self._hold = None              # LOOK 에서 지킬 (x, y, 선수각 deg)
         self._hold_ctrl.reset()
         self._warned_no_center = False
+        self._shape_hist = {}          # 부표 ID → 최근 모양 판정 (True = 부표 모양)
+        self._shape_grid_at = None     # 마지막으로 모양을 잰 지도 수신 시각
         self._last_status = None
 
     # ── 활성화 ──────────────────────────────────────────
@@ -140,6 +143,36 @@ class SearchCircler(BehaviorBase):
         return (grid is not None and grid.header.frame_id == 'odom'
                 and self._grid_at is not None
                 and now - self._grid_at <= self.params.grid_timeout_sec)
+
+    def _update_shapes(self, boat, area):
+        """새 지도마다 한 번 — 영역 안·배 shape_max_range 안 부표의 덩어리 모양 판정을 쌓는다."""
+        grid = self.occupancy_grid
+        if grid is None or self._grid_at is None or self._grid_at == self._shape_grid_at:
+            return
+        self._shape_grid_at = self._grid_at
+        p = self.params
+        info = grid.info
+        arr = np.asarray(grid.data, dtype=np.int16).reshape(info.height, info.width)
+        origin = (info.origin.position.x, info.origin.position.y)
+        for b in self.buoys:
+            bid = getattr(b, 'id', None)
+            xy = (b.position.x, b.position.y)
+            if (bid is None or math.dist(xy, boat) > p.shape_max_range
+                    or math.dist(xy, area) > p.target_search_radius + 1.0):
+                continue
+            s = blob_shape(arr, info.resolution, origin, xy)
+            if s is None:
+                continue
+            ok = (s.extent <= p.shape_max_extent and s.cells <= p.shape_max_cells
+                  and s.ring_cells <= p.shape_max_ring)
+            self._shape_hist.setdefault(bid, deque(maxlen=20)).append(ok)
+
+    def _shape_ok(self, buoy):
+        """True = 부표 모양, False = 구조물(길거나 큼), None = 아직 덜 잼."""
+        hist = self._shape_hist.get(getattr(buoy, 'id', None))
+        if not hist or len(hist) < self.params.shape_min_evals:
+            return None
+        return sum(hist) >= self.params.shape_pass_ratio * len(hist)
 
     def _on_search_center(self, msg: PoseStamped):
         p = msg.pose.position
@@ -197,7 +230,12 @@ class SearchCircler(BehaviorBase):
         pos = self.odom.pose.pose.position
         boat = (pos.x, pos.y)
         fsm = self.fsm
-        phase = fsm.update(self.buoys, boat, now)
+        shape_ok = None
+        if self.params.shape_check and self.occupancy_grid is not None:
+            # 지도가 없으면(require_grid:=false 시험) 모양을 못 재니 검사도 안 한다
+            self._update_shapes(boat, fsm.area)
+            shape_ok = self._shape_ok
+        phase = fsm.update(self.buoys, boat, now, shape_ok)
 
         if fsm.done:
             self._status('완료 — 탐색 목표점으로' if phase == 'DONE'

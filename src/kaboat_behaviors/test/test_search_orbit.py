@@ -16,6 +16,7 @@ def buoy(color, x, y, bid=None):
 def fsm(color='red', area=None, **kw):
     kw.setdefault('lock_confirm_sec', 0.0)   # 기존 시나리오는 바로 고정
     kw.setdefault('look_sec', 0.0)           # 기존 시나리오는 시작 둘러보기 없이
+    kw.setdefault('black_needs_field', False)  # 기존 검정 시나리오는 빨강·초록 확인 없이
     return SearchFsm(SearchParams(target_color=color, **kw), GOAL, area)
 
 
@@ -219,14 +220,16 @@ def test_lock_released_when_target_turns_out_wrong_colour():
 
 
 def test_colour_must_hold_before_locking():
-    f = SearchFsm(SearchParams(target_color='black', lock_confirm_sec=1.0, look_sec=0.0), GOAL)
+    f = SearchFsm(SearchParams(target_color='black', lock_confirm_sec=1.0, look_sec=0.0,
+                                 black_needs_field=False), GOAL)
     assert f.update([buoy('unknown', 51.0, 70.0, 5)], (40, 70), 0.0) == 'SEEK'
     assert f.update([buoy('unknown', 51.0, 70.0, 5)], (40, 70), 0.5) == 'SEEK'
     assert f.update([buoy('unknown', 51.0, 70.0, 5)], (40, 70), 1.1) == 'ORBIT'
 
 
 def test_colour_flicker_restarts_confirm_clock():
-    f = SearchFsm(SearchParams(target_color='black', lock_confirm_sec=1.0, look_sec=0.0), GOAL)
+    f = SearchFsm(SearchParams(target_color='black', lock_confirm_sec=1.0, look_sec=0.0,
+                                 black_needs_field=False), GOAL)
     f.update([buoy('unknown', 51.0, 70.0, 5)], (40, 70), 0.0)
     f.update([buoy('green', 51.0, 70.0, 5)], (40, 70), 0.6)    # 색이 바뀜 — 시계 다시
     f.update([buoy('unknown', 51.0, 70.0, 5)], (40, 70), 0.8)
@@ -320,7 +323,8 @@ def test_black_waits_until_look_ends():
 
 def test_black_can_lock_during_look_when_disabled():
     f = fsm_0113('black', look_sec=15.0, black_waits_look=False)
-    assert f.update([buoy('unknown', 169.3, -5.9, 3)], (168.7, -8.9), 0.0) == 'ORBIT'
+    seen = [buoy('unknown', 169.3, -5.9, 3), buoy('green', 166.5, -0.2, 4)]
+    assert f.update(seen, (168.7, -8.9), 0.0) == 'ORBIT'
 
 
 # ---------- 접선 진입 ----------
@@ -383,3 +387,101 @@ def test_0113_red_entry_from_start_pose_clears_black():
         dmin = min(math.dist((a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n), black)
                    for k in range(n + 1))
         assert dmin >= 1.5 - 1e-6
+
+
+# ---------- 모양 검사 (blob_shape) ----------
+
+def _grid(cells, size=40):
+    import numpy as np
+    g = np.zeros((size, size), dtype=np.int16)
+    for i, j in cells:
+        g[j, i] = 100
+    return g
+
+
+def test_blob_shape_small_buoy_vs_long_wall():
+    from kaboat_behaviors.search_orbit import blob_shape
+    buoy_cells = [(20 + di, 20 + dj) for di in (-1, 0, 1) for dj in (-1, 0, 1)]
+    s = blob_shape(_grid(buoy_cells), 0.2, (0.0, 0.0), (4.1, 4.1))
+    assert s.cells == 9 and 0.4 < s.extent <= 0.8 and s.ring_cells == 0
+    wall = [(i, 20) for i in range(5, 35)]                           # 6 m 벽
+    w = blob_shape(_grid(wall), 0.2, (0.0, 0.0), (4.1, 4.1))
+    assert w.extent > 5.0 and w.cells == 30
+
+
+def test_blob_shape_counts_separate_neighbours_in_ring():
+    from kaboat_behaviors.search_orbit import blob_shape
+    cells = [(20, 20), (27, 20), (20, 27)]                          # 1.4 m 떨어진 칸 둘
+    s = blob_shape(_grid(cells), 0.2, (0.0, 0.0), (4.1, 4.1))
+    assert s.cells == 1 and s.ring_cells == 2
+
+
+def test_blob_shape_none_outside_grid_or_empty():
+    from kaboat_behaviors.search_orbit import blob_shape
+    assert blob_shape(_grid([]), 0.2, (0.0, 0.0), (4.1, 4.1)) is None
+    assert blob_shape(_grid([(20, 20)]), 0.2, (0.0, 0.0), (100.0, 4.1)) is None
+
+
+# ---------- 검정: 모양 + 빨강·초록 근접 ----------
+
+def _shape(table):
+    return lambda b: table.get(b.id)
+
+
+def test_black_needs_buoy_shape():
+    f = fsm_0113('black')
+    dock = buoy('unknown', 171.0, -4.0, 20)                          # 영역 안 unknown 구조물
+    black = buoy('unknown', 169.3, -5.9, 3)
+    green = buoy('green', 166.5, -0.2, 4)
+    f.update([dock, black, green], (168.7, -8.9), 0.0, _shape({20: False, 3: None}))
+    assert f.phase == 'SEEK'                                         # 검정 모양 아직 모름 → 안 고름
+    f.update([dock, black, green], (168.7, -8.9), 0.1, _shape({20: False, 3: True}))
+    assert f.center == (169.3, -5.9)
+
+
+def test_red_green_only_drop_structures():
+    f = fsm_0113('red')
+    f.update([buoy('red', 174.5, -1.2, 5)], (168.7, -8.9), 0.0, _shape({5: None}))
+    assert f.phase == 'ORBIT'                                        # 멀어서 모름 → 그래도 고름
+    g = fsm_0113('red')
+    g.update([buoy('red', 174.5, -1.2, 5)], (168.7, -8.9), 0.0, _shape({5: False}))
+    assert g.phase == 'SEEK'
+
+
+def test_unlock_when_locked_turns_out_structure():
+    f = fsm_0113('red')
+    red = buoy('red', 174.5, -1.2, 5)
+    f.update([red], (168.7, -8.9), 0.0, _shape({5: None}))
+    assert f.phase == 'ORBIT'
+    f.update([red], (172.0, -3.0), 0.1, _shape({5: False}))
+    assert f.center is None and f.unlocks == 1
+
+
+def test_black_ranked_by_nearest_red_green_not_area_center():
+    # 영역 중심 기준이면 A(중심 3.8 m)를 고르겠지만, 확인된 초록 옆 B(초록 2.3 m)를 고른다
+    f = fsm_0113('black')
+    a = buoy('unknown', 172.5, -6.0, 30)
+    b = buoy('unknown', 168.0, 1.5, 31)
+    green = buoy('green', 166.5, -0.2, 4)
+    f.update([a, b, green], (168.7, -8.9), 0.0, _shape({30: True, 31: True, 4: True}))
+    assert f.center == (168.0, 1.5)
+
+
+def test_black_beyond_field_gap_ignored():
+    # 영역(12 m) 안이지만 빨강에서 10.4 m — 탐색 부표 무리 밖 물체
+    f = fsm_0113('black', field_gap=10.0)
+    lone = buoy('unknown', 178.0, -11.0, 32)
+    green, red = buoy('green', 166.5, -0.2, 4), buoy('red', 174.5, -1.2, 5)
+    f.update([lone, green, red], (168.7, -8.9), 0.0, _shape({32: True}))
+    assert f.phase == 'SEEK'
+
+
+def test_black_needs_red_or_green_seen_by_default():
+    # 부표만 한 도크 조각은 모양으로 못 거른다 — 빨강·초록을 못 봤으면 검정을 안 고름
+    unknowns = [buoy('unknown', 169.3, -5.9, 3), buoy('unknown', 175.0, -8.0, 7)]
+    f = fsm_0113('black')
+    f.update(unknowns, (168.7, -8.9), 0.0, _shape({3: True, 7: True}))
+    assert f.phase == 'SEEK'
+    g = fsm_0113('black', black_needs_field=False)                   # 끄면 영역 중심 거리로
+    g.update(unknowns, (168.7, -8.9), 0.0, _shape({3: True, 7: True}))
+    assert g.center == (169.3, -5.9)
