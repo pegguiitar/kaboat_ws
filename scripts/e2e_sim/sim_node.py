@@ -40,7 +40,8 @@ LIDAR_X = 0.4
 N_BEAMS = 2030
 K_CAM = (381.67, 381.25, 316.82, 245.23)
 IMG_W, IMG_H = 640, 480
-BGR = {'red': (30, 30, 200), 'green': (60, 150, 60), 'black': (35, 35, 35), 'orange': (0, 140, 255),
+# green = HSV (73, 160, 150): 실제 초록 부표 H 중앙 73 — 예전 (60,150,60) 은 H 60 이라 2026-11-14 색 튜닝(초록 H ≥ 64)에서 unknown
+BGR = {'red': (30, 30, 200), 'green': (97, 150, 56), 'black': (35, 35, 35), 'orange': (0, 140, 255),
        'white': (235, 235, 235), 'yellow': (0, 220, 230)}
 SHAPES = ('triangle', 'circle', 'square')
 
@@ -543,9 +544,7 @@ class SimNode(Node):
         now = time.monotonic()
         msg = String()
         if not self.detector_on:
-            msg.data = json.dumps({'valid': False, 'reason': 'disabled', 'target_class': 'sim', 'ground_valid': False})
-            self.det_pub.publish(msg)
-            return
+            return   # 실제 검출기처럼 도킹이 아닐 때(/detector/enable false)는 상태를 안 낸다 (2026-11-14)
         pose = None
         for p in self.pose_hist:
             if p[0] >= now - 0.2:
