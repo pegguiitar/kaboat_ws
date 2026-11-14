@@ -86,7 +86,8 @@ class SearchParams:
                                       # 회전하며 부표에 닿을 수 있다 (2026-11-14 영역 중심이 검정에서 2.5 m). 0 = 안 옮김
     scan_turn: float = 0.15           # 제자리 둘러보기 회전 명령 (최대 추력 비율)
     give_up_sec: float = 90.0         # 영역 중심 도착 후 이만큼 못 찾으면 포기 [s]
-    orbit_thrust: float = 0.25        # 선회·접선 진입 LOS 전진 상한 (공용 LOS 0.25) — 실물 0.75 m/s
+    orbit_thrust: float = 0.25        # 선회·접선 진입 LOS 전진 상한 (공용 LOS 0.25) — 추력 곡선 0.75 m/s,
+                                      # 11-14 오후 run2 선회 실측 0.88 m/s
     orbit_turn: float = 0.31          # 선회 LOS 회전 상한 (공용 LOS 회전 0.31)
     # LOS 속도 → 명령을 실물 곡선으로 (2026-11-14, los_controller.MEASURED_SPEED_*). 공용 변환은 상한 0.25 에서
     # 1.48 m/s(Gazebo 맞춤)를 가정해 감속 구간 명령이 실물보다 3~4 배 작았다 — 선수각 오차 60° 넘으면 0.032
@@ -148,7 +149,8 @@ class SearchParams:
                                       # 진입 120° 쪽으로 크게 돌다 반발 조향에 밀려 검정 반대편으로 돌아 중심 0.61 m
     exit_cone_deg: float = 75.0       # 완료 뒤, 부표→배 방향과 배→출구 방향 사이가 이 안일 때 원을 벗어난다 [deg]
                                       # (그 전에는 원을 이어 돈다 — 출구 직선이 방금 돈 부표를 스치지 않게)
-    exit_thrust: float = 0.25         # 완료·포기 뒤 출구 직선 LOS 직진 상한 (선회와 같음, 실물 0.75 m/s). 예전 공용 waypoint()
+    exit_thrust: float = 0.25         # 완료·포기 뒤 출구 직선 LOS 직진 상한 (선회와 같음, 추력 곡선 0.75 m/s, 11-14 오후 run2
+                                      # 출구 실측 0.80 m/s). 예전 공용 waypoint()
                                       # 0.101 은 조류 0.25 m/s 에서 22 m 에 125 s, 0.15 m/s 에서 옆으로 밀려 0.43 m
     exit_arrive_radius: float = 0.4   # 출구점이 search_end 에서 비킨 점일 때 도착 반경 [m]
                                       # (done_clearance + 이것 < mission_manager 전환 반경 2.0)
