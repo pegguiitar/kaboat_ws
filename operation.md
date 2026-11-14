@@ -609,6 +609,11 @@ test_dock_outdoor approach:=true             # dock_entry 접근(직선, 회피 
   `src/kaboat_perception/kaboat_perception/camera_mount.py` 한곳(카메라 층·`dock_yolo`와 공유).
 - 상태: `ros2 topic echo /dock/status` (`phase`: `SCAN` → `SEEK` → (`BACKOFF`) → `TO_VIA` → `ALIGN_VIA` → `TO_GOAL` → `REVERSE` →
   `COMPLETE`), YOLO `/dock/detection_status`, 라이다 `/dock/lidar/status`. RViz `bash scripts/demo/rviz_dock.sh --real`.
+- **YOLO 미리 불러오기**(2026-11-14): 검출기가 켜질 때(런치 시작) 백그라운드로 모델을 불러오고 빈 영상으로 2번
+  추론해 둡니다. 로그 `Dock YOLO preloaded in … s`. 추론은 지금처럼 도킹 상태에서만. 예전엔 도킹 시작 때 처음 불러와
+  run1 bag에서 SCAN이 28 s 동안 검출 없이 섰습니다(불러오기 20 s + 첫 추론 7.9·1.4 s). 불러오는 중에는 상태를 안 내
+  dock은 `YOLO stale`로 서서 기다리고, `give_up_yolo_stale_s`(30 s) 넘으면 포기합니다. 끄기: 검출기 `preload:=false`.
+  도킹이 아닐 때(`/detector/enable` false)는 검출 상태·디버그 영상을 내지 않습니다(예전엔 매 프레임 `disabled`).
 - 전체 미션(`autonomy.launch.py`)의 도킹도 같은 노드(`kaboat_perception/dock_nodes.py`)라 같은 인자
   (`dock_target_class`, `dock_marker_order`, `dock_retreat_cmd` …)를 받습니다. 그냥 `ros2 launch`로 켜도
   됩니다 — 런치가 젯슨 YOLO 가상환경(`.venv-dock-yolo`)을 찾아 **검출기 노드에만** `PYTHONPATH`·

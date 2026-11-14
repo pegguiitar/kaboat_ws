@@ -8,10 +8,19 @@ Outputs: /detections/dock_marks, /dock/marker_base (3D, base_link),
 Only the marker position is estimated here. The dock axis / entrance comes
 from the lidar back-wall fit in docking_ctrl, not from a depth plane normal.
 3D depth markers require valid depth and TF; sight rays and arrows do not.
+
+모델 미리 불러오기 (preload, 기본 켬 — 2026-11-14): 노드가 켜질 때(= autonomy 런치 시작) 백그라운드
+스레드에서 YOLO 를 불러오고 빈 영상으로 warmup_runs(2)번 추론해 둔다. 추론 자체는 지금처럼
+/detector/enable(도킹 상태)일 때만. 예전엔 도킹 시작 때 처음 불러와 2026-11-14 run1 bag 에서 불러오기 20 s
++ 첫 추론 7.9 s·1.4 s — 도킹 SCAN 이 28 s 동안 검출 없이 섰다. 불러오는 중에는 상태를 내지 않아
+dock_ctrl 은 'YOLO stale' 로 서서 기다린다 ('모델 없음' 상태를 내면 목표가 안 보인다고 보고 탐색 회전을
+시작해 2바퀴 제한을 써 버린다). 미리 불러오기에 실패하면 예전처럼 켜질 때 다시 불러온다.
+/detector/enable 이 false(도킹이 아닐 때)면 상태·디버그 영상을 내지 않는다 (2026-11-14).
 """
 
 import json
 import math
+import threading
 import time
 from pathlib import Path
 
@@ -53,6 +62,7 @@ class DockMarkDetector(Node):
             'mask_erosion_pixels': 1, 'max_depth_sigma_m': 0.25,
             'min_depth_inlier_fraction': 0.7, 'depth_outlier_floor_m': 0.06, 'marker_filter_tau_s': 0.5,
             'marker_filter_gate_m': 0.35, 'marker_filter_reset_s': 1.5,
+            'preload': True, 'warmup_runs': 2,
         }.items():
             self.declare_parameter(name, value)
         self.weights = str(self.get_parameter('weights').value)
@@ -70,6 +80,8 @@ class DockMarkDetector(Node):
         self.enabled = False
         self.segmenter = None
         self.model_error = ''
+        self._model_lock = threading.Lock()
+        self._model_loading = False          # 백그라운드에서 불러오는 중 (그동안 상태를 안 냄)
         self.bridge = CvBridge()
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
@@ -136,22 +148,52 @@ class DockMarkDetector(Node):
 
         initial = Bool()
         initial.data = bool(self.get_parameter('enabled').value)
+        if bool(self.get_parameter('preload').value) and self.weights and Path(self.weights).is_file():
+            self._model_loading = True
+            threading.Thread(target=self._preload, name='dock_yolo_preload', daemon=True).start()
         self._on_enable(initial)
+
+    def _build_segmenter(self):
+        return DockSegmenter(
+            self.weights, float(self.get_parameter('confidence').value),
+            int(self.get_parameter('image_size').value),
+            str(self.get_parameter('device').value),
+            half=bool(self.get_parameter('half').value))
+
+    def _preload(self):
+        """백그라운드: 모델을 불러오고 빈 영상으로 warmup_runs 번 추론 (GPU 첫 추론이 7.9 s·1.4 s)."""
+        started = time.monotonic()
+        try:
+            segmenter = self._build_segmenter()
+            blank = np.zeros((480, 640, 3), dtype=np.uint8)
+            for _ in range(max(0, int(self.get_parameter('warmup_runs').value))):
+                segmenter.predict(blank)
+            with self._model_lock:
+                if self.segmenter is None:
+                    self.segmenter = segmenter
+            self.get_logger().info(
+                f'Dock YOLO preloaded in {time.monotonic() - started:.1f} s '
+                f'(warm-up {int(self.get_parameter("warmup_runs").value)} runs): {self.weights}')
+        except Exception as exc:   # 실패하면 켜질 때 예전처럼 다시 불러온다
+            self.get_logger().error(f'Dock YOLO preload failed ({exc}) — will load on enable')
+        finally:
+            self._model_loading = False
+            if self.enabled and self.segmenter is None:
+                self._on_enable(Bool(data=True))
 
     def _on_enable(self, msg: Bool):
         self.enabled = bool(msg.data)
         if not self.enabled:
             for marker_filter in self.marker_filters.values():
                 marker_filter.reset()
-        if self.enabled and self.segmenter is None and not self.model_error:
+        if (self.enabled and self.segmenter is None and not self.model_error
+                and not self._model_loading):   # 미리 불러오는 중이면 그쪽이 끝낸다
             try:
                 if not self.weights or not Path(self.weights).is_file():
                     raise FileNotFoundError(self.weights or 'weights parameter unset')
-                self.segmenter = DockSegmenter(
-                    self.weights, float(self.get_parameter('confidence').value),
-                    int(self.get_parameter('image_size').value),
-                    str(self.get_parameter('device').value),
-                    half=bool(self.get_parameter('half').value))
+                segmenter = self._build_segmenter()
+                with self._model_lock:
+                    self.segmenter = segmenter
                 self.get_logger().info(f'Dock YOLO ready: {self.weights}')
             except Exception as exc:
                 self.model_error = str(exc)
@@ -268,6 +310,11 @@ class DockMarkDetector(Node):
         return point
 
     def on_frame(self, rgb_msg: Image, depth_msg: Image, info_msg: CameraInfo):
+        if not self.enabled:
+            # 도킹이 아닐 때(/detector/enable false)는 아무것도 안 낸다 — 상태·디버그 영상·영상 변환 모두.
+            # 예전엔 'disabled' 상태와 디버그 영상을 매 프레임(약 10 Hz) 내 run1 bag 검출 상태 5816 개 중
+            # 도킹 구간은 264 개뿐이었다 (다른 미션 동안 젯슨 CPU 만 씀).
+            return
         self.frame_started = time.perf_counter()
         stamp = rgb_msg.header.stamp
         self.frame_stamp_s = (stamp.sec + stamp.nanosec * 1e-9) or None
@@ -282,9 +329,8 @@ class DockMarkDetector(Node):
         except (ValueError, cv2.error, RuntimeError) as exc:
             self._status(False, 'rgb_conversion_error', detail=str(exc))
             return
-        if not self.enabled:
-            self._status(False, 'disabled')
-            return
+        if self.segmenter is None and getattr(self, '_model_loading', False):
+            return   # 불러오는 중 — 상태를 안 내 dock_ctrl 이 'YOLO stale' 로 서서 기다린다 (탐색 회전 안 함)
         if self.segmenter is None:
             self._status(False, 'model_unavailable', detail=self.model_error)
             return

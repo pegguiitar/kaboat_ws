@@ -292,3 +292,67 @@ def test_status_reports_image_time_and_half_fov():
     status = json.loads(node.status_pub.publish.call_args.args[0].data)
     assert status['image_half_fov_deg'] == {'left': 21.8, 'right': 21.8}
     assert 'image_stamp_s' in status
+
+
+# ── 모델 미리 불러오기 (2026-11-14) ─────────────────────────────────────────────
+
+def test_no_status_while_model_is_preloading():
+    """불러오는 중엔 상태를 안 낸다 — dock_ctrl 이 'YOLO stale' 로 서서 기다리게 (탐색 회전 안 함)."""
+    node = Harness()
+    node.segmenter = None
+    node._model_loading = True
+    frame(node)
+    node.status_pub.publish.assert_not_called()
+
+
+def test_missing_model_after_loading_still_reports_unavailable():
+    node = Harness()
+    node.segmenter = None
+    node._model_loading = False
+    node.model_error = 'no weights'
+    frame(node)
+    assert json.loads(node.status_pub.publish.call_args.args[0].data)['reason'] == 'model_unavailable'
+
+
+def test_detector_preloads_and_warms_up_at_startup(tmp_path, monkeypatch):
+    """런치 때 백그라운드로 불러오고 빈 영상으로 2번 추론 — 켜질 때 다시 불러오지 않는다."""
+    import threading
+    import rclpy
+    import kaboat_perception.dock_mark_detector as mod
+
+    built, predicted = [], []
+
+    class FakeSegmenter:
+        def __init__(self, *args, **kwargs):
+            built.append(args)
+
+        def predict(self, bgr):
+            predicted.append(bgr.shape)
+            return []
+
+    monkeypatch.setattr(mod, 'DockSegmenter', FakeSegmenter)
+    weights = tmp_path / 'best.pt'
+    weights.write_bytes(b'x')
+    rclpy.init(args=['--ros-args', '-p', f'weights:={weights}'])
+    try:
+        node = mod.DockMarkDetector()
+        for t in threading.enumerate():
+            if t.name == 'dock_yolo_preload':
+                t.join(5.0)
+        assert node.segmenter is not None and not node._model_loading
+        assert len(built) == 1 and predicted == [(480, 640, 3), (480, 640, 3)]
+        node._on_enable(mod.Bool(data=True))
+        assert len(built) == 1                          # 켜질 때 다시 안 불러옴
+        node.destroy_node()
+    finally:
+        rclpy.shutdown()
+
+
+def test_disabled_detector_publishes_nothing():
+    """도킹이 아닐 때는 상태·디버그 영상·추론 모두 없음 (예전엔 'disabled' 상태를 매 프레임)."""
+    node = Harness()
+    node.enabled = False
+    frame(node)
+    node.status_pub.publish.assert_not_called()
+    node.debug_pub.publish.assert_not_called()
+    node.segmenter.predict.assert_not_called()
