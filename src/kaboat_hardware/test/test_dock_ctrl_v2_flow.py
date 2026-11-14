@@ -765,11 +765,25 @@ def _oblique_setup(node, x=0.0, y=4.0, bearing=-math.pi / 4):
     node._add_cloud(300.0, _cloud((x, y)))
 
 
+def _fail_line_search(node, x=0.0, y=4.0, n=3):
+    """목표선 찾기가 n 번 실패한 뒤 visible_fallback_s 가 지난 것으로 — 다음 tick 에 예비 5방향 찾기."""
+    for k in range(n):
+        node._add_cloud(301.0 + .25 * k, _cloud((x, y)))
+        node._tick()
+    assert node.phase == 'SEEK' and node.line_fail_count >= n
+    node.line_fail_since -= node.visible_fallback
+    node._add_cloud(310.0, _cloud((x, y)))
+    node._tick()
+
+
 def test_oblique_target_repositions_before_moving(node):
-    """보이는 가운데 ㄷ자 법선과 목표 방위가 45° (>= 37°) — 다가가기 전에 바로 우회."""
+    """45° 비스듬하면 목표선 찾기가 못 찾는다(방위 ±40° 만 봄) — 3 s·3번 실패하면 예비로 한 번 찾은 보이는
+    가운데 ㄷ자 법선과 목표 방위가 45° (>= 37°) — 다가가기 전에 우회."""
     _oblique_setup(node)
     _scan(node)                                        # 앞은 비어 있음 (막힘 아님)
     node._tick()
+    assert node.phase == 'SEEK' and 'back wall not seen' in node.slot_last[1]
+    _fail_line_search(node)
     assert node.phase == 'REPOSITION' and node.sent[-1].linear.x == 0.0
     assert 'deg off the visible U slot axis' in node.reports[-1]['detail']
     rp = node.reposition
@@ -818,7 +832,7 @@ def test_target_u_locks_during_reposition_goes_straight_to_via(node):
     """우회 중 목표 ㄷ자(x=4)가 양쪽 면까지 보여 안정되면 경유점 전에 바로 TO_VIA."""
     _oblique_setup(node)
     _scan(node)
-    node._tick()
+    _fail_line_search(node)
     assert node.phase == 'REPOSITION'
     pos = (3.0, 4.6)                                   # 경유점 가는 길, 뒷벽 4.6 m (> 3.94)
     _odom(node, *pos, yaw=math.radians(40))
@@ -836,7 +850,7 @@ def test_reposition_ignores_target_lock_closer_than_backoff_limit(node):
     """뒷벽 3.94 m 보다 가까이서 잠기면 받지 않는다 (BACKOFF 후진 방지) — 우회를 계속."""
     _oblique_setup(node)
     _scan(node)
-    node._tick()
+    _fail_line_search(node)
     pos = (3.6, 3.7)
     _odom(node, *pos, yaw=math.radians(40))
     for k in range(6):
@@ -905,7 +919,7 @@ def test_reposition_drive_blocked_backs_off_then_rescans_on_time_limit(node):
     """우회 경유점 가는 길이 막혀도 reposition_after_s 뒤 후진. 후진이 안 나가도(바람) unblock_max_s 면 SCAN."""
     _oblique_setup(node)
     _scan(node)
-    node._tick()
+    _fail_line_search(node)
     assert node.phase == 'REPOSITION'
     node.reposition['stage'] = 'drive'
     _scan(node, ahead_m=1.5)
@@ -1061,3 +1075,107 @@ def test_bad_give_up_params_refused(name):
             DockCtrlV2(parameter_overrides=[Parameter(name, value=-1.0)])
     finally:
         rclpy.shutdown()
+
+
+def _count_visible(node, monkeypatch):
+    calls = []
+    real = node._visible_u_slot
+    monkeypatch.setattr(node, '_visible_u_slot', lambda *a: calls.append(1) or real(*a))
+    return calls
+
+
+def test_visible_u_slot_search_is_not_periodic_while_target_line_finds_the_slot(node, monkeypatch):
+    """평소 SEEK 에선 목표선 찾기만 — 5방향 '보이는 ㄷ자'는 안 돈다 (run2: 1 s 마다 돌아 샘플이 굶음)."""
+    calls = _count_visible(node, monkeypatch)
+    _lock_bearing(node)
+    pos = (0.3, 7.0)                                   # 뒷벽 7 m — 칸막이 끝 5 m (6 m 게이트 열림), 잠금 전
+    _odom(node, *pos)
+    _scan(node)
+    for k in range(20):
+        node._add_cloud(100.0 + .25 * k, _cloud(pos))
+        node._tick()
+    assert node.phase == 'SEEK' and 'U slot 7.0m away' in node.reports[-1]['detail']
+    assert calls == [] and node.line_fail_count == 0
+
+
+def test_fallback_visible_search_needs_time_and_failures_and_runs_once_per_seek(node, monkeypatch):
+    """목표선 찾기가 visible_fallback_s 넘게·visible_fallback_results 번 넘게 실패해야 한 번. 그동안은 SEEK 그대로."""
+    calls = _count_visible(node, monkeypatch)
+    node.reposition_angle = math.radians(89.0)         # 우회는 끄고 찾기 횟수만 본다
+    _oblique_setup(node)
+    _scan(node)
+    for k in range(8):                                 # 실패 8번이어도 3 s 전이면 안 함
+        node._add_cloud(301.0 + .25 * k, _cloud((0.0, 4.0)))
+        node._tick()
+    assert calls == [] and node.line_fail_count >= 8 and node.sent[-1].linear.x > 0.0
+    node.line_fail_since -= node.visible_fallback
+    node._add_cloud(310.0, _cloud((0.0, 4.0)))
+    node._tick()
+    assert calls == [1] and node.fallback_used
+    for k in range(6):                                 # 계속 실패해도 이번 SEEK 에선 다시 안 함
+        node._add_cloud(311.0 + .25 * k, _cloud((0.0, 4.0)))
+        node.line_fail_since = time.monotonic() - 10.0
+        node._tick()
+    assert calls == [1]
+    node._start_seek(node.locked_bearing)              # 새 SEEK 면 다시 한 번 할 수 있다
+    assert not node.fallback_used and node.line_fail_since is None
+
+
+def test_fallback_needs_points_ahead(node, monkeypatch):
+    """6 m 안 점이 뒤쪽(선수 ±80° 밖)뿐이면 예비 찾기를 안 한다 — 보이는 ㄷ자가 볼 수 없는 쪽."""
+    calls = _count_visible(node, monkeypatch)
+    _oblique_setup(node, bearing=math.pi / 2)          # 도크를 등지고 (+90°)
+    _scan(node)
+    node.line_fail_since, node.line_fail_count = time.monotonic() - 10.0, 5
+    node._add_cloud(301.0, _cloud((0.0, 4.0)))
+    node._tick()
+    assert calls == [] and not node.fallback_used
+
+
+def test_fallback_search_holds_position_until_result(async_node, monkeypatch):
+    """예비 5방향 찾기 결과를 기다리는 동안은 전진 0, 선수만 지킨다 (비스듬히 도크 앞을 기어가지 않게)."""
+    node = async_node
+    gate = []
+    real = node._visible_u_slot
+
+    def slow(*a):
+        while not gate:
+            time.sleep(.01)
+        return real(*a)
+    monkeypatch.setattr(node, '_visible_u_slot', slow)
+    _oblique_setup(node)
+    _scan(node)
+    node.line_fail_since, node.line_fail_count = time.monotonic() - 10.0, 5
+    node._tick()
+    assert node.visible_job is not None and node.visible_reason == 'fallback'
+    assert node.sent[-1].linear.x == 0.0 and 'one-time visible U slot search' in node.reports[-1]['detail']
+    assert node.reports[-1]['visible_search'] == 'fallback'
+    gate.append(1)
+    deadline = time.monotonic() + 3.0
+    while node.phase == 'SEEK' and time.monotonic() < deadline:
+        time.sleep(.02)
+        node._tick()
+    assert node.phase == 'REPOSITION'
+
+
+def test_blocked_requests_visible_search_once(node, monkeypatch):
+    """앞이 막혀 우회를 짤 때만 5방향 찾기 한 번 (b767f7c 처음 의도)."""
+    calls = _count_visible(node, monkeypatch)
+    node.reposition_angle = math.radians(89.0)
+    _oblique_setup(node)
+    _scan(node, ahead_m=1.5)
+    node._tick()
+    assert calls == []
+    node.blocked_since -= 10.0
+    node._tick()
+    assert calls == [1] and node.phase == 'REPOSITION'
+
+
+def test_target_line_slot_normal_is_used_for_the_angle_check(node):
+    """목표선 찾기가 찾은 ㄷ자 법선으로 비스듬함을 본다. 그 ㄷ자는 목표 자신이라(0칸) 37° 넘어도 우회 없이 잠근다."""
+    _oblique_setup(node, x=1.6, y=5.0, bearing=math.atan2(-5.0, -1.6))   # 가운데 슬롯, 약 18° 비스듬
+    node.reposition_angle = math.radians(10.0)         # 판단이 걸리게 낮춤
+    _scan(node)
+    node._tick()
+    assert node.line_slot is not None and node.line_slot_seen == node.line_slot_seq
+    assert node.reposition is None and 'target itself' in node.reposition_why
