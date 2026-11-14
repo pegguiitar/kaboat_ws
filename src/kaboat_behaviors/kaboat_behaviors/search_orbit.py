@@ -21,7 +21,7 @@
            켜고 재생하면 시작 자세에서 검정 +0.8 s, 초록 +6.2 s, 빨강 +14.1 s 에 들어왔다.
            빨강·초록 목표는 확인되는 즉시 고정한다. 검정 목표(unknown)는 LOOK 이 끝날 때까지
            기다렸다 고른다 — 빨강·초록도 색이 붙기 전 잠깐 unknown 을 거치므로(같은 bag 빨강 1.3 s).
-           단 탐색 부표가 다 들어오면(영역 안 빨강·초록 확인 + 그 무리 안 unknown 이 look_settle_sec(3 s)
+           단 목표가 들어오면(영역 안 빨강·초록 하나 이상 확인 + 그 무리 안 unknown 이 look_settle_sec(3 s)
            이어짐) LOOK 을 일찍 끝낸다 — look_sec 은 상한. 검정이 아직 모양 확인 전(6 m 밖)이면 SEEK 로
            다가가며 확인되는 대로 고정한다.
   SEEK     LOOK 이 끝나도 못 찾음 — 탐색 영역 중심(area)으로 가고, 도착하면 제자리 선회로 둘러본다.
@@ -115,8 +115,8 @@ class SearchParams:
                                       # (mission_manager transition_radius 2.0 보다 작게)
     look_sec: float = 15.0            # 활성화 직후 제자리에서 둘러보는 시간 [s] (0 = 안 함)
     black_waits_look: bool = True     # 검정(unknown) 목표는 LOOK 이 끝난 뒤에 고른다
-    look_settle_sec: float = 3.0      # 단 탐색 부표가 다 들어오면(영역 안 빨강·초록 확인 + 그 무리 안 unknown 이 이만큼
-                                      # 이어짐) LOOK 을 일찍 끝낸다 [s] (0 = 끔, look_sec 끝까지). 검정 모양 확인 전(6 m 밖)
+    look_settle_sec: float = 3.0      # 단 목표가 들어오면(영역 안 빨강·초록 하나 이상 확인 + 그 무리 안 unknown 이 이만큼
+                                      # 이어짐, _field_complete) LOOK 을 일찍 끝낸다 [s] (0 = 끔, look_sec 끝까지). 검정 모양 확인 전(6 m 밖)
                                       # 이면 SEEK 로 다가가며 확인되는 대로 고정.
                                       # 빨강·초록이 색 붙기 전 unknown 인 시간은 1–1.3 s. 2026-11-14 오후 run2: 빨강·초록
                                       # 색 370 s, 검정 첫 검출 375.4 s, 고정 385.3 s(LOOK 15 s 끝)
@@ -644,8 +644,11 @@ class SearchFsm:
         return [(xy, bid) for _, xy, bid in out]
 
     def _field_complete(self, buoys, now: float) -> bool:
-        """검정 목표 LOOK 조기 종료 — 탐색 부표가 다 들어왔는가: 영역 안에 빨강·초록이 둘 다 확인됐고,
+        """검정 목표 LOOK 조기 종료 — 목표가 들어왔는가: 영역 안에 빨강·초록 중 하나 이상이 확인됐고,
         그 무리(가장 가까운 빨강·초록까지 field_gap 안)에 unknown 부표가 look_settle_sec 이상 이어졌다.
+        빨강·초록이 하나만 확인됐으면 무리 안 unknown 이 하나일 때만 — 둘이면 하나는 색이 아직 안 붙은
+        나머지 빨강·초록일 수 있다 (그때는 LOOK 끝까지 보고 순위로 고른다).
+        2026-11-14 오전·오후 bag: 탐색 중 영역 안 검출은 탐색 부표뿐(노이즈 0), 색 붙기 전은 unseen.
         모양 검사는 여기서 안 본다 — LOOK 자리에서 검정이 6 m(shape_max_range) 밖이면 모양을 못 재서,
         고정은 그 뒤 candidates() 가 (가까이 가며) 모양을 확인하고 한다."""
         if self.p.look_settle_sec <= 0.0:
@@ -671,7 +674,9 @@ class SearchFsm:
             first = self._unk_since.setdefault(key, now)
             settled = settled or now - first >= self.p.look_settle_sec
         self._unk_since = {k: v for k, v in self._unk_since.items() if k in seen}
-        return colors == {'red', 'green'} and settled
+        if not colors or not settled:
+            return False
+        return colors == {'red', 'green'} or len(seen) == 1
 
     def _looking(self, now: float) -> bool:
         if self.p.look_sec <= 0.0 or self._look_cut:

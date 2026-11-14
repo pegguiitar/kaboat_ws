@@ -352,8 +352,25 @@ def test_black_look_ends_early_when_field_complete():
     assert f.center == (169.3, -5.9)
 
 
+def test_black_look_ends_early_with_one_colored_neighbour():
+    # 빨강만 확인됐어도 무리 안 unknown 이 하나면 그게 목표 — LOOK 을 일찍 끝낸다
+    f = fsm_0113('black', look_sec=15.0, lock_confirm_sec=1.0, look_settle_sec=3.0)
+    seen = [buoy('red', 174.5, -1.2, 5), buoy('unknown', 169.3, -5.9, 3)]
+    assert f.update(seen, (168.7, -8.9), 100.0) == 'LOOK'
+    assert f.update(seen, (168.7, -8.9), 103.1) == 'ORBIT'
+    assert f.center == (169.3, -5.9)
+
+
+def test_black_look_waits_without_colored_neighbour():
+    # 빨강·초록이 하나도 확인 안 됨 — 무리를 모르니 LOOK 끝까지
+    f = fsm_0113('black', look_sec=15.0, lock_confirm_sec=1.0, look_settle_sec=3.0)
+    only = [buoy('unknown', 169.3, -5.9, 3)]
+    assert f.update(only, (168.7, -8.9), 100.0) == 'LOOK'
+    assert f.update(only, (168.7, -8.9), 110.0) == 'LOOK'
+
+
 def test_black_look_waits_while_field_incomplete():
-    # 초록이 아직 unknown(색 붙기 전) — 부표가 다 안 들어왔으니 LOOK 끝까지
+    # 빨강 하나만 확인 + unknown 둘 — 하나는 색이 아직 안 붙은 초록일 수 있으니 LOOK 끝까지
     f = fsm_0113('black', look_sec=15.0, lock_confirm_sec=1.0, look_settle_sec=3.0)
     part = [buoy('red', 174.5, -1.2, 5), buoy('unknown', 166.5, -0.2, 4), buoy('unknown', 169.3, -5.9, 3)]
     assert f.update(part, (168.7, -8.9), 100.0) == 'LOOK'
