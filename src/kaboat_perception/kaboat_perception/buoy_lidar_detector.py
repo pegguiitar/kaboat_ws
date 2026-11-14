@@ -14,6 +14,7 @@
 입력   /scan/level, /odom, 컬러 영상(color_topic, color_compressed), /camera/camera_info,
        /imu/data (창 투영 롤·피치)
 출력   /detections/buoys (BuoyArray, 확정 부표. 카메라에 한 번도 안 찍힌 것은 color='unseen'),
+       /detections/buoys/color_frac (Float32MultiArray [id, 색 순도, ...] — 같은 부표, buoy_evidence.EvTrack.color_frac),
        ~/markers (부표 중심 = 큰 둥근 점, 덩어리 점 = 작은 둥근 점, 색 = 부표 색, 존재 확률 글자), ~/debug_image (창·표)
 """
 import collections
@@ -29,7 +30,7 @@ from rclpy.qos import qos_profile_sensor_data
 from rclpy.time import Time
 from geometry_msgs.msg import Point
 from sensor_msgs.msg import CameraInfo, CompressedImage, Image, Imu, LaserScan
-from std_msgs.msg import ColorRGBA
+from std_msgs.msg import ColorRGBA, Float32MultiArray
 from visualization_msgs.msg import Marker, MarkerArray
 
 from kaboat_msgs.msg import Buoy, BuoyArray
@@ -138,6 +139,9 @@ class BuoyLidarDetector(Node):
             else:
                 self.create_subscription(Image, g('depth_topic'), self._on_depth, qos_profile_sensor_data)
         self.pub = self.create_publisher(BuoyArray, g('output_topic'), 10)
+        # 색 순도 — [id, color_frac, id, color_frac, ...] (BuoyArray 와 같은 부표·같은 순간). Buoy.msg 에 필드를
+        # 더하면 예전 bag 의 /detections/buoys 가 안 풀려서 따로 낸다 (2026-11-14). 탐색이 검정 쌍둥이 판정에 쓴다.
+        self.frac_pub = self.create_publisher(Float32MultiArray, g('output_topic') + '/color_frac', 10)
         self.marker_pub = self.create_publisher(MarkerArray, '~/markers', 1)
         self.debug_pub = self.create_publisher(Image, '~/debug_image', 1)
         self.get_logger().info(
@@ -283,6 +287,7 @@ class BuoyLidarDetector(Node):
     # ── 출력 ─────────────────────────────────────────────
     def _publish(self, stamp, conf):
         out = BuoyArray()
+        fr = Float32MultiArray()
         out.header.frame_id = 'odom'
         out.header.stamp = stamp
         for tr in conf:
@@ -293,7 +298,9 @@ class BuoyLidarDetector(Node):
             b.position.x, b.position.y = tr.x, tr.y
             b.confidence = float(tr.probability)
             out.buoys.append(b)
+            fr.data.extend([float(tr.id), float(tr.color_frac)])
         self.pub.publish(out)
+        self.frac_pub.publish(fr)
 
     def _publish_markers(self, stamp):
         """부표 중심 = 큰 둥근 점, 부표 덩어리 점 = 작은 둥근 점 (색 = 부표 색), 존재 확률 글자."""

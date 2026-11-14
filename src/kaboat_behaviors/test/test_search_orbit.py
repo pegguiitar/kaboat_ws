@@ -618,3 +618,65 @@ def test_yaw_kd_default_and_range():
     for bad in (-0.1, 2.5, float('nan')):
         with pytest.raises(ValueError):
             SearchParams(target_color='red', yaw_kd=bad)
+
+
+# ---------- 검정이 빨강·초록으로 잘못 굳었을 때 (black_from_twin) ----------
+# 2026-11-14 오전 run1 bag 을 예전 색 코드로 재생: 검정 green 순도 0.34, 진짜 초록 0.77–0.84, 빨강 0.65
+
+def cbuoy(color, x, y, bid, frac):
+    b = buoy(color, x, y, bid)
+    b.color_frac = frac
+    return b
+
+
+RUN1_TWIN = [cbuoy('green', 167.5, 0.75, 0, 0.78), cbuoy('green', 167.6, 0.9, 3, 0.83),
+             cbuoy('red', 176.9, 0.7, 1, 0.65), cbuoy('green', 171.6, -4.3, 2, 0.34)]
+
+
+def test_black_picks_weak_green_twin_when_no_unknown():
+    f = fsm('black', area=(171.0, -1.0), black_needs_field=True)
+    assert f.update(RUN1_TWIN, (160.0, -10.0), 0.0) == 'ORBIT'
+    assert f.center == (171.6, -4.3) and f.locked_id == 2
+    # 고정한 쌍둥이가 계속 green 이어도 고정을 풀지 않는다
+    for k in range(1, 20):
+        f.update(RUN1_TWIN, (169.0, -6.0), float(k))
+    assert f.locked_id == 2 and f.unlocks == 0
+
+
+def test_twin_not_used_when_unknown_buoy_exists():
+    buoys = RUN1_TWIN + [buoy('unknown', 172.0, -3.0, 9)]
+    f = fsm('black', area=(171.0, -1.0), black_needs_field=True)
+    f.update(buoys, (160.0, -10.0), 0.0)
+    assert f.locked_id == 9 and f.twin_ids == set()
+
+
+def test_twin_needs_purity_gap_and_distance():
+    # 순도 차이가 작으면 (0.7 배 넘음) 안 고른다 — 진짜 초록 둘일 수 있다
+    close = [cbuoy('green', 167.5, 0.75, 0, 0.8), cbuoy('red', 176.9, 0.7, 1, 0.9),
+             cbuoy('green', 171.6, -4.3, 2, 0.7)]
+    f = fsm('black', area=(171.0, -1.0), black_needs_field=True)
+    assert f.update(close, (160.0, -10.0), 0.0) != 'ORBIT'
+    # 같은 부표의 중복 트랙(twin_gap 안)은 쌍둥이가 아니다
+    dup = [cbuoy('green', 167.5, 0.75, 0, 0.9), cbuoy('green', 168.5, 0.75, 3, 0.2),
+           cbuoy('red', 176.9, 0.7, 1, 0.9)]
+    f = fsm('black', area=(171.0, -1.0), black_needs_field=True)
+    assert f.update(dup, (160.0, -10.0), 0.0) != 'ORBIT'
+    # 순도가 없는 메시지(예전 정의·시뮬) 는 고르지 않는다
+    nofrac = [buoy('green', 167.5, 0.75, 0), buoy('red', 176.9, 0.7, 1), buoy('green', 171.6, -4.3, 2)]
+    f = fsm('black', area=(171.0, -1.0), black_needs_field=True)
+    assert f.update(nofrac, (160.0, -10.0), 0.0) != 'ORBIT'
+
+
+def test_twin_only_for_black_target_and_can_be_disabled():
+    f = fsm('green', area=(171.0, -1.0))
+    f.update(RUN1_TWIN, (160.0, -10.0), 0.0)
+    assert f.twin_ids == set()
+    f = fsm('black', area=(171.0, -1.0), black_needs_field=True, black_from_twin=False)
+    assert f.update(RUN1_TWIN, (160.0, -10.0), 0.0) != 'ORBIT'
+
+
+def test_twin_params_validated():
+    with pytest.raises(ValueError):
+        SearchParams(target_color='black', twin_frac_ratio=0.0)
+    with pytest.raises(ValueError):
+        SearchParams(target_color='black', twin_gap=-1.0)

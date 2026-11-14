@@ -324,3 +324,17 @@ def test_confirmed_tracks_drifting_within_spawn_sep_merge():
     tk.tracks[1].x = 8.7                                              # 0.7 m 로 다가옴
     tk.update([], 0.5)
     assert len(tk.confirmed()) == 1
+
+
+def test_color_frac_from_pixels_and_votes():
+    from kaboat_perception.buoy_evidence import EvTrack
+    t = EvTrack(id=1, x=0.0, y=0.0, L=3.0, last_seen=0.0, px_red=10, px_green=340, px_visible=1000,
+                px_params=(0.15, 2.0, 150))
+    assert t.color == 'green' and t.color_frac == pytest.approx(0.34)
+    t = EvTrack(id=2, x=0.0, y=0.0, L=3.0, last_seen=0.0, px_red=20, px_green=50, px_visible=1000,
+                px_params=(0.15, 2.0, 150))
+    assert t.color == 'unknown' and t.color_frac == pytest.approx(0.05)   # 빨강·초록 중 큰 쪽
+    t = EvTrack(id=3, x=0.0, y=0.0, L=3.0, last_seen=0.0, color_votes={'red': 3, 'unknown': 1})
+    assert t.color == 'red' and t.color_frac == pytest.approx(0.75)       # 픽셀 적으면 표 비율
+    t = EvTrack(id=4, x=0.0, y=0.0, L=3.0, last_seen=0.0)
+    assert t.color == 'unseen' and t.color_frac == 0.0

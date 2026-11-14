@@ -45,7 +45,7 @@ import numpy as np
 import rclpy
 from geometry_msgs.msg import Point, PoseStamped, Twist
 from rclpy.qos import DurabilityPolicy, QoSProfile
-from std_msgs.msg import String
+from std_msgs.msg import Float32MultiArray, String
 from visualization_msgs.msg import Marker, MarkerArray
 
 from .behavior_base import BehaviorBase, WAYPOINT_MAX_ANGULAR, yaw_from_quaternion
@@ -158,6 +158,9 @@ class SearchCircler(BehaviorBase):
         latched = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.create_subscription(PoseStamped, '/mission/search_center',
                                  self._on_search_center, latched)
+        # 부표 색 순도 [id, frac, ...] — 검정이 빨강·초록으로 굳었을 때 쌍둥이 판정 (search.black_from_twin)
+        self._color_fracs = {}
+        self.create_subscription(Float32MultiArray, '/detections/buoys/color_frac', self._on_color_frac, 10)
         self.status_pub = self.create_publisher(String, '/search/status', 10)
         self.marker_pub = self.create_publisher(MarkerArray, '/search/markers', 1)
         self.create_timer(0.5, self._publish_markers)
@@ -173,6 +176,10 @@ class SearchCircler(BehaviorBase):
                 f'{p.look_sec:.0f} s, 접선 진입 {"켬" if p.tangent_entry else "끔"}, '
                 f'LOS 속도 변환 {"실물 곡선" if p.measured_speed else "공용(시뮬 맞춤)"} '
                 f'(전진 상한 {p.orbit_thrust:.2f})')
+
+    def _on_color_frac(self, msg: Float32MultiArray):
+        d = list(msg.data)
+        self._color_fracs = {int(d[i]): float(d[i + 1]) for i in range(0, len(d) - 1, 2)}
 
     def _params_from(self, prefix, cls):
         defaults = cls()
@@ -302,7 +309,15 @@ class SearchCircler(BehaviorBase):
             # 지도가 없으면(require_grid:=false 시험) 모양을 못 재니 검사도 안 한다
             self._update_shapes(boat, fsm.area)
             shape_ok = self._shape_ok
+        fsm.color_fracs = getattr(self, "_color_fracs", {})
         phase = fsm.update(self.buoys, boat, now, shape_ok)
+        if fsm._locked_twin and fsm.locked_id != getattr(self, '_twin_warned', None):
+            self._twin_warned = fsm.locked_id
+            b = next((b for b in self.buoys if b.id == fsm.locked_id), None)
+            self.get_logger().warn(
+                f'unknown 부표가 없어 같은 색 쌍둥이 중 색 순도 낮은 부표 ID {fsm.locked_id}'
+                f' ({b.color if b else "?"}, 순도 {fsm.color_fracs.get(fsm.locked_id, float("nan")):.2f})'
+                ' 를 검정으로 고정')
 
         if fsm.done:
             self.report_complete()

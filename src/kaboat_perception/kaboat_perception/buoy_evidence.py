@@ -138,6 +138,24 @@ class EvTrack:
         return 'unknown'
 
     @property
+    def color_frac(self) -> float:
+        """색 순도 0–1 — 판정한 색(빨강·초록)의 근거 비율. 누적 픽셀이 충분하면 그 색 픽셀 / 보이는 픽셀,
+        아니면 그 색 표 / 전체 표. unknown 은 빨강·초록 중 큰 쪽 비율, unseen 은 0.
+        탐색이 검정 목표인데 unknown 이 없고 같은 색이 둘일 때 약한 쪽을 검정으로 고르는 데 쓴다
+        (2026-11-14 오전 run1: 흐린 날 검정이 green 으로 굳어 탐색 포기)."""
+        color = self.color
+        _min_frac, _dominance, min_visible = self.px_params or (0.15, 2.0, 150)
+        if self.px_visible >= min_visible:
+            n = {'red': self.px_red, 'green': self.px_green}.get(color, max(self.px_red, self.px_green))
+            return min(1.0, n / self.px_visible)
+        total = sum(self.color_votes.values())
+        if total == 0:
+            return 0.0
+        n = self.color_votes.get(color) if color in KNOWN_COLORS else max(
+            (self.color_votes.get(c, 0) for c in KNOWN_COLORS), default=0)
+        return min(1.0, (n or 0) / total)
+
+    @property
     def probability(self) -> float:
         return 1.0 / (1.0 + math.exp(-self.L))
 

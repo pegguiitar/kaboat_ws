@@ -58,6 +58,7 @@ TARGET_COLORS = ('red', 'green', 'black')
 TURN_DIRECTION = {'red': 'cw', 'green': 'cw', 'black': 'ccw'}
 # 목표 색 → 부표맵에서 받아들일 색. 검정 = 빨강·초록 아닌 물체(unknown).
 MATCH_COLORS = {'red': ('red',), 'green': ('green',), 'black': ('unknown', 'black')}
+TWIN_RANK = 1000.0   # 쌍둥이(잘못 굳은 검정) 후보는 unknown 후보 뒤 순위
 
 XY = Tuple[float, float]
 
@@ -132,6 +133,12 @@ class SearchParams:
     black_needs_field: bool = True    # 검정은 영역 안 빨강·초록을 하나 이상 확인해야 고른다 — 부표만 한
                                       # 구조물(도크 조각·기둥)은 "탐색 부표 무리 안"으로만 거를 수 있어서.
                                       # 못 보면 계속 찾다가 give_up (도는 것보다 안전한 실패)
+    black_from_twin: bool = True      # 검정 목표인데 unknown 후보가 없고, 영역 안 같은 색(빨강·초록) 부표가 가장 진한
+                                      # 것에서 twin_gap 넘게 떨어져 또 있으면 그중 색 순도(color_frac) 가장 낮은 것을 검정
+                                      # 후보로 (unknown 후보보다 뒤). 2026-11-14 오전 run1: 흐린 날 검정이 green 으로 굳어
+                                      # 90 s 뒤 포기 — 그 bag 을 예전 색 코드로 재생하면 검정 순도 0.34, 진짜 초록 0.77–0.84
+    twin_gap: float = 3.0             # 같은 부표의 중복 트랙(0.5–1.5 m)과 구분하는 거리 [m]
+    twin_frac_ratio: float = 0.7      # 가장 진한 같은 색 순도의 이 배 이하일 때만 (순도 없으면 0 → 안 고름)
     tangent_entry: bool = True        # 선회 원에 규정 방향 접선으로 진입
     entry_lead: float = 0.8           # 접점에서 원을 따라 이만큼 더 간 점까지 진입 경로 [m]
     entry_clearance: float = 1.5      # 진입 직선이 다른 부표와 이보다 가까우면 비켜 가는 경유점 [m]
@@ -187,6 +194,9 @@ class SearchParams:
                              'shape_pass_ratio out of range')
         if self.ignore_radius >= self.orbit_radius:
             raise ValueError('search.ignore_radius must be smaller than orbit_radius')
+        if not (math.isfinite(self.twin_gap) and self.twin_gap > 0.0
+                and math.isfinite(self.twin_frac_ratio) and 0.0 < self.twin_frac_ratio <= 1.0):
+            raise ValueError('search twin_gap must be > 0 and twin_frac_ratio in (0, 1]')
         if not 1 <= self.repulse_occ_min <= 100:
             raise ValueError('search.repulse_occ_min must be in [1, 100]')
 
@@ -474,6 +484,9 @@ class SearchFsm:
         self._refs: List[XY] = []  # 검정 순위 기준 (확인된 빨강·초록)
         self.seek_xy: XY = self.area   # SEEK 목적지 — 영역 중심을 부표에서 seek_clearance 비킨 점 (update 마다)
         self._seek_fixed: Optional[XY] = None   # 한 번 정한 비킨 점 (_update_seek_xy)
+        self.color_fracs = {}     # 부표 ID → 색 순도 (검출기 /detections/buoys/color_frac, 노드가 tick 마다 넣음)
+        self.twin_ids = set()     # 검정으로 볼 같은 색 쌍둥이 중 약한 쪽 ID (black_from_twin, candidates 마다)
+        self._locked_twin = False  # 고정한 부표가 쌍둥이 — 색이 빨강·초록이어도 고정을 안 푼다
 
     @property
     def direction(self) -> str:
@@ -518,13 +531,45 @@ class SearchFsm:
     def _dist_area(self, xy) -> float:
         return math.hypot(xy[0] - self.area[0], xy[1] - self.area[1])
 
-    def _field_refs(self, buoys) -> List[XY]:
-        """검정 목표의 기준 — 영역 안에서 색이 확인된 빨강·초록 부표 위치."""
+    def _in_area(self, b) -> Optional[XY]:
+        xy = _xy(b)
+        if all(math.isfinite(v) for v in xy) and self._dist_area(xy) <= self.p.target_search_radius:
+            return xy
+        return None
+
+    def _twins(self, buoys) -> set:
+        """검정이 빨강·초록으로 잘못 굳은 부표 ID (black_from_twin). 영역 안 unknown 부표가 하나도 없고,
+        같은 색 중 가장 진한(color_frac) 것에서 twin_gap 넘게 떨어진 같은 색 부표가 있으면 그중 가장 옅은 것 —
+        가장 진한 것의 twin_frac_ratio 배 이하일 때만. 순도(color_fracs, 없으면 부표의 color_frac 속성)가
+        없으면 0 → 고르지 않는다."""
+        if self.p.target_color != 'black' or not self.p.black_from_twin:
+            return set()
+        if any(b.color in self.match and self._in_area(b) is not None for b in buoys):
+            return set()
+        out = set()
+        for color in ('red', 'green'):
+            group = [(float(self.color_fracs.get(b.id, getattr(b, 'color_frac', 0.0)) or 0.0), xy, b.id)
+                     for b in buoys
+                     if b.color == color and getattr(b, 'id', None) is not None
+                     and (xy := self._in_area(b)) is not None]
+            if len(group) < 2:
+                continue
+            top_frac, top_xy, _ = max(group, key=lambda g: g[0])
+            far = [g for g in group if math.dist(g[1], top_xy) > self.p.twin_gap]
+            if not far or not (top_frac > 0.0 and math.isfinite(top_frac)):
+                continue
+            frac, _xy_, bid = min(far, key=lambda g: g[0])
+            if frac <= self.p.twin_frac_ratio * top_frac:
+                out.add(bid)
+        return out
+
+    def _field_refs(self, buoys, skip=()) -> List[XY]:
+        """검정 목표의 기준 — 영역 안에서 색이 확인된 빨강·초록 부표 위치 (쌍둥이 skip 빼고)."""
         if self.p.target_color != 'black':
             return []
         refs = []
         for b in buoys:
-            if b.color in ('red', 'green'):
+            if b.color in ('red', 'green') and getattr(b, 'id', None) not in skip:
                 xy = _xy(b)
                 if (all(math.isfinite(v) for v in xy)
                         and self._dist_area(xy) <= self.p.target_search_radius):
@@ -547,11 +592,14 @@ class SearchFsm:
           빨강·초록 후보는 False 인 것만 뺀다 (색이 있어 구조물일 일이 드물고, 멀면 모양을 못 잰다).
         검정은 확인된 빨강·초록이 있으면 그중 가장 가까운 것까지 field_gap 안이어야 하고,
         black_needs_field 면 하나도 없을 때 고르지 않는다.
+        검정 목표에서 쌍둥이(_twins — 빨강·초록으로 잘못 굳은 검정)는 unknown 후보 뒤 순위로 넣는다.
         """
-        refs = self._field_refs(buoys)
+        self.twin_ids = self._twins(buoys)
+        refs = self._field_refs(buoys, self.twin_ids)
         out, seen = [], set()
         for b in buoys:
-            if b.color not in self.match:
+            twin = getattr(b, 'id', None) in self.twin_ids
+            if b.color not in self.match and not twin:
                 continue
             xy = _xy(b)
             if not all(math.isfinite(v) for v in xy):
@@ -574,7 +622,7 @@ class SearchFsm:
                 first = self._match_since.setdefault(key, now)
                 if now - first < self.p.lock_confirm_sec:
                     continue
-            out.append((score, xy, bid))
+            out.append((score + (TWIN_RANK if twin else 0.0), xy, bid))
         if now is not None:
             self._match_since = {k: v for k, v in self._match_since.items() if k in seen}
         out.sort(key=lambda t: t[0])
@@ -633,6 +681,7 @@ class SearchFsm:
     def _lock(self, xy, bid=None):
         self.center = (float(xy[0]), float(xy[1]))
         self.locked_id = bid
+        self._locked_twin = bid is not None and bid in self.twin_ids
         self.phase = 'ORBIT'
         self.swept = 0.0
         self.counting = False
@@ -641,6 +690,7 @@ class SearchFsm:
     def _unlock(self):
         self.center = None
         self.locked_id = None
+        self._locked_twin = False
         self.phase = 'SEEK'
         self.swept = 0.0
         self.counting = False
@@ -680,7 +730,8 @@ class SearchFsm:
         if self.locked_id is not None:
             for b in buoys:
                 if getattr(b, 'id', None) == self.locked_id:
-                    if b.color in ('red', 'green') and b.color not in self.match:
+                    if (b.color in ('red', 'green') and b.color not in self.match
+                            and not self._locked_twin):
                         return False
                     best = _xy(b)
                     break

@@ -289,6 +289,18 @@ test_mission dock dock_target_class:=circle
     search 평균 87.8 s → 75.7 s, 접촉 0. 이전 값은 초록 1판에서 원을 6 m 까지 벗어나 검정에 0.85 m 붙었다.
     tick 지연 없는 조건도 같은 경향(회전 상한 40–49 %). 물 위에서는 미확인.
   - 되돌리기: `run_autonomy … search_yaw_kd:=0.16` (큐 깊이는 코드).
+- **검정이 빨강·초록으로 굳었을 때 대비** (2026-11-14 밤, 검출기 + `search_circler`):
+  - 검출기가 부표별 색 순도(그 색 픽셀 / 보이는 픽셀)를 `/detections/buoys/color_frac`
+    (`[id, 순도, …]`)로 따로 냅니다. `Buoy.msg` 는 그대로입니다(필드를 더하면 예전 bag 의 `/detections/buoys` 가 안 풀림).
+  - 탐색이 검정 목표인데 영역 안에 unknown 부표가 하나도 없고, 같은 색 부표가 가장 진한 것에서 3 m 넘게 떨어져
+    또 있으면 그중 순도가 가장 낮은 것(가장 진한 것의 0.7 배 이하)을 검정으로 고정합니다. unknown 후보가 있으면 동작 안 함.
+    로그: `unknown 부표가 없어 같은 색 쌍둥이 중 … 를 검정으로 고정`.
+  - 확인(bag 재생, 검출기 노드 오프라인 + 실제 SearchFsm): 11-14 오전·오후 탐색을 예전 색 코드(3654cb7 이전)로
+    재생하면 검정이 green 으로 굳는데(오전 실주행 포기와 같음) 검정 순도 0.34 vs 진짜 초록 0.77–0.84 로 갈려 검정을
+    고정. 지금 색 코드로는 11-12·11-13·11-14 오전·오후 모두 검정이 unknown 이라 이 규칙이 한 번도 안 켜지고 고정 결과 그대로.
+  - 한계: 게이트의 진짜 같은 색 부표끼리도 순도 비가 0.23 까지 벌어진다 — 탐색 영역에 진짜 같은 색이 둘 있으면
+    틀린 부표를 돌 수 있다(이 규칙이 없으면 어차피 포기). 검정이 같은 색 부표와 3 m 안에 붙어 있으면 못 잡는다.
+  - 끄기: `ros2 param set /search_circler search.black_from_twin false` 또는 파라미터 `search.black_from_twin:=false`.
 - **이번에 돌 미션의 노드만 띄웁니다** (`only_mission_nodes:=true` 기본). `start_state`부터 끝까지,
   `single_mission:=true`면 그 미션 하나만. 미션 매니저·`cmd_mux`는 항상, `mission_approach`는
   `entry_required:=true`(기본)일 때만 뜹니다. 런치를 켜면 `[autonomy] 미션 … — 띄우는 노드: …` 한 줄로 보입니다.
