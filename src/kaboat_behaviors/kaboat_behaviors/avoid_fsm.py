@@ -44,7 +44,8 @@ class FsmParams:
     v↔cmd 캘리브레이션(cmd_full·v_full)은 물리 결합층(SKELETON §6) — 실물 전환 시
     이 두 값만 재실측하면 speed_to_cmd 가 통째로 교체 지점이다.
     v_full·cmd_exp 는 아직 Gazebo 시뮬 맞춤값이다. 야외 실측(2026-11-14)은 los_controller.MEASURED_SPEED_*
-    (0.40 → 1.06 m/s) — 탐색만 그 곡선을 쓰고(LosFollower measured_speed), 회피·게이트·도킹 LOS 는 이 값.
+    (0.40 → 1.06 m/s) — 탐색(LosFollower measured_speed)과 종합 회피(measured_speed, 2026-11-15)가
+    그 곡선을 쓰고, 토너먼트 회피 시험·게이트·도킹 LOS 는 이 값.
     """
     # 경로 추종 상수 slow_radius 는 수조에서 검증한 LOS(LosFollower.bspline_track) 와 같은
     # 값 (2026-11-04 실물 튜닝). lookahead 는 LOS 의 1.0 에서 0.8 로 줄임 (2026-11-06,
@@ -112,11 +113,16 @@ class FsmParams:
     #   cmd_exp 와 같은 2 점), 실물로 다시 잰 적 없음. 2026-11-06 엔 계수(cmd_full)만 낮추고 이 값은 그대로 둬
     #   모든 전진 출력을 같은 비율로 줄였다. 야외 실측(2026-11-14, 진행 방향별로 물살 분리): 명령 0.40 → 1.06 m/s,
     #   0.467 → 1.21 m/s 라 상한 0.2~0.25 에서 1.48 m/s 는 안 나온다(실물 곡선으로 0.25 → 약 0.75 m/s) —
-    #   감속 구간 명령이 실물보다 3~4 배 작다. 회피·게이트·도킹 LOS 는 아직 이 값, 탐색은 실물 곡선
-    #   (los_controller.MEASURED_SPEED_*, SEARCH_MISSION.md §7.8).
+    #   감속 구간 명령이 실물보다 3~4 배 작다. 토너먼트 회피 시험·게이트·도킹 LOS 는 아직 이 값, 탐색과
+    #   종합 회피는 실물 곡선 (los_controller.MEASURED_SPEED_*, SEARCH_MISSION.md §7.8, 아래 measured_speed).
     cmd_exp: float = 1.64         # 📝 v↔cmd 멱지수 — Gazebo 시뮬 2점 fit (12N→1.480,
     #   6N→0.970 m/s, 2026-07-18). 정상상태 추력=항력 균형이 순수 2차 항력이면
     #   2.0, 시뮬은 선형 항력 섞여 1.64. 야외 bag 맞춤 곡선은 v ≈ 2.15·cmd^0.76 → 지수 1/0.76 = 1.32.
+    # True 면 경로 추종의 원하는 속도 → 전진 명령을 실물 곡선 cmd = (v / 2.15)^(1/0.76) 로 바꾸고
+    # (탐색과 같은 식, los_controller.MEASURED_SPEED_*), 상한은 cmd_full 그대로 자른다. 회전 명령은 안 바뀜.
+    # False(공용 기본) = 위 cmd_full·v_full·cmd_exp 식 — 토너먼트 시험(real_obstacle_avoid_test)은 그대로.
+    # 종합 회피(obstacle_planner)만 켠다 (AVOID_MEASURED_SPEED). 근거는 그 상수 주석.
+    measured_speed: bool = False
 
 
 @dataclass
@@ -137,6 +143,14 @@ def _controller_params(p: FsmParams, yaw_kp: float,
         v_full=p.v_full,
         cmd_exp=p.cmd_exp,
     )
+
+
+def _speed_curve(p: FsmParams) -> FsmParams:
+    """measured_speed 면 속도→명령 변환만 실물 곡선으로 바꾼 사본 (상한은 호출 쪽이 cmd_full 로 자름)."""
+    if not p.measured_speed:
+        return p
+    from .los_controller import MEASURED_SPEED_EXP, MEASURED_SPEED_SCALE   # 순환 import 피해 여기서
+    return replace(p, cmd_full=1.0, v_full=MEASURED_SPEED_SCALE, cmd_exp=1.0 / MEASURED_SPEED_EXP)
 
 
 def speed_to_cmd(v: float, p: FsmParams) -> float:
@@ -549,9 +563,11 @@ class AvoidFsm:
                     self._panic_t0 = None
                     ev, slow = 'violation_wait', True   # 감속 + 다음 tick 재시도
 
+        fs = _speed_curve(f)
         lin, ang = follow_cmd(self.plan, boat_xy, yaw, yaw_rate, wp_xy,
-                              f, self.yaw_kp, self.yaw_kd, pivot_angle=f.pivot_angle)
+                              fs, self.yaw_kp, self.yaw_kd, pivot_angle=f.pivot_angle)
+        lin = min(lin, f.cmd_full)     # 실물 곡선이면 v_max 가 0.2 를 넘는 명령이 됨 — 상한 그대로
         if slow:
             # 위반 지점까지는 안전(check 가 보장) — 기어가며 수리 기회를 번다
-            lin = min(lin, speed_to_cmd(f.v_min, f))
+            lin = min(lin, speed_to_cmd(f.v_min, fs))
         return StepOut(lin, ang, self.state, self.plan, ev)

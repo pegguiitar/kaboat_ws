@@ -1,4 +1,4 @@
-"""obstacle_planner 노드: /odom 최신만(큐 깊이 1)·회피 전용 D 게인 (2026-11-14)."""
+"""obstacle_planner 노드: /odom 최신만(큐 깊이 1)·회피 전용 D 게인 (2026-11-14)·실물 추력 곡선 (2026-11-15)."""
 
 import pytest
 import rclpy
@@ -82,5 +82,30 @@ def test_bad_yaw_kd_is_rejected(ros):
     try:
         with pytest.raises(ValueError):
             op.ObstaclePlanner()
+    finally:
+        Node.__init__ = orig
+
+
+def test_avoid_uses_measured_speed_curve_by_default(ros):
+    from kaboat_behaviors.avoid_fsm import FsmParams
+    node = op.ObstaclePlanner()
+    try:
+        assert node.fsm_params.measured_speed is True and op.AVOID_MEASURED_SPEED is True
+        assert node.fsm_params.cmd_full == FsmParams().cmd_full == 0.2   # 전진 상한 그대로
+        assert FsmParams().measured_speed is False                       # 공용(토너먼트 시험) 기본은 그대로
+    finally:
+        node.destroy_node()
+    rclpy.shutdown(); rclpy.init()
+    from rclpy.node import Node
+    orig = Node.__init__
+
+    def init_with(self, name, **kw):
+        kw['parameter_overrides'] = [Parameter('fsm.measured_speed', value=False)]
+        orig(self, name, **kw)
+    Node.__init__ = init_with
+    try:
+        node = op.ObstaclePlanner()
+        assert node.fsm_params.measured_speed is False          # 되돌리기 avoid_measured_speed:=false
+        node.destroy_node()
     finally:
         Node.__init__ = orig

@@ -28,6 +28,15 @@ from .los_controller import BSPLINE_TRACK_YAW_KP
 # 늘리지 않았다 (0.8 은 지연이 남을 때 좌우 전환이 늘어남). P 게인은 공용 1.4 그대로.
 AVOID_YAW_KD = 0.6
 
+# 경로 추종 전진 명령을 실물 추력 곡선으로 (fsm.measured_speed, 2026-11-15). Gazebo 곡선은 굽은 구간의
+# 원하는 속도(약 0.5–0.6 m/s)를 명령 0.02–0.05 로 내 실물이 0.28–0.39 m/s 로 기었다 — run1·run2 회피 시간의
+# 32–45 % 가 이 감속 전진. 실물에 맞춘 e2e 시뮬(선체 폭 1 m, 명령 0.2 → 0.62 m/s, 후진 추력 0.79 배,
+# run1 무충돌·run2 1 회 충돌에 맞춘 경기장, D 0.6·/odom 깊이 1·젯슨 tick 재현, 두 배치 × 시드 4):
+# 회피 평균 120 → 78 s, 충돌 0.38 → 0.12 회/판 (지금 곡선은 run2 배치 bar8 앞에서 기어 2/4 판 200 s 초과).
+# 같은 시뮬에서 D 0.16·0.35 보다 0.6 이 경로 이탈(최대 0.30 m)·좌우 전환 가장 작았다. 상한 0.2·회전은 그대로.
+# 되돌리기: run_autonomy avoid_measured_speed:=false
+AVOID_MEASURED_SPEED = True
+
 
 class ObstaclePlanner(BehaviorBase):
     STATE_NAME = 'avoid'
@@ -45,9 +54,10 @@ class ObstaclePlanner(BehaviorBase):
         # 각도 필드(bearing_max 등)는 radian 그대로다.
         self.dri_params = self._params_from('dri', DriParams)
         self.planner_params = self._params_from('planner', PlannerParams)
-        self.fsm_params = self._params_from('fsm', FsmParams)
+        self.fsm_params = self._params_from('fsm', FsmParams,
+                                            {'measured_speed': AVOID_MEASURED_SPEED})
         # 경로 추종 요 PD: P 는 수조에서 검증한 LOS(test_los) 와 같은 1.4, D 는 회피 전용 avoid.yaw_kd(0.6).
-        # 전진: fsm.cmd_full(0.2) 이 전진 기준이자 전진 상한.
+        # 전진: fsm.cmd_full(0.2) 이 전진 상한, 속도→명령은 실물 곡선(fsm.measured_speed, 회피 전용 기본 켬).
         # 회전: avoid.max_angular_ratio(0.35) 상한 (2026-11-06 0.31 → 2026-11-13 0.35, 야외).
         self.declare_parameter('avoid.max_angular_ratio', 0.35)
         self.declare_parameter('avoid.yaw_kd', AVOID_YAW_KD)
@@ -85,12 +95,14 @@ class ObstaclePlanner(BehaviorBase):
         self.declare_parameter('viz.dri_mark_threshold', 1.116)
         self.declare_parameter('viz.dri_mark_size', 0.15)   # 셀(0.2 m) 안에 들어가는 크기
 
-    def _params_from(self, prefix: str, cls):
+    def _params_from(self, prefix: str, cls, overrides=None):
+        """overrides: 이 노드에서만 다른 기본값 {필드: 값} (ROS param 으로 다시 덮을 수 있음)."""
         defaults = cls()
+        overrides = overrides or {}
         kw = {}
         for f in dataclasses.fields(cls):
             name = f'{prefix}.{f.name}'
-            self.declare_parameter(name, getattr(defaults, f.name))
+            self.declare_parameter(name, overrides.get(f.name, getattr(defaults, f.name)))
             kw[f.name] = self.get_parameter(name).value
         return cls(**kw)
 

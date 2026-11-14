@@ -11,8 +11,10 @@ import pytest
 
 from kaboat_behaviors.dri import DriParams, build_dri
 from kaboat_behaviors.bspline_planner import PlannerParams, check, curvature_ahead
+from dataclasses import replace
+
 from kaboat_behaviors.avoid_fsm import (
-    AvoidFsm, FsmParams, follow_cmd, speed_to_cmd)
+    AvoidFsm, FsmParams, _speed_curve, follow_cmd, speed_to_cmd)
 from test_dri import make_grid
 
 BOAT = (0.0, 0.0)
@@ -77,6 +79,36 @@ def test_follow_curvature_slows_down():
     lin, _ = follow_cmd(plan, BOAT, YAW, 0.0, WP_FAR, p, KP, KD)
     assert lin < speed_to_cmd(p.v_max, p) - 1e-12
     assert lin >= speed_to_cmd(p.v_min, p) * min(15.0 / p.slow_radius, 1.0) - 1e-12
+
+
+def test_measured_speed_off_by_default():
+    """공용 기본은 Gazebo 곡선 — 토너먼트 회피 시험 등은 그대로 (종합 회피 노드만 켬)."""
+    assert FsmParams().measured_speed is False
+
+
+def test_measured_speed_faster_in_bends_same_turn():
+    """실물 곡선(2026-11-15): 굽은 구간 원하는 속도가 실제로 나오게 전진 명령만 커지고 회전 명령은 그대로."""
+    fsm = make_fsm()
+    plan = acquire(fsm, dri_of([(3.0, -0.5), (4.0, 1.0)])).plan
+    p = FsmParams(kappa_window=6.0, v_max=1.48)
+    lin_g, ang_g = follow_cmd(plan, BOAT, 0.2, 0.05, WP_FAR, p, KP, KD)
+    lin_m, ang_m = follow_cmd(plan, BOAT, 0.2, 0.05, WP_FAR, _speed_curve(replace(p, measured_speed=True)), KP, KD)
+    assert lin_m > lin_g * 2.0
+    assert ang_m == ang_g
+
+
+def test_measured_speed_step_capped_at_cmd_full():
+    """직진 원하는 속도 1.4 m/s 는 실물 곡선으로 0.57 — FSM 이 전진 상한 cmd_full(0.2)로 자른다."""
+    out = {}
+    for m in (False, True):
+        fsm = make_fsm(measured_speed=m)
+        dri = dri_of([])
+        fsm.step(dri, BOAT, YAW, V_FULL, 0.0, WP_FAR, 0.0)
+        out[m] = fsm.step(dri, BOAT, 0.2, V_FULL, 0.05, WP_FAR, 0.1)
+    p = FsmParams()
+    assert out[False].linear_x == pytest.approx(speed_to_cmd(p.v_max, p))   # Gazebo 곡선 0.18
+    assert out[True].linear_x == pytest.approx(p.cmd_full)
+    assert out[True].angular_z == pytest.approx(out[False].angular_z)
 
 
 def test_follow_caps_target_to_waypoint_when_close():

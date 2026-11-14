@@ -114,6 +114,12 @@ def test_avoid_gets_yaw_kd(mod):
     assert _avoid_params(mod, avoid_yaw_kd='0.16')['avoid.yaw_kd'] == 0.16
 
 
+def test_avoid_gets_measured_speed(mod):
+    # 2026-11-15: 회피 전진 명령 실물 곡선 (되돌리기 avoid_measured_speed:=false)
+    assert _avoid_params(mod)['fsm.measured_speed'] is True
+    assert _avoid_params(mod, avoid_measured_speed='false')['fsm.measured_speed'] is False
+
+
 def _search_params(mod, **args):
     context = _context(mod, **args)
     node = next(n for n in mod._stack(context) if getattr(n, 'node_executable', '') == 'search_circler')
