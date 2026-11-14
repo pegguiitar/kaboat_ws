@@ -13,9 +13,12 @@
 제한 시간 (2026-11-13, 경기 전체 15 분): 여러 미션을 이어 도는 실행(single_mission=false)에서 한
   미션이 실패해 무한정 기다리거나 재시도하지 않게, 미션마다 몫을 두고 넘으면 건너뛴다.
     time_limit.<미션> [s]  gate 180, station 120, dock 240, search 180, avoid 180 (합 900 s = 15 분).
-                           미션 몫은 그 미션의 접근(approach)부터 센다. 마감 시각은 '전체 시작 + 앞
-                           미션들 몫의 합'으로 고정 — 앞 미션이 일찍 끝나면 남은 시간이 다음 미션으로
-                           넘어가고, 늦어도 뒤 미션 몫을 먹지 않는다 (0 = 그 미션 제한 없음).
+                           미션 몫은 그 미션의 접근(approach)부터 센다. 일정표는 '전체 시작 + 앞
+                           미션들 몫의 합'으로 고정 — 늦어도 뒤 미션 몫을 먹지 않는다 (0 = 그 미션 제한 없음).
+    time_limit_carry_max   앞 미션이 일찍 끝나 남은 시간은 이 미션이 30 s 까지만 더 쓴다
+                           (마감 = min(일정표 끝, 시작 + 몫 + 30 s), 2026-11-14). 나머지는 일정표를 따라
+                           뒤로 넘어간다 — 막힌 미션이 아낀 시간을 다 먹던 것(시뮬 station 255 s·dock 419 s).
+                           마지막 미션(avoid)은 예외 — 뒤에 쓸 미션이 없어 남은 시간을 다 쓴다.
                            전체 시작 = 출발 직진이 실제로 시작된 때(없으면 첫 접근).
     approach_timeout_sec   접근만 따로 90 s 넘으면 그 미션을 건너뛴다.
   넘으면 다음 미션 접근으로 (avoid 면 done). dock 미션 중에 넘으면 슬롯 근처일 수 있으므로 먼저
@@ -97,9 +100,10 @@ UNDOCK_LINEAR = round((1700 - 1525) / (1900 - 1525), 4)
 UNDOCK_PERIOD = 0.05            # [s] /cmd/undock 발행 주기 (cmd_mux 워치독 0.3 s, 모터 0.3 s 보다 짧게)
 THRUSTER_STATUS_TIMEOUT = 1.0   # [s] /teleop/status(5 Hz)가 이보다 오래 안 오면 AUTO 로 안 본다
 
-# 미션 제한 시간 [s] — 경기 전체 15 분(900 s) 배분. 접근 시간 포함, 남은 시간은 다음 미션으로 이월.
+# 미션 제한 시간 [s] — 경기 전체 15 분(900 s) 배분. 접근 시간 포함, 남은 시간은 다음 미션이 +30 s 까지 씀.
 MISSION_TIME_LIMITS = {'gate': 180.0, 'station': 120.0, 'dock': 240.0,
                        'search': 180.0, 'avoid': 180.0}
+CARRY_OVER_MAX = 30.0           # [s] 앞 미션이 남긴 시간 중 한 미션이 더 쓸 수 있는 상한 (2026-11-14)
 APPROACH_TIMEOUT = 90.0         # [s] 시작 자세 접근만의 상한
 TIMEOUT_RETREAT_M = 3.0         # [m] dock 시간 초과 시 직진 후진 거리
 TIMEOUT_RETREAT_CMD = 0.05      # 그 후진 출력 (dock_retreat_cmd 는 2026-11-14 부터 0.20 — 이 값은 따로)
@@ -150,6 +154,7 @@ class MissionManager(Node):
         self.declare_parameter('skip_on_give_up', True)
         for name in MISSION_ORDER:
             self.declare_parameter(f'time_limit.{name}', MISSION_TIME_LIMITS[name])
+        self.declare_parameter('time_limit_carry_max', CARRY_OVER_MAX)
         self.declare_parameter('approach_timeout_sec', APPROACH_TIMEOUT)
         self.declare_parameter('timeout_retreat_m', TIMEOUT_RETREAT_M)
         self.declare_parameter('timeout_retreat_cmd', TIMEOUT_RETREAT_CMD)
@@ -161,15 +166,16 @@ class MissionManager(Node):
         self._give_up_noted = False        # 무시한 포기 신호 경고는 미션마다 한 번
         self.time_limits = {name: float(self.get_parameter(f'time_limit.{name}').value)
                             for name in MISSION_ORDER}
+        self.carry_over_max = float(self.get_parameter('time_limit_carry_max').value)
         self.approach_timeout = float(self.get_parameter('approach_timeout_sec').value)
         self.retreat_m = float(self.get_parameter('timeout_retreat_m').value)
         self.retreat_cmd = float(self.get_parameter('timeout_retreat_cmd').value)
         self.retreat_max_sec = float(self.get_parameter('timeout_retreat_max_sec').value)
         if not all(math.isfinite(v) and v >= 0.0 for v in (
-                *self.time_limits.values(), self.approach_timeout, self.retreat_m,
-                self.retreat_max_sec)):
-            raise ValueError('time_limit.*, approach_timeout_sec, timeout_retreat_m and '
-                             'timeout_retreat_max_sec must be finite and >= 0')
+                *self.time_limits.values(), self.carry_over_max, self.approach_timeout,
+                self.retreat_m, self.retreat_max_sec)):
+            raise ValueError('time_limit.*, time_limit_carry_max, approach_timeout_sec, '
+                             'timeout_retreat_m and timeout_retreat_max_sec must be finite and >= 0')
         if not (math.isfinite(self.retreat_cmd) and 0.0 < self.retreat_cmd <= 1.0):
             raise ValueError('timeout_retreat_cmd must be in (0, 1]')
         self.undock_sec = float(self.get_parameter('undock_sec').value)
@@ -248,7 +254,7 @@ class MissionManager(Node):
         # 제한 시간
         self.run_started_at = None         # 전체 시작 (출발 직진이 실제로 시작된 때, 없으면 첫 접근)
         self.deadline = None               # 지금 미션의 마감 시각 (None = 제한 없음)
-        self._slot_end = None              # 앞 미션 마감 — 다음 미션 몫을 여기에 잇는다(이월)
+        self._slot_end = None              # 일정표 끝 (전체 시작 + 몫의 합) — 다음 미션 몫을 여기에 잇는다
         self.approach_started_at = None
         self.skipped = []                  # 건너뛴 미션 [(이름, 이유)]
         # dock 시간 초과 후진 — cmd_mux 가 state 'retreat' 일 때 /cmd_vel 로 통과
@@ -436,21 +442,33 @@ class MissionManager(Node):
         self._slot_end = now
 
     def _set_deadline(self, state: str, now: float):
-        """이 미션 마감 = 앞 미션 마감(이월) + 이 미션 몫. 몫 0 이면 제한 없음(다음은 그때부터)."""
+        """이 미션 마감 = min(일정표 끝, 지금 + 이 미션 몫 + carry_over_max).
+
+        일정표 끝 = 앞 미션 일정표 끝 + 이 미션 몫 (전체 시작 + 몫의 합). 앞 미션이 일찍 끝나 남은 시간은
+        carry_over_max(30 s)까지만 이 미션이 쓰고 나머지는 일정표를 따라 뒤로 계속 넘어간다 — 막힌 미션이
+        앞에서 아낀 시간을 다 먹지 않게 (2026-11-14 시뮬: station 255 s·dock 419 s·search 400 s).
+        늦게 시작하면(앞 미션이 몫을 넘김) 일정표 끝이 더 이르므로 그대로 — 뒤 미션 몫을 먹지 않는다.
+        몫 0 이면 제한 없음(다음은 그때부터).
+        """
         limit = self.time_limits[state]
         if not self.timeouts_active() or limit <= 0.0:
             self.deadline = None
             self._slot_end = None
             return
         base = self._slot_end if self._slot_end is not None else now
-        self.deadline = base + limit
-        self._slot_end = self.deadline
+        self._slot_end = base + limit
+        # 마지막 미션(avoid)은 뒤에 쓸 미션이 없으니 남은 시간을 다 쓴다 (2026-11-14)
+        cap = math.inf if state == MISSION_ORDER[-1] else now + limit + self.carry_over_max
+        self.deadline = min(self._slot_end, cap)
 
     def _deadline_text(self, now: float) -> str:
         if self.deadline is None:
             return ''
+        capped = (self._slot_end is not None and self.deadline < self._slot_end - 1e-6)
         return (f' [마감 전체 +{self.deadline - self.run_started_at:.0f} s, '
-                f'남은 {self.deadline - now:.0f} s]')
+                f'남은 {self.deadline - now:.0f} s'
+                + (f' — 넘어온 시간 {self.carry_over_max:.0f} s 까지만, 나머지 '
+                   f'{self._slot_end - self.deadline:.0f} s 는 뒤로' if capped else '') + ']')
 
     def check_timeout(self, now: float) -> bool:
         """접근 상한·미션 마감을 넘었으면 건너뛰고 True."""

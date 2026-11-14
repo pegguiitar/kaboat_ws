@@ -27,7 +27,9 @@ mission_manager:
 
     # 미션 제한 시간 [s] — 경기 전체 15 분(900 s) 배분. 이어 도는 실행(run_autonomy)에서만.
     # 그 미션의 접근부터 세고, 넘으면 건너뛰고 다음 미션으로(dock 은 먼저 3 m 직진 후진).
-    # 마감 = 전체 시작 + 앞 미션 몫의 합 — 일찍 끝난 미션의 남은 시간은 다음 미션으로 넘어간다.
+    # 일정표 = 전체 시작 + 앞 미션 몫의 합. 앞 미션이 일찍 끝나 남은 시간은 그 미션이 time_limit_carry_max
+    # 까지만 더 쓰고(마감 = min(일정표 끝, 시작 + 몫 + 30 s)) 나머지는 뒤로 넘어간다 (2026-11-14 — 막힌
+    # 미션이 아낀 시간을 다 먹던 것: 시뮬 station 255 s·dock 419 s·search 400 s). 늦게 시작하면 일정표 끝까지만.
     # 0 = 그 미션 제한 없음. 전부 끄기: autonomy.launch.py mission_timeouts:=false
     time_limit:
       gate:    180.0
@@ -35,6 +37,8 @@ mission_manager:
       dock:    240.0
       search:  180.0
       avoid:   180.0
+    time_limit_carry_max: 30.0   # [s] 넘어온 시간 중 한 미션이 더 쓸 수 있는 상한 (0 = 자기 몫만)
+    #   마지막 미션 avoid 는 예외 — 뒤에 쓸 미션이 없어 남은 시간을 다 쓴다
     approach_timeout_sec: 90.0   # 시작 자세 접근만 이만큼 넘으면 그 미션을 건너뜀
     # behavior 포기 신호(/mission/give_up)를 받으면 제한 시간 전이라도 건너뜀 (이어 도는 실행만).
     # dock: 누적 2바퀴 돌아도 목표 도형 못 찾음 → 도크 쪽 선수로 되돌린 뒤 → 직진 후진 3 m → search

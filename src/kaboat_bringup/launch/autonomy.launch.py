@@ -23,6 +23,7 @@ test_mission·go_* 는 해당 없음. 끄려면 run_autonomy undock_sec:=0.
 
 미션 제한 시간 (mission_timeouts, 기본 true): 경기 15 분을 gate 3·station 2·dock 4·search 3·avoid 3 분으로
 나눠(mission_params.yaml time_limit.*), 넘거나 시작 자세가 없으면 그 미션을 건너뛴다 (mission_manager 설명).
+앞 미션이 남긴 시간은 다음 미션이 30 s 까지만 더 쓴다 (time_limit_carry_max).
 """
 
 import math

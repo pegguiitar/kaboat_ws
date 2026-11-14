@@ -1,7 +1,7 @@
 """미션 제한 시간 (2026-11-13, 경기 15 분): 실패한 미션에서 무한정 기다리거나 재시도하지 않고 넘어간다.
 
 gate 180·station 120·dock 240·search 180·avoid 180 s (합 900 s). 마감 = 전체 시작 + 앞 미션 몫의 합
-(일찍 끝나면 남은 시간 이월). 접근만 90 s 넘어도 건너뜀. dock 은 먼저 직진 후진 3 m (30 s 상한).
+(일찍 끝나 남은 시간은 다음 미션이 30 s 까지만 더 씀). 접근만 90 s 넘어도 건너뜀. dock 은 먼저 직진 후진 3 m (30 s 상한).
 """
 
 import pytest
@@ -85,8 +85,9 @@ def test_approach_over_90s_skips_that_mission(ros):
         rig.at(90.0)                                   # 접근 90 s — gate 건너뛰고 station 접근
         assert rig.state == ('approach', 'station')
         assert rig.node.skipped[0][0] == 'gate' and '접근' in rig.node.skipped[0][1]
-        # gate 몫의 남은 90 s 는 station 으로 이월: 마감 = 전체 시작 + 180 + 120
-        assert rig.node.deadline == pytest.approx(T0 + 300.0)
+        # gate 몫의 남은 90 s 중 30 s 만 station 이 더 씀: 마감 = 90 + 120 + 30 (일정표 끝 +300 은 그대로)
+        assert rig.node.deadline == pytest.approx(T0 + 240.0)
+        assert rig.node._slot_end == pytest.approx(T0 + 300.0)
     finally:
         rig.destroy()
 
@@ -106,21 +107,56 @@ def test_mission_over_its_share_moves_on(ros):
         rig.destroy()
 
 
-def test_early_finish_carries_time_over(ros):
+def test_early_finish_carries_only_30s_over(ros):
+    """앞 미션이 남긴 시간은 다음 미션이 30 s 까지만 더 쓴다 (2026-11-14). 나머지는 일정표를 따라 뒤로."""
     rig = Rig()
     try:
         rig.complete('approach')
-        rig.finish('gate', 60.0)                       # gate 1 분에 끝
+        rig.finish('gate', 60.0)                       # gate 1 분에 끝 — 2 분 남김
         assert rig.state == ('approach', 'station')
-        assert rig.node.deadline == pytest.approx(T0 + 300.0)   # station 은 남은 2 분 + 2 분
+        assert rig.node._slot_end == pytest.approx(T0 + 300.0)   # 일정표 끝은 그대로
+        assert rig.node.deadline == pytest.approx(T0 + 60.0 + 120.0 + 30.0)   # 몫 2 분 + 30 s
+        assert '넘어온 시간 30 s 까지만' in rig.node._deadline_text(T0 + 60.0)
         rig.complete('approach')
-        rig.at(299.0)
+        rig.at(209.0)
         assert rig.state == ('mission', 'station')
-        rig.at(300.0)
+        rig.at(210.0)                                  # 막힌 station 이 아낀 2 분을 다 먹지 않음
         assert rig.state == ('approach', 'dock')
-        assert rig.node.deadline == pytest.approx(T0 + 540.0)
+        # dock: 일정표 끝 +540 이지만 시작 210 + 몫 240 + 30 = +480 까지
+        assert rig.node._slot_end == pytest.approx(T0 + 540.0)
+        assert rig.node.deadline == pytest.approx(T0 + 480.0)
     finally:
         rig.destroy()
+
+
+def test_late_start_still_ends_at_schedule(ros):
+    """앞 미션이 몫을 다 써 늦게 시작하면 마감은 일정표 끝 — 뒤 미션 몫을 먹지 않는다 (예전과 같음)."""
+    rig = Rig()
+    try:
+        rig.complete('approach')
+        rig.at(180.0)                                  # gate 시간 초과
+        assert rig.state == ('approach', 'station')
+        assert rig.node.deadline == pytest.approx(T0 + 300.0)
+        assert '넘어온 시간' not in rig.node._deadline_text(T0 + 180.0)
+    finally:
+        rig.destroy()
+
+
+@pytest.mark.parametrize('carry, station_deadline', [(0.0, 180.0), (1000.0, 300.0)])
+def test_carry_over_cap_is_a_parameter(ros, carry, station_deadline):
+    """0 = 자기 몫만, 아주 크게 = 예전처럼 남은 시간을 다 씀."""
+    rig = Rig(time_limit_carry_max=carry)
+    try:
+        rig.complete('approach')
+        rig.finish('gate', 60.0)
+        assert rig.node.deadline == pytest.approx(T0 + station_deadline)
+    finally:
+        rig.destroy()
+
+
+def test_default_carry_over_cap_is_30s():
+    from kaboat_mission.mission_manager import CARRY_OVER_MAX
+    assert CARRY_OVER_MAX == 30.0
 
 
 def test_dock_timeout_reverses_out_first(ros):
@@ -189,8 +225,9 @@ def test_missing_entry_is_skipped_not_stuck(ros):
         rig.finish('gate', 50.0)
         assert rig.state == ('approach', 'dock')
         assert rig.node.skipped == [('station', '시작 자세 미기록')]
-        # station 몫(120 s)은 dock 으로 이월: 마감 = 180 + 120 + 240
-        assert rig.node.deadline == pytest.approx(T0 + 540.0)
+        # 남은 시간(gate 130 s + station 몫 120 s) 중 30 s 만 dock 이 더 씀: 마감 = 50 + 240 + 30
+        assert rig.node.deadline == pytest.approx(T0 + 320.0)
+        assert rig.node._slot_end == pytest.approx(T0 + 540.0)
     finally:
         rig.destroy()
 
@@ -249,7 +286,7 @@ def test_run_clock_starts_when_undock_actually_drives(ros):
 
 
 @pytest.mark.parametrize('params', [{'time_limit.dock': -1.0}, {'approach_timeout_sec': -5.0},
-                                    {'timeout_retreat_cmd': 0.0}])
+                                    {'timeout_retreat_cmd': 0.0}, {'time_limit_carry_max': -1.0}])
 def test_bad_timeout_params_refused(ros, params):
     with pytest.raises(ValueError):
         Rig(**params)
@@ -273,7 +310,7 @@ def test_cmd_mux_passes_retreat_only_in_retreat_state(ros):
 
 
 def test_dock_give_up_reverses_out_then_next_mission(ros):
-    """도킹이 2바퀴 돌아도 목표를 못 찾아 포기하면 제한 시간 전이라도 직진 후진 → search (남은 몫 이월)."""
+    """도킹이 2바퀴 돌아도 목표를 못 찾아 포기하면 제한 시간 전이라도 직진 후진 → search (남은 몫은 30 s 까지만)."""
     rig = Rig(start_state='dock')                      # 이어 도는 실행 (dock → search → avoid)
     try:
         rig.complete('approach')
@@ -288,7 +325,9 @@ def test_dock_give_up_reverses_out_then_next_mission(ros):
         rig.clock[0] += UNDOCK_PERIOD
         rig.node.retreat_step()
         assert rig.state == ('approach', 'search')
-        assert rig.node.deadline == pytest.approx(T0 + 240.0 + 180.0)   # dock 마감에 search 몫을 이음
+        # search: 일정표 끝 dock 240 + 180 이지만 시작(100.05) + 몫 180 + 30 까지
+        assert rig.node._slot_end == pytest.approx(T0 + 240.0 + 180.0)
+        assert rig.node.deadline == pytest.approx(T0 + 100.0 + UNDOCK_PERIOD + 180.0 + 30.0)
     finally:
         rig.destroy()
 
@@ -307,5 +346,20 @@ def test_give_up_ignored_when_it_does_not_apply(ros, params, signal, approach_do
         before = rig.state
         rig.node.on_give_up(String(data=signal))
         assert rig.state == before and rig.node.skipped == [] and 'retreat' not in rig.states
+    finally:
+        rig.destroy()
+
+
+def test_last_mission_avoid_keeps_all_carry_over(ros):
+    """avoid 는 뒤에 미션이 없어 +30 s 제한 없이 일정표 끝(+900 s)까지."""
+    rig = Rig(start_state='avoid')
+    try:
+        assert rig.state == ('approach', 'avoid')
+        rig.node._slot_end = T0 + 200.0 - 180.0
+        rig.node._set_deadline('avoid', T0)
+        assert rig.node.deadline == pytest.approx(T0 + 200.0)      # 몫 180 + 30 = 210 이 아니라 일정표 끝
+        rig.node._slot_end = T0 + 300.0 - 180.0
+        rig.node._set_deadline('station', T0)
+        assert rig.node.deadline == pytest.approx(T0 + 150.0)      # 다른 미션은 +30 s 까지
     finally:
         rig.destroy()
