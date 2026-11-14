@@ -254,7 +254,8 @@ class BuoyLidarDetector(Node):
             for (wx, wy), (_xy, r, _n) in zip(world, clusters):
                 dx, dy = wx - ipose[0], wy - ipose[1]
                 cands.append(((ic * dx + isn * dy, -isn * dx + ic * dy), r))
-            res = vote_colors(self.label[1], cands, self.K, g, self.cp, self.roll, self.pitch)
+            res = vote_colors(self.label[1], cands, self.K, g, self.cp, self.roll, self.pitch,
+                              image=self.image[1])   # 물 대비 마스크 (color.water_mask)
             if self.depth is not None and abs(self.depth[0] - self.image[0]) <= 0.07:
                 res = refine_with_depth(self.label[1], res, cands, self.depth[1], self.K, g, self.cp,
                                         self.roll, self.pitch)

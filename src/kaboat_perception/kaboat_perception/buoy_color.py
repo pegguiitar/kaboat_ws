@@ -92,6 +92,14 @@ class ColorParams:
     depth_min_px: int = 20        # 고른 픽셀이 이보다 적으면 창 전체로 (지금 방식)
     depth_z_min: float = -0.3     # 수면 아래로 계산된 픽셀(뎁스 매칭 오류) 버림 [m]
     depth_z_max: float = 1.2
+    # 물 대비 마스크 (water_mask) — 창 픽셀 중 같은 높이 좌우 물 띠와 색이 다른 덩어리만 센다 (vote_colors 에
+    # 영상을 넘길 때). 2026-11-14 3 bag 123 프레임 부표 40 개: 지금 방식(뎁스 / 창 전체) 35 개 → 뎁스 ∩ 마스크 /
+    # 마스크 38 개 맞음, 틀린 색 0 (6 m 밖에서 창 전체에 섞인 물·다리 픽셀이 빠짐)
+    water_mask: bool = True
+    water_guard: int = 2          # 창과 물 띠 사이 보호 칸 (스텝 후 픽셀)
+    water_min_ref_px: int = 20    # 물 띠 픽셀이 이보다 적으면 마스크 없음 (창 전체)
+    water_min_contrast: float = 3.0  # Otsu 문턱이 물 흔들림(중앙 절대 편차)의 이 배 미만이면 부표가 물과 안 갈림 → 창 전체
+    water_min_px: int = 12        # 마스크(가장 큰 덩어리)가 이보다 작으면 창 전체
 
 
 @dataclass
@@ -103,6 +111,7 @@ class ColorVote:
     visible: int = 0
     usable: bool = False          # 픽셀 수를 누적해도 되는 프레임 (보임·가림·번짐 조건 통과)
     depth: bool = False           # 뎁스로 고른 픽셀로 셌나 (refine_with_depth)
+    mask: Optional[np.ndarray] = None   # 물 대비 마스크 (스텝 후 창 [r0:r1, c0:c1] 크기, bool) — 없으면 창 전체로 셈
 
 
 def classify_colors(bgr, p: ColorParams):
@@ -136,15 +145,65 @@ def candidate_rect(center, radius, K, g: BuoyGeometry, p: ColorParams, roll=0.0,
     return float(u.min()), float(v.min()), float(u.max()), float(v.max()), float(d.min())
 
 
+_K3 = np.ones((3, 3), np.uint8)
+_WATER_W = np.array([0.5, 1.0, 1.0], dtype=np.float32)   # L 은 반 무게 (그늘·반사로 밝기가 크게 흔들림)
+
+
+def water_mask(lab, r0, r1, c0, c1, occupied, p: ColorParams):
+    """창 [r0:r1, c0:c1] (스텝 후 Lab) 에서 좌우 물 띠와 색이 다른 가장 큰 덩어리 (bool) 또는 None.
+
+    CFAR 처럼: 참조 = 창 좌우 같은 높이 띠 (보호 칸 water_guard 건너, 창 폭만큼, 다른 창 자리 occupied 뺌),
+    잡음 = 띠의 중앙 절대 편차. 픽셀마다 물과의 정규화 거리 → Otsu 로 자동 문턱 (물 흔들림의 water_min_contrast 배
+    미만이면 부표가 안 갈려 None) → 3×3 열기·닫기 → 가장 큰 덩어리."""
+    rows, cols = lab.shape[:2]
+    if r1 - r0 < 4 or c1 - c0 < 4:
+        return None
+    gd, wd = int(p.water_guard), max(c1 - c0, 6)
+    band = np.zeros((rows, cols), dtype=bool)
+    band[r0:r1, max(c0 - gd - wd, 0):max(c0 - gd, 0)] = True
+    band[r0:r1, min(c1 + gd, cols):min(c1 + gd + wd, cols)] = True
+    ref_px = lab[band & ~occupied]
+    if len(ref_px) < p.water_min_ref_px:
+        return None
+    ref = np.median(ref_px, axis=0)
+    spread = np.median(np.abs(ref_px - ref), axis=0) + 1.0
+    d = np.sqrt((((lab[r0:r1, c0:c1] - ref) / spread) ** 2 * _WATER_W).sum(axis=2))
+    d8 = np.clip(d * 16.0, 0, 255).astype(np.uint8)
+    t, m = cv2.threshold(d8, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    if t < 16.0 * p.water_min_contrast:
+        return None
+    m = cv2.morphologyEx(m, cv2.MORPH_OPEN, _K3)
+    m = cv2.morphologyEx(m, cv2.MORPH_CLOSE, _K3)
+    n, lbl, st, _ = cv2.connectedComponentsWithStats(m, connectivity=8)
+    if n < 2:
+        return None
+    k = 1 + int(np.argmax(st[1:, cv2.CC_STAT_AREA]))
+    if st[k, cv2.CC_STAT_AREA] < p.water_min_px:
+        return None
+    return lbl == k
+
+
 def vote_colors(label, candidates: Sequence[Tuple[Tuple[float, float], float]], K,
-                g: BuoyGeometry, p: ColorParams, roll=0.0, pitch=0.0) -> List[ColorVote]:
+                g: BuoyGeometry, p: ColorParams, roll=0.0, pitch=0.0, image=None) -> List[ColorVote]:
     """후보들 [((x, y), 반지름), ...] (선체 수평 프레임) → 후보마다 ColorVote.
 
     더 가까운 후보의 창과 겹치는 픽셀은 가림으로 보고 뺀다 (뎁스 없이 라이다로 가림 판정).
+    image(BGR 원본)를 주고 water_mask 면 창 안에서 물과 색이 다른 덩어리(water_mask)만 센다 — 못 따면 창 전체.
     """
     s = max(1, int(p.step))
     rows, cols = label.shape
     rects = [candidate_rect(c, r, K, g, p, roll, pitch) for c, r in candidates]
+    lab = occupied = None
+    if image is not None and p.water_mask:
+        lab = cv2.cvtColor(np.ascontiguousarray(image[::s, ::s]), cv2.COLOR_BGR2LAB).astype(np.float32)[:rows, :cols]
+        occupied = np.zeros((rows, cols), dtype=bool)
+        gd = int(p.water_guard)
+        for rect in rects:
+            if rect is not None:
+                a0, a1 = max(int(math.floor(rect[0] / s)) - gd, 0), min(int(math.ceil(rect[2] / s)) + 1 + gd, cols)
+                b0, b1 = max(int(math.floor(rect[1] / s)) - gd, 0), min(int(math.ceil(rect[3] / s)) + 1 + gd, rows)
+                if a0 < a1 and b0 < b1:
+                    occupied[b0:b1, a0:a1] = True
     out = []
     for i, rect in enumerate(rects):
         if rect is None:
@@ -167,15 +226,19 @@ def vote_colors(label, candidates: Sequence[Tuple[Tuple[float, float], float]], 
             b1 = int(min(math.ceil(other[3] / s) + 1, r1)) - r0
             if a0 < a1 and b0 < b1:
                 keep[b0:b1, a0:a1] = False
-        win = label[r0:r1, c0:c1][keep]
-        visible = int(win.size)
+        visible = int(keep.sum())
         total = max((math.ceil(u1 / s) - math.floor(u0 / s) + 1)
                     * (math.ceil(v1 / s) - math.floor(v0 / s) + 1), 1)
+        mask = water_mask(lab, r0, r1, c0, c1, occupied, p) if lab is not None else None
+        if mask is not None and int((mask & keep).sum()) >= p.water_min_px:
+            win = label[r0:r1, c0:c1][mask & keep]
+        else:
+            mask, win = None, label[r0:r1, c0:c1][keep]
         red, green = int(np.sum(win == 1)), int(np.sum(win == 2))
-        vote = ColorVote(None, box, red, green, visible)
+        vote = ColorVote(None, box, red, green, int(win.size), mask=mask)
         tint = int(np.sum(win == 3))
         if (visible < p.min_visible_px or visible < p.min_visible_frac * total
-                or tint > p.max_tint_frac * visible):
+                or tint > p.max_tint_frac * win.size):
             out.append(vote)
             continue
         vote.usable = True
@@ -232,6 +295,16 @@ def refine_with_depth(label, votes: List[ColorVote], candidates, depth_m, K, g: 
                & (pts[:, 2] >= p.depth_z_min) & (pts[:, 2] <= p.depth_z_max))
         if int(sel.sum()) < p.depth_min_px:
             continue
+        if v.mask is not None:
+            # 뎁스로 고른 픽셀 ∩ 물 대비 마스크 — 너무 적으면 뎁스 없이 마스크 표 그대로
+            mr0, mc0 = max(v0 // s, 0), max(u0 // s, 0)
+            mi, mj = rr + r0 - mr0, cc + c0 - mc0
+            inside = (mi >= 0) & (mi < v.mask.shape[0]) & (mj >= 0) & (mj < v.mask.shape[1])
+            both = sel & inside
+            both[both] = v.mask[mi[both], mj[both]]
+            if int(both.sum()) < p.water_min_px:
+                continue
+            sel = both
         lv = label[rr[sel] + r0, cc[sel] + c0]
         if int(np.sum(lv == 3)) > p.max_tint_frac * len(lv):
             continue

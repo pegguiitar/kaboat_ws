@@ -141,3 +141,51 @@ def test_no_depth_keeps_window_vote():
     v = vote_colors(lab, cands, K, G, P)[0]
     r = refine_with_depth(lab, [v], cands, np.zeros((480, 640), np.float32), K, G, P)[0]
     assert not r.depth and r.color == 'green'
+
+
+# ---------- 물 대비 마스크 (창 안에서 물과 색이 다른 덩어리만) ----------
+
+def _water_scene(buoy_bgr, center=(7.0, 0.0), water_bgr=(95, 105, 70), frac=0.45):
+    """잔잔한 청록 물 위 부표 — 창의 가운데 frac 폭만 부표, 나머지 창은 물. (영상 BGR 640×480, 창)"""
+    rng = np.random.default_rng(0)
+    img = (np.array(water_bgr, np.float32) + rng.normal(0, 3, (480, 640, 3))).clip(0, 255).astype(np.uint8)
+    u0, v0, u1, v1, _ = candidate_rect(center, 0.25, K, G, P)
+    cx, hw = (u0 + u1) / 2, (u1 - u0) * frac / 2
+    img[int(v0):int(v1) + 1, int(cx - hw):int(cx + hw) + 1] = buoy_bgr
+    return img, (u0, v0, u1, v1)
+
+
+def test_water_mask_counts_only_the_buoy_not_the_water():
+    # 물 색이 초록 범위(H≈75·S≈80·V≈105)라 창 전체로는 초록 표가 섞인다 — 마스크면 빨강 부표 픽셀만
+    img, _ = _water_scene((40, 40, 200))
+    lab = classify_colors(img, P)
+    cands = [((7.0, 0.0), 0.25)]
+    whole = vote_colors(lab, cands, K, G, P)[0]
+    masked = vote_colors(lab, cands, K, G, P, image=img)[0]
+    assert whole.green > 0 and whole.color is None          # 물이 초록으로 섞여 판정 불가
+    assert masked.mask is not None and masked.color == 'red'
+    assert masked.green / masked.visible < 0.5 * whole.green / whole.visible   # 경계 한 줄 정도만 남음
+    assert masked.visible < whole.visible
+
+
+def test_water_mask_off_or_no_contrast_falls_back_to_window():
+    img, _ = _water_scene((95, 105, 70))                      # 부표가 물과 같은 색 — 못 땀
+    lab = classify_colors(img, P)
+    v = vote_colors(lab, [((7.0, 0.0), 0.25)], K, G, P, image=img)[0]
+    assert v.mask is None
+    from dataclasses import replace
+    img2, _ = _water_scene((40, 40, 200))
+    off = vote_colors(classify_colors(img2, P), [((7.0, 0.0), 0.25)], K, G, replace(P, water_mask=False), image=img2)[0]
+    assert off.mask is None and off.green > 0
+
+
+def test_depth_intersects_water_mask():
+    # 4.5 m — 뎁스로 고른 창 전체(부표 자리 뎁스) ∩ 마스크 = 부표 픽셀만
+    from kaboat_perception.buoy_color import refine_with_depth
+    img, _ = _water_scene((40, 40, 200), center=(4.5, 0.0), frac=0.5)
+    lab = classify_colors(img, P)
+    cands = [((4.5, 0.0), 0.25)]
+    v = vote_colors(lab, cands, K, G, P, image=img)[0]
+    dep, _ = _depth_for((4.5, 0.0), 1)
+    r = refine_with_depth(lab, [v], cands, dep, K, G, P)[0]
+    assert r.depth and r.color == 'red' and r.visible <= v.visible and r.green <= v.green
