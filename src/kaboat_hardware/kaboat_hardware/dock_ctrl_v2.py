@@ -150,6 +150,30 @@ def front_clearance(scan, half_angle, stop_distance):
     return float(ranges[near].min())
 
 
+def berth_wall_distance(scan, half_angle, lidar_forward, min_range=.3, max_range=6.0, min_beams=5):
+    """선체 중심 → 앞 뒷벽 거리 [m]: 앞 ±half_angle 빔(min_range~max_range)의 앞방향 성분 중앙값 + 라이다 앞 위치.
+
+    front_clearance 는 0.8 m 안 점을 물보라로 버리지만 정지점에서 라이다→뒷벽은 0.6 m 라 따로 둔다. 빔이
+    min_beams 개 미만이면 None.
+    """
+    ranges = np.asarray(scan.ranges, float)
+    angles = scan.angle_min + scan.angle_increment * np.arange(len(ranges))
+    angles = np.arctan2(np.sin(angles), np.cos(angles))
+    ok = (np.isfinite(ranges) & (ranges >= max(scan.range_min, min_range)) & (ranges <= max_range)
+          & (np.abs(angles) <= half_angle))
+    if int(ok.sum()) < min_beams:
+        return None
+    return float(np.median(ranges[ok] * np.cos(angles[ok]))) + lidar_forward
+
+
+def _segment(a, b):
+    """a→b 직선 표본 (0.1 m). 너무 짧으면 두 점 그대로 (경로 표시용)."""
+    try:
+        return straight_samples(a, b)
+    except ValueError:
+        return np.vstack([np.asarray(a, float), np.asarray(b, float)])
+
+
 def default_slot_config():
     """kaboat_bringup/config/dock_slot.yaml (슬롯·선체 치수를 정하는 한 곳)."""
     from ament_index_python.packages import get_package_share_directory
@@ -288,7 +312,29 @@ class DockCtrlV2(Node):
                     # cmd_mux 300 ms 워치독이 39 번 정지 → SEEK 시간 35% 추력 0. False 면 예전처럼 tick 안에서.
                     'async_slot_search': True,
                     # tick 한 번이 이보다 오래 걸리면 경고 로그 (1 s 에 한 번) [ms]
-                    'slow_tick_warn_ms': 150.0}
+                    'slow_tick_warn_ms': 150.0,
+                    # 잠근 뒤 슬롯 추적. 2026-11-14 run2 는 도킹 내내 RTK Float — odom 이 도크 대비 위치 2.2 m·방향 12°
+                    # 어긋났다가 약 40 s 에 걸쳐 0 으로 수렴했다(LiDAR 로 잰 흐름 0.04 m/s 중앙값, p90 0.07 m/s, 약
+                    # 0.3°/s). 6 m 에서 일찍 잠그면 그 흐름이 고정 경로에 들어간다(재생: 15:03:57 잠금이 현장 최종 잠금보다
+                    # 뒷벽 1.26 m 앞·7° 차). TO_VIA·ALIGN_VIA·TO_GOAL 에서 track_period_s 마다 잠근 축으로 목표 ㄷ자를
+                    # 다시 찾아(작업 스레드, ±track_max_oblique_deg·폭 track_target_offset_m 만 — 노트북 5.1 ms, SEEK
+                    # 목표선 8.3 ms·5방향 41 ms) 경로를 그 ㄷ자 기준으로 다시 앉힌다. 2 Hz 면 갱신 사이 흐름 ≤3.5 cm.
+                    # 받는 조건: 지금 추정에서 track_gate_m·track_gate_deg 안(옆 슬롯 4 m 는 거름) → 최근 3개 중앙값 →
+                    # 한 번에 track_step_m·track_step_deg 까지만 옮긴다. 뒷벽 track_min_wall_m 안은 ㄷ자가 불안정해(run2
+                    # 1.9 m 안 '안쪽에 점' 실패) 멈춘다 — 마지막 진입은 마지막으로 고정한 ㄷ자의 경유점·정지점을 그대로
+                    # 따른다 (제어·진입 방식은 예전과 같고 ㄷ자 기준만 최신).
+                    'track_slot': True, 'track_period_s': 0.5, 'track_max_oblique_deg': 10.0,
+                    'track_target_offset_m': 0.6, 'track_max_range_m': 7.0,
+                    'track_gate_m': 0.6, 'track_gate_deg': 6.0, 'track_step_m': 0.15, 'track_step_deg': 1.5,
+                    'track_min_wall_m': 2.5,
+                    # TO_GOAL 의 LiDAR 뒷벽 거리: 앞 ±berth_half_angle_deg 빔의 앞방향 거리 중앙값 + lidar_forward_m
+                    # (tf base_link→onboard_laser_frame 0.4) = 선체 중심→뒷벽. 마지막 진입은 마지막으로 고정한 ㄷ자의
+                    # 정지점을 그대로 따르고, 이 값은 순수 충돌 방지에만 쓴다: berth_distance − berth_guard_m(0.85 m)
+                    # 보다 가까우면 그 자리에서 REVERSE. 추적은 뒷벽 2.5 m 안에서 멈추므로 그 뒤에도 odom 이 계속
+                    # 흐르면(e2e 시뮬 0.07 m/s 증가형: 고정 정지점보다 깊이 들어가 뒷벽 접촉) 이것이 막는다.
+                    # 라이다 range_min 0.4 m 라 선체 중심 0.8 m 안은 못 잰다 — 기준은 그보다 바깥이어야 한다.
+                    # 빔이 없거나 선수가 축에서 20° 넘게 틀어졌으면 판단 안 함.
+                    'berth_half_angle_deg': 10.0, 'lidar_forward_m': 0.4, 'berth_guard_m': 0.15}
         for name, value in defaults.items():
             self.declare_parameter(name, value)
         p = lambda name: self.get_parameter(name).value
@@ -375,6 +421,19 @@ class DockCtrlV2(Node):
         self.give_up_reverse = float(p('give_up_reverse_m'))
         self.stale_hold = bool(p('yolo_stale_hold_heading'))
         self.async_slot = bool(p('async_slot_search'))
+        self.track = bool(p('track_slot'))
+        self.track_period = float(p('track_period_s'))
+        self.track_params = replace(self.slot_params, max_range=float(p('track_max_range_m')),
+                                    max_oblique_deg=float(p('track_max_oblique_deg')),
+                                    target_offset=float(p('track_target_offset_m')))
+        self.track_gate = float(p('track_gate_m'))
+        self.track_gate_angle = math.radians(float(p('track_gate_deg')))
+        self.track_step = float(p('track_step_m'))
+        self.track_step_angle = math.radians(float(p('track_step_deg')))
+        self.track_min_wall = float(p('track_min_wall_m'))
+        self.berth_half_angle = math.radians(float(p('berth_half_angle_deg')))
+        self.lidar_forward = float(p('lidar_forward_m'))
+        self.berth_guard = float(p('berth_guard_m'))
         self.slow_tick_ms = float(p('slow_tick_warn_ms'))
         if not all(math.isfinite(v) and v >= 0 for v in (
                 self.give_up_yolo_stale, self.give_up_to_via, self.give_up_to_goal,
@@ -485,6 +544,7 @@ class DockCtrlV2(Node):
         self.phase_seen = 'IDLE'                    # 단계가 바뀐 때를 재려고 (TO_VIA·TO_GOAL 시간 제한)
         self.phase_since = time.monotonic()
         self.phase = 'IDLE'
+        self._clear_track()
         self.first_plan = self.final_plan = None
         self.route_enu = None
         self.route_origin_odom = None
@@ -844,6 +904,7 @@ class DockCtrlV2(Node):
         self.route_origin_odom = self.route_origin_enu = None
         self.fixed_path_msg = self.fixed_gps_msg = None
         self.first_plan = self.final_plan = None
+        self._clear_track()
         self.det = None
         self.det_received = 0.0
         self.last_det_seq = self.det_seq
@@ -938,7 +999,10 @@ class DockCtrlV2(Node):
                 'slot_search_ms': (round(self.slot_search_ms, 1)
                                    if self.slot_search_ms is not None else None),
                 # 5방향 '보이는 ㄷ자' 찾기 중이면 그 이유 ('blocked' / 'fallback')
-                'visible_search': self.visible_reason if self.visible_job is not None else None}
+                'visible_search': self.visible_reason if self.visible_job is not None else None,
+                # 잠근 뒤 슬롯 추적 (갱신 수·거른 수·처음 잠금 대비 누적 이동·마지막 갱신 나이·근거리 동결)
+                'track': self._track_report() if self.route_enu is not None else None,
+                'berth_lidar_m': (round(self.berth_lidar_m, 3) if self.berth_lidar_m is not None else None)}
         self.status.publish(String(data=json.dumps(data)))
         if not self.phase_log or self.phase_log[-1][1] != self.phase:
             self.phase_log.append((self.get_clock().now().nanoseconds * 1e-9, self.phase, detail))
@@ -1078,6 +1142,12 @@ class DockCtrlV2(Node):
         self.final_plan = sampled_path(second, spacing=.1, curvatures=np.zeros(len(second)), frame_id='dock_enu')
         self.final_heading = heading
         self.follower.reset()
+        self._clear_track()
+        self._publish_fixed_path(first, second, retreat)
+        return True
+
+    def _publish_fixed_path(self, first, second, retreat):
+        origin_odom, origin_enu = self.route_origin_odom, self.route_origin_enu
         path = Path()
         path.header.frame_id = 'odom'
         path.header.stamp = self.get_clock().now().to_msg()
@@ -1094,7 +1164,133 @@ class DockCtrlV2(Node):
         self._publish_route_markers(path.header)
         self.gps_path_pub.publish(self.fixed_gps_msg)
         self.last_path_pub = time.monotonic()
-        return True
+
+    # ── 잠근 뒤 슬롯 추적: odom 이 흘러도(RTK Float) 경로를 LiDAR 로 본 ㄷ자에 다시 앉힌다 ──────────
+    def _clear_track(self):
+        self.track_job = None
+        self.track_asked = 0.0
+        self.track_hist = deque(maxlen=3)           # 받은 (중심, 법선) — 중앙값으로 쓴다
+        self.track_updates = self.track_rejected = 0
+        self.track_last = None                      # 마지막으로 받은 때 (monotonic)
+        self.track_frozen = False
+        self.track_origin = None                    # 처음 잠근 (뒷벽, 법선) — 누적 이동 표시용
+        self.berth_lidar_m = None
+
+    @staticmethod
+    def _signed_angle(a, b):
+        """단위벡터 b 에서 a 까지 부호 있는 각 [rad]."""
+        return math.atan2(b[0] * a[1] - b[1] * a[0], float(np.dot(a, b)))
+
+    def _track_slot(self):
+        """TO_VIA·ALIGN_VIA·TO_GOAL: track_period 마다 잠근 축으로 목표 ㄷ자를 찾아(작업 스레드) 경로를 갱신.
+
+        한 번에 하나만 맡긴다 — 앞 일이 안 끝났으면 건너뛴다(줄 세우지 않음). 결과가 늦거나 없으면 마지막
+        경로를 그대로 쓴다.
+        """
+        if not self.track or self.lock is None or self.route_enu is None:
+            return
+        if self.track_origin is None:               # 처음 잠근 자리 (누적 이동 표시용)
+            self.track_origin = (np.asarray(self.lock['wall'], float).copy(),
+                                 np.asarray(self.lock['outward'], float).copy())
+        self._update_cloud()
+        if self.track_job is not None:
+            done = self._take(self.track_job)
+            if done is None:
+                return
+            self.track_job = None
+            out, current = done
+            if current:
+                self._track_accept(out[0] if out is not None else None)
+        boat = self._odom_xy()
+        self.track_frozen = wall_distance(boat, self.lock['wall'], self.lock['outward']) < self.track_min_wall
+        if self.track_frozen or not self.cloud:
+            return
+        if self.line_job is not None:               # SEEK·우회 때 맡긴 찾기가 남아 있으면 끝날 때까지
+            if not self.line_job[0].done():
+                return
+            self.line_job = None
+        now = time.monotonic()
+        if now - self.track_asked < self.track_period:
+            return
+        self.track_asked = now
+        wall, outward = np.asarray(self.lock['wall'], float), np.asarray(self.lock['outward'], float)
+        self.track_job = self._submit(find_u_slot, self._cloud_points(), boat, wall.copy(),
+                                      tuple(-outward), self.track_params)
+        done = self._take(self.track_job)           # 바로 계산(테스트)이면 지금 받는다
+        if done is not None:
+            self.track_job = None
+            out, current = done
+            if current:
+                self._track_accept(out[0] if out is not None else None)
+
+    def _track_accept(self, slot):
+        if slot is None:
+            return
+        lock = self.lock
+        wall, outward = np.asarray(lock['wall'], float), np.asarray(lock['outward'], float)
+        centre, normal = np.asarray(slot.center, float), np.asarray(slot.outward, float)
+        if (float(np.linalg.norm(centre - wall)) > self.track_gate
+                or abs(self._signed_angle(normal, outward)) > self.track_gate_angle):
+            self.track_rejected += 1                # 옆 슬롯·오검출 — 추정에서 멀다
+            return
+        self.track_hist.append((centre, normal))
+        target = np.median([c for c, _ in self.track_hist], axis=0)
+        turn = float(np.median([self._signed_angle(n, outward) for _, n in self.track_hist]))
+        step = target - wall
+        length = float(np.linalg.norm(step))
+        if length > self.track_step:
+            step *= self.track_step / length
+        turn = float(np.clip(turn, -self.track_step_angle, self.track_step_angle))
+        c, s_ = math.cos(turn), math.sin(turn)
+        self.track_last = time.monotonic()
+        self.track_updates += 1
+        self._retarget(wall + step, np.array([c * outward[0] - s_ * outward[1], s_ * outward[0] + c * outward[1]]))
+
+    def _retarget(self, wall, outward):
+        """잠금(뒷벽·법선)을 바꾸고 경유점·정지점·진입 선수·후진 끝을 다시 계산. 지금 단계의 경로도 새로."""
+        outward = outward / float(np.linalg.norm(outward))
+        via_odom = wall + self.via_distance * outward
+        stop_odom = wall + self.stop_distance * outward
+        heading = math.atan2(-outward[1], -outward[0])
+        shift = self.route_origin_enu - self.route_origin_odom
+        via, stop = via_odom + shift, stop_odom + shift
+        self.lock = dict(self.lock, wall=wall, outward=outward, via=via_odom, stop=stop_odom, heading=heading)
+        try:
+            second = straight_samples(via, stop)
+            retreat, exit_xy = retreat_route(stop, heading, self.retreat_distance)
+        except ValueError:
+            return
+        first = None
+        if self.phase == 'TO_VIA':
+            try:
+                first = straight_samples(self._position(), via)
+            except ValueError:                      # 이미 경유점 위 — 다음 tick 에 ALIGN_VIA
+                first = None
+        self.route_enu = (self.route_enu[0], via, stop, exit_xy)
+        if first is not None:
+            self.first_plan = sampled_path(first, spacing=.1, curvatures=np.zeros(len(first)), frame_id='dock_enu')
+        self.final_plan = sampled_path(second, spacing=.1, curvatures=np.zeros(len(second)), frame_id='dock_enu')
+        self.final_heading = heading
+        self._publish_fixed_path(_segment(self.route_enu[0], via), second, retreat)
+
+    def _track_report(self):
+        if self.track_origin is None:
+            return None
+        wall0, out0 = self.track_origin
+        lock = self.lock
+        return {'updates': self.track_updates, 'rejected': self.track_rejected,
+                'shift_m': round(float(np.linalg.norm(np.asarray(lock['wall']) - wall0)), 3),
+                'turn_deg': round(math.degrees(self._signed_angle(np.asarray(lock['outward']), out0)), 2),
+                'age_s': (round(time.monotonic() - self.track_last, 1) if self.track_last is not None else None),
+                'frozen': self.track_frozen}
+
+    def _berth_distance(self, yaw):
+        """TO_GOAL: LiDAR 로 잰 선체 중심→뒷벽 [m] (충돌 방지·보고). 스캔이 낡았거나 선수가 축에서 20° 넘게 틀어졌으면 None."""
+        if (self.scan is None
+                or time.monotonic() - self.scan_received > self.perception_timeout
+                or abs(wrap(self.final_heading - yaw)) > math.radians(20)):
+            return None
+        return berth_wall_distance(self.scan, self.berth_half_angle, self.lidar_forward)
 
     def _route_latlon(self):
         """고정 경로 네 점의 위경도 (기록용). odom 위치면 지금 GPS 와의 차이로 바꾼다."""
@@ -1819,6 +2015,8 @@ class DockCtrlV2(Node):
             self._command(-self.retreat_cmd, self._turn(self.backoff_heading, yaw))
             self._report(f'backing off {have:.2f}/{need:.2f}m from target wall')
             return
+        if self.phase in ('TO_VIA', 'ALIGN_VIA', 'TO_GOAL'):
+            self._track_slot()
         if self.phase == 'TO_VIA':
             if self._can_give_up() and self.give_up_to_via and in_phase >= self.give_up_to_via:
                 # 경유점은 입구 밖 — 후진 없이 포기 (mission_manager 가 직진 후진 3 m)
@@ -1855,6 +2053,15 @@ class DockCtrlV2(Node):
                                   reverse_heading=self.final_heading)
                 return
             self.follower.goal_tolerance = self.goal_tol
+            self.berth_lidar_m = self._berth_distance(yaw)        # 정지는 고정한 ㄷ자 정지점, 이건 충돌 방지만
+            if (self.berth_guard > 0 and self.berth_lidar_m is not None
+                    and self.berth_lidar_m <= self.stop_distance - self.berth_guard):
+                self.phase = 'REVERSE'
+                self._command(-self.retreat_cmd, self._turn(self.final_heading, yaw))
+                self._report(f'lidar wall {self.berth_lidar_m:.2f}m < {self.stop_distance - self.berth_guard:.2f}m '
+                             f'— collision guard, reversing (odom goal error '
+                             f'{np.linalg.norm(xy-self.route_enu[2]):.2f}m)')
+                return
             step = self.follower.step(self.final_plan, xy, yaw,
                                       self.odom.twist.twist.angular.z,
                                       thrust_ratio=self.final_cmd,

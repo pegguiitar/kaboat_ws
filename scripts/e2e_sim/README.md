@@ -112,6 +112,15 @@ run1_20261114_091623 실주행 bag 의 배치. 11-13 과 달라진 것: 게이�
 `marker_hidden`(YOLO 가 못 보는 도형), `cmd_drop`[t0, t1](모터 무반응), `bar_cls`, `detect_scale`, `shift`.
 `*_x.json` = station_end 를 부표에서 3 m 동쪽 (162.8, −33.6) 으로 옮긴 것.
 
+`odom_error` (RTK Float 흉내, 2026-11-14 run2): 정답 자세에 '목표 슬롯 뒷벽 중심 기준 회전 + 도크 법선 방향 이동'
+오차를 씌워 `/odom`·TF·`/gps/fix` 로 낸다. 라이다·카메라는 정답에서 만들므로 odom 안에서 도크가 옮겨·돌아 보인다
+(현장과 같은 구조). 시각은 `/mission/state=dock` 부터, `trace.jsonl` 에 `err_m`·`err_deg`.
+- `decay`: `t0_s` 까지 (`shift_m`, `rot_deg`), 그 뒤 `dur_s` 에 걸쳐 0 — `dock_drift_run2.json` (2.2 m·12° → 45 s, run2 실측 모양)
+- `ramp`: `t0_s` 부터 `rate_mps`·`rate_dps` 로 커짐(`max_m`·`max_deg` 까지) — `dock_drift_ramp_pos/neg.json`
+  (run2 p90 0.07 m/s·0.3°/s 가 잠금 뒤 끝까지 계속되는 최악)
+이 셋은 도킹장 앞 (167.5, −29.0) 출발이라 `start_state:=dock single_mission:=true` 로 도킹만 돌린다.
+동시에 여러 판을 돌리면 노트북 CPU 가 바빠 TO_GOAL 선수가 수십 도 흔들렸다(혼자 돌리면 3–5°) — 제어 비교는 한 판씩.
+
 ## 한계
 
 - YOLO·카메라 영상은 실제가 아니다 (표지 방위에 잡음을 넣은 검출기 출력, 부표는 색 사각형).

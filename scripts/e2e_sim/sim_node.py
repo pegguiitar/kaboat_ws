@@ -261,6 +261,16 @@ class SimNode(Node):
         self.marker_hidden = set(sc.get('marker_hidden', []))
         self.marker_p_scale = float(sc.get('marker_p_scale', 1.0))
         self.cmd_drop = sc.get('cmd_drop')          # [t0, t1] run 시각 동안 /cmd_vel 무시 (모터 고장 흉내)
+        # odom 오차 (RTK Float 흉내, 2026-11-14 run2): 정답 자세에 '목표 슬롯 뒷벽 중심 기준 회전 rot + 도크 법선 방향
+        # shift' 를 씌워 /odom·TF·/gps/fix 로 낸다. 라이다·카메라는 정답에서 만들므로 odom 안에서 도크가 그만큼
+        # 옮겨·돌아 보인다(현장과 같은 구조). 시각은 /mission/state=dock 부터. 모양:
+        #   decay: t0_s 까지 (shift_m, rot_deg), 그 뒤 dur_s 에 걸쳐 0 으로 (run2: 2.2 m·12° 가 약 40 s 에 0)
+        #   ramp : t0_s 부터 rate_mps·rate_dps 로 커짐 (max_m·max_deg 까지)
+        self.odom_err = sc.get('odom_error')
+        self.dock_t0 = None
+        tgt = arena.get('targets', {}).get('dock_class', 'circle')
+        self.err_pivot = np.array(arena['dock']['slots'][tgt], float)
+        self.err_n = np.array(arena['dock']['n'], float)
         # 모터: 실제 믹서 + 드라이버와 같은 워치독
         self.mixer = ThrusterMixer(ThrusterConfig())
         self.cmd = Twist()
@@ -328,7 +338,33 @@ class SimNode(Node):
                                       'kind': kind, **kw}, ensure_ascii=False) + '\n')
         self.events.flush()
 
+    def _odom_error(self):
+        """지금 odom 오차 (회전 rad, 이동 벡터)."""
+        e = self.odom_err
+        if not e:
+            return 0.0, np.zeros(2)
+        t = 0.0 if self.dock_t0 is None else time.monotonic() - self.dock_t0
+        t0 = float(e.get('t0_s', 0.0))
+        if e.get('shape', 'decay') == 'ramp':
+            k = max(0.0, t - t0) if self.dock_t0 is not None else 0.0
+            sh = math.copysign(min(abs(e.get('rate_mps', 0.0)) * k, e.get('max_m', 9.0)), e.get('rate_mps', 0.0))
+            rot = math.copysign(min(abs(e.get('rate_dps', 0.0)) * k, e.get('max_deg', 90.0)), e.get('rate_dps', 0.0))
+        else:
+            f = 1.0 if t <= t0 else max(0.0, 1.0 - (t - t0) / float(e.get('dur_s', 40.0)))
+            sh, rot = e.get('shift_m', 0.0) * f, e.get('rot_deg', 0.0) * f
+        return math.radians(rot), sh * self.err_n
+
+    def _apply_error(self, x, y, yaw):
+        th, d = self._odom_error()
+        if th == 0.0 and not d.any():
+            return x, y, yaw
+        c, s_ = math.cos(th), math.sin(th)
+        rx, ry = x - self.err_pivot[0], y - self.err_pivot[1]
+        return (self.err_pivot[0] + c * rx - s_ * ry + d[0], self.err_pivot[1] + s_ * rx + c * ry + d[1], yaw + th)
+
     def _on_state(self, m):
+        if m.data == 'dock' and self.dock_t0 is None:
+            self.dock_t0 = time.monotonic()
         if m.data != self.state:
             self._event('state', value=m.data, pose=[round(self.boat.x, 2), round(self.boat.y, 2), round(math.degrees(self.boat.yaw), 1)])
         self.state = m.data
@@ -397,11 +433,12 @@ class SimNode(Node):
         self.k += 1
         if self.k % 2 == 0:               # 25 Hz
             ex, ey = self.rng.normal(0, self.pose_sigma, 2)
-            yaw = b.yaw + self.rng.normal(0, self.yaw_sigma)
+            ox, oy, oyaw = self._apply_error(b.x, b.y, b.yaw)
+            yaw = oyaw + self.rng.normal(0, self.yaw_sigma)
             od = Odometry()
             od.header.stamp = t.to_msg()
             od.header.frame_id, od.child_frame_id = 'odom', 'base_link'
-            od.pose.pose.position.x, od.pose.pose.position.y = b.x + ex, b.y + ey
+            od.pose.pose.position.x, od.pose.pose.position.y = ox + ex, oy + ey
             od.pose.pose.orientation.z, od.pose.pose.orientation.w = math.sin(yaw / 2), math.cos(yaw / 2)
             # 선체 속도 (대지 속도를 선체 축으로)
             od.twist.twist.linear.x = vx * math.cos(b.yaw) + vy * math.sin(b.yaw)
@@ -592,8 +629,9 @@ class SimNode(Node):
         m = NavSatFix()
         m.header.stamp = self.get_clock().now().to_msg()
         m.header.frame_id = 'gnss_1_antenna'
-        m.latitude = self.origin[0] + math.degrees(b.y / 6378137.0)
-        m.longitude = self.origin[1] + math.degrees(b.x / (6378137.0 * math.cos(math.radians(self.origin[0]))))
+        gx, gy, _ = self._apply_error(b.x, b.y, b.yaw)
+        m.latitude = self.origin[0] + math.degrees(gy / 6378137.0)
+        m.longitude = self.origin[1] + math.degrees(gx / (6378137.0 * math.cos(math.radians(self.origin[0]))))
         m.status.status = 2
         self.gps_pub.publish(m)
 
@@ -604,7 +642,9 @@ class SimNode(Node):
             't': round(self.now(), 2), 'rt': None if rt is None else round(rt, 2),
             'x': round(b.x, 3), 'y': round(b.y, 3), 'yaw': round(math.degrees(b.yaw), 1), 'u': round(b.u, 3),
             'r': round(b.r, 3), 'L': int(self.pwm[0]), 'R': int(self.pwm[1]),
-            'cl': round(self.cmd.linear.x, 3), 'ca': round(self.cmd.angular.z, 3), 'state': self.state}) + '\n')
+            'cl': round(self.cmd.linear.x, 3), 'ca': round(self.cmd.angular.z, 3), 'state': self.state,
+            **({'err_deg': round(math.degrees(self._odom_error()[0]), 2),
+                'err_m': round(float(np.linalg.norm(self._odom_error()[1])), 3)} if self.odom_err else {})}) + '\n')
         if self.k % 250 == 0:
             self.trace.flush()
 

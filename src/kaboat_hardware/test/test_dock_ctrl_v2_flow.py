@@ -1179,3 +1179,149 @@ def test_target_line_slot_normal_is_used_for_the_angle_check(node):
     node._tick()
     assert node.line_slot is not None and node.line_slot_seen == node.line_slot_seq
     assert node.reposition is None and 'target itself' in node.reposition_why
+
+
+# ── 잠근 뒤 슬롯 추적 (RTK Float 로 odom 이 도크 대비 흐를 때) ─────────────────────────────
+def _locked_to_via(node):
+    """가운데 슬롯을 뒷벽 5.5 m 에서 잠가 TO_VIA (정지점 (0, 1.0), 경유점 (0, 3.44))."""
+    _lock_bearing(node)
+    _odom(node, 0.0, 5.5)
+    _feed_slot(node, (0.4, 5.5), n=6, t0=110.0)
+    assert node.phase == 'TO_VIA'
+
+
+def _drifted_cloud(boat, shift=(0.0, 0.0), turn_deg=0.0):
+    """odom 이 흘러 도크가 odom 안에서 shift 만큼 옮겨지고 가운데 슬롯 뒷벽 중심 기준 turn_deg 돈 것처럼 보이는 점."""
+    pts = _cloud(boat)
+    a = math.radians(turn_deg)
+    rot = np.array([[math.cos(a), -math.sin(a)], [math.sin(a), math.cos(a)]])
+    return pts @ rot.T + np.asarray(shift, float)
+
+
+def _track_ticks(node, boat, n, t0=200.0, **drift):
+    pts = _drifted_cloud(boat, **drift)
+    for k in range(n):
+        node._add_cloud(t0 + .5 * k, pts)
+        node.track_asked = 0.0                         # track_period(0.5 s) 지난 것으로
+        node._tick()
+
+
+def test_tracking_follows_drifted_dock_in_limited_steps(node):
+    """잠근 뒤 도크가 odom 안에서 0.5 m 물 쪽으로 옮겨 보이면 경로가 한 번에 0.15 m 까지만 따라간다."""
+    _locked_to_via(node)
+    stop0 = node.route_enu[2].copy()
+    _track_ticks(node, (0.0, 5.5), 1, shift=(0.0, 0.5))
+    first = node.route_enu[2] - stop0
+    assert first[1] == pytest.approx(node.track_step, abs=.02) and abs(first[0]) < .05
+    _track_ticks(node, (0.0, 5.5), 8, t0=210.0, shift=(0.0, 0.5))
+    assert node.route_enu[2].tolist() == pytest.approx([0.0, 1.5], abs=.06)
+    assert node.route_enu[1].tolist() == pytest.approx([0.0, 3.94], abs=.06)     # 경유점도 같이
+    assert node.final_heading == pytest.approx(FACING_WALL, abs=math.radians(1.0))
+    tr = node.reports[-1]['track']
+    assert tr['updates'] >= 4 and tr['shift_m'] == pytest.approx(.5, abs=.06) and not tr['frozen']
+    assert node.fixed_path_msg.poses[-1].pose.position.y == pytest.approx(1.5 + node.retreat_distance, abs=.1)
+
+
+def test_tracking_turns_route_with_rotated_dock_in_limited_steps(node):
+    """도크가 3° 돌아 보이면 진입 선수도 한 번에 track_step_deg 까지만 따라 돈다."""
+    _locked_to_via(node)
+    _track_ticks(node, (0.0, 5.5), 1, turn_deg=3.0)
+    assert abs(wrap(node.final_heading - FACING_WALL)) == pytest.approx(node.track_step_angle, abs=math.radians(.3))
+    _track_ticks(node, (0.0, 5.5), 6, t0=210.0, turn_deg=3.0)
+    assert wrap(node.final_heading - FACING_WALL) == pytest.approx(math.radians(3.0), abs=math.radians(.6))
+
+
+def test_tracking_rejects_jumps_outside_the_gate(node):
+    """지금 추정에서 track_gate_m(0.6 m) 넘게 뛴 ㄷ자는 받지 않는다 — 경로 그대로. 옆으로 0.8 m 면 축 폭(0.6 m)
+    밖이라 아예 안 찾아진다. (도크 전체가 슬롯 간격 4 m 만큼 옮겨 보이면 옆 슬롯과 구분할 수 없지만 run2 흐름은
+    최대 2.2 m, 2 Hz 갱신 사이엔 4 cm 이하라 생기지 않는다.)"""
+    _locked_to_via(node)
+    stop0, updates = node.route_enu[2].copy(), node.track_updates
+    _track_ticks(node, (0.0, 5.5), 4, shift=(0.0, 1.0))          # 물 쪽 1 m 점프 (게이트 밖)
+    assert node.track_rejected >= 4
+    _track_ticks(node, (0.0, 5.5), 3, t0=210.0, shift=(0.8, 0.0))    # 옆 0.8 m
+    assert node.route_enu[2].tolist() == pytest.approx(stop0.tolist(), abs=1e-9)
+    assert node.track_updates == updates
+
+
+def test_tracking_freezes_near_the_wall_and_runs_off_tick(node, monkeypatch):
+    """뒷벽 track_min_wall(2.5 m) 안에선 ㄷ자를 찾지 않는다. 바깥에선 track_period 마다 한 번만."""
+    calls = []
+    real = dock_ctrl_v2_module.find_u_slot
+    monkeypatch.setattr(dock_ctrl_v2_module, 'find_u_slot', lambda *a, **k: calls.append(1) or real(*a, **k))
+    _locked_to_via(node)
+    calls.clear()
+    node.track_asked = 0.0
+    pts = _cloud((0.0, 5.5))
+    for k in range(5):                                           # 0.5 s 안의 tick 5번 — 한 번만
+        node._add_cloud(300.0 + .1 * k, pts)
+        node._tick()
+    assert len(calls) == 1
+    node.phase = 'TO_GOAL'
+    _odom(node, 0.0, 2.3)
+    node._add_cloud(301.0, _cloud((0.0, 2.3)))
+    node.track_asked = 0.0
+    calls.clear()
+    node._tick()
+    assert calls == [] and node.reports[-1]['track']['frozen']
+
+
+def test_tracking_can_be_turned_off(node):
+    _locked_to_via(node)
+    node.track = False
+    stop0 = node.route_enu[2].copy()
+    _track_ticks(node, (0.0, 5.5), 4, shift=(0.0, 0.5))
+    assert node.route_enu[2].tolist() == pytest.approx(stop0.tolist(), abs=1e-9)
+
+
+# ── TO_GOAL: 정지는 마지막으로 고정한 ㄷ자 정지점 그대로, LiDAR 뒷벽 거리는 충돌 방지에만 ─────────────
+def test_to_goal_stops_on_fixed_slot_goal_not_on_lidar_wall(node):
+    _locked_to_via(node)
+    node.phase = 'TO_GOAL'
+    _odom(node, 0.0, 1.6)
+    _scan(node, ahead_m=0.8)                                     # 라이다 0.8 + 앞 0.4 = 1.2 m — 정지점 범위지만
+    node._tick()
+    assert node.phase == 'TO_GOAL' and node.sent[-1].linear.x > 0.0      # LiDAR 로 멈추지 않는다
+    assert node.reports[-1]['berth_lidar_m'] == pytest.approx(1.2, abs=.02)
+    _odom(node, 0.0, 1.1)
+    _scan(node)                                                  # 앞 빔 없음 → None, 정지점 도착으로 후진
+    node._tick()
+    assert node.phase == 'REVERSE' and node.reports[-1]['berth_lidar_m'] is None
+
+
+def test_collision_guard_reverses_when_lidar_wall_too_close(node):
+    """odom 으로는 정지점까지 0.8 m 남았어도 LiDAR 뒷벽이 0.85 m 안이면 그 자리에서 후진."""
+    _locked_to_via(node)
+    node.phase = 'TO_GOAL'
+    _odom(node, 0.0, 1.8)
+    _scan(node, ahead_m=0.42)                                    # 선체 중심 0.82 m (range_min 0.4)
+    node._tick()
+    assert node.phase == 'REVERSE' and 'collision guard' in node.reports[-1]['detail']
+    assert node.sent[-1].linear.x == -node.retreat_cmd
+
+
+def test_collision_guard_ignored_off_axis_or_disabled(node):
+    _locked_to_via(node)
+    node.phase = 'TO_GOAL'
+    _odom(node, 0.0, 1.8, yaw=FACING_WALL + math.radians(30))   # 축에서 30° — 앞 빔이 뒷벽이 아닐 수 있다
+    _scan(node, ahead_m=0.42)
+    node._tick()
+    assert node.phase == 'TO_GOAL'
+    node.berth_guard = 0.0                                       # 끔
+    _odom(node, 0.0, 1.8)
+    _scan(node, ahead_m=0.42)
+    node._tick()
+    assert node.phase == 'TO_GOAL'
+
+
+def test_frozen_near_wall_keeps_last_fixed_slot_goal(node):
+    """뒷벽 2.5 m 안에선 도크가 더 흘러 보여도 정지점은 마지막으로 고정한 ㄷ자 그대로."""
+    _locked_to_via(node)
+    _track_ticks(node, (0.0, 5.5), 6, shift=(0.0, 0.3))
+    fixed = node.route_enu[2].copy()
+    assert fixed[1] == pytest.approx(1.3, abs=.06)
+    node.phase = 'TO_GOAL'
+    _odom(node, 0.0, 2.2)
+    _track_ticks(node, (0.0, 2.2), 4, t0=230.0, shift=(0.0, 0.6))
+    assert node.route_enu[2].tolist() == pytest.approx(fixed.tolist(), abs=1e-9)
+    assert node.reports[-1]['track']['frozen']
