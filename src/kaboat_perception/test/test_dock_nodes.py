@@ -92,7 +92,10 @@ def test_venv_env_goes_to_the_detector_only():
     detector_env = dict((k[0].text, v[0].text) for k, v in nodes['dock_mark_detector'].additional_env)
     assert detector_env == {'PYTHONPATH': '/venv/site'}
     for name, node in nodes.items():
-        if name != 'dock_mark_detector':
+        if name == 'dock_ctrl_v2':
+            ctrl_env = dict((k[0].text, v[0].text) for k, v in node.additional_env)
+            assert ctrl_env == {'OPENBLAS_NUM_THREADS': '1'}
+        elif name != 'dock_mark_detector':
             assert not node.additional_env                       # 다른 노드는 시스템 Python 그대로
     without = docking_nodes(target_class='circle', motion_enabled=True, weights='/w.pt',
                             detector_env={})
