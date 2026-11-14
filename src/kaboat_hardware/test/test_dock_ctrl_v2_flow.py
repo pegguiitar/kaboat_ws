@@ -604,7 +604,38 @@ def test_search_stops_when_yolo_status_is_stale(node):
     _shapes(node, square=-25.0)
     node._tick()
     assert node.sent[-1].angular.z != 0.0
-    node.det_received -= 10.0                          # 검출 노드가 멈춤 — 눈먼 회전·후진 안 함
+    node.det_received -= 10.0                          # 검출 노드가 멈춤 — 눈먼 회전·후진 안 함 (선수 유지만)
+    node._tick()
+    assert node.sent[-1].angular.z == 0.0 and node.sent[-1].linear.x == 0.0
+    assert node.reports[-1]['detail'].startswith('YOLO stale')
+
+
+def test_yolo_stale_at_scan_start_holds_arrival_heading(node):
+    """도킹 시작점 도착 때 YOLO 가 아직 안 떴으면 도착 선수각을 지킨다 (2026-11-14 bag: 명령 0 으로 69° 표류)."""
+    _odom(node, 0.0, 10.0, rate=math.radians(-16))     # approach 끝 선회가 남아 오른쪽으로 돌고 있음
+    _scan(node)
+    node._tick()                                       # 검출 상태가 한 번도 안 옴
+    assert node.phase == 'SCAN' and node.stale_hold_yaw == pytest.approx(FACING_WALL)
+    detail = node.reports[-1]['detail']
+    assert detail.startswith('YOLO stale') and 'holding heading -90.0 deg' in detail
+    assert node.sent[-1].linear.x == 0.0 and node.sent[-1].angular.z > 0   # 남은 선회를 되잡음
+    _odom(node, 0.0, 10.0, yaw=FACING_WALL - math.radians(30))           # 그래도 30° 오른쪽으로 밀림
+    node._tick()
+    assert node.stale_hold_yaw == pytest.approx(FACING_WALL)              # 기준은 처음 선수각 그대로
+    assert node.sent[-1].linear.x == 0.0 and node.sent[-1].angular.z == pytest.approx(node.max_turn)
+    _odom(node, 0.0, 10.0, yaw=FACING_WALL + math.radians(10))
+    node._tick()
+    assert node.sent[-1].angular.z < 0
+    _det(node, 0.0)                                    # YOLO 가 뜸 → 유지 끝, 보통 SCAN
+    node._tick()
+    assert node.stale_hold_yaw is None and node.yolo_stale_since is None
+    assert not node.reports[-1]['detail'].startswith('YOLO stale')
+
+
+def test_yolo_stale_heading_hold_can_be_turned_off(node):
+    node.stale_hold = False
+    _odom(node, 0.0, 10.0, yaw=FACING_WALL - math.radians(30), rate=math.radians(-5))
+    _scan(node)
     node._tick()
     assert node.sent[-1].angular.z == 0.0 and node.sent[-1].linear.x == 0.0
     assert node.reports[-1]['detail'] == 'YOLO stale'
@@ -823,7 +854,7 @@ def test_yolo_stale_30s_gives_up(node):
     _odom(node, 0.0, 10.0)
     _scan(node)
     node._tick()                                                       # 검출 상태가 한 번도 안 옴
-    assert node.phase == 'SCAN' and node.reports[-1]['detail'] == 'YOLO stale'
+    assert node.phase == 'SCAN' and node.reports[-1]['detail'].startswith('YOLO stale')
     node.yolo_stale_since -= node.give_up_yolo_stale - 1.0
     node._tick()
     assert node.phase == 'SCAN'                                        # 29 s — 아직 (YOLO 로딩 bag 9 s)

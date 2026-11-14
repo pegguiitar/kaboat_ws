@@ -26,8 +26,12 @@
                             (시뮬: 끝 슬롯 앞에서 반대로 330° 돎). 반전한 쪽은 비어 있다고 보고, 그 뒤 간격
                             규칙도 그쪽 후보를 뺀다.
             아무것도 없음 — 시계방향.
-          YOLO 상태 자체가 끊기면(stale) 멈춘다. 누적 search_max_turns(2)바퀴를 돌아도 목표가 없으면
-          상태에 'not found after 2 turns' 를 남기고(목표가 보이면 다시 시작) — 미션 모드면 SCAN 시작
+          YOLO 상태 자체가 끊기면(stale) 끊긴 순간의 선수각을 odom PD(scan_turn_kp/kd)로 지킨다
+          (yolo_stale_hold_heading). 도킹 시작점에 왔는데 YOLO 가 아직 안 떴을 때의 페일세이프 — 2026-11-14
+          bag: 모델 로드 20 s + 첫 추론 8 s 동안 명령 0 이라 선수가 −117° → +174° 로 69° 표류해, 시작 때
+          화면 안(16°)이던 목표가 화면 밖으로 나갔다. 탐색 회전은 하지 않는다(눈먼 회전 금지).
+          누적 search_max_turns(2)바퀴를 돌아도 목표가 없으면 상태에 'not found after 2 turns' 를
+          남기고(목표가 보이면 다시 시작) — 미션 모드면 SCAN 시작
           선수각(도크 쪽)으로 되돌린 뒤 /mission/give_up 'dock: …' 을 보낸다. 전체 실행이면 mission_manager 가
           시간 초과 때처럼 직진 후진 3 m 뒤 다음 미션으로 넘긴다(선수가 도크 쪽이라 후진은 도크에서
           멀어진다). 단일 시험·미션 모드 아님이면 그대로 멈춘다.
@@ -237,7 +241,9 @@ class DockCtrlV2(Node):
                     'give_up_to_goal_s': 60.0,
                     # TO_GOAL 에서 포기하면 슬롯 안일 수 있어 먼저 선수 유지 직진 후진 (retreat_cmd) — 정지점은
                     # 경유점보다 2.44 m 안쪽이라 3 m 면 입구 밖 (mission_manager 후진 0.05 는 조류에 약함)
-                    'give_up_reverse_m': 3.0}
+                    'give_up_reverse_m': 3.0,
+                    # SCAN 중 YOLO 상태가 끊기면(모델 로딩 중 등) 끊긴 순간의 선수각을 지킨다. False 면 예전처럼 0.
+                    'yolo_stale_hold_heading': True}
         for name, value in defaults.items():
             self.declare_parameter(name, value)
         p = lambda name: self.get_parameter(name).value
@@ -320,6 +326,7 @@ class DockCtrlV2(Node):
         self.give_up_to_via = float(p('give_up_to_via_s'))
         self.give_up_to_goal = float(p('give_up_to_goal_s'))
         self.give_up_reverse = float(p('give_up_reverse_m'))
+        self.stale_hold = bool(p('yolo_stale_hold_heading'))
         if not all(math.isfinite(v) and v >= 0 for v in (
                 self.give_up_yolo_stale, self.give_up_to_via, self.give_up_to_goal,
                 self.give_up_reverse)):
@@ -408,6 +415,7 @@ class DockCtrlV2(Node):
         self.abort_since = 0.0
         self.abort_heading = None                   # ABORT 전 후진 때 지킬 선수각 (None = 후진 없이 포기)
         self.yolo_stale_since = None                # SCAN 에서 YOLO 가 끊긴 때 (monotonic)
+        self.stale_hold_yaw = None                  # 그때의 선수각 — YOLO 가 돌아올 때까지 지킨다
         self.phase_seen = 'IDLE'                    # 단계가 바뀐 때를 재려고 (TO_VIA·TO_GOAL 시간 제한)
         self.phase_since = time.monotonic()
         self.phase = 'IDLE'
@@ -617,6 +625,7 @@ class DockCtrlV2(Node):
         self.phase = phase
         self.abort_reason, self.abort_from, self.abort_heading = '', None, None
         self.yolo_stale_since = None
+        self.stale_hold_yaw = None
         self.blocked_since = None
         self.reposition = None
         self.unblock_start = None
@@ -1446,12 +1455,19 @@ class DockCtrlV2(Node):
             if why == 'YOLO stale':
                 if self.yolo_stale_since is None:
                     self.yolo_stale_since = now
+                    self.stale_hold_yaw = yaw
                 stale = now - self.yolo_stale_since
                 if self._can_give_up() and self.give_up_yolo_stale and stale >= self.give_up_yolo_stale:
                     self._start_abort(f'YOLO stale for {stale:.0f}s')
                     return
+                if self.stale_hold:
+                    turn = self._scan_turn(self.stale_hold_yaw, yaw)
+                    why = (f'YOLO stale {stale:.1f}s — holding heading '
+                           f'{math.degrees(self.stale_hold_yaw):.1f} deg '
+                           f'(error {math.degrees(wrap(self.stale_hold_yaw - yaw)):+.1f})')
             else:
                 self.yolo_stale_since = None
+                self.stale_hold_yaw = None
             self._command(linear, turn)
             self._report(why)
             return
