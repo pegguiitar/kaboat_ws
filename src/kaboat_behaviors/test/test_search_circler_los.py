@@ -170,10 +170,24 @@ def test_look_holds_activation_pose_facing_area_with_hold_cap():
     assert state._hold == (45.0, 70.0, math.degrees(math.atan2(10.0, 15.0)))
     assert state._command_full_scale == (0.25, WAYPOINT_MAX_ANGULAR)   # 공용 waypoint() 아님
     assert state.calls == []
-    move(state, 43.0, 70.0)                          # 바람에 2 m 밀림 → 처음 자리로 되돌아감
+    move(state, 42.0, 70.0)                          # 바람에 3 m 밀림 → 처음 자리로 되돌아감
     cmd = SearchCircler.compute_cmd(state)
     assert state._hold[:2] == (45.0, 70.0)
     assert DEFAULT_MAX_LINEAR < cmd.linear.x <= 0.25 + 1e-9
+
+
+def test_look_overshoot_near_hold_keeps_heading_without_turning_back():
+    # 2026-11-14 실주행: 활성화 자리를 1.1 m 지나쳐 서자 뒤쪽 자리로 돌아가려 제자리에서 약 1.3 바퀴 돌았다.
+    # 2 m 안이면 위치는 놔두고 선수각(영역 쪽)만 — 이미 영역 쪽을 보면 전진·회전 거의 0
+    area_dir = math.atan2(10.0, 15.0)
+    state = make_state('red', [], search_center=(60.0, 80.0), look_sec=15.0, yaw=area_dir)
+    SearchCircler.compute_cmd(state)
+    ahead = (45.0 + 1.1 * math.cos(area_dir), 70.0 + 1.1 * math.sin(area_dir))
+    move(state, *ahead)
+    for _ in range(3):
+        cmd = SearchCircler.compute_cmd(state)
+        assert cmd.linear.x == 0.0 and abs(cmd.angular.z) < 0.05
+    assert state._hold[:2] == (45.0, 70.0)           # 기준 자리는 그대로 (멀리 밀리면 되돌아감)
 
 
 def test_scan_in_place_at_area_uses_effective_turn():
@@ -222,7 +236,7 @@ def test_look_repulsion_only_while_moving(monkeypatch):
     state = make_state('red', [], search_center=(60.0, 70.0), look_sec=15.0)
     SearchCircler.compute_cmd(state)          # 제자리 — 선수각만 (이미 영역 쪽) → 반발 안 걸림
     assert seen == []
-    move(state, 43.0, 70.0)                   # 2 m 밀림 → 제자리로 전진 → 반발
+    move(state, 42.0, 70.0)                   # 3 m 밀림 → 제자리로 전진 → 반발
     SearchCircler.compute_cmd(state)
     assert len(seen) == 1 and seen[0] > 0.0
 

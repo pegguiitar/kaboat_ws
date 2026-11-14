@@ -27,6 +27,12 @@
         · 해 질 녘 검정 캡슐 몸통의 어두운 픽셀이 H 45~66(중앙 51)·V 26~32 라 하한 45 로는 초록이 돼,
           붙은 쌍의 검정이 초반 29 % 스캔 동안 초록이었다. 초록 공 부표 초록 픽셀은 H 60~79(중앙 73).
           하한 55 로 올리면 검정 오판 0 %, gate 초록 부표 초록 픽셀 비율은 86→82 % 정도로만 준다.
+        · **어두운 픽셀(V < 50)은 H ≥ 68 일 때만 초록** (green_dark_v·green_dark_h_min, 2026-11-14).
+          흐린 아침(비) 실주행 run1_20261114: 검정 캡슐 몸통이 H 56~71(중앙 64)·V 23~48(중앙 35)로 초록에
+          들어가 누적 초록 비율 0.17~0.23 > 0.15 → 검출기가 검정을 green 으로 내 탐색(검정 목표) 실패.
+          같은 날 초록 부표 초록 픽셀은 H 71~86(중앙 77~80)·V 중앙 59~72 — 이 규칙으로 검정 0.23 → 0.07
+          (unknown), 초록 탐색 부표 2 개·gate 초록 7 개는 초록 픽셀 95~100 % 유지 (0.16~0.89 그대로),
+          11-13 탐색 초록 100 %, 11-12 해 질 녘 초록 86 % 유지.
   검정 부표(V≈40, 보라 번짐 H≈148)는 둘 다 아니라 unknown.
 """
 import math
@@ -50,7 +56,9 @@ class ColorParams:
     green_h_min: int = 55         # 초록: green_h_min ≤ H ≤ green_h_max — 올리브 물·해 질 녘 검정 캡슐(H 45~55) 제외
     green_h_max: int = 89
     green_s_min: int = 40         # 이보다 채도 낮으면(흰·회색·윤슬) 초록 아님 — 초록 공 부표 S 50~70 (bag 실측)
-    green_v_min: int = 20         # 짙은 초록 몸통(V≈34)도 초록
+    green_v_min: int = 20         # 짙은 초록 몸통(V≈34)도 초록 — 단 아래 어두운 픽셀 규칙
+    green_dark_v: int = 50        # 이보다 어두운 픽셀은 H ≥ green_dark_h_min 일 때만 초록 — 흐린 날 검정 캡슐
+    green_dark_h_min: int = 68    # 몸통(H 56~71·V 23~48)이 초록이 됐다 (2026-11-14 bag). 0 이면 끔
     # D455 화면 가장자리 보라 번짐 — 창의 max_tint_frac 넘게 이 색이면 그 프레임은 색을 못 믿음 (표 없음)
     tint_h_min: int = 140
     tint_h_max: int = 169
@@ -93,7 +101,8 @@ def classify_colors(bgr, p: ColorParams):
     label[(sat >= p.red_s_min) & (val >= p.red_v_min)
           & ((h <= p.red_h_max) | (h >= p.red_h_min))] = 1
     label[(sat >= p.green_s_min) & (val >= p.green_v_min)
-          & (h >= p.green_h_min) & (h <= p.green_h_max)] = 2
+          & (h >= p.green_h_min) & (h <= p.green_h_max)
+          & ((val >= p.green_dark_v) | (h >= p.green_dark_h_min))] = 2
     label[(sat >= p.tint_s_min) & (h >= p.tint_h_min) & (h <= p.tint_h_max)] = 3   # 보라 번짐
     return label
 

@@ -60,6 +60,10 @@ ENTRY_SPACING = 0.05        # [m] 진입 경로 샘플 간격
 ENTRY_DONE_DISTANCE = 1.0   # [m] 진입 경로 끝점에 이만큼 다가가면 원 추종으로
 ENTRY_ALIGN_AHEAD = 1.5     # [m] 진입 방향 = 경로에서 배와 가장 가까운 점부터 이만큼 앞 점 쪽
 ENTRY_ALIGN_DONE_DEG = 20.0  # [deg] 제자리 회전을 이 안까지 하고 LOS 진입으로
+LOOK_FREE_RADIUS = 2.0      # [m] LOOK — 활성화 자리에서 이 안이면 위치는 놔두고 선수각만 지킨다 (approach 도착
+                            # 반경과 같음). 2026-11-14 실주행: 배가 0.9 m/s 로 들어와 1.1 m 지나쳐 서자 뒤쪽
+                            # 자리(0.35 m 허용)로 돌아가려 제자리에서 약 1.3 바퀴(373–388 s, 486°) 돌았고, 그동안 카메라가
+                            # 탐색 부표를 못 봐 검정이 19 s 동안 unseen 이었다
 MARKER_RGB = {'red': (1.0, 0.1, 0.1), 'green': (0.1, 0.9, 0.2), 'black': (0.2, 0.2, 0.2)}
 
 
@@ -439,6 +443,9 @@ class SearchCircler(BehaviorBase):
             angle = math.degrees(math.atan2(area[1] - boat[1], area[0] - boat[0]))
             self._hold = (boat[0], boat[1], angle)
         x, y, angle = self._hold
+        if math.hypot(boat[0] - x, boat[1] - y) <= LOOK_FREE_RADIUS:
+            # 활성화 자리 근처 — 지금 자리를 목표로 줘서 선수각만 맞춘다 (뒤쪽 점으로 돌아가며 맴돌지 않게)
+            x, y = boat
         self._hold_ctrl.set_goal(make_waypoint(x, y, angle))
         # _tick 이 이 상한으로 자른다 (공용 waypoint() 의 max_linear 0.101 대신 hold_linear)
         self._command_thrust_ratio = 1.0
