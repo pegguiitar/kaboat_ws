@@ -21,6 +21,9 @@
            켜고 재생하면 시작 자세에서 검정 +0.8 s, 초록 +6.2 s, 빨강 +14.1 s 에 들어왔다.
            빨강·초록 목표는 확인되는 즉시 고정한다. 검정 목표(unknown)는 LOOK 이 끝날 때까지
            기다렸다 고른다 — 빨강·초록도 색이 붙기 전 잠깐 unknown 을 거치므로(같은 bag 빨강 1.3 s).
+           단 탐색 부표가 다 들어오면(영역 안 빨강·초록 확인 + 그 무리 안 unknown 이 look_settle_sec(3 s)
+           이어짐) LOOK 을 일찍 끝낸다 — look_sec 은 상한. 검정이 아직 모양 확인 전(6 m 밖)이면 SEEK 로
+           다가가며 확인되는 대로 고정한다.
   SEEK     LOOK 이 끝나도 못 찾음 — 탐색 영역 중심(area)으로 가고, 도착하면 제자리 선회로 둘러본다.
            목적지는 검출된 부표에서 seek_clearance(2.5 m) 비킨 점 (seek_xy — 부표 옆에서 제자리 회전하지 않게).
   ORBIT    목표 부표 고정 — 부표 중심 반경 orbit_radius 원을 LOS 로 추종한다. 원 밖에서는 규정
@@ -67,7 +70,9 @@ XY = Tuple[float, float]
 class SearchParams:
     target_color: str = ''            # 대회 당일 공지 — red / green / black. '' 이면 미설정
     orbit_radius: float = 2.0         # 부표 중심 → 선회 원 반경 [m] (선체 1.1 m + 부표 반경 여유)
-    orbit_band: float = 1.0           # 원에서 이만큼 안쪽·바깥에 있을 때만 선회 각도를 센다 [m]
+    orbit_band: float = 1.5           # 원에서 이만큼 안쪽·바깥에 있을 때만 선회 각도를 센다 [m]
+                                      # (1.0 → 1.5, 2026-11-14 오후 run2: 0.9 m/s·회전 상한에서 실제 선회 반경이
+                                      #  2.7–2.9 m 라 3 m 밖에서 각이 안 쌓여 170°·376° 에서 7 s 멈췄다)
     laps: float = 1.1                 # 완료 바퀴 수 — 한 바퀴 + 36° 여유 (원이 확실히 닫히게)
     target_search_radius: float = 12.0  # 탐색 영역 중심에서 이 안의 부표만 후보 [m]
                                       # (10 → 12, 2026-11-13: 영역 중심 기준. 같은 bag 에서 탐색 부표는
@@ -110,6 +115,11 @@ class SearchParams:
                                       # (mission_manager transition_radius 2.0 보다 작게)
     look_sec: float = 15.0            # 활성화 직후 제자리에서 둘러보는 시간 [s] (0 = 안 함)
     black_waits_look: bool = True     # 검정(unknown) 목표는 LOOK 이 끝난 뒤에 고른다
+    look_settle_sec: float = 3.0      # 단 탐색 부표가 다 들어오면(영역 안 빨강·초록 확인 + 그 무리 안 unknown 이 이만큼
+                                      # 이어짐) LOOK 을 일찍 끝낸다 [s] (0 = 끔, look_sec 끝까지). 검정 모양 확인 전(6 m 밖)
+                                      # 이면 SEEK 로 다가가며 확인되는 대로 고정.
+                                      # 빨강·초록이 색 붙기 전 unknown 인 시간은 1–1.3 s. 2026-11-14 오후 run2: 빨강·초록
+                                      # 색 370 s, 검정 첫 검출 375.4 s, 고정 385.3 s(LOOK 15 s 끝)
     hold_linear: float = 0.25         # LOOK 제자리 유지 전진 상한 — 바람 0.25 m/s 를 이기게
                                       # (behavior 기본 0.101 ≈ 0.35 m/s 로는 겨우 버팀)
     require_grid: bool = True         # /occupancy_grid 없거나 끊기면 정지 (gate 와 같은 규칙)
@@ -149,9 +159,9 @@ class SearchParams:
                                       # 진입 120° 쪽으로 크게 돌다 반발 조향에 밀려 검정 반대편으로 돌아 중심 0.61 m
     exit_cone_deg: float = 75.0       # 완료 뒤, 부표→배 방향과 배→출구 방향 사이가 이 안일 때 원을 벗어난다 [deg]
                                       # (그 전에는 원을 이어 돈다 — 출구 직선이 방금 돈 부표를 스치지 않게)
-    exit_thrust: float = 0.25         # 완료·포기 뒤 출구 직선 LOS 직진 상한 (선회와 같음, 추력 곡선 0.75 m/s, 11-14 오후 run2
-                                      # 출구 실측 0.80 m/s). 예전 공용 waypoint()
-                                      # 0.101 은 조류 0.25 m/s 에서 22 m 에 125 s, 0.15 m/s 에서 옆으로 밀려 0.43 m
+    exit_thrust: float = 0.40         # 완료·포기 뒤 출구 직선 LOS 직진 상한 (실물 곡선 0.40 → 1.06 m/s). 예전 공용 waypoint()
+                                      # 0.101 은 조류 0.25 m/s 에서 22 m 에 125 s, 0.15 m/s 에서 옆으로 밀려 0.43 m.
+                                      # 0.25 → 0.40 (2026-11-14 오후 run2: 출구 22 m 에 0.83 m/s 로 27 s)
     exit_arrive_radius: float = 0.4   # 출구점이 search_end 에서 비킨 점일 때 도착 반경 [m]
                                       # (done_clearance + 이것 < mission_manager 전환 반경 2.0)
 
@@ -170,7 +180,7 @@ class SearchParams:
             raise ValueError('search refine_alpha / scan_turn / orbit_thrust / orbit_turn / '
                              'hold_linear must be in [0, 1]')
         non_negative = (self.switch_margin, self.look_sec, self.entry_clearance,
-                        self.entry_skip_band, self.seek_clearance)
+                        self.entry_skip_band, self.seek_clearance, self.look_settle_sec)
         if not all(math.isfinite(v) and v >= 0.0 for v in non_negative):
             raise ValueError('search switch_margin / look_sec / entry_clearance / '
                              'entry_skip_band must be finite and >= 0')
@@ -489,6 +499,8 @@ class SearchFsm:
         self.color_fracs = {}     # 부표 ID → 색 순도 (검출기 /detections/buoys/color_frac, 노드가 tick 마다 넣음)
         self.twin_ids = set()     # 검정으로 볼 같은 색 쌍둥이 중 약한 쪽 ID (black_from_twin, candidates 마다)
         self._locked_twin = False  # 고정한 부표가 쌍둥이 — 색이 빨강·초록이어도 고정을 안 푼다
+        self._unk_since = {}      # LOOK 조기 종료 — 무리 안 unknown 부표 키 → 처음 본 시각
+        self._look_cut = False    # 탐색 부표가 다 들어와 LOOK 을 일찍 끝냈는가
 
     @property
     def direction(self) -> str:
@@ -631,8 +643,38 @@ class SearchFsm:
         self._refs = refs
         return [(xy, bid) for _, xy, bid in out]
 
+    def _field_complete(self, buoys, now: float) -> bool:
+        """검정 목표 LOOK 조기 종료 — 탐색 부표가 다 들어왔는가: 영역 안에 빨강·초록이 둘 다 확인됐고,
+        그 무리(가장 가까운 빨강·초록까지 field_gap 안)에 unknown 부표가 look_settle_sec 이상 이어졌다.
+        모양 검사는 여기서 안 본다 — LOOK 자리에서 검정이 6 m(shape_max_range) 밖이면 모양을 못 재서,
+        고정은 그 뒤 candidates() 가 (가까이 가며) 모양을 확인하고 한다."""
+        if self.p.look_settle_sec <= 0.0:
+            return False
+        refs, colors, unknown = [], set(), []
+        for b in buoys:
+            xy = _xy(b)
+            if not all(math.isfinite(v) for v in xy) or self._dist_area(xy) > self.p.target_search_radius:
+                continue
+            if b.color in ('red', 'green'):
+                refs.append(xy)
+                colors.add(b.color)
+            elif b.color in self.match:
+                unknown.append((b, xy))
+        seen = set()
+        settled = False
+        for b, xy in unknown:
+            if not refs or min(math.dist(xy, r) for r in refs) > self.p.field_gap:
+                continue
+            bid = getattr(b, 'id', None)
+            key = bid if bid is not None else (round(xy[0] * 2), round(xy[1] * 2))
+            seen.add(key)
+            first = self._unk_since.setdefault(key, now)
+            settled = settled or now - first >= self.p.look_settle_sec
+        self._unk_since = {k: v for k, v in self._unk_since.items() if k in seen}
+        return colors == {'red', 'green'} and settled
+
     def _looking(self, now: float) -> bool:
-        if self.p.look_sec <= 0.0:
+        if self.p.look_sec <= 0.0 or self._look_cut:
             return False
         if self._look_since is None:
             self._look_since = now
@@ -657,6 +699,9 @@ class SearchFsm:
         if self.center is None:
             looking = self._looking(now)
             wait = looking and self.p.black_waits_look and self.p.target_color == 'black'
+            if wait and self._field_complete(buoys, now):
+                self._look_cut = True      # 탐색 부표가 다 들어왔다 — LOOK 을 일찍 끝낸다
+                looking = wait = False     # (후보가 아직 모양 확인 전이면 SEEK 로 다가가며 고정)
             if cands and not wait:
                 self._lock(*cands[0])
             else:

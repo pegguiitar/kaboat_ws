@@ -342,6 +342,45 @@ def test_black_waits_until_look_ends():
     assert f.center == (169.3, -5.9)
 
 
+def test_black_look_ends_early_when_field_complete():
+    # 빨강·초록 확인 + 검정 후보 unknown 3 s 이어짐 → LOOK 15 s 를 다 안 기다리고 고정
+    f = fsm_0113('black', look_sec=15.0, lock_confirm_sec=1.0, look_settle_sec=3.0)
+    full = [buoy('red', 174.5, -1.2, 5), buoy('green', 166.5, -0.2, 4), buoy('unknown', 169.3, -5.9, 3)]
+    assert f.update(full, (168.7, -8.9), 100.0) == 'LOOK'
+    assert f.update(full, (168.7, -8.9), 102.9) == 'LOOK'
+    assert f.update(full, (168.7, -8.9), 103.1) == 'ORBIT'
+    assert f.center == (169.3, -5.9)
+
+
+def test_black_look_waits_while_field_incomplete():
+    # 초록이 아직 unknown(색 붙기 전) — 부표가 다 안 들어왔으니 LOOK 끝까지
+    f = fsm_0113('black', look_sec=15.0, lock_confirm_sec=1.0, look_settle_sec=3.0)
+    part = [buoy('red', 174.5, -1.2, 5), buoy('unknown', 166.5, -0.2, 4), buoy('unknown', 169.3, -5.9, 3)]
+    assert f.update(part, (168.7, -8.9), 100.0) == 'LOOK'
+    assert f.update(part, (168.7, -8.9), 110.0) == 'LOOK'
+    assert f.update(part, (168.7, -8.9), 115.1) == 'ORBIT'
+
+
+def test_black_look_ends_early_to_seek_when_shape_not_known_yet():
+    # 다 들어왔지만 검정이 6 m 밖이라 모양 미확인(None) — LOOK 을 끝내고 SEEK 로 다가간다
+    f = fsm_0113('black', look_sec=15.0, lock_confirm_sec=1.0, look_settle_sec=3.0)
+    full = [buoy('red', 174.5, -1.2, 5), buoy('green', 166.5, -0.2, 4), buoy('unknown', 169.3, -5.9, 3)]
+    shape = lambda b: None
+    assert f.update(full, (168.7, -12.0), 100.0, shape) == 'LOOK'
+    assert f.update(full, (168.7, -12.0), 103.1, shape) == 'SEEK'
+    assert f.update(full, (168.7, -12.0), 104.0, shape) == 'SEEK'       # LOOK 으로 돌아가지 않음
+    assert f.update(full, (168.7, -10.0), 105.0, lambda b: True) == 'SEEK'      # 모양 확인 + lock_confirm 1 s
+    assert f.update(full, (168.7, -10.0), 106.1, lambda b: True) == 'ORBIT'
+
+
+def test_black_look_settle_disabled_waits_full_look():
+    f = fsm_0113('black', look_sec=15.0, lock_confirm_sec=1.0, look_settle_sec=0.0)
+    full = [buoy('red', 174.5, -1.2, 5), buoy('green', 166.5, -0.2, 4), buoy('unknown', 169.3, -5.9, 3)]
+    assert f.update(full, (168.7, -8.9), 100.0) == 'LOOK'
+    assert f.update(full, (168.7, -8.9), 110.0) == 'LOOK'
+    assert f.update(full, (168.7, -8.9), 115.1) == 'ORBIT'
+
+
 def test_black_can_lock_during_look_when_disabled():
     f = fsm_0113('black', look_sec=15.0, black_waits_look=False)
     seen = [buoy('unknown', 169.3, -5.9, 3), buoy('green', 166.5, -0.2, 4)]
