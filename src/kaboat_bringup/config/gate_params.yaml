@@ -55,6 +55,7 @@ gate_follower:
     # 게이트 1 짝을 기다림. 15 s 넘게 계속 막히면 풀고 고른 쌍으로 감. 0 = 끔
     gate.first_guard_margin: 1.2
     gate.first_guard_max_sec: 15.0
+    gate.give_up_stall_sec: 25.0        # 게이트 통과 뒤 진행 없이 이만큼 → /mission/give_up (0 = 끔, 2026-11-14)
     # 게이트 사슬 (2026-11-12): 다음 게이트를 기억한 부표로 미리 골라 경로를 중점들로 이어 둔다.
     # 1 이면 미리 잇지 않음(지금 게이트를 지나는 순간 다음 쌍을 고름).
     gate.max_chain_gates: 3

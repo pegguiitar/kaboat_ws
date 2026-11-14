@@ -272,7 +272,8 @@ def test_seek_holds_for_front_obstacle_stale_scan_and_travel_limit(node):
 
 def test_seek_travel_limit_rescans_then_gives_up(node):
     """막힘 없이 seek_max_travel_m 를 가도 ㄷ자를 못 잡으면 그 자리에서 다시 SCAN → 새 방위로 SEEK.
-    seek_rescan_max_attempts 번 다 쓰면 멈춰 기다리고, 새 도킹이면 횟수는 처음부터."""
+    seek_rescan_max_attempts 번 다 쓰면 단독 시험은 멈춰 기다리고(미션 모드는 포기 — 아래), 새 도킹이면 횟수는 처음부터."""
+    node.give_up_pub = None                            # 미션 모드 아님 (단독 도킹 시험)
     y = 10.0
     for k in range(node.seek_rescan_max):
         _lock_bearing(node, y=y)                                          # 그 자리에서 방위 다시 고정
@@ -738,6 +739,7 @@ def test_blocked_again_after_reposition_backs_off_instead_of_holding(node):
 
 
 def test_unblock_gives_up_after_max_attempts_and_new_dock_resets(node):
+    node.give_up_pub = None                            # 미션 모드 아님 — 횟수 다 쓰면 멈춰 기다림
     _lock_bearing(node)
     node.unblock_count = node.unblock_max
     _scan(node, ahead_m=1.5)
@@ -775,3 +777,136 @@ def test_reposition_drive_blocked_backs_off_then_rescans_on_time_limit(node):
 def test_slot_pitch_from_yaml_is_the_measured_lidar_pitch(node):
     """dock_slot.yaml slot_pitch_m = 라이다 실측 슬롯 중심 간격(3.99/4.06) — 표지판 간격(3.55)이 아님."""
     assert node.slot_pitch == pytest.approx(PITCH, abs=.05)
+
+
+# ── 포기 (미션 모드, 2026-11-14): 서서 마감을 기다리지 않고 /mission/give_up ─────────────────
+
+def _gave(node):
+    gave = []
+    node.give_up_pub.publish = lambda msg: gave.append(msg.data)
+    return gave
+
+
+def test_rescans_used_up_gives_up_in_mission_mode(node):
+    gave = _gave(node)
+    node.seek_rescans = node.seek_rescan_max
+    _lock_bearing(node)
+    _odom(node, 0.0, 10.0 - node.seek_max_travel)
+    node._tick()
+    assert node.phase == 'ABORT' and node.abort_heading is None       # 슬롯 밖 — 후진 없이
+    node._tick()
+    assert node.sent[-1].linear.x == 0.0
+    assert gave == [f'dock: no U slot after {node.seek_rescan_max} re-scans']
+    node._tick()                                                       # 1 s 마다 다시
+    assert len(gave) == 1
+    node.give_up_last -= 1.0
+    node._tick()
+    assert len(gave) == 2 and 'gave up' in node.reports[-1]['detail']
+
+
+def test_unblocks_used_up_gives_up_in_mission_mode(node):
+    gave = _gave(node)
+    _lock_bearing(node)
+    node.unblock_count = node.unblock_max
+    node.reposition_used = True
+    _scan(node, ahead_m=1.5)
+    node._tick()
+    node.blocked_since -= 10.0
+    node._tick()
+    assert node.phase == 'ABORT'
+    node._tick()
+    assert gave and gave[0].startswith('dock: blocked') and f'after {node.unblock_max} retreats' in gave[0]
+
+
+def test_yolo_stale_30s_gives_up(node):
+    gave = _gave(node)
+    _odom(node, 0.0, 10.0)
+    _scan(node)
+    node._tick()                                                       # 검출 상태가 한 번도 안 옴
+    assert node.phase == 'SCAN' and node.reports[-1]['detail'] == 'YOLO stale'
+    node.yolo_stale_since -= node.give_up_yolo_stale - 1.0
+    node._tick()
+    assert node.phase == 'SCAN'                                        # 29 s — 아직 (YOLO 로딩 bag 9 s)
+    node.yolo_stale_since -= 1.0
+    node._tick()
+    assert node.phase == 'ABORT'
+    node._tick()
+    assert gave and gave[0].startswith('dock: YOLO stale for 30s')
+
+
+def _to_via(node):
+    _lock_bearing(node)
+    _odom(node, 0.0, 5.5)
+    _feed_slot(node, (0.4, 5.5), n=6, t0=110.0)
+    assert node.phase == 'TO_VIA'
+
+
+def test_via_not_reached_in_60s_gives_up_without_reversing(node):
+    gave = _gave(node)
+    _to_via(node)
+    node._tick()
+    node.phase_since -= node.give_up_to_via - 1.0
+    node._tick()
+    assert node.phase == 'TO_VIA'
+    node.phase_since -= 1.0
+    node._tick()
+    assert node.phase == 'ABORT' and node.abort_heading is None
+    node._tick()
+    assert node.sent[-1].linear.x == 0.0 and gave[0].startswith('dock: via not reached in 60s')
+
+
+def test_berth_not_reached_in_60s_backs_out_then_gives_up(node):
+    gave = _gave(node)
+    _to_via(node)
+    _odom(node, 0.0, 3.44)
+    node._tick()
+    assert node.phase == 'ALIGN_VIA'
+    node._tick()
+    assert node.phase == 'TO_GOAL'
+    _odom(node, 0.0, 2.0)                                              # 슬롯 입구 안쪽에서 정체
+    node._tick()
+    node.phase_since -= node.give_up_to_goal
+    node._tick()
+    assert node.phase == 'ABORT' and node.abort_heading == pytest.approx(node.final_heading)
+    node._tick()
+    assert node.sent[-1].linear.x == -node.retreat_cmd and not gave   # 먼저 슬롯 축으로 직진 후진
+    _odom(node, 0.0, 2.0 + node.give_up_reverse)
+    node._tick()
+    assert node.sent[-1].linear.x == 0.0 and gave[0].startswith('dock: berth not reached in 60s')
+
+
+def test_berth_give_up_reverse_has_a_time_limit(node):
+    gave = _gave(node)
+    _odom(node, 0.0, 2.0)
+    _scan(node)
+    node._start_abort('test', reverse_heading=FACING_WALL)
+    node._tick()
+    assert node.sent[-1].linear.x == -node.retreat_cmd
+    node.abort_since -= node.unblock_max_s                             # 물살에 못 나가도
+    node._tick()
+    assert gave == ['dock: test']
+
+
+def test_time_give_ups_off_outside_mission_mode_and_reset_on_new_dock(node):
+    node.give_up_pub = None                            # 단독 도킹 시험 — 예전처럼 계속 시도
+    _to_via(node)
+    node._tick()
+    node.phase_since -= 1000.0
+    node._tick()
+    assert node.phase == 'TO_VIA'
+    node.phase = 'ABORT'
+    node.abort_reason = 'x'
+    node._on_mission_state(String(data='search'))
+    node._on_mission_state(String(data='dock'))
+    assert node.phase == 'SCAN' and node.abort_reason == '' and node.yolo_stale_since is None
+
+
+@pytest.mark.parametrize('name', ['give_up_yolo_stale_s', 'give_up_to_via_s', 'give_up_to_goal_s',
+                                  'give_up_reverse_m'])
+def test_bad_give_up_params_refused(name):
+    rclpy.init()
+    try:
+        with pytest.raises(ValueError):
+            DockCtrlV2(parameter_overrides=[Parameter(name, value=-1.0)])
+    finally:
+        rclpy.shutdown()

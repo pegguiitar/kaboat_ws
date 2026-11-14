@@ -53,6 +53,12 @@
   TO_VIA → ALIGN_VIA → TO_GOAL  경유점(입구 밖 pre_entry_offset) → 슬롯 중심선과 평행하게 선수
           정렬 → 정지점(뒷벽 앞 berth_distance). 치수는 모두 dock_slot.yaml (slot_config).
   REVERSE → COMPLETE  선수 유지 후진 retreat_distance_m → /mission/complete=dock, 이탈점 유지.
+  ABORT   (미션 모드만, 2026-11-14) 더 할 게 없거나 진전이 없으면 서서 미션 마감(240 s)을 기다리지 않고
+          /mission/give_up 'dock: 이유' 를 1 s 마다 — 전체 실행이면 mission_manager 가 직진 후진 3 m 뒤 search.
+          바로 포기: SEEK 재탐색·막힘 후진(UNBLOCK) 횟수 소진, BACKOFF 실패. 시간: SCAN 에서 YOLO 가
+          give_up_yolo_stale_s(30 s) 끊김, TO_VIA give_up_to_via_s(60 s)·TO_GOAL give_up_to_goal_s(60 s) 안에
+          도착 못 함(시뮬 정상 최대 9·37 s, 실패 172·61 s). TO_GOAL 이면 슬롯 안일 수 있어 슬롯 축 선수로
+          give_up_reverse_m(3 m) 직진 후진(retreat_cmd) 뒤 포기. 단독 도킹 시험(미션 모드 아님)은 예전처럼 멈춤.
 
 위치 출처 position_source (기본 odom, 2026-11-12): /odom = GQ7 RTK 필터 위치(25 Hz, 선체 중심).
 gps 는 /gps/fix 원시(2 Hz, 좌현 안테나) 최근 5개 중앙값 — 시뮬레이션 원래 방식, 1~2 s 늦다.
@@ -222,7 +228,16 @@ class DockCtrlV2(Node):
                     'unblock_max_attempts': 3,
                     # SEEK 가 막힘 없이 seek_max_travel_m 를 가도 ㄷ자를 못 잡으면 그 자리에서 SCAN 부터 다시
                     # (목표 방위를 새로 잡음). 도킹 한 번에 최대 이만큼 — 다 쓰면 멈춰 기다린다.
-                    'seek_rescan_max_attempts': 2}
+                    'seek_rescan_max_attempts': 2,
+                    # 포기 (미션 모드, 2026-11-14): 더 할 게 없거나 진전이 없으면 서서 마감(240 s)을 기다리지
+                    # 않고 /mission/give_up — 전체 실행이면 mission_manager 가 직진 후진 3 m 뒤 search 로.
+                    # 0 = 그 조건 끔. 재탐색·막힘 후진·BACKOFF 를 다 써서 멈추면 바로 포기.
+                    # 폐루프 시뮬 정상 판 최대: TO_VIA 9 s·TO_GOAL 37 s (실패 판 172·61 s), YOLO 첫 결과 9 s(bag).
+                    'give_up_yolo_stale_s': 30.0, 'give_up_to_via_s': 60.0,
+                    'give_up_to_goal_s': 60.0,
+                    # TO_GOAL 에서 포기하면 슬롯 안일 수 있어 먼저 선수 유지 직진 후진 (retreat_cmd) — 정지점은
+                    # 경유점보다 2.44 m 안쪽이라 3 m 면 입구 밖 (mission_manager 후진 0.05 는 조류에 약함)
+                    'give_up_reverse_m': 3.0}
         for name, value in defaults.items():
             self.declare_parameter(name, value)
         p = lambda name: self.get_parameter(name).value
@@ -301,6 +316,14 @@ class DockCtrlV2(Node):
         self.unblock_max_s = float(p('unblock_max_s'))
         self.unblock_max = int(p('unblock_max_attempts'))
         self.seek_rescan_max = int(p('seek_rescan_max_attempts'))
+        self.give_up_yolo_stale = float(p('give_up_yolo_stale_s'))
+        self.give_up_to_via = float(p('give_up_to_via_s'))
+        self.give_up_to_goal = float(p('give_up_to_goal_s'))
+        self.give_up_reverse = float(p('give_up_reverse_m'))
+        if not all(math.isfinite(v) and v >= 0 for v in (
+                self.give_up_yolo_stale, self.give_up_to_via, self.give_up_to_goal,
+                self.give_up_reverse)):
+            raise ValueError('give_up_* must be finite and >= 0 (0 = off)')
         if not all(math.isfinite(v) and v > 0 for v in
                    (self.stage_radius, self.gps_timeout, self.odom_timeout,
                     self.perception_timeout,
@@ -380,6 +403,13 @@ class DockCtrlV2(Node):
         self.unblock_start = self.unblock_heading = None
         self.unblock_since = 0.0
         self.unblock_why = ''
+        self.abort_reason = ''                      # ABORT: 포기 이유 (/mission/give_up 'dock: …')
+        self.abort_from = None                      # ABORT 를 시작한 odom 위치 (후진 거리)
+        self.abort_since = 0.0
+        self.abort_heading = None                   # ABORT 전 후진 때 지킬 선수각 (None = 후진 없이 포기)
+        self.yolo_stale_since = None                # SCAN 에서 YOLO 가 끊긴 때 (monotonic)
+        self.phase_seen = 'IDLE'                    # 단계가 바뀐 때를 재려고 (TO_VIA·TO_GOAL 시간 제한)
+        self.phase_since = time.monotonic()
         self.phase = 'IDLE'
         self.first_plan = self.final_plan = None
         self.route_enu = None
@@ -585,6 +615,8 @@ class DockCtrlV2(Node):
 
     def _reset_search(self, phase, keep_reposition=False):
         self.phase = phase
+        self.abort_reason, self.abort_from, self.abort_heading = '', None, None
+        self.yolo_stale_since = None
         self.blocked_since = None
         self.reposition = None
         self.unblock_start = None
@@ -693,7 +725,8 @@ class DockCtrlV2(Node):
     PHASE_COLORS = {'IDLE': (.7, .7, .7), 'STAGE': (.8, .8, .3), 'SCAN': (1., .7, .1),
                     'SEEK': (.3, .6, 1.), 'BACKOFF': (1., .3, .3), 'TO_VIA': (.2, .9, .4),
                     'ALIGN_VIA': (.2, .9, .8), 'TO_GOAL': (.1, 1., .2), 'REVERSE': (.8, .4, 1.),
-                    'COMPLETE': (1., 1., 1.), 'REPOSITION': (1., .2, 1.), 'UNBLOCK': (1., .5, .5)}
+                    'COMPLETE': (1., 1., 1.), 'REPOSITION': (1., .2, 1.), 'UNBLOCK': (1., .5, .5),
+                    'ABORT': (1., .1, .1)}
 
     def _publish_ctrl_markers(self, detail):
         """RViz: 단계 글자·전이 기록, 지연 보상한 목표 시선, SCAN 목표/고정 방위선, SEEK ±가운데."""
@@ -1058,6 +1091,10 @@ class DockCtrlV2(Node):
                 if held >= self.reposition_after and self._start_unblock(
                         yaw, f'reposition blocked {held:.1f}s, {blocked:.2f}m ahead'):
                     return
+                if held >= self.reposition_after and self._can_give_up():
+                    self._start_abort(f'reposition blocked {blocked:.2f}m ahead after '
+                                      f'{self.unblock_count} retreats')
+                    return
                 self._report(f'reposition: something {blocked:.2f}m ahead — holding ({distance:.1f}m to go)'
                              + self._unblock_note())
                 return
@@ -1118,6 +1155,42 @@ class DockCtrlV2(Node):
         self._command(-self.retreat_cmd, self._turn(self.unblock_heading, yaw))
         self._report(f'unblock {self.unblock_count}/{self.unblock_max}: backing straight '
                      f'{backed:.2f}/{self.unblock_distance:.1f}m ({self.unblock_why})')
+
+    # ── 포기 (미션 모드): 서서 마감을 기다리지 않고 mission_manager 에 dock 건너뛰기 요청 ─────────
+    def _can_give_up(self):
+        """미션 모드만 — 단독 도킹 시험(give_up_pub 없음)은 예전처럼 그 자리에서 멈춰 기다린다."""
+        return self.give_up_pub is not None
+
+    def _start_abort(self, reason, reverse_heading=None):
+        """ABORT: reverse_heading 을 주면 그 선수를 지키며 give_up_reverse_m 직진 후진(슬롯 밖으로) 뒤 포기."""
+        self.phase = 'ABORT'
+        self.abort_reason = reason
+        self.abort_from = self._odom_xy()
+        self.abort_since = time.monotonic()
+        self.abort_heading = reverse_heading if self.give_up_reverse > 0 else None
+        self.give_up_last = 0.0
+        self.reposition = None
+        self.follower.reset()
+        self._command(0, 0)
+        self._report(f'{reason} — giving up dock'
+                     + (f' after backing {self.give_up_reverse:.1f}m' if self.abort_heading is not None else ''))
+
+    def _abort_tick(self, yaw):
+        backed = float(np.linalg.norm(self._odom_xy() - self.abort_from))
+        elapsed = time.monotonic() - self.abort_since
+        if (self.abort_heading is not None and backed < self.give_up_reverse
+                and elapsed < self.unblock_max_s):
+            self._command(-self.retreat_cmd, self._turn(self.abort_heading, yaw))
+            self._report(f'{self.abort_reason} — backing out {backed:.2f}/{self.give_up_reverse:.1f}m '
+                         'before giving up')
+            return
+        self._command(0, 0)
+        now = time.monotonic()
+        if now - self.give_up_last >= 1.0:          # 한 번 잃어도 되게 — state 가 바뀌면 IDLE
+            self.give_up_pub.publish(String(data=f'dock: {self.abort_reason}'))
+            self.give_up_last = now
+            self.give_up_sent = True
+        self._report(f'{self.abort_reason} — gave up, asked mission manager to skip dock')
 
     def _start_seek(self, bearing):
         self.phase = 'SEEK'
@@ -1345,6 +1418,13 @@ class DockCtrlV2(Node):
             self._report(error)
             return
         xy, yaw = self._position(), self._yaw()
+        now = time.monotonic()
+        if self.phase != self.phase_seen:
+            self.phase_seen, self.phase_since = self.phase, now
+        in_phase = now - self.phase_since
+        if self.phase == 'ABORT':
+            self._abort_tick(yaw)
+            return
         if self.phase == 'STAGE':
             stage = self._stage()
             if stage is None:
@@ -1363,6 +1443,15 @@ class DockCtrlV2(Node):
             if self.scan_home_yaw is None:
                 self.scan_home_yaw = yaw
             linear, turn, why = self._scan_target(yaw)
+            if why == 'YOLO stale':
+                if self.yolo_stale_since is None:
+                    self.yolo_stale_since = now
+                stale = now - self.yolo_stale_since
+                if self._can_give_up() and self.give_up_yolo_stale and stale >= self.give_up_yolo_stale:
+                    self._start_abort(f'YOLO stale for {stale:.0f}s')
+                    return
+            else:
+                self.yolo_stale_since = None
             self._command(linear, turn)
             self._report(why)
             return
@@ -1402,6 +1491,10 @@ class DockCtrlV2(Node):
                     if self._start_unblock(yaw, f'blocked {held:.1f}s, {blocked:.2f}m ahead, '
                                                 f'no reposition ({why})'):
                         return
+                    if self._can_give_up():                 # 우회·막힘 후진을 다 씀 — 더 할 게 없다
+                        self._start_abort(f'blocked {blocked:.2f}m ahead after '
+                                          f'{self.unblock_count} retreats')
+                        return
                 note = f'; reposition: {self.reposition_why}' if self.reposition_why else ''
                 self._report(f'something {blocked:.2f}m ahead — holding; {wall_why}{note}'
                              + self._unblock_note())
@@ -1415,6 +1508,9 @@ class DockCtrlV2(Node):
                     self._reset_search('SCAN', keep_reposition=True)
                     self._report(f'no U slot within {self.seek_max_travel:.1f}m ({wall_why}) — '
                                  f're-scanning here ({self.seek_rescans}/{self.seek_rescan_max})')
+                    return
+                if self._can_give_up():
+                    self._start_abort(f'no U slot after {self.seek_rescans} re-scans')
                     return
                 self._report(f'no U slot within {self.seek_max_travel:.1f}m — holding; {wall_why}; '
                              f'gave up after {self.seek_rescans} re-scans')
@@ -1441,11 +1537,16 @@ class DockCtrlV2(Node):
                     self.phase = 'TO_VIA'
                     self._command(0, 0)
                     self._report(f'backed off to {have:.2f}m; one-shot route fixed')
+                elif self._can_give_up():
+                    self._start_abort('backed off but route rejected')
                 else:
                     self._command(0, 0)
                     self._report('backed off but route rejected — holding')
                 return
             if backed >= self.backoff_max:
+                if self._can_give_up():
+                    self._start_abort(f'backed off {backed:.2f}m, still {have:.2f}/{need:.2f}m from wall')
+                    return
                 self._command(0, 0)
                 self._report(f'backed off {backed:.2f}m, still {have:.2f}/{need:.2f}m — holding')
                 return
@@ -1453,6 +1554,11 @@ class DockCtrlV2(Node):
             self._report(f'backing off {have:.2f}/{need:.2f}m from target wall')
             return
         if self.phase == 'TO_VIA':
+            if self._can_give_up() and self.give_up_to_via and in_phase >= self.give_up_to_via:
+                # 경유점은 입구 밖 — 후진 없이 포기 (mission_manager 가 직진 후진 3 m)
+                self._start_abort(f'via not reached in {in_phase:.0f}s '
+                                  f'({np.linalg.norm(xy-self.route_enu[1]):.2f}m left)')
+                return
             self.follower.goal_tolerance = self.via_tol
             step = self.follower.step(self.first_plan, xy, yaw,
                                       self.odom.twist.twist.angular.z,
@@ -1476,6 +1582,12 @@ class DockCtrlV2(Node):
             self._report(f'via heading error {math.degrees(error):.1f}deg')
             return
         if self.phase == 'TO_GOAL':
+            if self._can_give_up() and self.give_up_to_goal and in_phase >= self.give_up_to_goal:
+                # 슬롯 안일 수 있다 — 슬롯 축 선수를 지키며 먼저 빠져나온 뒤 포기
+                self._start_abort(f'berth not reached in {in_phase:.0f}s '
+                                  f'({np.linalg.norm(xy-self.route_enu[2]):.2f}m left)',
+                                  reverse_heading=self.final_heading)
+                return
             self.follower.goal_tolerance = self.goal_tol
             step = self.follower.step(self.final_plan, xy, yaw,
                                       self.odom.twist.twist.angular.z,

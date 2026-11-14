@@ -158,6 +158,11 @@ class GateFollower(BehaviorBase):
         # 확정 부표가 있으면 그 쌍(게이트 2)을 받지 않음 (0 = 끔)
         self.declare_parameter('gate.first_guard_margin', 1.2)
         self.declare_parameter('gate.first_guard_max_sec', 15.0)   # 이만큼 넘게 막히면 지키기를 풂
+        # 포기 (2026-11-14): 마지막 게이트를 지난 뒤(없으면 시작부터) 진행(FOLLOW·GOAL_APPROACH·SEEK_FIRST_PAIR)이
+        # 아닌 상태로 보낸 시간이 이만큼 쌓이면 /mission/give_up — 전체 실행이면 mission_manager 가 다음 미션으로.
+        # 폐루프 시뮬: 성공 23 판 최대 11.6 s, 실패 판(게이트 1 을 기둥 밖으로 지남·강한 조류) 127~166 s 를 서서
+        # 떠밀렸다(16 m). 게이트 수가 대회 배치와 달라 required_pairs 를 못 채울 때도 여기서 끝난다. 0 = 끔.
+        self.declare_parameter('gate.give_up_stall_sec', 25.0)
         self.thrust_ratio = float(self.get_parameter('gate.thrust_ratio').value)
         self.los_thrust_ratio = float(
             self.get_parameter('gate.los_thrust_ratio').value)
@@ -184,6 +189,9 @@ class GateFollower(BehaviorBase):
         self.seek_close_stop = float(self.get_parameter('gate.seek_close_stop_along').value)
         self.first_guard_margin = float(self.get_parameter('gate.first_guard_margin').value)
         self.first_guard_max_sec = float(self.get_parameter('gate.first_guard_max_sec').value)
+        self.give_up_stall = float(self.get_parameter('gate.give_up_stall_sec').value)
+        if not (math.isfinite(self.give_up_stall) and self.give_up_stall >= 0.0):
+            raise ValueError('gate.give_up_stall_sec must be finite and >= 0 (0 = off)')
         self.seek_max_bias = math.radians(
             float(self.get_parameter('gate.seek_max_bias_deg').value))
         if (not all(math.isfinite(v) for v in (
@@ -249,6 +257,8 @@ class GateFollower(BehaviorBase):
         self.path_pub = self.create_publisher(Path, '/gate/path', 1)
         self.pair_pub = self.create_publisher(MarkerArray, '/gate/pairs', 1)
         self.status_pub = self.create_publisher(String, '/gate/status', 10)
+        # 진전 없이 정체 → mission_manager 에 gate 건너뛰기 요청 (전체 실행에서만 받아 줌)
+        self.give_up_pub = self.create_publisher(String, '/mission/give_up', 10)
         self.preview_pub = self.create_publisher(Twist, '/gate/cmd_preview', 10)
         # 부표 쌍 찾기는 스캔 점을 바로 쓰므로 배가 수평일 때만 오는 /scan/level 을 받는다
         self.create_subscription(LaserScan, '/scan/level', self._on_scan,
@@ -293,6 +303,10 @@ class GateFollower(BehaviorBase):
         self._guard_expired = False
         self._guard_hint = None
         self._guard_arrived = False
+        self._stall_acc = 0.0        # 마지막 게이트 통과 뒤 진행 아닌 상태로 보낸 시간 [s]
+        self._stall_last = None
+        self._stall_passed = 0
+        self._give_up_last = None
 
     def on_deactivate(self):
         self._pair = None
@@ -780,7 +794,39 @@ class GateFollower(BehaviorBase):
             return False
         return points_safe(dri, self._goal_leg(boat_xy, goal_xy), self.gate_params)
 
+    # 진행으로 보는 상태 — 나머지(WAIT_GATE_PAIR·PATH_UNSAFE·LOOKAHEAD_UNSAFE·GATE_NOT_CROSSED·센서 끊김 …)는 정체
+    PROGRESS_STATUSES = ('FOLLOW_GATE', 'GOAL_APPROACH', 'SEEK_FIRST_PAIR', 'COMPLETE')
+
     def compute_cmd(self):
+        cmd = self._compute_cmd()
+        self._track_stall(time.monotonic())
+        return cmd
+
+    def _track_stall(self, now):
+        """정체 시간을 쌓아 give_up_stall_sec 넘으면 /mission/give_up 'gate: …' 을 1 s 마다.
+
+        게이트를 하나 지나면 0 부터 다시. 단일 미션 시험·mission_manager 가 없으면 받는 쪽이 무시하고
+        gate 는 계속 시도한다.
+        """
+        passed = len(self._passed_midpoints)
+        if passed != self._stall_passed:
+            self._stall_passed, self._stall_acc = passed, 0.0
+        dt = 0.0 if self._stall_last is None else min(max(now - self._stall_last, 0.0), 0.5)
+        self._stall_last = now
+        status = self._status_text or ''
+        if status.startswith(self.PROGRESS_STATUSES) or status.endswith('PASSED'):
+            return
+        self._stall_acc += dt
+        if not self.give_up_stall or self._stall_acc < self.give_up_stall:
+            return
+        if self._give_up_last is None or now - self._give_up_last >= 1.0:
+            self._give_up_last = now
+            reason = (f'{passed}/{self.gate_params.required_pairs} gates passed, no progress for '
+                      f'{self._stall_acc:.0f}s (last {status or "none"})')
+            self.give_up_pub.publish(String(data=f'gate: {reason}'))
+            self.get_logger().warning(f'gate: 포기 — {reason}', throttle_duration_sec=5.0)
+
+    def _compute_cmd(self):
         now = time.monotonic()
         if (self.goal is None or self.goal.header.frame_id != 'odom'
                 or not self.waypoint_odom_ready()):
