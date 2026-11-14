@@ -189,3 +189,44 @@ def test_depth_intersects_water_mask():
     dep, _ = _depth_for((4.5, 0.0), 1)
     r = refine_with_depth(lab, [v], cands, dep, K, G, P)[0]
     assert r.depth and r.color == 'red' and r.visible <= v.visible and r.green <= v.green
+
+
+# ---------- 창 위치 보정 (water_search) — 창 좌우로 넓혀 가장 가까운 덩어리 ----------
+
+def _offset_scene(buoys, center=(7.0, 0.0), water_bgr=(95, 105, 70)):
+    """buoys = [(창 폭 대비 가로 어긋남, BGR)] — 투영 창은 center 그대로, 부표는 옆으로 밀어 그린다."""
+    rng = np.random.default_rng(1)
+    img = (np.array(water_bgr, np.float32) + rng.normal(0, 3, (480, 640, 3))).clip(0, 255).astype(np.uint8)
+    u0, v0, u1, v1, _ = candidate_rect(center, 0.25, K, G, P)
+    w = u1 - u0
+    for shift, bgr in buoys:
+        a = int(u0 + shift * w + 0.25 * w)
+        img[int(v0):int(v1) + 1, a:a + int(0.5 * w)] = bgr
+    return img
+
+
+def test_search_finds_buoy_beside_the_window():
+    # 라이다 창이 부표 왼쪽 물 위에 놓임 (부표가 창 폭 0.8 배 오른쪽) — 창 안만 보면 물(초록 범위)만, 넓혀 찾으면 빨강
+    from dataclasses import replace
+    img = _offset_scene([(0.8, (40, 40, 200))])
+    lab = classify_colors(img, P)
+    cands = [((7.0, 0.0), 0.25)]
+    inside = vote_colors(lab, cands, K, G, replace(P, water_search=0.0), image=img)[0]
+    found = vote_colors(lab, cands, K, G, P, image=img)[0]
+    assert inside.red < 0.15 * inside.visible
+    assert found.mask is not None and found.color == 'red'
+
+
+@pytest.mark.parametrize('side, alone', [(-1.4, True), (-0.9, False)])
+def test_search_leaves_neighbour_to_its_own_window(side, alone):
+    # 오른쪽 이웃 초록은 자기 창이 있다 — 떨어져 있으면 내 덩어리(빨강)만, 붙어서 한 덩어리가 되면 못 골라
+    # 창 전체(섞임 → 판정 불가)로 돌아간다 (틀린 색 표는 안 냄)
+    img = _offset_scene([(0.3, (40, 40, 200))])
+    nb = candidate_rect((7.0, side), 0.25, K, G, P)
+    img[int(nb[1]):int(nb[3]) + 1, int(nb[0]):int(nb[2]) + 1] = (60, 140, 40)
+    lab = classify_colors(img, P)
+    votes = vote_colors(lab, [((7.0, 0.0), 0.25), ((7.0, side), 0.25)], K, G, P, image=img)
+    if alone:
+        assert votes[0].color == 'red' and votes[0].green < 0.15 * votes[0].visible and votes[1].color == 'green'
+    else:
+        assert votes[0].color in (None, 'red')
