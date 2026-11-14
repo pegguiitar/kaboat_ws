@@ -154,7 +154,7 @@ ros2 launch kaboat_hardware real_sensors.launch.py outdoor:=true rtk:=true \
 | `check_yolo` | `python3 scripts/check_yolo_masks.py` | 도킹 YOLO **마스크만** 확인 (뎁스·라이다 무관). `bash scripts/run_dock_yolo.sh`(D455 + YOLO, 모터 없음)를 먼저 켜 둔다. 1초마다 도형별 ✓신뢰도·화면 위치·방위각·최근 검출률, 추론 ms. 마스크 그린 영상을 5초마다 `~/kaboat_yolo_checks/날짜_시각/`에 PNG (`--save-every 0` 끔). Ctrl+C로 요약 |
 | `test_avoid_outdoor` | `ros2 launch kaboat_hardware outdoor_avoid_test.launch.py` | 야외 회피 시험 `avoid_entry` → `avoid_end`, **조건이 맞으면 즉시 출발**. 5절 참고 |
 | `test_tournament` | `ros2 launch kaboat_hardware outdoor_tournament_test.launch.py` | 토너먼트 회피(종합 미션과 별개 경기장) `tournament_entry` → `tournament_end`. `test_avoid_outdoor`와 같은 노드·조건·인자, **조건이 맞으면 즉시 출발**. 5절 참고 |
-| `go_tournament` / `go_avoid` / `go_gate` / `go_dock` / `go_station` / `go_search` | `python3 scripts/go_and_test.py 미션` | **`goto 미션_entry` → 시작 조건을 0.5 s 유지하면 goto 를 끄고 그 미션 시험을 바로 켬** (goto 를 손으로 안 끔). 시험은 각각 `test_tournament`·`test_avoid_outdoor`·`test_gate_outdoor`·`test_dock_outdoor`·`test_mission station`·`test_mission search`(접근 단계 없이 `entry_required:=false`). 기본 조건(각 미션 시작 조건과 같음): 게이트·도킹·스테이션·탐색 **2 m·기록 선수각 ±30°**, 회피·토너먼트 **3 m·`_end` 방향 ±45°**. 옵션 → 시험 인자 순: `go_tournament --dist 1.5 --heading 20 --goto thrust_ratio:=0.3 drive_enabled:=false`. 회피·토너먼트는 넘기는 동안 흐를 여유로 시험 출발 검사를 0.5 m·5° 넓혀 넘김(`start_tolerance`·`start_heading_tolerance_deg` 를 직접 주면 그 값). 넘기는 몇 초(도킹은 YOLO 로딩이라 더 김)는 명령이 없어 배가 조금 흐를 수 있음. Ctrl+C = 켜진 쪽 끄고 끝 |
+| `go_tournament` / `go_avoid` / `go_gate` / `go_dock` / `go_station` / `go_search` | `python3 scripts/go_and_test.py 미션` | **`goto 미션_entry` → 시작 조건을 0.5 s 유지하면 goto 를 끄고 그 미션 시험을 바로 켬** (goto 를 손으로 안 끔). 시험은 각각 `test_tournament`·`test_avoid_outdoor`·`test_gate_outdoor`·`test_dock_outdoor`·`test_mission station`·`test_mission search`(접근 단계 없이 `entry_required:=false`). 기본 조건(각 미션 시작 조건과 같음): 게이트·도킹·스테이션·탐색 **2 m·기록 선수각 ±30°**, 회피·토너먼트 **3 m·`_end` 방향 ±45°**. 옵션 → 시험 인자 순: `go_tournament --dist 1.5 --heading 20 --goto thrust_ratio:=0.3 drive_enabled:=false`. 회피·토너먼트는 넘기는 동안 흐를 여유로 시험 출발 검사를 0.5 m·5° 넓혀 넘김(`start_tolerance`·`start_heading_tolerance_deg` 를 직접 주면 그 값). 넘기는 몇 초(도킹은 YOLO 로딩이라 더 김)는 명령이 없어 배가 조금 흐를 수 있음. **`go_tournament`는 goto 전에 출발 직진 3 s**(슬롯 탈출, `run_autonomy`와 같은 텔레옵 4단계 직진, 모터 `AUTO` 인 시간만 셈 — 아래 "출발 직진") 뒤 정지 명령 한 번 → goto (goto 가 뜨는 1~2 s 는 흐름). 끄기 `go_tournament --undock 0`, 시간 `--undock 4`, 다른 미션도 `--undock 3` 으로 켬. Ctrl+C = 켜진 쪽 끄고 끝 (직진 중이면 정지 명령 내고 끝) |
 | `test_straight` / `test_circle` / `test_bspline` / `test_station` / `test_waypoint` / `test_los` / `test_avoid` | 각 `*_test.launch.py … wait_for_start:=false` | 단독 주행 시험, **실행 즉시 출발** ([TANK_TESTS_GUIDE.md](TANK_TESTS_GUIDE.md)) |
 
 ---
@@ -245,6 +245,8 @@ test_mission dock dock_target_class:=circle
   - 3초는 모터가 자율(`/teleop/status` = `AUTO`)일 때만 셉니다. 텔레옵·비상 정지 중이면 기다렸다가 놓으면 남은 만큼 이어서 갑니다.
   - 처음부터 도는 전체 실행만 해당합니다(`test_mission`·`go_*`·`start_state:=…`는 안 함). 미리보기(`approach_motion_enabled:=false`)도 안 합니다.
   - 끄기 `run_autonomy undock_sec:=0`, 시간 바꾸기 `undock_sec:=4.0`.
+  - **토너먼트도 슬롯에서 출발**하므로 `go_tournament`도 같은 직진을 3초 낸 뒤 `goto tournament_entry` → `test_tournament`입니다
+    (`go_and_test.py`가 `/cmd_vel`로 직접 냄, 같은 0.4667·0.05 s·`AUTO` 시간만). 끄기 `go_tournament --undock 0`.
 - **미션 제한 시간 (경기 15분):** 한 미션이 실패해 계속 기다리거나 재시도하면 뒤 미션을 못 하므로, 시간을 넘으면 건너뜁니다.
   - 몫: gate 3분, station 2분, dock 4분, search 3분, avoid 3분 (합 15분, `mission_params.yaml`의 `time_limit.*`).
   - 그 미션의 접근부터 셉니다. 마감은 "전체 시작 + 앞 미션 몫의 합"이라, 일찍 끝난 미션의 남은 시간은 다음 미션이 씁니다.

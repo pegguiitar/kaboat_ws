@@ -86,3 +86,101 @@ def test_bad_inputs_are_rejected():
         gt.build_plan('gate', dist=0.0)
     with pytest.raises(ValueError):
         gt.build_plan('gate', heading=200.0)
+
+
+def test_tournament_undocks_first_other_missions_do_not():
+    assert gt.build_plan('tournament').undock_sec == 3.0        # 토너먼트도 슬롯에서 출발
+    for mission in ('avoid', 'gate', 'dock', 'station', 'search'):
+        assert gt.build_plan(mission).undock_sec == 0.0
+    assert gt.build_plan('tournament', undock=0.0).undock_sec == 0.0   # --undock 0 = 끔
+    assert gt.build_plan('avoid', undock=3.0).undock_sec == 3.0
+    for bad in (-1.0, 31.0, float('nan')):
+        with pytest.raises(ValueError):
+            gt.build_plan('tournament', undock=bad)
+
+
+def test_undock_cli_option_reaches_the_plan(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(gt, 'run', lambda plan, *_: seen.setdefault('plan', plan) and 0)
+    gt.main(['tournament', '--undock', '4', 'drive_enabled:=false'])
+    assert seen['plan'].undock_sec == 4.0
+    assert seen['plan'].test_cmd[4] == 'drive_enabled:=false'
+
+
+def test_undock_command_matches_full_run():
+    assert gt.UNDOCK_LINEAR == pytest.approx(0.4667)           # 텔레옵 4단계 (좌우 1700 µs)
+    mm = pytest.importorskip('kaboat_mission.mission_manager')
+    assert (gt.UNDOCK_LINEAR, gt.UNDOCK_PERIOD, gt.THRUSTER_STATUS_TIMEOUT) == (
+        mm.UNDOCK_LINEAR, mm.UNDOCK_PERIOD, mm.THRUSTER_STATUS_TIMEOUT)
+    assert gt.PRESETS['tournament'].undock_sec == mm.UNDOCK_SEC
+
+
+def test_undock_timer_counts_only_while_motor_is_auto():
+    t = gt.UndockTimer(1.0, period=0.05)
+    assert not t.update(0.0, True)
+    assert not t.update(0.1, True)                              # 0.1
+    assert not t.update(0.5, False)                             # 텔레옵 — 안 셈
+    assert not t.update(0.6, True)                              # 0.2
+    assert not t.update(5.0, True)                              # 밀려도 한 번에 0.2 까지만 → 0.4
+    assert t.elapsed == pytest.approx(0.4)
+    for now in (5.2, 5.4, 5.6):
+        t.update(now, True)
+    assert t.elapsed == pytest.approx(1.0)
+    assert t.update(5.65, True)                                 # 늦어도 다음 주기에 끝남
+
+
+def test_motor_auto_needs_fresh_auto_status():
+    assert gt.motor_auto('AUTO', 10.0, 10.5)
+    assert not gt.motor_auto('AUTO', 10.0, 11.5)                # 상태가 1 s 넘게 안 옴
+    assert not gt.motor_auto('TELEOP', 10.0, 10.1)
+    assert not gt.motor_auto(None, None, 10.0)
+
+
+class _FakePub:
+    def __init__(self):
+        self.sent = []
+
+    def publish(self, msg):
+        self.sent.append((msg.linear.x, msg.angular.z))
+
+
+class _FakeNode:
+    def __init__(self):
+        self.pub = _FakePub()
+
+    def create_publisher(self, _type, topic, _depth):
+        assert topic == '/cmd_vel'
+        return self.pub
+
+
+def test_undock_drives_straight_until_done_then_stops():
+    pytest.importorskip('geometry_msgs.msg')
+    import time as _time
+    node, motor, stop = _FakeNode(), {}, {'flag': False}
+
+    def spin_once(_node, timeout_sec):
+        motor.update(mode='AUTO', t=_time.monotonic())
+        _time.sleep(timeout_sec)
+
+    assert gt.undock(node, 0.3, motor, stop, spin_once)
+    sent = node.pub.sent
+    assert sent[-1] == (0.0, 0.0)                               # 끝나면 정지 명령
+    assert len(sent) >= 4 and all(s == (gt.UNDOCK_LINEAR, 0.0) for s in sent[:-1])
+
+
+def test_undock_waits_without_auto_and_stops_on_ctrl_c():
+    pytest.importorskip('geometry_msgs.msg')
+    import time as _time
+    node, motor, stop = _FakeNode(), {'mode': 'TELEOP', 't': _time.monotonic()}, {'flag': False}
+    calls = {'n': 0}
+
+    def spin_once(_node, timeout_sec):
+        motor['t'] = _time.monotonic()
+        calls['n'] += 1
+        if calls['n'] > 20:                                     # 텔레옵 중이라 안 끝남 → Ctrl+C
+            stop['flag'] = True
+        _time.sleep(timeout_sec)
+
+    assert not gt.undock(node, 0.1, motor, stop, spin_once)
+    assert node.pub.sent[0] == (gt.UNDOCK_LINEAR, 0.0)          # 대기 중에도 직진 명령은 낸다
+    assert node.pub.sent[-1] == (0.0, 0.0)

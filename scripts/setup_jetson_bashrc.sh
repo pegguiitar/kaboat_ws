@@ -162,6 +162,7 @@ test_mission() {
 # goto <미션>_entry → 시작 조건(거리·선수각)을 0.5 s 유지하면 goto 를 끄고 그 미션 시험을 바로 켬 (goto 손으로 안 꿈).
 #   기본 조건: 게이트·도킹·스테이션·탐색 2 m·기록 선수각 ±30°, 회피·토너먼트 3 m·목표(_end) 방향 ±45°.
 #   go_tournament --dist 1.5 --heading 20 --goto thrust_ratio:=0.3 drive_enabled:=false  (옵션 → 시험 인자 순)
+#   go_tournament 은 goto 전에 출발 직진 3 s (슬롯 탈출, run_autonomy 와 같은 텔레옵 4단계). 끄기 --undock 0
 alias go_tournament='python3 "$KABOAT_WS/scripts/go_and_test.py" tournament'
 alias go_avoid='python3 "$KABOAT_WS/scripts/go_and_test.py" avoid'
 alias go_gate='python3 "$KABOAT_WS/scripts/go_and_test.py" gate'
