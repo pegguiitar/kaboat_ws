@@ -22,8 +22,8 @@
            빨강·초록 목표는 확인되는 즉시 고정한다. 검정 목표(unknown)는 LOOK 이 끝날 때까지
            기다렸다 고른다 — 빨강·초록도 색이 붙기 전 잠깐 unknown 을 거치므로(같은 bag 빨강 1.3 s).
            단 목표가 들어오면(영역 안 빨강·초록 하나 이상 확인 + 그 무리 안 unknown 이 look_settle_sec(3 s)
-           이어짐) LOOK 을 일찍 끝낸다 — look_sec 은 상한. 검정이 아직 모양 확인 전(6 m 밖)이면 SEEK 로
-           다가가며 확인되는 대로 고정한다.
+           이어짐) LOOK 을 일찍 끝낸다 — look_sec 은 상한. 검정은 모양 확인 전(6 m 밖)이어도 바로 고정하고,
+           진입하며 구조물로 판정되면 선회 각을 세기 전에 고정을 푼다 (black_wait_shape).
   SEEK     LOOK 이 끝나도 못 찾음 — 탐색 영역 중심(area)으로 가고, 도착하면 제자리 선회로 둘러본다.
            목적지는 검출된 부표에서 seek_clearance(2.5 m) 비킨 점 (seek_xy — 부표 옆에서 제자리 회전하지 않게).
   ORBIT    목표 부표 고정 — 부표 중심 반경 orbit_radius 원을 LOS 로 추종한다. 원 밖에서는 규정
@@ -116,8 +116,7 @@ class SearchParams:
     look_sec: float = 15.0            # 활성화 직후 제자리에서 둘러보는 시간 [s] (0 = 안 함)
     black_waits_look: bool = True     # 검정(unknown) 목표는 LOOK 이 끝난 뒤에 고른다
     look_settle_sec: float = 3.0      # 단 목표가 들어오면(영역 안 빨강·초록 하나 이상 확인 + 그 무리 안 unknown 이 이만큼
-                                      # 이어짐, _field_complete) LOOK 을 일찍 끝낸다 [s] (0 = 끔, look_sec 끝까지). 검정 모양 확인 전(6 m 밖)
-                                      # 이면 SEEK 로 다가가며 확인되는 대로 고정.
+                                      # 이어짐, _field_complete) LOOK 을 일찍 끝낸다 [s] (0 = 끔, look_sec 끝까지).
                                       # 빨강·초록이 색 붙기 전 unknown 인 시간은 1–1.3 s. 2026-11-14 오후 run2: 빨강·초록
                                       # 색 370 s, 검정 첫 검출 375.4 s, 고정 385.3 s(LOOK 15 s 끝)
     hold_linear: float = 0.25         # LOOK 제자리 유지 전진 상한 — 바람 0.25 m/s 를 이기게
@@ -128,7 +127,12 @@ class SearchParams:
     # 800 프레임 긴 축 ≤ 1.28 m·칸 ≤ 19·주변 ≤ 6, 도크 벽·줄부표는 2.6–9.5 m·칸 20–155.
     # 아래 값(여유 있게)이면 부표 100 % 통과, 긴 구조물은 칸 수로 걸러진다. 다만 부표만 한 도크
     # 조각(1.35 m·14 칸)은 모양으로 못 거른다 — 검정은 black_needs_field 로 무리 안인지 본다.
-    shape_check: bool = True          # 검정 후보는 부표 모양 확인된 것만, 빨강·초록은 구조물이면 뺀다
+    shape_check: bool = True          # 구조물(모양 False)로 판정된 후보는 뺀다 (검정은 black_wait_shape 참고)
+    black_wait_shape: bool = False    # True = 검정 후보는 모양이 확인(True)된 것만 (예전). False = 모양 미확인(None,
+                                      # 배에서 6 m 밖)이어도 고르고, 다가가며 구조물(False)로 판정되면 선회 각을 세기 전에
+                                      # 고정을 푼다(update). 2026-11-13 bag 탐색 영역 12 m 안 다른 물체 0(가장 가까운 것
+                                      # 16.8 m), 11-14 오전·오후 bag 탐색 중 영역 안 검출은 탐색 부표뿐. 예전 값으로는 LOOK 이
+                                      # 끝나도 검정이 6 m 밖이면 SEEK 로 3–5 s 다가간 뒤에야 고정했다 (11-14 오후 시뮬)
     shape_max_extent: float = 2.0     # 덩어리 긴 축 [m] (누운 부표 옆면·이동 번짐·이웃 부표 여유)
     shape_max_cells: int = 25         # 덩어리 칸 수 (0.2 m 칸)
     shape_max_ring: int = 12          # 중심 1–2 m 고리 안 다른 점유 칸 수
@@ -602,8 +606,8 @@ class SearchFsm:
         [(xy, id)]. now 를 주면 목표 색이 lock_confirm_sec 이상 이어진 부표만.
 
         shape_ok(buoy) → True(부표 모양) / False(구조물) / None(아직 모름). 주면
-          검정(unknown) 후보는 True 인 것만 — 다리 기둥·도크·방파제도 unknown 이라서,
-          빨강·초록 후보는 False 인 것만 뺀다 (색이 있어 구조물일 일이 드물고, 멀면 모양을 못 잰다).
+          False(구조물) 후보는 뺀다. black_wait_shape 면 검정(unknown) 후보는 True 인 것만 (예전 —
+          다리 기둥·도크·방파제도 unknown 이라서). 기본은 None 도 고르고, 가까이서 False 가 되면 update 가 고정을 푼다.
         검정은 확인된 빨강·초록이 있으면 그중 가장 가까운 것까지 field_gap 안이어야 하고,
         black_needs_field 면 하나도 없을 때 고르지 않는다.
         검정 목표에서 쌍둥이(_twins — 빨강·초록으로 잘못 굳은 검정)는 unknown 후보 뒤 순위로 넣는다.
@@ -622,7 +626,8 @@ class SearchFsm:
                 continue
             if shape_ok is not None:
                 ok = shape_ok(b)
-                if ok is False or (ok is None and b.color not in ('red', 'green')):
+                if ok is False or (ok is None and self.p.black_wait_shape
+                                   and b.color not in ('red', 'green')):
                     continue
             score = self._score(xy, refs)
             if refs and score > self.p.field_gap:
@@ -706,7 +711,7 @@ class SearchFsm:
             wait = looking and self.p.black_waits_look and self.p.target_color == 'black'
             if wait and self._field_complete(buoys, now):
                 self._look_cut = True      # 탐색 부표가 다 들어왔다 — LOOK 을 일찍 끝낸다
-                looking = wait = False     # (후보가 아직 모양 확인 전이면 SEEK 로 다가가며 고정)
+                looking = wait = False
             if cands and not wait:
                 self._lock(*cands[0])
             else:

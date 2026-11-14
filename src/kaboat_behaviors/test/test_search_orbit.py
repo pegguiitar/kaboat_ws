@@ -378,9 +378,19 @@ def test_black_look_waits_while_field_incomplete():
     assert f.update(part, (168.7, -8.9), 115.1) == 'ORBIT'
 
 
-def test_black_look_ends_early_to_seek_when_shape_not_known_yet():
-    # 다 들어왔지만 검정이 6 m 밖이라 모양 미확인(None) — LOOK 을 끝내고 SEEK 로 다가간다
+def test_black_look_ends_early_and_locks_before_shape_known():
+    # 검정이 6 m 밖이라 모양 미확인(None) — 기본은 바로 고정 (구조물이면 다가가며 풀린다)
     f = fsm_0113('black', look_sec=15.0, lock_confirm_sec=1.0, look_settle_sec=3.0)
+    full = [buoy('red', 174.5, -1.2, 5), buoy('green', 166.5, -0.2, 4), buoy('unknown', 169.3, -5.9, 3)]
+    shape = lambda b: None
+    assert f.update(full, (168.7, -12.0), 100.0, shape) == 'LOOK'
+    assert f.update(full, (168.7, -12.0), 103.1, shape) == 'ORBIT'
+    assert f.center == (169.3, -5.9)
+
+
+def test_black_look_ends_early_to_seek_when_waiting_for_shape():
+    # black_wait_shape(예전): 모양 미확인이면 LOOK 을 끝내고 SEEK 로 다가간다
+    f = fsm_0113('black', look_sec=15.0, lock_confirm_sec=1.0, look_settle_sec=3.0, black_wait_shape=True)
     full = [buoy('red', 174.5, -1.2, 5), buoy('green', 166.5, -0.2, 4), buoy('unknown', 169.3, -5.9, 3)]
     shape = lambda b: None
     assert f.update(full, (168.7, -12.0), 100.0, shape) == 'LOOK'
@@ -505,8 +515,19 @@ def _shape(table):
     return lambda b: table.get(b.id)
 
 
-def test_black_needs_buoy_shape():
+def test_black_locks_unknown_shape_then_unlocks_structure():
+    # 기본: 모양 미확인(None) 검정도 고르고, 다가가 구조물(False)로 판정되면 각을 세기 전에 푼다
     f = fsm_0113('black')
+    clutter = buoy('unknown', 169.3, -5.9, 3)
+    green = buoy('green', 166.5, -0.2, 4)
+    f.update([clutter, green], (168.7, -12.0), 0.0, _shape({3: None}))
+    assert f.center == (169.3, -5.9)
+    f.update([clutter, green], (168.7, -10.0), 0.1, _shape({3: False}))
+    assert f.center is None and f.phase == 'SEEK'
+
+
+def test_black_needs_buoy_shape():
+    f = fsm_0113('black', black_wait_shape=True)
     dock = buoy('unknown', 171.0, -4.0, 20)                          # 영역 안 unknown 구조물
     black = buoy('unknown', 169.3, -5.9, 3)
     green = buoy('green', 166.5, -0.2, 4)
