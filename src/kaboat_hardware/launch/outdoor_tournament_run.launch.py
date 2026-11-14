@@ -11,6 +11,7 @@
   go_tournament                                   # = ros2 launch kaboat_hardware outdoor_tournament_run.launch.py
   go_tournament drive_enabled:=false              # 회피 시험만 미리보기 (출발 직진·goto 는 실제로 움직임)
   go_tournament undock_sec:=0                     # 출발 직진 끄기
+  go_tournament undock_linear:=0.4667             # 출발 직진 세기 (기본 1.0 = 최대, 좌우 1900 µs)
   go_tournament start_dist:=1.5 start_heading_deg:=20 goto_thrust_ratio:=0.3
 
 센서·모터·지도는 따로(run_gq7_rtk, run_lidar, run_motor, run_map). /cmd_vel 을 내는 다른 노드
@@ -45,7 +46,9 @@ START_MARGIN_DEG = 5.0
 AUTO = 'auto'
 
 SEQUENCE_ARGS = [
-    ('undock_sec', '3.0', '출발 직진 시간 [s] (텔레옵 4단계, 모터 AUTO 인 시간만 셈). 0 = 끔'),
+    ('undock_sec', '3.0', '출발 직진 시간 [s] (모터 AUTO 인 시간만 셈). 0 = 끔'),
+    # 2026-11-14: 토너먼트 출발 직진은 최대 추력 (전체 실행 run_autonomy 는 텔레옵 4단계 0.4667 그대로)
+    ('undock_linear', '1.0', '출발 직진 세기 [0~1] (1.0 = 최대, 좌우 1900 µs. 0.4667 = 텔레옵 4단계 1700 µs)'),
     ('start_dist', '3.0', '시작 조건: start_point 에서 이 거리 [m] 안'),
     ('start_heading_deg', '45.0', '시작 조건: 선수가 goal_point 방향에서 이 각도 [deg] 안'),
     ('start_hold_sec', '0.5', '시작 조건을 이만큼 [s] 유지하면 회피 시험 출발'),
@@ -102,6 +105,7 @@ def sequence_parameters(get) -> dict:
         'start_point': get('start_point'), 'goal_point': get('goal_point'),
         'points_file': get('points_file'), 'origin_file': get('origin_file'),
         'undock_sec': _float(get('undock_sec'), 'undock_sec'),
+        'undock_linear': _float(get('undock_linear'), 'undock_linear'),
         'start_dist': _float(get('start_dist'), 'start_dist'),
         'start_heading_deg': _float(get('start_heading_deg'), 'start_heading_deg'),
         'start_hold_sec': _float(get('start_hold_sec'), 'start_hold_sec'),

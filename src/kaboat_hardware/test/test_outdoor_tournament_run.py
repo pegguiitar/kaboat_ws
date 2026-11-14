@@ -58,13 +58,14 @@ def _remaps(node):
 
 def test_arguments_are_sequence_plus_tournament_test_args(mod):
     names = [name for name, _, _ in mod.ARGS]
-    assert names[:5] == ['undock_sec', 'start_dist', 'start_heading_deg', 'start_hold_sec',
+    assert names[:6] == ['undock_sec', 'undock_linear', 'start_dist', 'start_heading_deg', 'start_hold_sec',
                          'goto_thrust_ratio']
     assert 'wait_for_start' not in names                    # 서비스로 출발 — 고정
     assert 'start_occupancy_grid' not in names              # 지도는 run_map
     defaults = {name: default for name, default, _ in mod.ARGS}
     assert defaults['start_point'] == 'tournament_entry' and defaults['goal_point'] == 'tournament_end'
     assert defaults['undock_sec'] == '3.0' and defaults['drive_enabled'] == 'true'
+    assert defaults['undock_linear'] == '1.0'                   # 토너먼트 출발 직진은 최대
     assert defaults['start_tolerance'] == 'auto'
     declared = {a.name for a in mod.generate_launch_description().entities
                 if isinstance(a, DeclareLaunchArgument)}
@@ -99,6 +100,7 @@ def test_goto_goes_to_start_point_and_sequence_gets_conditions(mod, tmp_path):
     assert g['thrust_ratio'] == 0.3 and g['motion_enabled'] is True and g['outdoor'] is True
     s = mod.sequence_parameters(get)
     assert (s['start_point'], s['goal_point']) == ('tournament_entry', 'tournament_end')
+    assert s['undock_linear'] == 1.0
     assert (s['undock_sec'], s['start_dist'], s['start_heading_deg'], s['start_hold_sec']) == (
         0.0, 3.0, 45.0, 1.0)
 

@@ -164,7 +164,8 @@ test_mission() {
 #   go_avoid --dist 1.5 --heading 20 --goto thrust_ratio:=0.3 drive_enabled:=false  (옵션 → 시험 인자 순)
 # 토너먼트 한 번에 (슬롯 출발): 출발 직진 3 s → goto tournament_entry → 토너먼트 회피 시험, 노드를 처음에 다 띄우고
 #   cmd_mux 로 명령만 넘김 — 단계 사이 명령 공백 없음 (2026-11-14). 인자는 이름:=값:
-#   go_tournament drive_enabled:=false | undock_sec:=0 | start_dist:=1.5 start_heading_deg:=20 goto_thrust_ratio:=0.3
+#   go_tournament drive_enabled:=false | undock_sec:=0 | undock_linear:=0.4667 (직진 세기, 기본 1.0 = 최대)
+#   | start_dist:=1.5 start_heading_deg:=20 goto_thrust_ratio:=0.3
 alias go_tournament='ros2 launch kaboat_hardware outdoor_tournament_run.launch.py'
 alias go_avoid='python3 "$KABOAT_WS/scripts/go_and_test.py" avoid'
 alias go_gate='python3 "$KABOAT_WS/scripts/go_and_test.py" gate'

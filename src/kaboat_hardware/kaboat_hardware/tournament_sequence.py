@@ -4,7 +4,7 @@ outdoor_tournament_run.launch.py (go_tournament) 가 처음에 cmd_mux·goto·�
 goto 는 /cmd/approach, 회피 시험은 /cmd/avoid 로 내고(remap), cmd_mux 가 /mission/state 에 맞는 것만
 /cmd_vel 로 보낸다. 이 노드가 /mission/state 를 바꾼다:
 
-  undock    /cmd/undock 로 텔레옵 4단계 직진 (mission_manager 출발 직진과 같은 값·규칙 — 모터가 AUTO
+  undock    /cmd/undock 로 출발 직진 undock_linear (launch 기본 1.0 = 최대, mission_manager 출발 직진과 같은 규칙 — 모터가 AUTO
             (/teleop/status)인 시간만 셈, 텔레옵·비상 정지 중이면 기다렸다가 이어서)
   approach  goto 명령 통과. 시작 조건(start_point 에서 start_dist 안 + 선수가 goal_point 방향
             ±start_heading_deg)을 start_hold_sec 유지하면 회피 시험 시작 서비스를 부른다.
@@ -147,7 +147,7 @@ class TournamentSequence(Node):
         self.phase = None
 
         self.get_logger().info(
-            f'토너먼트 한 번에 — 출발 직진 {self.undock_sec:g} s → goto {self.start_name} '
+            f'토너먼트 한 번에 — 출발 직진 {self.undock_sec:g} s (세기 {self.undock_linear:g}) → goto {self.start_name} '
             f'({self.start_pt.x:.2f}, {self.start_pt.y:.2f}) → 시작 조건 {self.start_dist:g} m 안 + '
             f'{self.goal_name} 방향 ±{self.start_heading:g}° 를 {hold:g} s 유지하면 회피 시험 출발')
         self._enter('undock' if self.undock_sec > 0.0 else 'approach')
