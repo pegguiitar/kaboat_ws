@@ -135,7 +135,9 @@ def docking_nodes(*, target_class, motion_enabled, weights, device='0',
                  'adaptive_entry_enabled': False,
              }]),
         Node(package='kaboat_hardware', executable='dock_ctrl_v2',
-             name='dock_ctrl_v2', output='screen', parameters=[common, {
+             name='dock_ctrl_v2', output='screen',
+             additional_env={'OPENBLAS_NUM_THREADS': '1'},
+             parameters=[common, {
                  'mission_mode': True,
                  'target_class': target_class,
                  'drive_enabled': ParameterValue(motion_enabled, value_type=bool),

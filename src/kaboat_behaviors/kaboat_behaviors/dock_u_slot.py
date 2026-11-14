@@ -100,17 +100,21 @@ def dock_orientation(points, forward, max_oblique_deg):
     return _rotate(forward, best)
 
 
-def _box_sums(occ, ulo, uhi, wlo, whi):
-    """각 칸(iu, iw)에서 occ[iu+ulo:iu+uhi, iw+wlo:iw+whi] 합 (범위 밖은 0)."""
-    pu = max(abs(ulo), abs(uhi)) + 1
-    pw = max(abs(wlo), abs(whi)) + 1
-    padded = np.pad(occ, ((pu, pu), (pw, pw)))
-    integral = np.zeros((padded.shape[0] + 1, padded.shape[1] + 1))
-    integral[1:, 1:] = padded.cumsum(0).cumsum(1)
-    iu = np.arange(occ.shape[0])[:, None] + pu
-    iw = np.arange(occ.shape[1])[None, :] + pw
-    return (integral[iu + uhi, iw + whi] - integral[iu + ulo, iw + whi]
-            - integral[iu + uhi, iw + wlo] + integral[iu + ulo, iw + wlo])
+def _integral_image(occ):
+    """같은 점유격자의 면별 합 계산에 공유할 적분영상."""
+    integral = np.zeros((occ.shape[0] + 1, occ.shape[1] + 1))
+    integral[1:, 1:] = occ.cumsum(0).cumsum(1)
+    return integral
+
+
+def _box_sums(integral, ulo, uhi, wlo, whi):
+    """공유 적분영상으로 각 칸의 직사각형 합을 구한다 (범위 밖은 0)."""
+    nu, nw = integral.shape[0] - 1, integral.shape[1] - 1
+    iu, iw = np.arange(nu)[:, None], np.arange(nw)[None, :]
+    ul, uh = np.clip(iu + ulo, 0, nu), np.clip(iu + uhi, 0, nu)
+    wl, wh = np.clip(iw + wlo, 0, nw), np.clip(iw + whi, 0, nw)
+    return (integral[uh, wh] - integral[ul, wh]
+            - integral[uh, wl] + integral[ul, wl])
 
 
 def find_u_slot(points, boat_xy, line_point, line_dir, params):
@@ -167,9 +171,10 @@ def find_u_slot(points, boat_xy, line_point, line_dir, params):
         'right_tip': (-hw - tip, -hw + 1, -depth, -depth + 1),
         'interior': (-hw + inner, hw - inner + 1, -depth - 2 * inner, -inner + 1),
     }
+    integral = _integral_image(occ)
     cov = {}
     for name, (a, b, c, d) in boxes.items():
-        cov[name] = _box_sums(occ, a, b, c, d) / float((b - a) * (d - c))
+        cov[name] = _box_sums(integral, a, b, c, d) / float((b - a) * (d - c))
     score = (cov['back'] + cov['left_face'] + cov['right_face']
              + .5 * (cov['left_tip'] + cov['right_tip']) - 4.0 * cov['interior'])
 
