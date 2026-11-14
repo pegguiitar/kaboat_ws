@@ -226,7 +226,9 @@ def _stop(proc, label, timeout=8.0):
 def undock(node, seconds, motor, stop, spin_once):
     """출발 직진: UNDOCK_LINEAR 를 /cmd_vel 로 UNDOCK_PERIOD 마다, 모터가 AUTO 인 시간이 seconds 가 될 때까지.
 
-    끝나거나 Ctrl+C 면 정지 명령을 한 번 낸다. 다 했으면 True, Ctrl+C 면 False.
+    끝나거나 Ctrl+C 면 정지 명령을 한 번 내고 /cmd_vel 발행자를 지운다 — goto(indoor_waypoint)·시험 노드는
+    /cmd_vel 발행자가 자기 하나가 아니면 CMD_VEL_PUBLISHER_CONFLICT 로 서 있는다 (2026-11-14 젯슨: 발행자를
+    남겨 둬 goto 가 37 m 앞에서 안 움직임). 다 했으면 True, Ctrl+C 면 False.
     """
     from geometry_msgs.msg import Twist
 
@@ -258,6 +260,22 @@ def undock(node, seconds, motor, stop, spin_once):
         return False
     finally:
         pub.publish(Twist())   # 직진 멈춤 — goto 가 뜰 때까지 모터 워치독(0.3 s)을 기다리지 않게
+        time.sleep(0.1)        # 정지 명령이 나간 뒤에 발행자를 지운다
+        node.destroy_publisher(pub)
+        _wait_cmd_vel_released(node, spin_once)
+
+
+def _wait_cmd_vel_released(node, spin_once, timeout=3.0):
+    """/cmd_vel 발행자가 그래프에서 없어질 때까지 (goto 가 발행자 수를 셀 때 이게 남아 있지 않게)."""
+    deadline = time.monotonic() + timeout
+    while node.count_publishers('/cmd_vel') > 0:
+        if time.monotonic() >= deadline:
+            print(f'⚠ /cmd_vel 발행자가 {node.count_publishers("/cmd_vel")}개 남아 있음 — 다른 노드가 '
+                  '/cmd_vel 을 내고 있으면 goto 가 CMD_VEL_PUBLISHER_CONFLICT 로 서 있음 '
+                  '(ros2 topic info /cmd_vel -v 로 확인)', flush=True)
+            return False
+        spin_once(node, timeout_sec=0.05)
+    return True
 
 
 def run(plan: Plan, points_file, origin_file):

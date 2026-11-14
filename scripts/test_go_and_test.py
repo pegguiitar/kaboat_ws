@@ -147,10 +147,19 @@ class _FakePub:
 class _FakeNode:
     def __init__(self):
         self.pub = _FakePub()
+        self.publishers = []
 
     def create_publisher(self, _type, topic, _depth):
         assert topic == '/cmd_vel'
+        self.publishers.append(self.pub)
         return self.pub
+
+    def destroy_publisher(self, pub):
+        self.publishers.remove(pub)
+
+    def count_publishers(self, topic):
+        assert topic == '/cmd_vel'
+        return len(self.publishers)
 
 
 def test_undock_drives_straight_until_done_then_stops():
@@ -165,6 +174,7 @@ def test_undock_drives_straight_until_done_then_stops():
     assert gt.undock(node, 0.3, motor, stop, spin_once)
     sent = node.pub.sent
     assert sent[-1] == (0.0, 0.0)                               # 끝나면 정지 명령
+    assert node.publishers == []        # 발행자를 지워야 goto 가 CMD_VEL_PUBLISHER_CONFLICT 로 안 섬
     assert len(sent) >= 4 and all(s == (gt.UNDOCK_LINEAR, 0.0) for s in sent[:-1])
 
 
@@ -184,3 +194,10 @@ def test_undock_waits_without_auto_and_stops_on_ctrl_c():
     assert not gt.undock(node, 0.1, motor, stop, spin_once)
     assert node.pub.sent[0] == (gt.UNDOCK_LINEAR, 0.0)          # 대기 중에도 직진 명령은 낸다
     assert node.pub.sent[-1] == (0.0, 0.0)
+    assert node.publishers == []
+
+
+def test_wait_for_cmd_vel_release_gives_up_on_another_publisher():
+    node = _FakeNode()
+    node.publishers.append(object())                            # 다른 노드가 /cmd_vel 을 냄
+    assert not gt._wait_cmd_vel_released(node, lambda *_a, **_k: None, timeout=0.05)
