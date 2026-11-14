@@ -10,6 +10,13 @@ OUT="${KABOAT_E2E_OUT:-/tmp/kaboat_e2e_runs}"
 NAME=$1; DOMAIN=$2; SEED=$3; SCEN=${4:-}; shift 4 || shift $#
 EXTRA=("$@")
 RUN=$OUT/$NAME
+# 판 폴더로 cd 하므로 상대 경로는 여기서 절대 경로로
+[ -n "$SCEN" ] && SCEN=$(realpath "$SCEN")
+# 경기장·배 모델 고르기 (기본 = 11-13 경기장, bag 맞춤 Nomoto). 예: KABOAT_E2E_ARENA=$HERE/arena_20261114.json
+ARENA=$(realpath "${KABOAT_E2E_ARENA:-$HERE/arena.json}")
+NOMOTO=$(realpath "${KABOAT_E2E_NOMOTO:-$HERE/nomoto.json}")
+# 탐색 목표 색·도킹 목표 도형 = 경기장 파일의 targets (없으면 red·circle)
+read -r SEARCH_COLOR DOCK_CLASS < <(python3 -c "import json,sys; t=json.load(open(sys.argv[1])).get('targets',{}); print(t.get('search_color','red'), t.get('dock_class','circle'))" "$ARENA")
 rm -rf "$RUN"; mkdir -p "$RUN/home"
 # 같은 ROS_DOMAIN_ID 를 쓰는 다른 프로세스(다른 시험·세션이 남긴 mission_manager 등)가 있으면 명령이 섞인다
 # (2026-11-14: 도메인 86·88 에 남은 노드 때문에 두 판이 무효). 있으면 시작하지 않는다.
@@ -35,9 +42,10 @@ source $WS/install/setup.bash
 export PYTHONPATH=$WS/src/kaboat_hardware:$PYTHONPATH
 export ROS_DOMAIN_ID=$DOMAIN ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
 export HOME=$RUN/home ROS_LOG_DIR=$RUN/roslog PYTHONUNBUFFERED=1
-python3 "$HERE/make_home.py" "$HERE/arena.json" "$HOME" "$SCEN"
+python3 "$HERE/make_home.py" "$ARENA" "$HOME" "$SCEN"
+cp "$ARENA" "$RUN/arena.json"; cp "$NOMOTO" "$RUN/nomoto.json"     # analyze.py 가 판에 쓴 경기장으로 채점
 cd "$RUN"
-python3 "$HERE/sim_node.py" --arena "$HERE/arena.json" --nomoto "$HERE/nomoto.json" \
+python3 "$HERE/sim_node.py" --arena "$ARENA" --nomoto "$NOMOTO" \
     ${SCEN:+--scenario "$SCEN"} --out "$RUN" --seed "$SEED" > sim.log 2>&1 &
 SIM=$!
 setsid ros2 run kaboat_hardware thruster_driver --ros-args \
@@ -48,7 +56,7 @@ setsid ros2 run kaboat_perception occupancy_grid --ros-args > map.log 2>&1 &
 MAP=$!
 sleep 4
 setsid ros2 launch kaboat_bringup autonomy.launch.py gate_motion_enabled:=true approach_motion_enabled:=true \
-    dock_motion_enabled:=true search_target_color:=red dock_target_class:=circle dock_device:=cpu "${EXTRA[@]}" \
+    dock_motion_enabled:=true search_target_color:=$SEARCH_COLOR dock_target_class:=$DOCK_CLASS dock_device:=cpu "${EXTRA[@]}" \
     > launch.log 2>&1 &
 LAUNCH=$!
 wait $SIM

@@ -9,6 +9,6 @@ R = 6378137.0
 out = {'version': 1, 'frame_id': 'odom', 'origin': {'lat': o['lat'], 'lon': o['lon'], 'alt': o['alt']}, 'points': {}}
 for name, (x, y, yaw) in pts.items():
     out['points'][name] = {'x': x, 'y': y, 'yaw_deg': yaw, 'lat': o['lat'] + math.degrees(y / R),
-                           'lon': o['lon'] + math.degrees(x / (R * math.cos(math.radians(o['lat'])))), 'recorded_at': 'bag 2026-11-13'}
+                           'lon': o['lon'] + math.degrees(x / (R * math.cos(math.radians(o['lat'])))), 'recorded_at': arena.get('source', 'bag')}
 json.dump(out, open(f'{home}/kaboat_mission_points.json', 'w'), ensure_ascii=False, indent=1)
 open(f'{home}/kaboat_geo_origin.yaml', 'w').write(f"origin_lat: {o['lat']}\norigin_lon: {o['lon']}\norigin_alt: {o['alt']}\n")

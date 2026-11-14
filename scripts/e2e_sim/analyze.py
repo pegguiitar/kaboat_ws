@@ -39,9 +39,12 @@ def in_poly(pt, poly):
     return inside
 
 
-def analyze(name, plot=False, target_color='red', target_shape='circle'):
+def analyze(name, plot=False, target_color=None, target_shape=None):
     run = f'{OUT}/{name}'
-    arena = json.load(open(f'{HERE}/arena.json'))
+    # run_one.sh 가 판 폴더에 복사한 경기장 (예전 판은 없으므로 11-13 arena.json)
+    arena = json.load(open(f'{run}/arena.json' if os.path.exists(f'{run}/arena.json') else f'{HERE}/arena.json'))
+    target_color = target_color or arena.get('targets', {}).get('search_color', 'red')
+    target_shape = target_shape or arena.get('targets', {}).get('dock_class', 'circle')
     tr = [json.loads(l) for l in open(f'{run}/trace.jsonl') if l.strip()]
     ev = [json.loads(l) for l in open(f'{run}/events.jsonl') if l.strip()]
     tr = [r for r in tr if r['rt'] is not None]
@@ -55,7 +58,9 @@ def analyze(name, plot=False, target_color='red', target_shape='circle'):
     for e in ev:
         if e['kind'] == 'state':
             phases.append((e['rt'] if e['rt'] is not None else 0.0, e['value']))
-    logs = [(e['rt'], e['msg']) for e in ev if e['kind'] == 'log' and e['node'] == 'mission_manager']
+    # 단독 미션 판은 모터가 돌기 전(rt None)에 접근 로그가 찍힌다 → 0 으로
+    logs = [(e['rt'] if e['rt'] is not None else 0.0, e['msg']) for e in ev
+            if e['kind'] == 'log' and e['node'] == 'mission_manager']
     mm = {m: {} for m in MISSIONS}
     cur = None
     for rt, msg in logs:
@@ -135,7 +140,7 @@ def analyze(name, plot=False, target_color='red', target_shape='circle'):
             if m[i] and m[i - 1]:
                 tot += ang[i] - ang[i - 1]
         S['search_orbit_deg'][col] = round(-math.degrees(tot), 0)     # + = 시계(우현 선회)
-    S['search_ok'] = S['search_orbit_deg'].get(target_color, 0) >= 340
+    S['search_ok'] = abs(S['search_orbit_deg'].get(target_color, 0)) >= 340   # 검정은 반시계(−)
     # ── 정답: avoid ──
     av = arena['avoid']
     t_in = [round(float(T[i]), 1) for i in range(1, len(X)) if seg_cross(X[i - 1], X[i], *av['entry_gate'])]

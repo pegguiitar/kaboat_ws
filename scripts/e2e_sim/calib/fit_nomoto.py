@@ -3,7 +3,8 @@ from scipy.optimize import least_squares
 DT = 0.02
 def load(n):
     z = np.load(f'cache/{n}_dyn.npz'); return {k: z[k] for k in z.files}
-data = {n: load(n) for n in ('dock1', 'dock2', 'run12')}
+# run14 = run1_20261114_091623 (2026-11-14 실주행, 자율 598 s) — 2026-11-14 추가. 예전 3 개 맞춤은 nomoto_20261113.json
+data = {n: load(n) for n in ('dock1', 'dock2', 'run12', 'run14')}
 def ratio(pwm):
     d = pwm - 1500.0
     return np.sign(d) * np.clip(np.abs(d) - 25.0, 0, None) / 375.0
@@ -55,7 +56,8 @@ for delay in (0.1, 0.2):
 cost, delay, p = best
 names = ['a', 'pw', 'krev', 'tau_u', 'K0', 'K1', 'T', 'q', 'tau_dn']
 out = dict(zip(names, map(float, p))); out['delay'] = delay
-# 표류: 모터 중립(idle) 3 s 뒤의 대지 속도 (dock1·dock2 만 — 모드 기록 있음)
+# 표류: 모터 중립(idle) 3 s 뒤의 대지 속도 (dock1·dock2 만 — 모드 기록 있음). run14 는 뺀다: 주행 뒤(681 s~)
+# 텔레옵 끊김 구간에 배를 끌거나 들어 0.6–1.2 m/s 로 움직였고, 출발 전 중립 표류는 0.01 m/s (물살 거의 없음)
 drift = []
 for n in ('dock1', 'dock2'):
     d = data[n]; idle = d['mode'] == 0
