@@ -42,4 +42,4 @@ def prep(name):
         print('  ', nm, round((mode == mm).mean() * T[-1]), 's')
     a = mode == 1
     print('   auto PWM common range', np.percentile((L[a] + R[a]) / 2, [1, 50, 99]), 'diff', np.percentile((R[a] - L[a]) / 2, [1, 50, 99]))
-for n in ('run12', 'dock1', 'dock2'): prep(n)
+for n in (sys.argv[1:] or ('run12', 'dock1', 'dock2')): prep(n)   # 예: python3 fit_prep.py run14

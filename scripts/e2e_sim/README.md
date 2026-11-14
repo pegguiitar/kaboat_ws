@@ -29,20 +29,34 @@ python3 scripts/e2e_sim/ev.py n1 0 900          # 미션 매니저·도킹·탐�
   `PYTHONPATH` 앞에 `src/kaboat_hardware` 를 둔다.
 - 런치 인자는 `search_target_color:=red dock_target_class:=circle dock_device:=cpu` 고정 (run_one.sh).
 
-## 배 모델 (`nomoto.json`, `calib/fit_nomoto.py`)
+## 배 모델 (`nomoto.json`, `calib/fit_nomoto_run14.py`)
 
-dock_test1·dock2(2026-11-13)·run(2026-11-12) bag 의 `/cmd_vel`·`/teleop/levels` → 실제 믹서로 좌우 PWM 재현 →
-`/odom` 속도에 맞춤 (구동 구간 2281 s, 오차 RMS 전진 0.27 m/s·선회 0.10 rad/s — 바람 표류 포함).
+**2026-11-14 야외 전체 실행(run1_20261114_091623) 으로 다시 맞춤** — 자동 미션 구간(gate·station·search·avoid 와
+그 접근, 도킹은 슬롯 벽 접촉이라 뺌)의 `/cmd_vel` → 실제 믹서로 좌우 PWM 재현 → `/odom` 속도. 후진 × 0.755 는
+오늘 자료가 없어 11-13 도킹 bag 값 그대로. 예전 계수(11-12·11-13 bag, `nomoto_20261113.json`)와 비교:
 
-- 선회 Nomoto 1차: `T·ṙ + r = K(u)·sgn(δ)|δ|^q`, `K(u) = K0 + K1·|u|` — T 0.58 s, K0 2.36, K1 −1.19, q 1.13
-- 전진 1차: `τ·u̇ + u = a·|f̄|^pw` — a 2.15 m/s, pw 0.76, τ 0.81 s(가속)/2.49 s(감속), 후진 × 0.75
+| RMS 전진 m/s / 선회 rad/s | gate | station | search | avoid | 11-13 dock1 | 11-13 dock2 |
+|---|---|---|---|---|---|---|
+| 예전 (`nomoto_20261113.json`) | 0.11 / 0.06 | 0.15 / 0.06 | 0.11 / 0.09 | 0.13 / 0.07 | 0.21 / 0.10 | 0.09 / 0.06 |
+| 지금 (`nomoto.json`) | 0.05 / 0.05 | 0.09 / 0.05 | 0.10 / 0.04 | 0.08 / 0.07 | 0.22 / 0.11 | 0.12 / 0.07 |
+
+- 선회 Nomoto 1차: `T·ṙ + r = K(u)·sgn(δ)|δ|^q`, `K(u) = K0 + K1·|u|` — T 0.59 s, K0 2.62, K1 −1.54, q 1.04
+  (예전 0.58·2.36·−1.19·1.13 — 제자리 회전이 예전보다 빠르다: search 제자리 둘러보기 명령 0.15 에 실측 0.37 rad/s, 예전 모델 0.27)
+- 전진 1차: `τ·u̇ + u = a·|f̄|^pw` — a 1.79 m/s, pw 0.54, τ 0.84 s(가속)/1.98 s(감속), 후진 × 0.755
+  (예전 2.15·0.76·0.81·2.49)
+- 정상 속도 실측 (여러 bag, 직진 3 s 이상): f̄ 0.05 → 0.22 · 0.10 → 0.34 · 0.18 → 0.65 · 0.23 → 0.77 · 0.25 → 0.82 ·
+  0.40 → 1.08 · 0.47 → 1.22 m/s. 0.18–0.25 는 오늘 bag 이 처음 준 자료(search LOS 속도대)로 예전 모델은 0.06–0.07 m/s
+  느렸다. 지금 모델은 0.18–0.47 을 ±0.07 로 맞추는 대신 **0.10 아래는 빠르다** (0.10 → 0.52, 실측 0.34) — 도킹 저속
+  접근은 예전 계수가 더 맞는다. 거듭제곱 하나로는 둘 다 못 맞춘다.
 - `δ = (우 − 좌)/2`, `f̄ = (좌 + 우)/2`, 좌·우 = `(|PWM − 1500| − 25)/375`, 입력 지연 0.1 s
 - 외란: 일정 물살(시나리오 `current`) + 돌풍 OU(σ 0.04 m/s) + 바람 요 외란 OU(σ 0.02 rad/s).
-  bag 의 모터 중립 표류 속도 중앙값 0.15 m/s, 90 % 0.20 m/s.
-- 옆미끄럼·파도·피치는 없다. 명령 0.05 아래 저속 구간은 bag 자료가 적어 외삽이다.
+  11-13 bag 의 모터 중립 표류 속도 중앙값 0.15 m/s, 90 % 0.20 m/s (11-14 아침은 0.02 m/s 로 잔잔).
+- 옆미끄럼·파도·피치는 없다.
+- 예전 계수로 돌리려면 `run_one.sh` 의 `--nomoto` 를 `nomoto_20261113.json` 으로.
 
 `calib/` 스크립트는 다시 맞출 때만 쓴다: 빈 작업 폴더에서 `python3 calib/extract.py <bag 폴더> cache/<이름>`
-(bag → `cache/<이름>.pkl`·스캔 npz) → `fit_prep.py` → `fit_nomoto.py` → `cache/nomoto.json`.
+(bag → `cache/<이름>.pkl`·스캔 npz) → `fit_prep.py [이름…]` → `fit_nomoto.py` → `cache/nomoto.json`
+(11-14 처럼 한 bag 의 미션 구간으로: `fit_prep.py run14` → `fit_nomoto_run14.py` → `cache/nomoto_run14.json`).
 `detcal.py`(검출률)·`build_arena.py`(물체 군집)도 같은 `cache/` 를 읽는다.
 
 ## 경기장 (`arena.json`, `make_arena.py`, `calib/build_arena.py`)
