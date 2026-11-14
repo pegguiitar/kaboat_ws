@@ -5,10 +5,16 @@ settle_time(0.5 s) 유지. 회전 속도 조건은 없다(approach.settle_yaw_ra
 (0.35 m / 8° / 0.1 rad/s)은 바람·물살이 있는 야외 시작 자세 맞추기에 너무 엄격해
 approach 에서 gate 등 미션으로 넘어가지 못했다. 다른 behavior 의 waypoint() 는 그대로.
 
-출력 상한 (2026-11-14): goto(outdoor_waypoint)와 같은 값 — 상한 1.0 × thrust_ratio 0.4 = 전진 0.4·회전 0.4.
-예전엔 공용 behavior 스케일(전진 0.101·회전 0.31) × 0.2 = 전진 0.0202·회전 0.062 라 야외에서 물살에
-밀려 시작 자세에 못 갔다(2026-11-13 dock_test1 bag: search_entry 에서 2.6 → 9.3 m 멀어짐, 시뮬에서
-접근 90 s 초과로 search 를 15번 중 9번 건너뜀).
+출력 상한 (2026-11-14 오후): 전진 0.8 (≈1825 µs)·회전 0.4, 목표 6 m 앞부터 감속.
+  = max_linear 1.0 × thrust_ratio 0.8, max_angular 0.5 × 0.8. 회전은 오전 값(0.4) 그대로 — 전진 1.0 이면
+  회전 명령을 더할 때 한쪽 모터가 잘려 조향 여유가 없고, 선회 상한까지 1.0 이면 제자리 회전이 풀파워라서.
+  감속 6 m (공용 1.5 m + 도착 반경 2배 4 m 대신): 브레이크 없이 추력만 줄이므로 일찍 줄여 다음 미션에
+  넘겨줄 때 속도를 예전과 비슷하게 (모델: gate 0.44 → 0.50 m/s).
+  근거 — run2_20261114_145941 bag 이동 5구간 120 s 를 이 노드 제어 코드 + 믹서 + 11-14 배 모델로 다시 돌려
+  (예전 값 계산 120.0 s = bag 120.0 s) 새 값 89.7 s. 0.8 의 속도(모델 1.59 m/s)는 실측(0.47, 1.2 m/s)
+  밖이라 실제가 1.35 m/s 면 100 s. 단독 시험 goto(go_*·outdoor_waypoint)는 예전 0.4 그대로.
+  오전 (0.4·0.4): 예전 공용 behavior 스케일(전진 0.101·회전 0.31) × 0.2 = 전진 0.0202·회전 0.062 라
+  야외에서 물살에 밀려 시작 자세에 못 갔다(2026-11-13 dock_test1 bag: search_entry 에서 2.6 → 9.3 m).
 """
 
 import dataclasses
@@ -23,10 +29,11 @@ from .waypoint_controller import WaypointController, WaypointParams
 APPROACH_POSITION_TOLERANCE = 2.0      # [m] (1.0 → 2.0, 2026-11-13)
 APPROACH_HEADING_TOLERANCE_DEG = 30.0  # [deg] 좌우 (15 → 30, 2026-11-13)
 APPROACH_SETTLE_YAW_RATE = 0.0         # [rad/s] 0 = 회전 속도 조건 없음
-# 출력 상한 — goto(outdoor_waypoint.launch.py 기본 max_linear·max_angular 1.0, thrust_ratio 0.4)와 같게
+# 출력 상한 = 상한 × thrust_ratio → 전진 1.0 × 0.8 = 0.8, 회전 0.5 × 0.8 = 0.4 (2026-11-14 오후)
 APPROACH_MAX_LINEAR = 1.0
-APPROACH_MAX_ANGULAR = 1.0
-APPROACH_THRUST_RATIO = 0.4             # (0.2 → 0.4, 2026-11-14) → 전진·회전 상한 0.4
+APPROACH_MAX_ANGULAR = 0.5              # (1.0 → 0.5) 회전 상한은 0.4 그대로 두려고
+APPROACH_THRUST_RATIO = 0.8             # (0.2 → 0.4 → 0.8, 2026-11-14) 전진 ≈1825 µs
+APPROACH_SLOW_RADIUS = 6.0              # [m] 이 거리부터 전진을 거리에 비례해 줄인다 (공용 1.5 m)
 
 
 def approach_params(base: WaypointParams, position_tolerance: float,
@@ -60,12 +67,16 @@ class MissionApproach(BehaviorBase):
         self.declare_parameter('approach.heading_tolerance_deg',
                                APPROACH_HEADING_TOLERANCE_DEG)
         self.declare_parameter('approach.settle_yaw_rate', APPROACH_SETTLE_YAW_RATE)
+        self.declare_parameter('approach.slow_radius', APPROACH_SLOW_RADIUS)
         self.motion_enabled = bool(
             self.get_parameter('approach.motion_enabled').value)
         self.thrust_ratio = float(
             self.get_parameter('approach.thrust_ratio').value)
         if not math.isfinite(self.thrust_ratio) or not 0 < self.thrust_ratio <= 1:
             raise ValueError('approach.thrust_ratio must be in (0, 1]')
+        self.slow_radius = float(self.get_parameter('approach.slow_radius').value)
+        if not math.isfinite(self.slow_radius) or self.slow_radius <= 0:
+            raise ValueError('approach.slow_radius must be > 0')
         params = approach_params(
             self._waypoint_controller.params,
             self.get_parameter('approach.position_tolerance').value,
@@ -83,7 +94,7 @@ class MissionApproach(BehaviorBase):
             f'±{params.heading_tolerance_deg:.0f}° 안, 회전 속도 {yaw_rate}, '
             f'{params.settle_time:.1f} s 유지 | 출력 상한 전진 '
             f'{params.max_linear * self.thrust_ratio:.3f}·회전 '
-            f'{params.max_angular * self.thrust_ratio:.3f} (goto 와 같음)')
+            f'{params.max_angular * self.thrust_ratio:.3f}, {self.slow_radius:.1f} m 앞부터 감속')
         self.entry_goal = None
         self.preview_pub = self.create_publisher(
             Twist, '/mission/approach_cmd_preview', 10)
@@ -119,7 +130,8 @@ class MissionApproach(BehaviorBase):
             return cmd
         angle_deg = math.degrees(yaw_from_quaternion(q))
         cmd, reached = self.waypoint(
-            point.x, point.y, angle_deg, thrust_ratio=self.thrust_ratio)
+            point.x, point.y, angle_deg, thrust_ratio=self.thrust_ratio,
+            slow_radius=self.slow_radius)
         self._command_full_scale = self._full_scale
         self.preview_pub.publish(cmd)
         if not self.motion_enabled:

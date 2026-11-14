@@ -13,8 +13,8 @@ from kaboat_behaviors.behavior_base import (
     DEFAULT_MAX_ANGULAR, DEFAULT_MAX_LINEAR, BehaviorBase)
 from kaboat_behaviors.mission_approach import (
     APPROACH_HEADING_TOLERANCE_DEG, APPROACH_MAX_ANGULAR, APPROACH_MAX_LINEAR,
-    APPROACH_POSITION_TOLERANCE, APPROACH_SETTLE_YAW_RATE, APPROACH_THRUST_RATIO,
-    MissionApproach, approach_params)
+    APPROACH_POSITION_TOLERANCE, APPROACH_SETTLE_YAW_RATE, APPROACH_SLOW_RADIUS,
+    APPROACH_THRUST_RATIO, MissionApproach, approach_params)
 from kaboat_behaviors.waypoint_controller import (
     WaypointController, WaypointParams, waypoint)
 
@@ -65,12 +65,12 @@ def test_heading_beyond_thirty_degrees_keeps_aligning(heading_deg):
     assert not step.reached
 
 
-# ── 출력 상한 = goto (2026-11-14) ─────────────────────────────
+# ── 출력 상한 (2026-11-14 오후): 전진 0.8·회전 0.4, 6 m 앞부터 감속 ─────────
 
-def test_caps_match_goto_forty_percent():
-    # goto = outdoor_waypoint.launch.py 기본 max_linear·max_angular 1.0 × thrust_ratio 0.4
-    assert APPROACH_MAX_LINEAR * APPROACH_THRUST_RATIO == pytest.approx(0.4)
-    assert APPROACH_MAX_ANGULAR * APPROACH_THRUST_RATIO == pytest.approx(0.4)
+def test_caps_forward_eighty_turn_forty_slow_six_metres():
+    assert APPROACH_MAX_LINEAR * APPROACH_THRUST_RATIO == pytest.approx(0.8)   # ≈1825 µs
+    assert APPROACH_MAX_ANGULAR * APPROACH_THRUST_RATIO == pytest.approx(0.4)  # 회전은 그대로
+    assert APPROACH_SLOW_RADIUS == 6.0
 
 
 def _yaw_q(yaw):
@@ -96,7 +96,7 @@ def approach_node(boat_xy, boat_yaw, goal_xy, goal_yaw):
     sent = []
     node = SimpleNamespace(
         active=True, odom=odom, entry_goal=goal, motion_enabled=True,
-        thrust_ratio=APPROACH_THRUST_RATIO,
+        thrust_ratio=APPROACH_THRUST_RATIO, slow_radius=APPROACH_SLOW_RADIUS,
         # 공용 behavior 스케일 (base 기본) — approach 는 이걸 쓰면 안 됨
         max_linear=DEFAULT_MAX_LINEAR, max_angular=DEFAULT_MAX_ANGULAR,
         _waypoint_controller=WaypointController(params),
@@ -111,13 +111,33 @@ def approach_node(boat_xy, boat_yaw, goal_xy, goal_yaw):
     return node, sent
 
 
-def test_far_goal_ahead_drives_at_goto_forward_cap():
+def test_far_goal_ahead_drives_at_forward_cap():
     node, sent = approach_node((0.0, 0.0), 0.0, (30.0, 0.0), 0.0)
     BehaviorBase._tick(node)
-    assert sent[-1].linear.x == pytest.approx(0.4)        # 예전 0.0202
+    assert sent[-1].linear.x == pytest.approx(0.8)        # 오전 0.4, 예전 0.0202
 
 
-def test_goal_behind_turns_at_goto_turn_cap():
+def test_goal_behind_turns_at_turn_cap_forty():
     node, sent = approach_node((0.0, 0.0), 0.0, (-30.0, 0.0), math.pi)
     BehaviorBase._tick(node)
-    assert abs(sent[-1].angular.z) == pytest.approx(0.4)  # 예전 0.062
+    assert sent[-1].linear.x == 0.0                       # 90° 넘게 틀어지면 제자리 회전
+    assert abs(sent[-1].angular.z) == pytest.approx(0.4)  # 전진을 올려도 회전 상한은 그대로
+
+
+@pytest.mark.parametrize('distance, expected', [
+    (6.0, 0.8),                    # 6 m 부터 줄기 시작
+    (5.0, 0.8 * 5 / 6),            # 감속 반경 안 (도착 반경 2배 4 m 밖)
+    (3.0, 0.8 * 3 / 6 * 3 / 4),    # 4 m 안에서는 공용 감속도 겹침
+])
+def test_slows_down_from_six_metres(distance, expected):
+    node, sent = approach_node((0.0, 0.0), 0.0, (distance, 0.0), 0.0)
+    BehaviorBase._tick(node)
+    assert sent[-1].linear.x == pytest.approx(expected)
+
+
+def test_go_star_goto_keeps_its_own_forty_percent():
+    # 단독 시험 goto(outdoor_waypoint)는 이 노드가 아니다 — 바뀌지 않는다
+    from pathlib import Path
+    launch = (Path(__file__).resolve().parents[2] / 'kaboat_hardware' / 'launch'
+              / 'outdoor_waypoint.launch.py').read_text()
+    assert "'thrust_ratio', '0.4'" in launch or "thrust_ratio', default_value='0.4'" in launch
