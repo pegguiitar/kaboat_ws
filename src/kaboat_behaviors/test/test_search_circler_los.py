@@ -303,7 +303,7 @@ def test_done_keeps_circling_until_exit_side():
     move(state, 50.0, 71.0)                          # 서쪽(출구 쪽)에 옴 → 출구 직선을 LOS 로
     SearchCircler.compute_cmd(state)
     exit_path, ratio, turn = state.calls[-1]
-    assert not exit_path.closed and (ratio, turn) == (0.40, 0.31)   # exit_thrust·orbit_turn
+    assert not exit_path.closed and (ratio, turn) == (0.25, 0.31)   # exit_thrust·orbit_turn
     assert np.allclose(exit_path.samples[0], [50.0, 71.0])
     assert np.allclose(exit_path.samples[-1], [40.0, 71.0])
     move(state, 54.0, 71.0)                          # 한 번 벗어나면 다시 원으로 안 돌아감
