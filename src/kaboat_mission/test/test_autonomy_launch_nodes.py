@@ -95,3 +95,20 @@ def _context(mod, **args):
                 s.perform(context) for s in action.default_value)
     context.launch_configurations.update(args)
     return context
+
+
+def _avoid_params(mod, **args):
+    context = _context(mod, **args)
+    node = next(n for n in mod._stack(context) if getattr(n, 'node_executable', '') == 'obstacle_planner')
+    merged = {}
+    from launch_ros.utilities import evaluate_parameters
+    for item in evaluate_parameters(context, node._Node__parameters):
+        if isinstance(item, dict):
+            merged.update(item)
+    return merged
+
+
+def test_avoid_gets_yaw_kd(mod):
+    # 2026-11-14: 회피 선수각 D 0.6 (되돌리기 avoid_yaw_kd:=0.16)
+    assert _avoid_params(mod)['avoid.yaw_kd'] == 0.6
+    assert _avoid_params(mod, avoid_yaw_kd='0.16')['avoid.yaw_kd'] == 0.16

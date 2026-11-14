@@ -20,12 +20,23 @@ from .avoid_fsm import AvoidFsm, FsmParams
 from .bspline_planner import PlannerParams
 from .dri import DriParams, build_dri
 from .dri_marker import dri_x_markers
-from .los_controller import BSPLINE_TRACK_YAW_KD, BSPLINE_TRACK_YAW_KP
+from .los_controller import BSPLINE_TRACK_YAW_KP
+
+# 회피 경로 추종 선수각 D 게인 (2026-11-14, 공용 LOS 의 0.16 에서 분리). run1·run2 회피에서 선수각이 경로 방향을
+# 중심으로 ±30–50° 흔들려 장애물 사이 제자리 회전 36 %·회전 상한 70 % 였다 — 회전 상한(0.35)에 붙은 채 돌다가
+# 넘쳤다. 그 데이터에 맞춘 배 모델로 재생·e2e 시뮬(젯슨 tick 재현)에서 0.6 이 넘침을 가장 잘 줄이고 경로 이탈을
+# 늘리지 않았다 (0.8 은 지연이 남을 때 좌우 전환이 늘어남). P 게인은 공용 1.4 그대로.
+AVOID_YAW_KD = 0.6
 
 
 class ObstaclePlanner(BehaviorBase):
     STATE_NAME = 'avoid'
     CMD_TOPIC = '/cmd/avoid'
+    # /odom 은 최신 것만 (2026-11-14). 젯슨에서 tick(DRI·경로 생성)이 10 Hz 주기를 다 써서 깊이 10 큐에 /odom 이
+    # 쌓였고, 이 노드는 0.3–0.4 s 묵은 위치·선수각으로 조종했다 (/avoid/plan 헤더 = 쓴 /odom 시각: run2 중앙
+    # 435 ms·run1 295 ms, /odom 자체는 11 ms 만에 도착). 배 반응 지연 0.6 s 에 0.4 s 가 더해져 선수각이 흔들렸다.
+    # 깊이 1 이면 같은 tick 부하에서 51 ms (p90 144 ms). 지도(/occupancy_grid)는 원래 깊이 1.
+    ODOM_QUEUE_DEPTH = 1
 
     def __init__(self):
         super().__init__()
@@ -35,19 +46,23 @@ class ObstaclePlanner(BehaviorBase):
         self.dri_params = self._params_from('dri', DriParams)
         self.planner_params = self._params_from('planner', PlannerParams)
         self.fsm_params = self._params_from('fsm', FsmParams)
-        # 경로 추종은 수조에서 검증한 LOS(test_los) 와 같은 요 PD 1.4/0.16.
+        # 경로 추종 요 PD: P 는 수조에서 검증한 LOS(test_los) 와 같은 1.4, D 는 회피 전용 avoid.yaw_kd(0.6).
         # 전진: fsm.cmd_full(0.2) 이 전진 기준이자 전진 상한.
         # 회전: avoid.max_angular_ratio(0.35) 상한 (2026-11-06 0.31 → 2026-11-13 0.35, 야외).
         self.declare_parameter('avoid.max_angular_ratio', 0.35)
+        self.declare_parameter('avoid.yaw_kd', AVOID_YAW_KD)
         ratio = float(self.fsm_params.cmd_full)
         turn = float(self.get_parameter('avoid.max_angular_ratio').value)
         if not all(math.isfinite(v) and 0.0 < v <= 1.0 for v in (ratio, turn)):
             raise ValueError('fsm.cmd_full and avoid.max_angular_ratio must be in (0, 1]')
+        yaw_kd = float(self.get_parameter('avoid.yaw_kd').value)
+        if not (math.isfinite(yaw_kd) and 0.0 <= yaw_kd <= 2.0):
+            raise ValueError('avoid.yaw_kd must be in [0, 2]')
         self.thrust_ratio = ratio
         self.turn_ratio = turn
         self.fsm = AvoidFsm(self.planner_params, self.fsm_params,
                             yaw_kp=BSPLINE_TRACK_YAW_KP,
-                            yaw_kd=BSPLINE_TRACK_YAW_KD)
+                            yaw_kd=yaw_kd)
         # 디버그 출력 — RViz 가 구독. 로직 아님.
         # 별도 viz 노드를 두지 않는 이유: 위험도 지도는 여기서 이미 계산했으므로
         # 그대로 내보내면 추가 계산이 0 이다. 별도 노드는 같은 걸 다시 계산해야

@@ -73,6 +73,9 @@ class BehaviorBase(Node):
     STATE_NAME = ''   # 예: 'gate' — /mission/state 가 이 값일 때만 active
     CMD_TOPIC = ''    # 예: '/cmd/gate'
     USES_BUOYS = False  # True 면 활성일 때만 /detections/buoys 구독
+    # /odom 수신 큐 깊이. tick 이 10 Hz 주기를 다 쓰는 무거운 behavior 는 큐에 /odom(25 Hz)이 쌓여
+    # 가장 오래된 것부터 꺼내 쓰게 된다 — 그런 behavior 는 1 로 (obstacle_planner, 2026-11-14).
+    ODOM_QUEUE_DEPTH = 10
 
     def __init__(self):
         super().__init__(f'{self.STATE_NAME}_behavior')
@@ -107,7 +110,7 @@ class BehaviorBase(Node):
         self.create_subscription(String, '/mission/state', self._on_state, latched)
         self.create_subscription(PoseStamped, '/mission/goal', self._on_goal, latched)
 
-        self.create_subscription(Odometry, '/odom', self._on_odom, 10)
+        self.create_subscription(Odometry, '/odom', self._on_odom, self.ODOM_QUEUE_DEPTH)
         self._buoy_sub = None     # USES_BUOYS — 활성일 때만 (_set_buoy_subscription)
         self.create_subscription(OccupancyGrid, '/occupancy_grid', self._on_grid, 1)
 

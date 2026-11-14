@@ -271,6 +271,16 @@ test_mission dock dock_target_class:=circle
   미션 사이 이동(`run_autonomy`)·`test_mission`·`test_*_outdoor approach:=true` 모두 이 값이고
   (`mission_approach.py`의 `APPROACH_*`), 단독 시험 `goto`(go_*)는 0.4 그대로입니다.
   예전 전진 0.0202·회전 0.062 는 물살에 밀려 시작 자세에 못 갔습니다(11-13 bag: `search_entry`에서 2.6 → 9.3 m).
+- **회피 선수각 흔들림 수정** (2026-11-14 저녁, `obstacle_planner`만):
+  - 원인: 회피 노드는 0.3–0.4 s 묵은 `/odom`으로 조종하고 있었습니다(run2 중앙 435 ms, run1 295 ms). 젯슨에서 tick이
+    10 Hz 주기를 다 써서 깊이 10 큐에 `/odom`이 쌓였기 때문입니다. 배 반응 지연 0.6 s에 이 지연이 더해져 선수각이
+    경로 방향을 중심으로 ±30–50° 흔들렸고, 장애물 사이 제자리 회전이 36 %였습니다.
+  - 고침: 회피 노드만 `/odom`을 최신 것만 받습니다(큐 깊이 1, 지도는 원래 1). 선수각 D 게인 0.16 → 0.6(회피 전용,
+    게이트·탐색 공용 LOS는 0.16 그대로).
+  - 확인: 데이터에 맞춘 배 모델 재생이 run2 흔들림을 재현했고(회전 상한 70 % vs 76 %), e2e 시뮬(젯슨 tick 재현,
+    run2·11-14 경기장)에서 회피 중앙 179 → 97 s·159 → 88 s, 접촉 54 → 17번·50 → 2번. 물 위에서는 미확인.
+  - 되돌리기: `run_autonomy … avoid_yaw_kd:=0.16` (큐 깊이는 코드).
+  - 토너먼트 회피 노드(`real_obstacle_avoid_test`)는 안 바꿨습니다 — 같은 깊이 10 `/odom` 구독이라 같은 문제가 있을 수 있습니다.
 - **이번에 돌 미션의 노드만 띄웁니다** (`only_mission_nodes:=true` 기본). `start_state`부터 끝까지,
   `single_mission:=true`면 그 미션 하나만. 미션 매니저·`cmd_mux`는 항상, `mission_approach`는
   `entry_required:=true`(기본)일 때만 뜹니다. 런치를 켜면 `[autonomy] 미션 … — 띄우는 노드: …` 한 줄로 보입니다.

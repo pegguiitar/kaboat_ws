@@ -108,7 +108,9 @@ def mission_nodes(use_sim_time_value) -> dict:
         ],
         'avoid': [Node(
             package='kaboat_behaviors', executable='obstacle_planner',
-            name='obstacle_planner', output='screen', parameters=[common_params])],
+            name='obstacle_planner', output='screen', parameters=[common_params, {
+                'avoid.yaw_kd': ParameterValue(L('avoid_yaw_kd'), value_type=float),
+            }])],
     }
 
 
@@ -236,6 +238,9 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'undock_linear', default_value='0.4667',
             description='출발 직진 명령 — 0.4667 = 텔레옵 4단계(좌우 1700 µs)'),
+        DeclareLaunchArgument(
+            'avoid_yaw_kd', default_value='0.6',
+            description='회피 경로 추종 선수각 D 게인 (2026-11-14 0.16 → 0.6, 선수각 넘침 억제). 되돌리기 0.16'),
         DeclareLaunchArgument(
             'mission_timeouts', default_value='true',
             description='true = 이어 도는 실행에서 미션별 제한 시간(15 분 배분, mission_params.yaml '
