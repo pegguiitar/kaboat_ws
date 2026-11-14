@@ -47,6 +47,11 @@
           slot_target_offset_m 안의 슬롯만 (YOLO 는 세 슬롯 중 어디인지만 정한다). 같은 ㄷ자가
           lock_min_span_s 이상 같은 자리·법선이면 진입 기하 고정. 직선 하나(RANSAC)로 벽을 정하면
           뒷벽과 평행한 칸막이 끝면(1.94 m 앞)을 잡던 문제를 ㄷ자 전체로 피한다(dock_u_slot.py).
+          ㄷ자 찾기(목표 방위선 1번, 우회 판단용 '보이는 ㄷ자' 5방향 1 s 에 한 번)는 배에서
+          lock_max_distance_m(6 m) 안에 점이 있을 때만, 작업 스레드 하나에서 한다(async_slot_search) —
+          tick 은 끝난 결과만 읽고 기다리지 않는다. 2026-11-14 bag: tick 안에서 하던 5방향 찾기가 젯슨에서
+          0.4–1.3 s 걸려 SEEK 동안 cmd_mux 워치독(300 ms) 정지 39번, 추력 0 이 시간의 35%. 뒷벽 8.4 m 에선
+          6.5 m 안 점이 1개라 찾을 것도 없었다. /dock/status 의 tick_ms(최근 1 s 최대)·slot_search_ms 로 본다.
           앞 front_stop_m 안에 점이 있으면 멈춰 기다린다(아래 REPOSITION·UNBLOCK). 막힘 없이
           seek_max_travel_m 를 가도 못 잡으면 방위가 틀렸거나 낡았다고 보고 그 자리에서 SCAN 부터 다시
           (seek_rescan_max_attempts 번까지, 다 쓰면 멈춤).
@@ -76,6 +81,7 @@ import math
 import os
 import time
 from collections import deque
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import replace
 
 import numpy as np
@@ -110,6 +116,19 @@ GIVE_UP_ALIGN_MAX_S = 20.0   # 목표 못 찾아 포기하기 전 SCAN 시작 �
 YOLO_DOWN_REASONS = frozenset({'disabled', 'model_unavailable', 'rgb_conversion_error',
                                'unaligned_rgb_depth_or_info', 'invalid_intrinsics',
                                'unsupported_distortion_model', 'image_or_inference_error'})
+VISIBLE_MAX_AGE_S = 2.0      # 막힘 우회에 쓸 '보이는 ㄷ자' 결과의 최대 나이 [s]
+
+
+class _InlinePool:
+    """ThreadPoolExecutor 대신 그 자리에서 바로 계산 (단위 테스트·async_slot_search=False)."""
+
+    def submit(self, fn):
+        future = Future()
+        future.set_result(fn())
+        return future
+
+    def shutdown(self, **_):
+        pass
 
 
 def stamp(msg):
@@ -250,7 +269,13 @@ class DockCtrlV2(Node):
                     # 경유점보다 2.44 m 안쪽이라 3 m 면 입구 밖 (mission_manager 후진 0.05 는 조류에 약함)
                     'give_up_reverse_m': 3.0,
                     # SCAN 중 YOLO 상태가 끊기면(모델 로딩 중 등) 끊긴 순간의 선수각을 지킨다. False 면 예전처럼 0.
-                    'yolo_stale_hold_heading': True}
+                    'yolo_stale_hold_heading': True,
+                    # ㄷ자 찾기(find_u_slot)를 작업 스레드 하나에서 — 10 Hz 제어 tick 이 기다리지 않는다.
+                    # 2026-11-14 bag: SEEK 에서 1 s 마다 '보이는 ㄷ자' 5방향 찾기가 tick 을 0.4–1.3 s 멈춰
+                    # cmd_mux 300 ms 워치독이 39 번 정지 → SEEK 시간 35% 추력 0. False 면 예전처럼 tick 안에서.
+                    'async_slot_search': True,
+                    # tick 한 번이 이보다 오래 걸리면 경고 로그 (1 s 에 한 번) [ms]
+                    'slow_tick_warn_ms': 150.0}
         for name, value in defaults.items():
             self.declare_parameter(name, value)
         p = lambda name: self.get_parameter(name).value
@@ -334,6 +359,8 @@ class DockCtrlV2(Node):
         self.give_up_to_goal = float(p('give_up_to_goal_s'))
         self.give_up_reverse = float(p('give_up_reverse_m'))
         self.stale_hold = bool(p('yolo_stale_hold_heading'))
+        self.async_slot = bool(p('async_slot_search'))
+        self.slow_tick_ms = float(p('slow_tick_warn_ms'))
         if not all(math.isfinite(v) and v >= 0 for v in (
                 self.give_up_yolo_stale, self.give_up_to_via, self.give_up_to_goal,
                 self.give_up_reverse)):
@@ -410,7 +437,6 @@ class DockCtrlV2(Node):
         self.reposition = None                      # 우회 계획 (임시 ㄷ자·경유점·단계)
         self.reposition_used = False                # 이번 도킹에서 우회를 이미 했나
         self.reposition_planned = 0.0               # 마지막 막힘 우회 계획 시도 (monotonic)
-        self.oblique_checked = 0.0                  # 마지막 비스듬함(37°) 확인 (monotonic)
         self.reposition_why = ''
         self.unblock_count = 0                      # 이번 도킹에서 막혀 후진한 횟수
         self.seek_rescans = 0                       # 이번 도킹에서 SEEK 거리 한도로 다시 SCAN 한 횟수
@@ -424,6 +450,18 @@ class DockCtrlV2(Node):
         self.yolo_stale_since = None                # SCAN 에서 YOLO 가 끊긴 때 (monotonic)
         self.stale_hold_yaw = None                  # 그때의 선수각 — YOLO 가 돌아올 때까지 지킨다
         self.yolo_down_reason = ''                  # 상태는 오는데 YOLO 가 안 돈 이유 (YOLO_DOWN_REASONS)
+        # ㄷ자 찾기 작업 (async_slot_search): 결과는 tick 이 끝났을 때만 읽는다. slot_gen 이 바뀌면
+        # (새 SEEK·우회·리셋) 늦게 온 결과는 버린다.
+        self.slot_pool = None
+        self.slot_gen = 0
+        self.line_job = None                        # (future, ctx) 목표 방위선 ㄷ자 (SEEK·REPOSITION)
+        self.visible_job = None                     # future — 보이는 ㄷ자 (우회 판단)
+        self.visible = None                         # (받은 monotonic, USlot 또는 None) 최근 결과
+        self.visible_seq = self.visible_seen = 0    # 새 결과 번호 / 비스듬함 판단에 쓴 번호
+        self.visible_asked = 0.0                    # 마지막으로 맡긴 때 (1 s 에 한 번)
+        self.slot_search_ms = None                  # 마지막 ㄷ자 찾기 시간 [ms]
+        self.tick_times = deque()                   # (monotonic, tick ms) 최근 1 s
+        self.slow_tick_logged = 0.0
         self.phase_seen = 'IDLE'                    # 단계가 바뀐 때를 재려고 (TO_VIA·TO_GOAL 시간 제한)
         self.phase_since = time.monotonic()
         self.phase = 'IDLE'
@@ -550,15 +588,86 @@ class DockCtrlV2(Node):
                                 scan.range_min, scan.range_max)
             self._add_cloud(stamp(scan), transform_xy(local, tf))
 
-    def _detect_slot(self):
-        """새 누적 점이 있으면 목표 방위선 근처 ㄷ자를 찾아 샘플로 쌓는다."""
-        if self.cloud_version == self.detected_version or not self.cloud:
+    # ── ㄷ자 찾기: 6 m 안에 점이 있을 때만, 작업 스레드에서 (tick 은 끝난 결과만 읽는다) ─────────
+    def destroy_node(self):
+        if self.slot_pool is not None:
+            self.slot_pool.shutdown(wait=False, cancel_futures=True)
+        super().destroy_node()
+
+    def _new_slot_search(self):
+        """새 SEEK·우회·리셋 — 진행 중인 찾기 결과는 버리고 보이는 ㄷ자 결과도 지운다."""
+        self.slot_gen += 1
+        self.line_job = self.visible_job = None
+        self.visible = None
+        self.visible_asked = 0.0
+
+    def _cloud_points(self):
+        return np.vstack([pts for _, pts in self.cloud])
+
+    def _near_dock(self, points, boat):
+        """배에서 lock_max_distance(6 m) 안(선체·물보라 0.8 m 제외)에 점이 find_u_slot 최소 점 수 이상인가.
+
+        ㄷ자는 뒷벽이 6 m 안이어야 잠그므로, 그 안에 아무것도 없으면 찾을 필요가 없다 (2026-11-14 bag:
+        뒷벽 8.4 m 에서 6.5 m 안 점 1개). 칸막이 끝은 뒷벽보다 1.94 m 가까워 뒷벽 약 8 m 부터 열린다.
+        """
+        r = np.linalg.norm(points - np.asarray(boat, float), axis=1)
+        near = (r >= FRONT_MIN_RANGE_M) & (r <= self.lock_max_distance)
+        return int(near.sum()) >= self.slot_params.min_points
+
+    def _submit(self, fn, *args):
+        """fn(*args) 를 작업 스레드에 맡긴다. 결과 future → (세대, 결과 또는 예외, ms)."""
+        if self.slot_pool is None:
+            self.slot_pool = (ThreadPoolExecutor(max_workers=1, thread_name_prefix='u_slot')
+                              if self.async_slot else _InlinePool())
+        gen = self.slot_gen
+
+        def job():
+            start = time.perf_counter()
+            try:
+                out = fn(*args)
+            except Exception as exc:                # noqa: BLE001 — tick 쪽에서 로그
+                out = exc
+            return gen, out, (time.perf_counter() - start) * 1000.0
+        return self.slot_pool.submit(job)
+
+    def _take(self, future):
+        """끝난 작업이면 (결과, 이번 세대인가), 아직이면 None."""
+        if future is None or not future.done():
+            return None
+        gen, out, ms = future.result()
+        self.slot_search_ms = ms
+        if isinstance(out, Exception):
+            self.get_logger().error(f'U slot search failed: {out!r}')
+            out = None
+        return out, gen == self.slot_gen
+
+    def _line_search(self, kind, line_point, direction, **ctx):
+        """새 누적 점이면 line_point·direction 방위선 근처 ㄷ자 찾기를 맡기고, 끝난 결과를 받는다."""
+        self._line_result()
+        if self.cloud_version == self.detected_version or not self.cloud or self.line_job is not None:
             return
         self.detected_version = self.cloud_version
-        points = np.vstack([pts for _, pts in self.cloud])
-        direction = (math.cos(self.locked_bearing), math.sin(self.locked_bearing))
-        slot, why = find_u_slot(points, self._odom_xy(), self.seek_line_point, direction,
-                                self.slot_params)
+        points, boat = self._cloud_points(), self._odom_xy()
+        if not self._near_dock(points, boat):
+            self.slot_last = (None, f'nothing within {self.lock_max_distance:.1f}m — U slot search off')
+            return
+        future = self._submit(find_u_slot, points, boat, np.asarray(line_point, float).copy(),
+                              tuple(direction), self.slot_params)
+        self.line_job = (future, dict(ctx, kind=kind, stamp=self.cloud[-1][0]))
+        self._line_result()
+
+    def _line_result(self):
+        if self.line_job is None:
+            return
+        future, ctx = self.line_job
+        done = self._take(future)
+        if done is None:
+            return
+        self.line_job = None
+        out, current = done
+        if not current:
+            return
+        slot, why = out if out is not None else (None, 'U slot search failed')
         self.slot_last = (slot, why)
         self._publish_slot_markers(slot)
         if slot is None:
@@ -568,10 +677,47 @@ class DockCtrlV2(Node):
                                     f'{self.lock_max_distance:.1f}m to lock')
             return
         center, outward = np.asarray(slot.center), np.asarray(slot.outward)
-        self.slot_samples.append((self.cloud[-1][0], center, outward,
+        if ctx['kind'] == 'reposition' and np.linalg.norm(center - ctx['target']) > 1.0:
+            return                                  # 임시 목표가 아닌 옆 슬롯
+        self.slot_samples.append((ctx['stamp'], center, outward,
                                   center + self.via_distance * outward,
                                   center + self.stop_distance * outward))
         self.slot_received = time.monotonic()
+
+    def _detect_slot(self):
+        """SEEK: 목표 방위선 근처 ㄷ자를 찾아(작업 스레드) 6 m 안이면 샘플로 쌓는다."""
+        self._line_search('seek', self.seek_line_point,
+                          (math.cos(self.locked_bearing), math.sin(self.locked_bearing)))
+
+    def _refresh_visible(self, yaw):
+        """SEEK: '보이는 ㄷ자'(우회 판단용)를 1 s 에 한 번 작업 스레드에 맡기고 끝난 결과를 visible 에."""
+        if self.visible_job is not None:
+            done = self._take(self.visible_job)
+            if done is not None:
+                self.visible_job = None
+                slot, current = done
+                if current:
+                    self.visible = (time.monotonic(), slot)
+                    self.visible_seq += 1
+        now = time.monotonic()
+        if (self.visible_job is not None or self.reposition_used or not self.cloud
+                or self.locked_bearing is None or now - self.visible_asked < 1.0):
+            return
+        self.visible_asked = now
+        points, boat = self._cloud_points(), self._odom_xy()
+        if not self._near_dock(points, boat):
+            self.visible = (now, None)              # 6 m 안에 아무것도 없다 — 보이는 ㄷ자 없음
+            self.visible_seq += 1
+            return
+        self.visible_job = self._submit(self._visible_u_slot, points, boat, yaw)
+        self._refresh_visible(yaw)                  # 바로 계산(테스트)이면 지금 받는다
+
+    def _visible_now(self):
+        """막힘 우회용 (기다리는 중인가, 최근 보이는 ㄷ자 또는 None)."""
+        fresh = self.visible is not None and time.monotonic() - self.visible[0] <= VISIBLE_MAX_AGE_S
+        if not fresh and self.visible_job is not None:
+            return True, None
+        return False, (self.visible[1] if fresh else None)
 
     def _publish_slot_markers(self, slot):
         marker = Marker()
@@ -658,6 +804,7 @@ class DockCtrlV2(Node):
         self.cloud.clear()
         self.pending_scans.clear()
         self.slot_samples.clear()
+        self._new_slot_search()
         self.slot_received = 0.0
         self.slot_last = None
         self.locked_bearing = None
@@ -733,7 +880,11 @@ class DockCtrlV2(Node):
                 'slot_lock': ({'center_xy': lock['wall'].tolist(), 'outward': lock['outward'].tolist(),
                                'heading_deg': math.degrees(lock['heading'])} if lock else None),
                 'route_fixed': self.route_enu is not None,
-                'route_xy': [xy.tolist() for xy in self.route_enu] if self.route_enu else None}
+                'route_xy': [xy.tolist() for xy in self.route_enu] if self.route_enu else None,
+                # 최근 1 s tick 최대 시간, 마지막 ㄷ자 찾기 시간 (작업 스레드) [ms]
+                'tick_ms': round(max((ms for _, ms in self.tick_times), default=0.0), 1),
+                'slot_search_ms': (round(self.slot_search_ms, 1)
+                                   if self.slot_search_ms is not None else None)}
         self.status.publish(String(data=json.dumps(data)))
         if not self.phase_log or self.phase_log[-1][1] != self.phase:
             self.phase_log.append((self.get_clock().now().nanoseconds * 1e-9, self.phase, detail))
@@ -968,9 +1119,7 @@ class DockCtrlV2(Node):
             self.reposition_why = 'no scan cloud or target bearing'
             return False
         boat = self._odom_xy()
-        if slot is None:
-            slot = self._visible_u_slot(np.vstack([pts for _, pts in self.cloud]), boat, yaw)
-        if slot is None:
+        if slot is None:                            # 보이는 ㄷ자는 _refresh_visible 이 작업 스레드에서 찾는다
             self.reposition_why = 'no complete U slot in view to offset from'
             return False
         centre, outward = np.asarray(slot.center), np.asarray(slot.outward)
@@ -1008,6 +1157,7 @@ class DockCtrlV2(Node):
         self.reposition_used = True
         self.follower.reset()
         self.slot_samples.clear()                   # 우회 중엔 임시 목표 축으로 목표 ㄷ자를 새로 모은다
+        self._new_slot_search()
         self.slot_received = 0.0
         self.reposition_why = (f'visible U slot shifted {steps:+d} x {self.slot_pitch:.2f}m → waypoint '
                                f'{self.reposition_distance:.1f}m out on target axis')
@@ -1019,12 +1169,12 @@ class DockCtrlV2(Node):
         도크 위치는 모른다 — 지금 양쪽 면까지 보이는 ㄷ자의 법선을 쓴다(세 슬롯은 한 부교라 평행).
         보이는 ㄷ자가 없으면(대개 6 m 밖 — 그 거리에선 비스듬해도 칸막이에 안 닿는다) 판단 안 함.
         """
-        now = time.monotonic()
-        if (self.reposition_used or not self.cloud or self.locked_bearing is None
-                or now - self.oblique_checked < 1.0):
+        # 보이는 ㄷ자는 _refresh_visible 이 1 s 에 한 번 작업 스레드에서 찾는다 — 새 결과만 본다
+        if (self.reposition_used or self.locked_bearing is None or self.visible is None
+                or self.visible_seen == self.visible_seq):
             return False
-        self.oblique_checked = now                  # 보이는 ㄷ자 찾기는 무거워 1 s 에 한 번
-        slot = self._visible_u_slot(np.vstack([pts for _, pts in self.cloud]), self._odom_xy(), yaw)
+        self.visible_seen = self.visible_seq
+        slot = self.visible[1]
         if slot is None:
             return False
         inward = -np.asarray(slot.outward)
@@ -1046,20 +1196,8 @@ class DockCtrlV2(Node):
         """
         rp = self.reposition
         self._update_cloud()
-        if self.cloud and self.cloud_version != self.detected_version:
-            self.detected_version = self.cloud_version
-            target, outward = np.asarray(rp['target']), np.asarray(rp['outward'])
-            slot, why = find_u_slot(np.vstack([pts for _, pts in self.cloud]), self._odom_xy(),
-                                    target, -outward, self.slot_params)
-            self.slot_last = (slot, why)
-            self._publish_slot_markers(slot)
-            if (slot is not None and slot.wall_distance <= self.lock_max_distance
-                    and float(np.linalg.norm(np.asarray(slot.center) - target)) <= 1.0):
-                centre, normal = np.asarray(slot.center), np.asarray(slot.outward)
-                self.slot_samples.append((self.cloud[-1][0], centre, normal,
-                                          centre + self.via_distance * normal,
-                                          centre + self.stop_distance * normal))
-                self.slot_received = time.monotonic()
+        target, outward = np.asarray(rp['target'], float), np.asarray(rp['outward'], float)
+        self._line_search('reposition', target, -outward, target=target)   # 작업 스레드, 6 m 안만
         ok, lock, _ = self._wall_lock()
         if not ok:
             return False
@@ -1217,6 +1355,7 @@ class DockCtrlV2(Node):
         self.seek_line_point = self.seek_start_odom.copy()
         self.cloud.clear()
         self.slot_samples.clear()
+        self._new_slot_search()
         self.follower.reset()
 
     def _target_sample(self):
@@ -1425,6 +1564,22 @@ class DockCtrlV2(Node):
             f'{360 * self.search_max_turns:.0f} deg; {why})')
 
     def _tick(self):
+        """10 Hz 제어 한 번 + 걸린 시간 기록 (status tick_ms, 느리면 경고)."""
+        start = time.perf_counter()
+        try:
+            self._tick_body()
+        finally:
+            now = time.monotonic()
+            ms = (time.perf_counter() - start) * 1000.0
+            self.tick_times.append((now, ms))
+            while self.tick_times and self.tick_times[0][0] < now - 1.0:
+                self.tick_times.popleft()
+            if ms > self.slow_tick_ms and now - self.slow_tick_logged >= 1.0:
+                self.slow_tick_logged = now
+                self.get_logger().warn(f'slow control tick {ms:.0f} ms in {self.phase} '
+                                       f'(last U slot search {self.slot_search_ms or 0:.0f} ms)')
+
+    def _tick_body(self):
         if self.fixed_path_msg is not None and time.monotonic()-self.last_path_pub >= 1.0:
             self.path_pub.publish(self.fixed_path_msg)
             self.gps_path_pub.publish(self.fixed_gps_msg)
@@ -1490,6 +1645,7 @@ class DockCtrlV2(Node):
             taken, wall_why = self._take_wall_lock(yaw)
             if taken:
                 return
+            self._refresh_visible(yaw)
             if self._oblique_reposition(xy, yaw):
                 self.phase = 'REPOSITION'
                 self._command(0, 0)
@@ -1509,8 +1665,13 @@ class DockCtrlV2(Node):
                 held = now - self.blocked_since
                 if held >= self.reposition_after:
                     if not self.reposition_used and now - self.reposition_planned >= 1.0:
+                        waiting, visible = self._visible_now()
+                        if waiting:                 # 보이는 ㄷ자 찾는 중 — 결과를 보고 우회/후진을 정한다
+                            self._report(f'something {blocked:.2f}m ahead — holding; '
+                                         f'waiting for visible U slot search; {wall_why}')
+                            return
                         self.reposition_planned = now
-                        if self._plan_reposition(xy, yaw):
+                        if self._plan_reposition(xy, yaw, slot=visible):
                             self.phase = 'REPOSITION'
                             self._report(f'blocked {held:.1f}s without U slot — {self.reposition_why}')
                             return

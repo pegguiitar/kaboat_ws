@@ -5,6 +5,7 @@
 """
 import json
 import math
+import time
 
 import numpy as np
 import pytest
@@ -15,6 +16,7 @@ from rclpy.parameter import Parameter
 from sensor_msgs.msg import LaserScan
 from std_msgs.msg import String
 
+import kaboat_hardware.dock_ctrl_v2 as dock_ctrl_v2_module
 from kaboat_hardware.dock_ctrl_v2 import DockCtrlV2, front_clearance
 from kaboat_hardware.dock_one_shot import wrap
 
@@ -27,7 +29,8 @@ def node():
     rclpy.init()
     n = DockCtrlV2(parameter_overrides=[
         Parameter('mission_mode', value=True), Parameter('drive_enabled', value=True),
-        Parameter('target_class', value='circle')])
+        Parameter('target_class', value='circle'),
+        Parameter('async_slot_search', value=False)])     # ㄷ자 찾기를 tick 안에서 바로 (결정적)
     n.sent, n.reports = [], []
     n.cmd.publish = n.sent.append
     n.status.publish = lambda msg: n.reports.append(json.loads(msg.data))
@@ -670,6 +673,88 @@ def test_yolo_down_status_holds_heading_like_stale(node, reason):
     _status(node, reason)
     node._tick()
     assert node.sent[-1].angular.z > 0 and node.sent[-1].linear.x == 0.0
+
+
+def test_u_slot_search_off_until_something_within_lock_distance(node, monkeypatch):
+    """6 m(lock_max_distance) 안에 점이 없으면 ㄷ자 찾기를 아예 안 한다 — 뒷벽 9.5 m 면 칸막이 끝 7.6 m."""
+    calls = []
+    real = dock_ctrl_v2_module.find_u_slot
+    monkeypatch.setattr(dock_ctrl_v2_module, 'find_u_slot',
+                        lambda *a, **k: calls.append(1) or real(*a, **k))
+    _lock_bearing(node)
+    _odom(node, 0.0, 9.5)
+    node._add_cloud(200.0, _cloud((0.0, 9.5)))
+    node._tick()
+    assert calls == [] and node.phase == 'SEEK'
+    assert 'U slot search off' in node.reports[-1]['detail']
+    _odom(node, 0.0, 7.5)                                              # 칸막이 끝 5.6 m — 찾기 시작
+    node._add_cloud(201.0, _cloud((0.0, 7.5)))
+    node._tick()
+    assert calls and 'U slot search off' not in node.reports[-1]['detail']
+
+
+@pytest.fixture
+def async_node():
+    rclpy.init()
+    n = DockCtrlV2(parameter_overrides=[
+        Parameter('mission_mode', value=True), Parameter('drive_enabled', value=True),
+        Parameter('target_class', value='circle')])                   # async_slot_search 기본 True
+    n.sent, n.reports = [], []
+    n.cmd.publish = n.sent.append
+    n.status.publish = lambda msg: n.reports.append(json.loads(msg.data))
+    n._on_mission_state(String(data='dock'))
+    try:
+        yield n
+    finally:
+        n.destroy_node()
+        rclpy.shutdown()
+
+
+def test_slow_u_slot_search_does_not_block_the_control_tick(async_node, monkeypatch):
+    """ㄷ자 찾기가 0.5 s 걸려도(젯슨 bag 0.4–1.3 s) tick 은 기다리지 않고 명령을 계속 낸다."""
+    node = async_node
+
+    def slow(*_a, **_k):
+        time.sleep(.5)
+        return None, 'slow search'
+    monkeypatch.setattr(dock_ctrl_v2_module, 'find_u_slot', slow)
+    _lock_bearing(node)
+    _odom(node, 0.0, 5.5)
+    node._add_cloud(300.0, _cloud((0.0, 5.5)))
+    sent = len(node.sent)
+    start = time.perf_counter()
+    node._tick()
+    assert time.perf_counter() - start < .1
+    assert node.line_job is not None and len(node.sent) == sent + 1   # 명령은 이번 tick 에 나갔다
+    assert node.reports[-1]['tick_ms'] < 100
+    deadline = time.monotonic() + 3.0
+    while node.line_job is not None and time.monotonic() < deadline:
+        time.sleep(.05)
+        node._tick()
+    assert node.line_job is None and node.slot_last == (None, 'slow search')
+    assert node.reports[-1]['slot_search_ms'] >= 500
+
+
+def test_async_u_slot_search_still_locks_and_drops_stale_results(async_node):
+    """작업 스레드로 찾아도 잠금은 같다. 새 SEEK 가 시작되면 앞 결과는 버린다."""
+    node = async_node
+    _lock_bearing(node)
+    pos = (0.4, 5.5)
+    _odom(node, *pos)
+    pts = _cloud(pos)
+    deadline = time.monotonic() + 5.0
+    k = 0
+    while node.phase == 'SEEK' and time.monotonic() < deadline:
+        node._add_cloud(400.0 + .25 * k, pts)
+        k += 1
+        for _ in range(3):
+            node._tick()
+            time.sleep(.02)
+    assert node.phase == 'TO_VIA'
+    assert node.route_enu[2].tolist() == pytest.approx([0.0, 1.0], abs=.1)
+    gen = node.slot_gen
+    node._start_seek(FACING_WALL)
+    assert node.slot_gen == gen + 1 and node.line_job is None and node.visible is None
 
 
 def _oblique_setup(node, x=0.0, y=4.0, bearing=-math.pi / 4):
