@@ -160,10 +160,12 @@ test_mission() {
         gate_motion_enabled:=true approach_motion_enabled:=true dock_motion_enabled:=true "$@"
 }
 # goto <미션>_entry → 시작 조건(거리·선수각)을 0.5 s 유지하면 goto 를 끄고 그 미션 시험을 바로 켬 (goto 손으로 안 꿈).
-#   기본 조건: 게이트·도킹·스테이션·탐색 2 m·기록 선수각 ±30°, 회피·토너먼트 3 m·목표(_end) 방향 ±45°.
-#   go_tournament --dist 1.5 --heading 20 --goto thrust_ratio:=0.3 drive_enabled:=false  (옵션 → 시험 인자 순)
-#   go_tournament 은 goto 전에 출발 직진 3 s (슬롯 탈출, run_autonomy 와 같은 텔레옵 4단계). 끄기 --undock 0
-alias go_tournament='python3 "$KABOAT_WS/scripts/go_and_test.py" tournament'
+#   기본 조건: 게이트·도킹·스테이션·탐색 2 m·기록 선수각 ±30°, 회피 3 m·목표(_end) 방향 ±45°.
+#   go_avoid --dist 1.5 --heading 20 --goto thrust_ratio:=0.3 drive_enabled:=false  (옵션 → 시험 인자 순)
+# 토너먼트 한 번에 (슬롯 출발): 출발 직진 3 s → goto tournament_entry → 토너먼트 회피 시험, 노드를 처음에 다 띄우고
+#   cmd_mux 로 명령만 넘김 — 단계 사이 명령 공백 없음 (2026-11-14). 인자는 이름:=값:
+#   go_tournament drive_enabled:=false | undock_sec:=0 | start_dist:=1.5 start_heading_deg:=20 goto_thrust_ratio:=0.3
+alias go_tournament='ros2 launch kaboat_hardware outdoor_tournament_run.launch.py'
 alias go_avoid='python3 "$KABOAT_WS/scripts/go_and_test.py" avoid'
 alias go_gate='python3 "$KABOAT_WS/scripts/go_and_test.py" gate'
 alias go_dock='python3 "$KABOAT_WS/scripts/go_and_test.py" dock'
@@ -202,7 +204,8 @@ echo "   - test_dock_outdoor  : 야외 도킹 dock_entry → 목표 슬롯 → �
 echo "   - check_yolo    : 도킹 YOLO 마스크 확인 (run_dock_yolo.sh 먼저, 영상 PNG ~/kaboat_yolo_checks)"
 echo "   - run_autonomy  : 종합 자율주행 전체 (게이트→스테이션→도킹→탐색→회피, 실제 주행). 예) search_target_color:=red"
 echo "   - test_mission 미션 : 미션 하나만, 그 미션 노드만 띄움 (예: test_mission station, 끝나면 정지)"
-echo "   - go_tournament / go_avoid / go_gate / go_dock / go_station / go_search : goto 그 미션 _entry → 조건 만족하면 바로 그 시험 시작"
+echo "   - go_tournament : 토너먼트 한 번에 — 출발 직진 3 s → goto tournament_entry → 토너먼트 회피 시험 (공백 없이)"
+echo "   - go_avoid / go_gate / go_dock / go_station / go_search : goto 그 미션 _entry → 조건 만족하면 바로 그 시험 시작"
 echo "   - view_position : /odom x·y·선수각·나침반 방위·GNSS 상태 실시간 표시"
 echo "   - run_zenoh     : 노트북 모니터링 브리지 가동"
 echo "   - cb / sb       : 빌드 / 환경 리로드"

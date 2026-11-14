@@ -3,7 +3,8 @@
 
 goto 를 손으로 끌(Ctrl+C) 필요 없이 한 명령으로 접근 → 미션 시작. 젯슨 단축어 (setup_jetson_bashrc.sh):
 
-  go_tournament [시험 인자 …]   출발 직진 3 s → goto tournament_entry → test_tournament
+  go_and_test.py tournament    출발 직진 3 s → goto tournament_entry → test_tournament (예전 go_tournament.
+                               지금 go_tournament 는 outdoor_tournament_run.launch.py — 노드를 다 띄우고 공백 없이)
   go_avoid      [시험 인자 …]   goto avoid_entry      → test_avoid_outdoor
   go_gate       [시험 인자 …]   goto gate_entry       → test_gate_outdoor
   go_dock       [시험 인자 …]   goto dock_entry       → test_dock_outdoor (YOLO venv, run_camera 필요)

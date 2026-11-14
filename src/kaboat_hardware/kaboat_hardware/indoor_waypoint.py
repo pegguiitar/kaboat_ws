@@ -42,8 +42,8 @@ def recorded_target(name, points_file=DEFAULT_POINTS_FILE,
 
 
 class IndoorWaypoint(Node):
-    def __init__(self):
-        super().__init__('indoor_waypoint')
+    def __init__(self, **kwargs):
+        super().__init__('indoor_waypoint', **kwargs)
         defaults = {
             'target_x': 5.0, 'target_y': 2.5, 'target_angle_deg': 0.0,
             'thrust_ratio': 0.2,
@@ -61,6 +61,10 @@ class IndoorWaypoint(Node):
             'align_heading': True,     # false = 위치만 (선수각 맞추지 않음)
             'points_file': DEFAULT_POINTS_FILE,
             'origin_file': DEFAULT_ORIGIN_FILE,
+            # 비어 있지 않으면 /mission/state 가 이 값일 때만 몬다 — 그 밖엔 명령을 안 내고 처음 상태로
+            # 돌아가 있다가, 이 state 가 되면 지금 자리에서 새로 출발한다 (토너먼트 한 번에: 'approach').
+            # 미리 띄워 둔 goto 가 출발 직진 중에 도착(REACHED)해 버려, 직진 뒤엔 0 만 내던 문제 (2026-11-14 시뮬).
+            'active_state': '',
         }
         for name, value in defaults.items():
             self.declare_parameter(name, value)
@@ -108,6 +112,8 @@ class IndoorWaypoint(Node):
         self.estop = False
         self.completed = False
         self.last_status = None
+        self.active_state = str(p('active_state')).strip()
+        self.mission_state = None
 
         latched = QoSProfile(depth=1,
                              durability=DurabilityPolicy.TRANSIENT_LOCAL)
@@ -119,8 +125,12 @@ class IndoorWaypoint(Node):
             Twist, '/waypoint/cmd_preview', 10)
         self.cmd_pub = (self.create_publisher(Twist, '/cmd_vel', 10)
                         if self.motion_enabled else None)
+        self._cmd_topic = (getattr(self.cmd_pub, 'topic_name', '/cmd_vel')
+                           if self.cmd_pub is not None else '/cmd_vel')
         self.create_subscription(Odometry, '/odom', self._on_odom, 10)
         self.create_subscription(Bool, '/emergency_stop', self._on_estop, 10)
+        if self.active_state:
+            self.create_subscription(String, '/mission/state', self._on_mission_state, latched)
         self.create_timer(0.05, self._tick)
         self._publish_goal()
         self._status('WAIT_ODOM')
@@ -159,6 +169,16 @@ class IndoorWaypoint(Node):
     def _on_estop(self, msg):
         self.estop = msg.data
 
+    def _on_mission_state(self, msg):
+        self.mission_state = msg.data
+
+    def _idle(self):
+        """active_state 가 아닐 때 — 명령 없이 처음 상태로 (도착 표시도 지움)."""
+        self.completed = False
+        self.controller.reset()                 # 도착 판정(_arrived)·머문 시간까지 새로
+        self.controller.set_goal(self.target)
+        self._status(f'IDLE_UNTIL_{self.active_state.upper()}')
+
     def _send(self, cmd):
         self.preview_pub.publish(cmd)
         if self.cmd_pub is not None:
@@ -183,13 +203,18 @@ class IndoorWaypoint(Node):
                                 and 0 <= pose.position.y <= self.size_y)
 
     def _tick(self):
+        if self.active_state and self.mission_state != self.active_state:
+            self._idle()
+            return
         if self.completed:
             self._send(Twist())
             return
         if self.estop:
             self._halt('EMERGENCY_STOP')
             return
-        if self.motion_enabled and self.count_publishers('/cmd_vel') != 1:
+        # 자기 출력 토픽의 발행자 수 — launch 에서 /cmd_vel 을 /cmd/approach 등으로 돌리면(cmd_mux 뒤,
+        # outdoor_tournament_run) 그 토픽을 센다. count_publishers 는 remap 을 안 따르므로 이름을 직접.
+        if self.motion_enabled and self.count_publishers(self._cmd_topic) != 1:
             self._halt('CMD_VEL_PUBLISHER_CONFLICT')
             return
         if self.count_publishers('/odom') != 1:
@@ -235,8 +260,14 @@ class IndoorWaypoint(Node):
             throttle_duration_sec=1.0)
 
     def stop(self):
-        if self.cmd_pub is not None:
+        # Ctrl+C 로 컨텍스트가 먼저 닫히면 publish 가 RCLError 로 죽어 traceback 이 났다 (2026-11-14).
+        # 그때는 못 내도 모터 워치독(0.3 s)이 중립으로 돌린다.
+        if self.cmd_pub is None or not self.context.ok():
+            return
+        try:
             self.cmd_pub.publish(Twist())
+        except Exception:  # noqa: BLE001 — 종료 중 컨텍스트 경합
+            pass
 
 
 def main(args=None):

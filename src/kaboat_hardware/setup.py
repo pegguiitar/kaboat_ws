@@ -49,6 +49,7 @@ setup(
             'circle_drive_test = kaboat_hardware.circle_drive_test:main',
             'station_keeping_test = kaboat_hardware.station_keeping_test:main',
             'indoor_waypoint = kaboat_hardware.indoor_waypoint:main',
+            'tournament_sequence = kaboat_hardware.tournament_sequence:main',
             'los_path_test = kaboat_hardware.los_path_test:main',
             'waypoint_sequence_test = kaboat_hardware.waypoint_sequence_test:main',
             'tank_test_visualization = kaboat_hardware.tank_test_visualization:main',
