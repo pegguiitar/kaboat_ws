@@ -25,7 +25,8 @@
 점유지도 필수 (gate 와 같은 규칙): /occupancy_grid 가 search.grid_timeout_sec(0.7 s) 넘게 끊기거나
   frame 이 odom 이 아니면 정지 — run_map 을 안 켜면 반발 회피 없이 도는 걸 막는다.
   search.require_grid:=false 로 끌 수 있다(지도 없는 수조·시험).
-반발 조향(apply_repulsion): SEEK 이동·접선 진입·선회·출구 이동, LOOK 은 전진할 때만
+반발 조향(apply_repulsion): SEEK 이동·접선 진입·선회·출구 이동, LOOK 은 전진할 때만. 점유 확률
+  search.repulse_occ_min(75) 이상 칸만 — 배가 지나간 자리에 남는 물보라 잡음 칸(60~70)에 밀리지 않게
   (탐색 부표 쪽을 보고 제자리 회전할 때 걸면 앞 부표 때문에 선수각을 못 맞춘다).
 
 입력   /detections/buoys, /odom, /mission/goal, /mission/search_center, /mission/state,
@@ -317,7 +318,8 @@ class SearchCircler(BehaviorBase):
                     cx, cy = fsm.center
                     cmd, _ = self.los(self._circle_path, p.orbit_thrust, p.orbit_turn)
                     return apply_repulsion(cmd, self.occupancy_grid, self.odom,
-                                           ignore=(cx, cy, p.ignore_radius))
+                                           ignore=(cx, cy, p.ignore_radius),
+                                           occ_threshold=p.repulse_occ_min)
             self._status('완료 — 탐색 목표점으로' if phase == 'DONE'
                          else f'{self.params.give_up_sec:.0f} s 동안 목표 부표 못 찾음 — 포기')
             arrive = (self.params.exit_arrive_radius if math.dist(target, fsm.goal) > 1e-6
@@ -369,14 +371,16 @@ class SearchCircler(BehaviorBase):
             if reached or math.dist(boat, self._entry_points[-1]) <= ENTRY_DONE_DISTANCE:
                 self._entry_done = True
                 self._los_follower.reset()
-            return apply_repulsion(cmd, self.occupancy_grid, self.odom, ignore=ignore)
+            return apply_repulsion(cmd, self.occupancy_grid, self.odom, ignore=ignore,
+                               occ_threshold=self.params.repulse_occ_min)
         self._status(f'{self.params.target_color} 부표 ({cx:+.1f}, {cy:+.1f}) '
                      f'{fsm.direction} 선회')
         cmd, _ = self.los(self._circle_path, self.params.orbit_thrust, self.params.orbit_turn)
         self.get_logger().info(
             f'search: 선회 {math.degrees(fsm.swept):.0f}° / {360.0 * self.params.laps:.0f}°',
             throttle_duration_sec=2.0)
-        return apply_repulsion(cmd, self.occupancy_grid, self.odom, ignore=ignore)
+        return apply_repulsion(cmd, self.occupancy_grid, self.odom, ignore=ignore,
+                               occ_threshold=self.params.repulse_occ_min)
 
     def _plan_entry(self, boat, center):
         """고정 직후 한 번 — 규정 방향 접선 진입 경로 (원 띠 안이면 없음)."""
@@ -458,7 +462,8 @@ class SearchCircler(BehaviorBase):
         cmd.linear.x, cmd.angular.z = step.linear, step.angular
         if cmd.linear.x > 0.0:
             # 밀려서 제자리로 돌아갈 때만 — 제자리 회전(선수각 맞추기)엔 걸지 않는다
-            cmd = apply_repulsion(cmd, self.occupancy_grid, self.odom)
+            cmd = apply_repulsion(cmd, self.occupancy_grid, self.odom,
+                               occ_threshold=self.params.repulse_occ_min)
         return cmd
 
     def _go_exit(self, target, arrive=None):
@@ -490,7 +495,8 @@ class SearchCircler(BehaviorBase):
         cmd, reached = self.los(self._exit_path, self.params.exit_thrust, self.params.orbit_turn)
         if reached:
             self._exit_path = None
-        return apply_repulsion(cmd, self.occupancy_grid, self.odom)
+        return apply_repulsion(cmd, self.occupancy_grid, self.odom,
+                               occ_threshold=self.params.repulse_occ_min)
 
     def _go_goal(self, target, arrive=None):
         pos = self.odom.pose.pose.position
@@ -499,7 +505,8 @@ class SearchCircler(BehaviorBase):
             self._los_follower.reset()
             return Twist()
         cmd, _ = self.waypoint(target[0], target[1], slow_radius=3.0)
-        return apply_repulsion(cmd, self.occupancy_grid, self.odom)
+        return apply_repulsion(cmd, self.occupancy_grid, self.odom,
+                               occ_threshold=self.params.repulse_occ_min)
 
     # ── RViz ─────────────────────────────────────────────
     def _ring(self, ns, stamp, cx, cy, rad, rgba, width=0.05):

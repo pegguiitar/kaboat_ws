@@ -92,6 +92,11 @@ class SearchParams:
     # §7.8). false = 예전 공용 변환.
     measured_speed: bool = True
     ignore_radius: float = 1.0        # 선회 중 회피 반발에서 뺄 목표 부표 둘레 반경 [m]
+    repulse_occ_min: int = 75         # 탐색의 반발 조향은 점유 확률 이 이상 칸만 (공용 기본 50). 지도는 반사 없는
+                                      # 빔으로 빈 공간을 안 지워, 배 근처 물보라 히트 한두 번(60~70)이 배 지나간 자리에
+                                      # 남는다 — 2026-11-14 실주행 지도: 부표 아닌 점유 칸 38/38 이 ≤ 70, 부표 몸통은
+                                      # 77 % 가 100. 같은 궤도를 다시 돌 때 이 칸에 밀려 원을 5–8 m 벗어났다 (시뮬 선회
+                                      # tick 의 87–92 % 에 반발, 그 칸의 84–96 % 가 물체 없는 자리). 50 = 예전 동작
     done_clearance: float = 1.5       # 완료 뒤 목표 부표에 이보다 가까이 안 감 [m]
                                       # (mission_manager transition_radius 2.0 보다 작게)
     look_sec: float = 15.0            # 활성화 직후 제자리에서 둘러보는 시간 [s] (0 = 안 함)
@@ -173,6 +178,8 @@ class SearchParams:
                              'shape_pass_ratio out of range')
         if self.ignore_radius >= self.orbit_radius:
             raise ValueError('search.ignore_radius must be smaller than orbit_radius')
+        if not 1 <= self.repulse_occ_min <= 100:
+            raise ValueError('search.repulse_occ_min must be in [1, 100]')
 
     @property
     def direction(self) -> Optional[str]:

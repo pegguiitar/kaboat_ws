@@ -24,13 +24,16 @@ GAIN = 30.0 / MAX_THRUST  # 반발 조향 게인 — steer 1 당 차동 30N (구
 OCC_THRESHOLD = 50       # 점유 확률[0~100] 이 값 이상인 셀만 장애물로 취급
 
 
-def apply_repulsion(cmd: Twist, occupancy_grid, odom, ignore=None) -> Twist:
+def apply_repulsion(cmd: Twist, occupancy_grid, odom, ignore=None,
+                    occ_threshold: int = OCC_THRESHOLD) -> Twist:
     """주행 명령 cmd 에 격자 기반 장애물 반발 조향을 더해 돌려준다.
 
     occupancy_grid  nav_msgs/OccupancyGrid (frame_id='odom', 점유확률 0~100/-1)
     odom            nav_msgs/Odometry (현재 위치/자세) — 선체 기준 변환에 필요
     ignore          (x, y, r) odom — 이 원 안의 셀은 장애물로 안 본다
                     (탐색 선회 중 일부러 도는 목표 부표)
+    occ_threshold   이 점유 확률 이상인 셀만 장애물 (기본 OCC_THRESHOLD 50). 탐색은 75 — 배 근처
+                    잡음 히트 한두 번(60~70)으로 생긴 칸을 거른다 (search_orbit.SearchParams.repulse_occ_min)
     """
     # A reached waypoint or failed odom check must remain a stop command.
     if (cmd.linear.x == 0.0 and cmd.angular.z == 0.0
@@ -52,7 +55,7 @@ def apply_repulsion(cmd: Twist, occupancy_grid, odom, ignore=None) -> Twist:
     steer = 0.0
     nearest = float('inf')
     for i, v in enumerate(occupancy_grid.data):
-        if v < OCC_THRESHOLD:      # -1(미탐색) 또는 저확률 셀은 건너뜀
+        if v < occ_threshold:      # -1(미탐색) 또는 저확률 셀은 건너뜀
             continue
         # 셀 인덱스 → odom 월드 좌표 (셀 중심)
         wx = ox + (i % width + 0.5) * res

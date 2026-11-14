@@ -232,7 +232,7 @@ def test_runs_with_fresh_grid():
 def test_look_repulsion_only_while_moving(monkeypatch):
     seen = []
     monkeypatch.setattr(search_circler_mod, 'apply_repulsion',
-                        lambda cmd, grid, odom, ignore=None: seen.append(cmd.linear.x) or cmd)
+                        lambda cmd, grid, odom, ignore=None, occ_threshold=50: seen.append(cmd.linear.x) or cmd)
     state = make_state('red', [], search_center=(60.0, 70.0), look_sec=15.0)
     SearchCircler.compute_cmd(state)          # 제자리 — 선수각만 (이미 영역 쪽) → 반발 안 걸림
     assert seen == []
@@ -354,3 +354,45 @@ def test_search_node_uses_measured_speed_curve_and_can_turn_it_off():
         finally:
             rclpy.shutdown()
     assert SearchParams().measured_speed is True
+
+
+# ---------- 반발 조향은 점유 75 이상 칸만 (배 지나간 자리 잡음 칸 거르기) ----------
+
+def odom_at(x, y, yaw=0.0):
+    return SimpleNamespace(pose=SimpleNamespace(pose=SimpleNamespace(
+        position=SimpleNamespace(x=x, y=y),
+        orientation=SimpleNamespace(x=0.0, y=0.0, z=math.sin(yaw / 2), w=math.cos(yaw / 2)))))
+
+
+def one_cell_grid(value, cell=(52, 51)):
+    # 배 (45, 70) 앞 왼쪽 2.4 m 쯤 (x 50.5, y 70.3) 칸 하나 — real_grid 와 같은 0.2 m·원점 (40, 60)
+    data = [0] * (100 * 100)
+    data[cell[1] * 100 + cell[0]] = value
+    return SimpleNamespace(header=SimpleNamespace(frame_id='odom'), data=data, info=SimpleNamespace(
+        width=100, height=100, resolution=0.2,
+        origin=SimpleNamespace(position=SimpleNamespace(x=40.0, y=60.0))))
+
+
+@pytest.mark.parametrize('value, threshold, steered', [
+    (65, 50, True),     # 공용 기본 50 — 잡음 한두 번 칸에도 꺾임
+    (65, 75, False),    # 탐색 75 — 2026-11-14 실주행 지도의 부표 아닌 칸은 전부 ≤ 70
+    (100, 75, True),    # 부표 몸통(대부분 100)은 그대로 비킨다
+])
+def test_repulsion_threshold(value, threshold, steered):
+    from kaboat_behaviors.obstacle_avoidance_utils import apply_repulsion
+    cmd = Twist()
+    cmd.linear.x = 0.25
+    out = apply_repulsion(cmd, one_cell_grid(value), odom_at(48.0, 70.0), occ_threshold=threshold)
+    assert (out.angular.z < -0.01) is steered      # 칸이 왼쪽 앞 → 오른쪽으로
+
+
+def test_search_passes_repulse_threshold_everywhere(monkeypatch):
+    seen = []
+    monkeypatch.setattr(search_circler_mod, 'apply_repulsion',
+                        lambda cmd, grid, odom, ignore=None, occ_threshold=50:
+                        seen.append(occ_threshold) or cmd)
+    state = make_state('red', [buoy('red', 52.0, 71.0)], boat=(54.0, 71.0))
+    SearchCircler.compute_cmd(state)                 # 선회
+    state2 = make_state('green', [], boat=(40.0, 70.0))
+    SearchCircler.compute_cmd(state2)                # SEEK — 영역 중심으로
+    assert seen and set(seen) == {75}
