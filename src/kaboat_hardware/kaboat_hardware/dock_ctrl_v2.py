@@ -67,7 +67,7 @@
   ABORT   (미션 모드만, 2026-11-14) 더 할 게 없거나 진전이 없으면 서서 미션 마감(240 s)을 기다리지 않고
           /mission/give_up 'dock: 이유' 를 1 s 마다 — 전체 실행이면 mission_manager 가 직진 후진 3 m 뒤 search.
           바로 포기: SEEK 재탐색·막힘 후진(UNBLOCK) 횟수 소진, BACKOFF 실패. 시간: SCAN 에서 YOLO 가
-          give_up_yolo_stale_s(30 s) 끊김, TO_VIA give_up_to_via_s(60 s)·TO_GOAL give_up_to_goal_s(60 s) 안에
+          give_up_yolo_stale_s(45 s) 끊김, TO_VIA give_up_to_via_s(60 s)·TO_GOAL give_up_to_goal_s(60 s) 안에
           도착 못 함(시뮬 정상 최대 9·37 s, 실패 172·61 s). TO_GOAL 이면 슬롯 안일 수 있어 슬롯 축 선수로
           give_up_reverse_m(3 m) 직진 후진(retreat_cmd) 뒤 포기. 단독 도킹 시험(미션 모드 아님)은 예전처럼 멈춤.
 
@@ -262,8 +262,10 @@ class DockCtrlV2(Node):
                     # 포기 (미션 모드, 2026-11-14): 더 할 게 없거나 진전이 없으면 서서 마감(240 s)을 기다리지
                     # 않고 /mission/give_up — 전체 실행이면 mission_manager 가 직진 후진 3 m 뒤 search 로.
                     # 0 = 그 조건 끔. 재탐색·막힘 후진·BACKOFF 를 다 써서 멈추면 바로 포기.
-                    # 폐루프 시뮬 정상 판 최대: TO_VIA 9 s·TO_GOAL 37 s (실패 판 172·61 s), YOLO 첫 결과 9 s(bag).
-                    'give_up_yolo_stale_s': 30.0, 'give_up_to_via_s': 60.0,
+                    # 폐루프 시뮬 정상 판 최대: TO_VIA 9 s·TO_GOAL 37 s (실패 판 172·61 s).
+                    # YOLO: 2026-11-14 run1 bag 에서 도킹 시작 때 모델을 처음 불러와 28.4 s 끊김. 검출기가 이제
+                    # 런치 때 미리 불러오지만(preload), 실패해 예전처럼 도킹 때 불러와도 걸리지 않게 45 s.
+                    'give_up_yolo_stale_s': 45.0, 'give_up_to_via_s': 60.0,
                     'give_up_to_goal_s': 60.0,
                     # TO_GOAL 에서 포기하면 슬롯 안일 수 있어 먼저 선수 유지 직진 후진 (retreat_cmd) — 정지점은
                     # 경유점보다 2.44 m 안쪽이라 3 m 면 입구 밖 (mission_manager 후진 0.05 는 조류에 약함)

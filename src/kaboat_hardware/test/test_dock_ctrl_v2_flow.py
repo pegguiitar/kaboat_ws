@@ -965,20 +965,24 @@ def test_unblocks_used_up_gives_up_in_mission_mode(node):
     assert gave and gave[0].startswith('dock: blocked') and f'after {node.unblock_max} retreats' in gave[0]
 
 
-def test_yolo_stale_30s_gives_up(node):
+def test_yolo_stale_45s_gives_up(node):
     gave = _gave(node)
+    assert node.give_up_yolo_stale == 45.0
     _odom(node, 0.0, 10.0)
     _scan(node)
     node._tick()                                                       # 검출 상태가 한 번도 안 옴
     assert node.phase == 'SCAN' and node.reports[-1]['detail'].startswith('YOLO stale')
-    node.yolo_stale_since -= node.give_up_yolo_stale - 1.0
+    node.yolo_stale_since -= 28.4                                      # run1 bag 모델 불러오기 — 아직
     node._tick()
-    assert node.phase == 'SCAN'                                        # 29 s — 아직 (YOLO 로딩 bag 9 s)
+    assert node.phase == 'SCAN'
+    node.yolo_stale_since -= node.give_up_yolo_stale - 1.0 - 28.4      # 44 s — 아직
+    node._tick()
+    assert node.phase == 'SCAN'
     node.yolo_stale_since -= 1.0
     node._tick()
     assert node.phase == 'ABORT'
     node._tick()
-    assert gave and gave[0].startswith('dock: YOLO stale for 30s')
+    assert gave and gave[0].startswith('dock: YOLO stale for 45s')
 
 
 def _to_via(node):
