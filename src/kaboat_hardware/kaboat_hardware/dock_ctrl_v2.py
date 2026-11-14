@@ -27,7 +27,9 @@
                             규칙도 그쪽 후보를 뺀다.
             아무것도 없음 — 시계방향.
           YOLO 상태 자체가 끊기면(stale) 끊긴 순간의 선수각을 odom PD(scan_turn_kp/kd)로 지킨다
-          (yolo_stale_hold_heading). 도킹 시작점에 왔는데 YOLO 가 아직 안 떴을 때의 페일세이프 — 2026-11-14
+          (yolo_stale_hold_heading). 상태는 오지만 YOLO 가 안 돈 이유(YOLO_DOWN_REASONS: disabled·
+          model_unavailable·추론 오류 등)도 끊긴 것과 같다. YOLO 는 돌았는데 도형이 없으면(검출 없음)
+          아래 탐색 선회 그대로. 도킹 시작점에 왔는데 YOLO 가 아직 안 떴을 때의 페일세이프 — 2026-11-14
           bag: 모델 로드 20 s + 첫 추론 8 s 동안 명령 0 이라 선수가 −117° → +174° 로 69° 표류해, 시작 때
           화면 안(16°)이던 목표가 화면 밖으로 나갔다. 탐색 회전은 하지 않는다(눈먼 회전 금지).
           누적 search_max_turns(2)바퀴를 돌아도 목표가 없으면 상태에 'not found after 2 turns' 를
@@ -103,6 +105,11 @@ from .dock_one_shot import (LocalGeo, fixed_route, parse_marker_order, retreat_e
 FRONT_MIN_RANGE_M = 0.8      # 이보다 가까운 점은 선체·물보라로 보고 앞 막힘 판정에서 뺀다
 FRONT_MIN_POINTS = 3
 GIVE_UP_ALIGN_MAX_S = 20.0   # 목표 못 찾아 포기하기 전 SCAN 시작 선수각으로 되돌리는 상한 [s]
+# 검출 상태는 오지만 YOLO 가 돌지 않은 경우 (dock_mark_detector 의 reason). 상태가 끊긴 것과 같게 본다 —
+# 검출이 없는 것(target_missing…, sight_rays 비어 있음)과 달리 탐색 선회해도 볼 수 없다.
+YOLO_DOWN_REASONS = frozenset({'disabled', 'model_unavailable', 'rgb_conversion_error',
+                               'unaligned_rgb_depth_or_info', 'invalid_intrinsics',
+                               'unsupported_distortion_model', 'image_or_inference_error'})
 
 
 def stamp(msg):
@@ -416,6 +423,7 @@ class DockCtrlV2(Node):
         self.abort_heading = None                   # ABORT 전 후진 때 지킬 선수각 (None = 후진 없이 포기)
         self.yolo_stale_since = None                # SCAN 에서 YOLO 가 끊긴 때 (monotonic)
         self.stale_hold_yaw = None                  # 그때의 선수각 — YOLO 가 돌아올 때까지 지킨다
+        self.yolo_down_reason = ''                  # 상태는 오는데 YOLO 가 안 돈 이유 (YOLO_DOWN_REASONS)
         self.phase_seen = 'IDLE'                    # 단계가 바뀐 때를 재려고 (TO_VIA·TO_GOAL 시간 제한)
         self.phase_since = time.monotonic()
         self.phase = 'IDLE'
@@ -1252,7 +1260,11 @@ class DockCtrlV2(Node):
         (선회율 × 0.2 s) 만큼 밀려 제어가 흔들리고 방위 고정도 안 된다(2026-11-13 bag).
         """
         now = time.monotonic()
-        if self.det is None or now - self.det_received > self.perception_timeout:
+        reason = self.det.get('reason') if isinstance(self.det, dict) else None
+        self.yolo_down_reason = (reason if reason in YOLO_DOWN_REASONS
+                                 and not (self.det or {}).get('sight_rays') else '')
+        if (self.det is None or now - self.det_received > self.perception_timeout
+                or self.yolo_down_reason):
             self.bearing_samples.clear()
             self.scan_heading = None
             return 0.0, 0.0, 'YOLO stale'
@@ -1462,7 +1474,8 @@ class DockCtrlV2(Node):
                     return
                 if self.stale_hold:
                     turn = self._scan_turn(self.stale_hold_yaw, yaw)
-                    why = (f'YOLO stale {stale:.1f}s — holding heading '
+                    down = f' ({self.yolo_down_reason})' if self.yolo_down_reason else ''
+                    why = (f'YOLO stale {stale:.1f}s{down} — holding heading '
                            f'{math.degrees(self.stale_hold_yaw):.1f} deg '
                            f'(error {math.degrees(wrap(self.stale_hold_yaw - yaw)):+.1f})')
             else:

@@ -641,6 +641,37 @@ def test_yolo_stale_heading_hold_can_be_turned_off(node):
     assert node.reports[-1]['detail'] == 'YOLO stale'
 
 
+def _status(node, reason, rays=None):
+    node._det(String(data=json.dumps({'valid': False, 'reason': reason, 'sight_rays': rays or {}})))
+
+
+def test_scan_searches_when_yolo_runs_but_sees_nothing(node):
+    """YOLO 는 도는데 도형이 없으면(검출 없음) 선수 유지가 아니라 예전 SCAN 탐색 선회."""
+    _odom(node, 0.0, 10.0)
+    _scan(node)
+    _status(node, 'target_missing_or_invalid_depth')
+    node._tick()
+    assert node.stale_hold_yaw is None and node.yolo_stale_since is None
+    assert node.reports[-1]['detail'].startswith('searching')
+    assert node.sent[-1].angular.z == pytest.approx(-node.search_turn)  # 아무것도 없음 — 시계방향
+
+
+@pytest.mark.parametrize('reason', ['disabled', 'model_unavailable', 'image_or_inference_error'])
+def test_yolo_down_status_holds_heading_like_stale(node, reason):
+    """상태는 오지만 YOLO 가 안 돈 이유면(비활성·모델 없음·추론 오류) 끊긴 것과 같이 선수 유지."""
+    _odom(node, 0.0, 10.0, yaw=FACING_WALL - math.radians(20))
+    _scan(node)
+    _status(node, reason)
+    node._tick()
+    detail = node.reports[-1]['detail']
+    assert detail.startswith('YOLO stale') and f'({reason})' in detail and 'holding heading' in detail
+    assert node.sent[-1].angular.z == 0.0                              # 첫 tick: 그 선수각이 기준
+    _odom(node, 0.0, 10.0, yaw=FACING_WALL - math.radians(30))         # 10° 오른쪽으로 밀림
+    _status(node, reason)
+    node._tick()
+    assert node.sent[-1].angular.z > 0 and node.sent[-1].linear.x == 0.0
+
+
 def _oblique_setup(node, x=0.0, y=4.0, bearing=-math.pi / 4):
     """가운데 슬롯(x=0) 정면 y m 에서 오른쪽 옆 슬롯(x=4) 표지 쪽(−45°) 을 목표로 SEEK."""
     _lock_bearing(node)
