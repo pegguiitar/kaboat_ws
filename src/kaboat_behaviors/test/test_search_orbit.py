@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from kaboat_behaviors.search_orbit import SearchFsm, SearchParams, tangent_entry
+from kaboat_behaviors.search_orbit import SearchFsm, SearchParams, clear_point, tangent_entry
 
 GOAL = (50.0, 70.0)
 
@@ -568,3 +568,45 @@ def test_black_needs_red_or_green_seen_by_default():
     g = fsm_0113('black', black_needs_field=False)                   # 끄면 영역 중심 거리로
     g.update(unknowns, (168.7, -8.9), 0.0, _shape({3: True, 7: True}))
     assert g.center == (169.3, -5.9)
+
+
+# ---------- SEEK 목적지는 부표에서 비킨다 ----------
+
+def test_clear_point_moves_off_buoys():
+    assert clear_point((50, 70), [], 2.5) == (50.0, 70.0)
+    assert clear_point((50, 70), [(60, 70)], 2.5) == (50.0, 70.0)          # 멀면 그대로
+    p = clear_point((50, 70), [(50, 70)], 2.5, toward=(40, 70))           # 부표 위 → 배 쪽으로
+    assert p == pytest.approx((47.5, 70.0))
+    p = clear_point((50, 70), [(51, 70)], 2.5)                            # 옆 → 바깥으로
+    assert p == pytest.approx((48.5, 70.0))
+    p = clear_point((50, 70), [(51, 70), (48.5, 70.5)], 2.5)              # 둘 사이
+    assert min(math.dist(p, o) for o in [(51, 70), (48.5, 70.5)]) >= 2.5 - 1e-6
+
+
+def test_seek_arrives_at_cleared_point_and_still_gives_up():
+    # 영역 중심(GOAL) 위에 목표 아닌 부표 — 그 자리 대신 2.5 m 비킨 점에서 둘러보고, 거기서 포기 시계가 돈다
+    f = fsm('red', give_up_sec=90.0)
+    other = [buoy('green', 50.0, 70.0)]
+    assert f.update(other, (40, 70), 0.0) == 'SEEK'
+    assert f.seek_xy == pytest.approx((47.5, 70.0))
+    f.update(other, (47.4, 70.0), 10.0)                                   # 비킨 점 도착 (중심 2.6 m)
+    assert f.update(other, (47.4, 70.0), 99.0) == 'SEEK'
+    assert f.update(other, (47.4, 70.0), 101.0) == 'GIVE_UP'
+
+
+def test_clear_point_near_buoy_goes_toward_boat():
+    # 영역 중심이 부표에서 3 cm — p−o 방향(동쪽) 대신 배(남쪽) 쪽으로
+    p = clear_point((50.03, 70.0), [(50.0, 70.0)], 2.5, toward=(50.0, 60.0))
+    assert p == pytest.approx((50.0, 67.5))
+
+
+def test_seek_point_stays_put_while_detection_jitters():
+    f = fsm('red', give_up_sec=90.0)
+    first = None
+    for k, (dx, dy) in enumerate([(0.03, 0.0), (-0.04, 0.02), (0.0, -0.05), (0.05, 0.05)]):
+        f.update([buoy('green', 50.0 + dx, 70.0 + dy)], (40.0, 70.0 + k * 0.5), float(k))
+        first = first or f.seek_xy
+        assert f.seek_xy == first                                     # 흔들려도 그대로
+    assert math.dist(first, (50.0, 70.0)) == pytest.approx(2.5, abs=0.06)
+    f.update([buoy('green', 50.0, 70.0), buoy('red', first[0], first[1] + 1.0, 9)], (40, 70), 5.0)
+    assert f.seek_xy != first                                         # 새 부표가 그 점 옆 → 다시 비킴

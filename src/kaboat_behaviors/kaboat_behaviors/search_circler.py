@@ -336,9 +336,9 @@ class SearchCircler(BehaviorBase):
             return self._hold_pose(boat, area)
 
         if phase == 'SEEK':
-            if math.dist(boat, fsm.area) > self.params.arrive_radius:
+            if math.dist(boat, fsm.seek_xy) > self.params.arrive_radius:
                 self._status(f'{self.params.target_color} 부표 찾는 중 — 탐색 영역 중심으로')
-                return self._go_goal(fsm.area)
+                return self._go_goal(fsm.seek_xy, detour=True)
             self._status('탐색 영역 중심 도착 — 제자리 둘러보기')
             turn = self.params.scan_turn
             self._command_full_scale = (self.max_linear, turn)
@@ -498,12 +498,18 @@ class SearchCircler(BehaviorBase):
         return apply_repulsion(cmd, self.occupancy_grid, self.odom,
                                occ_threshold=self.params.repulse_occ_min)
 
-    def _go_goal(self, target, arrive=None):
+    def _go_goal(self, target, arrive=None, detour=False):
         pos = self.odom.pose.pose.position
         radius = self.params.arrive_radius if arrive is None else arrive
         if math.hypot(target[0] - pos.x, target[1] - pos.y) <= radius:
             self._los_follower.reset()
             return Twist()
+        if detour:
+            # SEEK — 직선이 부표 entry_clearance 안을 지나면 바깥 경유점부터 (진입·출구와 같은 규칙, 매 tick 다시)
+            others = [(b.position.x, b.position.y) for b in self.buoys]
+            via = detour_via((pos.x, pos.y), target, others, self.params.entry_clearance)
+            if via is not None and math.hypot(via[0] - pos.x, via[1] - pos.y) > 1.0:
+                target = via
         cmd, _ = self.waypoint(target[0], target[1], slow_radius=3.0)
         return apply_repulsion(cmd, self.occupancy_grid, self.odom,
                                occ_threshold=self.params.repulse_occ_min)

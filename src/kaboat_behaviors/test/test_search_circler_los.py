@@ -51,7 +51,7 @@ def make_state(color, buoys, boat=(45.0, 70.0), yaw=0.0, search_center=(50.0, 70
     state.report_complete = lambda: state.completed.append(True)
     for name in ('_status', '_go_goal', '_area_xy', '_plan_entry', '_hold_pose', '_grid_ok',
                  '_update_shapes', '_shape_ok', '_entry_pivot', '_go_exit'):
-        setattr(state, name, (lambda n: lambda *a: getattr(SearchCircler, n)(state, *a))(name))
+        setattr(state, name, (lambda n: lambda *a, **k: getattr(SearchCircler, n)(state, *a, **k))(name))
     state._hold_ctrl = WaypointController(WaypointParams(
         max_linear=state.params.hold_linear, max_angular=WAYPOINT_MAX_ANGULAR,
         yaw_kp=1.4, yaw_kd=0.16))
@@ -151,7 +151,8 @@ def test_no_tangent_entry_when_disabled():
 
 
 def test_no_target_drives_to_area_center():
-    state = make_state('green', [buoy('red', 52.0, 71.0)], search_center=(60.0, 75.0))
+    # 빨강은 가는 직선에서 4 m 옆 (직선 1.5 m 안이면 경유점 — test_seek_detours_around_buoy_on_the_way)
+    state = make_state('green', [buoy('red', 52.0, 68.0)], search_center=(60.0, 75.0))
     SearchCircler.compute_cmd(state)
     assert state.calls[0][:3] == ('wp', 60.0, 75.0)
 
@@ -396,3 +397,19 @@ def test_search_passes_repulse_threshold_everywhere(monkeypatch):
     state2 = make_state('green', [], boat=(40.0, 70.0))
     SearchCircler.compute_cmd(state2)                # SEEK — 영역 중심으로
     assert seen and set(seen) == {75}
+
+
+def test_seek_goes_to_point_clear_of_buoys():
+    # 영역 중심 (50, 70) 바로 옆 초록 — 빨강 목표 SEEK 는 중심이 아니라 초록에서 2.5 m 비킨 점으로
+    state = make_state('red', [buoy('green', 50.5, 70.0)], boat=(40.0, 70.0))
+    SearchCircler.compute_cmd(state)
+    _, x, y, *_ = state.calls[-1]
+    assert (x, y) == pytest.approx((48.0, 70.0))
+
+
+def test_seek_detours_around_buoy_on_the_way():
+    # 배 (40, 70) → 비킨 점 (53, 70) 직선 위 (46, 70.3) 에 빨강 아닌 부표 → 바깥 경유점부터
+    state = make_state('red', [buoy('green', 46.0, 70.3)], boat=(40.0, 70.0), search_center=(53.0, 70.0))
+    SearchCircler.compute_cmd(state)
+    _, x, y, *_ = state.calls[-1]
+    assert math.dist((x, y), (46.0, 70.3)) >= 1.5 and abs(y - 70.0) > 1.0
