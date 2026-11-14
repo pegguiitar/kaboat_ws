@@ -112,3 +112,20 @@ def test_avoid_gets_yaw_kd(mod):
     # 2026-11-14: 회피 선수각 D 0.6 (되돌리기 avoid_yaw_kd:=0.16)
     assert _avoid_params(mod)['avoid.yaw_kd'] == 0.6
     assert _avoid_params(mod, avoid_yaw_kd='0.16')['avoid.yaw_kd'] == 0.16
+
+
+def _search_params(mod, **args):
+    context = _context(mod, **args)
+    node = next(n for n in mod._stack(context) if getattr(n, 'node_executable', '') == 'search_circler')
+    merged = {}
+    from launch_ros.utilities import evaluate_parameters
+    for item in evaluate_parameters(context, node._Node__parameters):
+        if isinstance(item, dict):
+            merged.update(item)
+    return merged
+
+
+def test_search_gets_yaw_kd(mod):
+    # 2026-11-14: 탐색 선수각 D 0.6 (되돌리기 search_yaw_kd:=0.16)
+    assert _search_params(mod)['search.yaw_kd'] == 0.6
+    assert _search_params(mod, search_yaw_kd='0.16')['search.yaw_kd'] == 0.16

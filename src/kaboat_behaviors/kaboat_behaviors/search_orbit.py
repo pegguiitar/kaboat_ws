@@ -95,6 +95,9 @@ class SearchParams:
     # 27~39 % → 1~5 %, 선회 중 접촉 0. 출구(선회 뒤 search_end 까지)는 여전히 71–170 s·접촉 3 번 (SEARCH_MISSION.md
     # §7.8). false = 예전 공용 변환.
     measured_speed: bool = True
+    yaw_kd: float = 0.6               # 진입·선회·출구 LOS 선수각 D 게인 (P 1.4 는 공용 그대로). 0.16 → 0.6 (2026-11-14,
+                                      # 회피와 같은 값): 공용 0.16 은 선수각이 넘쳐 회전 명령이 진입 뒤 65–80 % 상한에 붙고
+                                      # 원을 16–44 % 벗어났다 (e2e 시뮬, 젯슨 tick 105 ms 재현, 오후 배치) → 0.6 은 40–57 %·0–14 %
     ignore_radius: float = 1.0        # 선회 중 회피 반발에서 뺄 목표 부표 둘레 반경 [m]
     repulse_occ_min: int = 75         # 탐색의 반발 조향은 점유 확률 이 이상 칸만 (공용 기본 50). 지도는 반사 없는
                                       # 빔으로 빈 공간을 안 지워, 배 근처 물보라 히트 한두 번(60~70)이 배 지나간 자리에
@@ -162,6 +165,8 @@ class SearchParams:
         if not all(math.isfinite(v) and v >= 0.0 for v in non_negative):
             raise ValueError('search switch_margin / look_sec / entry_clearance / '
                              'entry_skip_band must be finite and >= 0')
+        if not (math.isfinite(self.yaw_kd) and 0.0 <= self.yaw_kd <= 2.0):
+            raise ValueError('search.yaw_kd must be in [0, 2]')
         if not (math.isfinite(self.grid_timeout_sec) and self.grid_timeout_sec > 0.0):
             raise ValueError('search.grid_timeout_sec must be finite and > 0')
         if not all(math.isfinite(v) and v > 0.0 for v in (

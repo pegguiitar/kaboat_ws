@@ -610,3 +610,11 @@ def test_seek_point_stays_put_while_detection_jitters():
     assert math.dist(first, (50.0, 70.0)) == pytest.approx(2.5, abs=0.06)
     f.update([buoy('green', 50.0, 70.0), buoy('red', first[0], first[1] + 1.0, 9)], (40, 70), 5.0)
     assert f.seek_xy != first                                         # 새 부표가 그 점 옆 → 다시 비킴
+
+
+def test_yaw_kd_default_and_range():
+    # 2026-11-14: 탐색 LOS 선수각 D 0.16 → 0.6 (회피와 같은 값)
+    assert SearchParams().yaw_kd == 0.6
+    for bad in (-0.1, 2.5, float('nan')):
+        with pytest.raises(ValueError):
+            SearchParams(target_color='red', yaw_kd=bad)

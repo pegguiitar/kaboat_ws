@@ -138,6 +138,7 @@ class SearchCircler(BehaviorBase):
     STATE_NAME = 'search'
     CMD_TOPIC = '/cmd/search'
     USES_BUOYS = True    # 활성일 때만 /detections/buoys 구독 → 그동안만 부표 검출 노드가 돈다
+    ODOM_QUEUE_DEPTH = 1   # 최신 /odom 만 — tick 이 길면 깊이 10 큐에 /odom 이 쌓여 묵은 위치로 조종 (회피와 같은 이유)
 
     def __init__(self):
         super().__init__()
@@ -145,6 +146,7 @@ class SearchCircler(BehaviorBase):
         # 진입·선회·출구 LOS 의 속도 → 명령을 실물 곡선으로 (search.measured_speed, 기본 켬 — SearchParams 설명).
         # 다른 미션(gate·avoid·dock)의 LOS 는 그대로 공용 변환.
         self._los_follower = LosFollower.bspline_track(measured_speed=self.params.measured_speed)
+        self._los_follower.yaw_kd = self.params.yaw_kd
         self.fsm = None
         self.search_center = None     # /mission/search_center (x, y)
         # LOOK 위치 유지 전용 — 공용 waypoint() 는 그대로 두고 전진 상한만 hold_linear 로 다른 것

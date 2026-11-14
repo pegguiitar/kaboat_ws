@@ -281,6 +281,14 @@ test_mission dock dock_target_class:=circle
     run2·11-14 경기장)에서 회피 중앙 179 → 97 s·159 → 88 s, 접촉 54 → 17번·50 → 2번. 물 위에서는 미확인.
   - 되돌리기: `run_autonomy … avoid_yaw_kd:=0.16` (큐 깊이는 코드).
   - 토너먼트 회피 노드(`real_obstacle_avoid_test`)는 안 바꿨습니다 — 같은 깊이 10 `/odom` 구독이라 같은 문제가 있을 수 있습니다.
+- **탐색 선수각 흔들림 수정** (2026-11-14 저녁, `search_circler`만):
+  - 회피와 같은 처방입니다. 탐색 노드도 `/odom`을 최신 것만 받고(큐 깊이 1), 진입·선회·출구 LOS 선수각 D 게인을
+    0.16 → 0.6 으로 올렸습니다(탐색 전용 `search.yaw_kd`, P 1.4 그대로). 게이트·도킹 LOS 는 그대로입니다.
+  - 확인: e2e 시뮬(오늘 bag 맞춤 배 모델, 오후 탐색 배치, 젯슨 tick 105 ms 재현)에서 검정·빨강·초록:
+    진입 뒤 회전 상한에 붙은 시간 65–73 % → 40–57 %(2판씩), 선회 원(1–3 m)을 벗어난 시간 16–44 % → 0–14 %,
+    search 평균 87.8 s → 75.7 s, 접촉 0. 이전 값은 초록 1판에서 원을 6 m 까지 벗어나 검정에 0.85 m 붙었다.
+    tick 지연 없는 조건도 같은 경향(회전 상한 40–49 %). 물 위에서는 미확인.
+  - 되돌리기: `run_autonomy … search_yaw_kd:=0.16` (큐 깊이는 코드).
 - **이번에 돌 미션의 노드만 띄웁니다** (`only_mission_nodes:=true` 기본). `start_state`부터 끝까지,
   `single_mission:=true`면 그 미션 하나만. 미션 매니저·`cmd_mux`는 항상, `mission_approach`는
   `entry_required:=true`(기본)일 때만 뜹니다. 런치를 켜면 `[autonomy] 미션 … — 띄우는 노드: …` 한 줄로 보입니다.

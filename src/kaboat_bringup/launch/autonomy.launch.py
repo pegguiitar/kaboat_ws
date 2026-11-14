@@ -104,6 +104,7 @@ def mission_nodes(use_sim_time_value) -> dict:
                  name='search_circler', output='screen', parameters=[common_params, {
                      'search.target_color': ParameterValue(
                          L('search_target_color'), value_type=str),
+                     'search.yaw_kd': ParameterValue(L('search_yaw_kd'), value_type=float),
                  }]),
         ],
         'avoid': [Node(
@@ -238,6 +239,9 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'undock_linear', default_value='0.4667',
             description='출발 직진 명령 — 0.4667 = 텔레옵 4단계(좌우 1700 µs)'),
+        DeclareLaunchArgument(
+            'search_yaw_kd', default_value='0.6',
+            description='탐색 진입·선회·출구 LOS 선수각 D 게인 (2026-11-14 0.16 → 0.6, 선수각 넘침 억제). 되돌리기 0.16'),
         DeclareLaunchArgument(
             'avoid_yaw_kd', default_value='0.6',
             description='회피 경로 추종 선수각 D 게인 (2026-11-14 0.16 → 0.6, 선수각 넘침 억제). 되돌리기 0.16'),
