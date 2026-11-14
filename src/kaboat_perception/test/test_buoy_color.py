@@ -110,15 +110,28 @@ def _depth_for(center, rect_label_value, behind_depth=None):
 def test_depth_keeps_only_pixels_on_the_buoy():
     from kaboat_perception.buoy_color import refine_with_depth
     lab = blank()
-    dep, (u0, v0, u1, v1) = _depth_for((6.0, 0.0), 1, behind_depth=12.0)
+    dep, (u0, v0, u1, v1) = _depth_for((4.5, 0.0), 1, behind_depth=12.0)
     mid = int((u0 + u1) / 2)
     lab[int(v0) // S:int(v1) // S + 1, int(u0) // S:mid // S] = 2       # 왼쪽 반 = 뒤의 초록 (12 m)
     lab[int(v0) // S:int(v1) // S + 1, mid // S + 1:int(u1) // S + 1] = 1   # 오른쪽 반 = 이 부표 빨강
-    cands = [((6.0, 0.0), 0.25)]
+    cands = [((4.5, 0.0), 0.25)]
     v = vote_colors(lab, cands, K, G, P)[0]
     assert v.color is None                                   # 창만 보면 섞여서 판정 불가
     r = refine_with_depth(lab, [v], cands, dep, K, G, P)[0]
     assert r.depth and r.color == 'red' and r.green == 0
+
+
+def test_depth_not_used_beyond_six_metres_of_depth():
+    # D455 뎁스는 원시값 6 m 정도까지만 쓸 만하다 — 라이다 6 m 부표(뎁스 ≈ 6.8)는 창 전체로 센다
+    from kaboat_perception.buoy_color import refine_with_depth
+    assert P.depth_max == 6.0
+    lab = blank()
+    dep, (u0, v0, u1, v1) = _depth_for((6.0, 0.0), 1)
+    lab[int(v0) // S:int(v1) // S + 1, int(u0) // S:int(u1) // S + 1] = 1
+    cands = [((6.0, 0.0), 0.25)]
+    v = vote_colors(lab, cands, K, G, P)[0]
+    r = refine_with_depth(lab, [v], cands, dep, K, G, P)[0]
+    assert not r.depth and r.color == 'red'
 
 
 def test_no_depth_keeps_window_vote():
