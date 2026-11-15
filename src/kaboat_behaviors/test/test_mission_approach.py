@@ -14,7 +14,7 @@ from kaboat_behaviors.behavior_base import (
 from kaboat_behaviors.mission_approach import (
     APPROACH_HEADING_TOLERANCE_DEG, APPROACH_MAX_ANGULAR, APPROACH_MAX_LINEAR,
     APPROACH_POSITION_TOLERANCE, APPROACH_SETTLE_YAW_RATE, APPROACH_SLOW_RADIUS,
-    APPROACH_THRUST_RATIO, MissionApproach, approach_params)
+    APPROACH_THRUST_RATIO, MissionApproach, approach_params, APPROACH_NODE_MAX_ANGULAR)
 from kaboat_behaviors.waypoint_controller import (
     WaypointController, WaypointParams, waypoint)
 
@@ -65,11 +65,12 @@ def test_heading_beyond_thirty_degrees_keeps_aligning(heading_deg):
     assert not step.reached
 
 
-# ── 출력 상한 (2026-11-14 오후): 전진 0.8·회전 0.4, 6 m 앞부터 감속 ─────────
+# ── 출력 상한 (2026-11-15): 전진 0.85·회전 0.4, 6 m 앞부터 감속 ─────────────
 
-def test_caps_forward_eighty_turn_forty_slow_six_metres():
-    assert APPROACH_MAX_LINEAR * APPROACH_THRUST_RATIO == pytest.approx(0.8)   # ≈1825 µs
-    assert APPROACH_MAX_ANGULAR * APPROACH_THRUST_RATIO == pytest.approx(0.4)  # 회전은 그대로
+def test_caps_forward_eighty_five_turn_forty_slow_six_metres():
+    assert APPROACH_MAX_LINEAR * APPROACH_THRUST_RATIO == pytest.approx(0.85)  # 11-14 0.8
+    assert APPROACH_NODE_MAX_ANGULAR * APPROACH_THRUST_RATIO == pytest.approx(0.4)  # 회전은 그대로
+    assert APPROACH_MAX_ANGULAR == 0.5                                     # 공용 (search goto 출구)
     assert APPROACH_SLOW_RADIUS == 6.0
 
 
@@ -84,7 +85,7 @@ def approach_node(boat_xy, boat_yaw, goal_xy, goal_yaw):
                        yaw_kp=1.4, yaw_kd=0.16),
         APPROACH_POSITION_TOLERANCE, APPROACH_HEADING_TOLERANCE_DEG,
         APPROACH_SETTLE_YAW_RATE, max_linear=APPROACH_MAX_LINEAR,
-        max_angular=APPROACH_MAX_ANGULAR)
+        max_angular=APPROACH_NODE_MAX_ANGULAR)
     odom = Odometry()
     odom.header.frame_id = 'odom'
     odom.pose.pose.position.x, odom.pose.pose.position.y = boat_xy
@@ -114,7 +115,7 @@ def approach_node(boat_xy, boat_yaw, goal_xy, goal_yaw):
 def test_far_goal_ahead_drives_at_forward_cap():
     node, sent = approach_node((0.0, 0.0), 0.0, (30.0, 0.0), 0.0)
     BehaviorBase._tick(node)
-    assert sent[-1].linear.x == pytest.approx(0.8)        # 오전 0.4, 예전 0.0202
+    assert sent[-1].linear.x == pytest.approx(0.85)       # 11-14 0.8, 오전 0.4, 예전 0.0202
 
 
 def test_goal_behind_turns_at_turn_cap_forty():
@@ -125,9 +126,9 @@ def test_goal_behind_turns_at_turn_cap_forty():
 
 
 @pytest.mark.parametrize('distance, expected', [
-    (6.0, 0.8),                    # 6 m 부터 줄기 시작
-    (5.0, 0.8 * 5 / 6),            # 감속 반경 안 (도착 반경 2배 4 m 밖)
-    (3.0, 0.8 * 3 / 6 * 3 / 4),    # 4 m 안에서는 공용 감속도 겹침
+    (6.0, 0.85),                   # 6 m 부터 줄기 시작
+    (5.0, 0.85 * 5 / 6),           # 감속 반경 안 (도착 반경 2배 4 m 밖)
+    (3.0, 0.85 * 3 / 6 * 3 / 4),   # 4 m 안에서는 공용 감속도 겹침
 ])
 def test_slows_down_from_six_metres(distance, expected):
     node, sent = approach_node((0.0, 0.0), 0.0, (distance, 0.0), 0.0)

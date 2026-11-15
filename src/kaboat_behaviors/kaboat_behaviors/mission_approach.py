@@ -5,7 +5,12 @@ settle_time(0.5 s) 유지. 회전 속도 조건은 없다(approach.settle_yaw_ra
 (0.35 m / 8° / 0.1 rad/s)은 바람·물살이 있는 야외 시작 자세 맞추기에 너무 엄격해
 approach 에서 gate 등 미션으로 넘어가지 못했다. 다른 behavior 의 waypoint() 는 그대로.
 
-출력 상한 (2026-11-14 오후): 전진 0.8 (≈1825 µs)·회전 0.4, 목표 6 m 앞부터 감속.
+출력 상한 (2026-11-15): 전진 0.85·회전 0.4, 목표 6 m 앞부터 감속. 0.8 → 0.85: run3(11-15) 이동 5구간
+  85.6 s 중 순항 60 s — 순항 중 회전 명령이 평균 −0.09(90% 가 한쪽)라 전진 + |회전| > 1.0 으로 한쪽 모터가
+  잘리는 시간이 0.8 16% · 0.85 19% · 0.9 52% · 1.0 100%. 조향 여유를 지키는 선에서 0.85. run3 출발 자세
+  폐루프 시뮬(e2e 배 모델 + 이 제어 코드) 이동 5구간 86.7 → 85.4 s. 회전 상한 0.4 는 그대로
+  (노드 approach.max_angular 기본 0.4 / 0.85 — 공용 APPROACH_MAX_ANGULAR 0.5 는 search goto 출구도 씀).
+이전 출력 상한 (2026-11-14 오후): 전진 0.8 (≈1825 µs)·회전 0.4, 목표 6 m 앞부터 감속.
   = max_linear 1.0 × thrust_ratio 0.8, max_angular 0.5 × 0.8. 회전은 오전 값(0.4) 그대로 — 전진 1.0 이면
   회전 명령을 더할 때 한쪽 모터가 잘려 조향 여유가 없고, 선회 상한까지 1.0 이면 제자리 회전이 풀파워라서.
   감속 6 m (공용 1.5 m + 도착 반경 2배 4 m 대신): 브레이크 없이 추력만 줄이므로 일찍 줄여 다음 미션에
@@ -31,8 +36,10 @@ APPROACH_HEADING_TOLERANCE_DEG = 30.0  # [deg] 좌우 (15 → 30, 2026-11-13)
 APPROACH_SETTLE_YAW_RATE = 0.0         # [rad/s] 0 = 회전 속도 조건 없음
 # 출력 상한 = 상한 × thrust_ratio → 전진 1.0 × 0.8 = 0.8, 회전 0.5 × 0.8 = 0.4 (2026-11-14 오후)
 APPROACH_MAX_LINEAR = 1.0
-APPROACH_MAX_ANGULAR = 0.5              # (1.0 → 0.5) 회전 상한은 0.4 그대로 두려고
-APPROACH_THRUST_RATIO = 0.8             # (0.2 → 0.4 → 0.8, 2026-11-14) 전진 ≈1825 µs
+APPROACH_MAX_ANGULAR = 0.5              # (1.0 → 0.5) 공용 — search goto 출구도 이 값 × 자기 비율(0.8 → 0.4)
+APPROACH_THRUST_RATIO = 0.85            # (0.2 → 0.4 → 0.8 → 0.85, 2026-11-15)
+APPROACH_TURN_CAP = 0.4                 # approach 회전 상한 (전진을 올려도 그대로)
+APPROACH_NODE_MAX_ANGULAR = APPROACH_TURN_CAP / APPROACH_THRUST_RATIO   # 노드 기본 0.47 × 0.85 = 0.4
 APPROACH_SLOW_RADIUS = 6.0              # [m] 이 거리부터 전진을 거리에 비례해 줄인다 (공용 1.5 m)
 
 
@@ -61,7 +68,7 @@ class MissionApproach(BehaviorBase):
         self.declare_parameter('approach.motion_enabled', False)
         self.declare_parameter('approach.thrust_ratio', APPROACH_THRUST_RATIO)
         self.declare_parameter('approach.max_linear', APPROACH_MAX_LINEAR)
-        self.declare_parameter('approach.max_angular', APPROACH_MAX_ANGULAR)
+        self.declare_parameter('approach.max_angular', APPROACH_NODE_MAX_ANGULAR)
         self.declare_parameter('approach.position_tolerance',
                                APPROACH_POSITION_TOLERANCE)
         self.declare_parameter('approach.heading_tolerance_deg',

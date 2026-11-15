@@ -80,6 +80,8 @@ def _nodes(context, mission):
                  shared_limits, {
                      'approach.motion_enabled': drive,
                      'approach.thrust_ratio': approach_ratio,
+                     # 수조는 예전 회전 상한(0.5 × 비율) 그대로 — 실물 기본은 0.4 / 0.85 (2026-11-15)
+                     'approach.max_angular': 0.5,
                  }]),
         Node(package='kaboat_behaviors',
              executable=('gate_follower' if mission == 'gate'

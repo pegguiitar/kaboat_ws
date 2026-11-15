@@ -264,7 +264,12 @@ test_mission dock dock_target_class:=circle
 - `test_mission 미션` = 같은 스택에 `start_state:=미션 single_mission:=true`를 더한 것입니다.
   - 그 미션의 `_entry`로 접근(`mission_approach`)한 뒤 미션을 하고 `done`(정지)합니다.
   - 미리 `goto 미션_entry`로 세워 두면 접근이 바로 끝납니다.
-- **접근 출력 상한** (2026-11-14 오후): 전진 0.8(≈1825 µs)·회전 0.4, 목표 6 m 앞부터 감속
+- **접근 출력 상한** (2026-11-15): 전진 **0.85**·회전 0.4, 목표 6 m 앞부터 감속
+  (`approach.thrust_ratio` 0.85 × 상한 전진 1.0·회전 `approach.max_angular` 0.4/0.85, `approach.slow_radius` 6 m).
+  0.8 → 0.85: run3 순항 중 회전 명령이 평균 −0.09 로 한쪽에 치우쳐 전진 + |회전| > 1.0(한쪽 모터 잘림)이
+  0.8 16% · 0.85 19% · 0.9 52% — 조향 여유 안에서 0.85. run3 출발 자세 폐루프 시뮬 이동 5구간 86.7 → 85.4 s.
+  수조 런치는 `approach.max_angular` 0.5 그대로. 되돌리기 `approach.thrust_ratio:=0.8 approach.max_angular:=0.5`.
+- 이전 상한 (2026-11-14 오후): 전진 0.8(≈1825 µs)·회전 0.4, 목표 6 m 앞부터 감속
   (`approach.thrust_ratio` 0.8 × 상한 전진 1.0·회전 `approach.max_angular` 0.5, `approach.slow_radius` 6 m).
   run2 bag 이동 5구간(120 s)을 이 제어 코드 + 배 모델로 다시 돌리면 약 90 s(−30 s). 0.8 속도는 실측 밖
   추정이라 실제가 덜 나오면 −13~−25 s. 회전은 0.4 그대로(전진을 1.0 으로 하면 조향 여유가 없어서).
