@@ -49,6 +49,7 @@ from std_msgs.msg import Float32MultiArray, String
 from visualization_msgs.msg import Marker, MarkerArray
 
 from .behavior_base import BehaviorBase, WAYPOINT_MAX_ANGULAR, yaw_from_quaternion
+from .mission_approach import APPROACH_MAX_ANGULAR, APPROACH_MAX_LINEAR, approach_params
 from .los_controller import (BSPLINE_TRACK_YAW_KD, BSPLINE_TRACK_YAW_KP, LosFollower,
                              circle_path, sampled_path)
 from .obstacle_avoidance_utils import apply_repulsion
@@ -152,6 +153,10 @@ class SearchCircler(BehaviorBase):
         # LOOK 위치 유지 전용 — 공용 waypoint() 는 그대로 두고 전진 상한만 hold_linear 로 다른 것
         self._hold_ctrl = WaypointController(dataclasses.replace(
             self._waypoint_controller.params, max_linear=self.params.hold_linear))
+        # goto 출구 — mission_approach 와 같은 waypoint 제어·상한 (전진 1.0 × exit_goto_thrust, 회전 0.5 × 같은 비율)
+        self._exit_ctrl = WaypointController(approach_params(
+            self._waypoint_controller.params, self.params.exit_arrive_radius, 179.0, 0.0,
+            max_linear=APPROACH_MAX_LINEAR, max_angular=APPROACH_MAX_ANGULAR))
         self._grid_at = None          # 마지막 /occupancy_grid 수신 시각 (monotonic)
         self._reset_run()
 
@@ -206,6 +211,7 @@ class SearchCircler(BehaviorBase):
         self._exit_path = None         # 출구 직선 LOS 경로 (_go_exit)
         self._exit_points = None
         self._exit_target = None
+        self._exit_via_done = False    # goto 출구 경유점을 지났나
         self._entry_align = None       # 진입 시작 선수 맞추기: None / 'check' / 'pivot'
         self._last_status = None
 
@@ -505,15 +511,48 @@ class SearchCircler(BehaviorBase):
             self._exit_path = polyline_path(pts, fillet_radius=self.params.orbit_radius)
             self._exit_points = pts
             self._exit_target = tuple(target)
+            self._exit_via_done = False
+            if getattr(self, '_exit_ctrl', None) is not None:
+                self._exit_ctrl.reset_progress()
             self._los_follower.reset()
             if via is not None:
                 self.get_logger().info(
                     f'search: 출구 경유점 ({via[0]:.1f}, {via[1]:.1f}) — 다른 부표 비킴')
-        cmd, reached = self.los(self._exit_path, self.params.exit_thrust, self.params.orbit_turn)
-        if reached:
-            self._exit_path = None
+        if self.params.exit_mode == 'goto':
+            cmd = self._exit_goto(boat)
+        else:
+            cmd, reached = self.los(self._exit_path, self.params.exit_thrust, self.params.orbit_turn)
+            if reached:
+                self._exit_path = None
         return apply_repulsion(cmd, self.occupancy_grid, self.odom,
                                occ_threshold=self.params.repulse_occ_min)
+
+    def _exit_goto(self, boat):
+        """goto 출구 — 경유점(있으면)부터 waypoint 제어로 (mission_approach 와 같은 제어·상한). 경유점은 1.5 m 안에
+        오면 지나간 것으로 치고 감속 없이, 출구점은 exit_goto_slow 부터 감속."""
+        pts = self._exit_points
+        if len(pts) == 3 and not self._exit_via_done and math.dist(boat, pts[1]) <= 1.5:
+            self._exit_via_done = True
+        via = len(pts) == 3 and not self._exit_via_done
+        x, y = pts[1] if via else pts[-1]
+        ratio = self.params.exit_goto_thrust
+        self._exit_ctrl.set_goal(make_waypoint(x, y, None, ratio))
+        self._command_thrust_ratio = ratio
+        self._command_full_scale = (APPROACH_MAX_LINEAR, APPROACH_MAX_ANGULAR)
+        pose = self.odom.pose.pose
+        step = self._exit_ctrl.step(pose.position.x, pose.position.y,
+                                    yaw_from_quaternion(pose.orientation),
+                                    self.odom.twist.twist.angular.z, time.monotonic(),
+                                    slow_radius=0.5 if via else self.params.exit_goto_slow)
+        cmd = Twist()
+        # 선수가 exit_goto_pivot_deg 넘게 틀어졌으면 제자리에서 먼저 돌고, 그 안이면 cos 만큼 — 선회 끝은 출구와 거의
+        # 직각이라 0.8 그대로 나가면 크게 돌며 다른 부표에 붙었다 (2026-11-15 시뮬: 빨강 출구가 초록 1.37 m, cos 만
+        # 줄였을 때도 0.67 m). 공용 waypoint 는 60° 까지 전속.
+        err = step.heading_error if step.heading_error is not None else 0.0
+        pivot = math.radians(self.params.exit_goto_pivot_deg)
+        cmd.linear.x = step.linear * math.cos(err) if abs(err) <= pivot else 0.0
+        cmd.angular.z = step.angular
+        return cmd
 
     def _go_goal(self, target, arrive=None, detour=False):
         pos = self.odom.pose.pose.position

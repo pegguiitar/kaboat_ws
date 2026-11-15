@@ -369,13 +369,12 @@ def test_black_look_waits_without_colored_neighbour():
     assert f.update(only, (168.7, -8.9), 110.0) == 'LOOK'
 
 
-def test_black_look_waits_while_field_incomplete():
-    # 빨강 하나만 확인 + unknown 둘 — 하나는 색이 아직 안 붙은 초록일 수 있으니 LOOK 끝까지
-    f = fsm_0113('black', look_sec=15.0, lock_confirm_sec=1.0, look_settle_sec=3.0)
+def test_black_look_ends_on_any_unknown_in_field():
+    # 2026-11-15: 빨강 하나만 확인 + unknown 둘이어도 무리 안 unknown 이 1 s 이어지면 LOOK 끝 → 빨강에 가까운 것
+    f = fsm_0113('black', look_sec=15.0, lock_confirm_sec=1.0)
     part = [buoy('red', 174.5, -1.2, 5), buoy('unknown', 166.5, -0.2, 4), buoy('unknown', 169.3, -5.9, 3)]
     assert f.update(part, (168.7, -8.9), 100.0) == 'LOOK'
-    assert f.update(part, (168.7, -8.9), 110.0) == 'LOOK'
-    assert f.update(part, (168.7, -8.9), 115.1) == 'ORBIT'
+    assert f.update(part, (168.7, -8.9), 101.1) == 'ORBIT' and f.locked_id == 3
 
 
 def test_black_look_ends_early_and_locks_before_shape_known():

@@ -50,11 +50,14 @@ def make_state(color, buoys, boat=(45.0, 70.0), yaw=0.0, search_center=(50.0, 70
     state.waypoint = lambda x, y, *a, **kw: (calls.append(('wp', x, y, *a, kw)) or Twist(), False)
     state.report_complete = lambda: state.completed.append(True)
     for name in ('_status', '_go_goal', '_area_xy', '_plan_entry', '_hold_pose', '_grid_ok',
-                 '_update_shapes', '_shape_ok', '_entry_pivot', '_go_exit'):
+                 '_update_shapes', '_shape_ok', '_entry_pivot', '_go_exit', '_exit_goto'):
         setattr(state, name, (lambda n: lambda *a, **k: getattr(SearchCircler, n)(state, *a, **k))(name))
     state._hold_ctrl = WaypointController(WaypointParams(
         max_linear=state.params.hold_linear, max_angular=WAYPOINT_MAX_ANGULAR,
         yaw_kp=1.4, yaw_kd=0.16))
+    state._exit_ctrl = WaypointController(WaypointParams(
+        max_linear=1.0, max_angular=0.5, yaw_kp=1.4, yaw_kd=0.16, position_tolerance=0.4))
+    state._exit_via_done = False
     return state
 
 
@@ -292,7 +295,7 @@ def test_no_shape_votes_when_boat_too_close():
 
 def test_done_keeps_circling_until_exit_side():
     # 출구 (40, 71) 는 부표 (52, 71) 서쪽. 배가 동쪽 원 위에서 끝나면 곧장 가면 부표를 가로지른다
-    state = make_state('red', [buoy('red', 52.0, 71.0)], boat=(54.0, 71.0))
+    state = make_state('red', [buoy('red', 52.0, 71.0)], boat=(54.0, 71.0), exit_mode='los')
     state.goal.pose.position.x, state.goal.pose.position.y = 40.0, 71.0
     SearchCircler.compute_cmd(state)                 # 고정 → 원
     circle = state.calls[-1][0]
@@ -314,7 +317,8 @@ def test_done_keeps_circling_until_exit_side():
 def test_exit_line_detours_around_other_buoy():
     # 빨강 (52, 71) 을 돌고 서쪽 출구 (40, 71) 로 — 직선 위 (46, 71.1) 에 초록. 경유점으로 1.5 m 넘게 비킨다
     green = (46.0, 71.1)
-    state = make_state('red', [buoy('red', 52.0, 71.0), buoy('green', *green)], boat=(50.0, 71.0))
+    state = make_state('red', [buoy('red', 52.0, 71.0), buoy('green', *green)], boat=(50.0, 71.0),
+                       exit_mode='los')
     state.goal.pose.position.x, state.goal.pose.position.y = 40.0, 71.0
     SearchCircler.compute_cmd(state)
     state.fsm.phase = 'DONE'
@@ -413,3 +417,59 @@ def test_seek_detours_around_buoy_on_the_way():
     SearchCircler.compute_cmd(state)
     _, x, y, *_ = state.calls[-1]
     assert math.dist((x, y), (46.0, 70.3)) >= 1.5 and abs(y - 70.0) > 1.0
+
+
+# ---------- goto 출구 (2026-11-15 기본) ----------
+
+def test_goto_exit_uses_approach_caps_and_goes_straight():
+    state = make_state('red', [buoy('red', 52.0, 71.0)], boat=(50.0, 71.0), yaw=math.pi)
+    state.goal.pose.position.x, state.goal.pose.position.y = 30.0, 71.0
+    SearchCircler.compute_cmd(state)
+    state.fsm.phase = 'DONE'
+    state._exit_clear = True
+    n = len(state.calls)
+    cmd = SearchCircler.compute_cmd(state)
+    assert len(state.calls) == n                                   # LOS 안 씀
+    assert state._command_full_scale == (1.0, 0.5) and state._command_thrust_ratio == 0.8
+    assert cmd.linear.x == pytest.approx(0.8) and abs(cmd.angular.z) < 1e-6   # 출구를 보고 있으면 직진 상한
+
+
+def test_goto_exit_visits_detour_point_first():
+    green = (46.0, 71.1)
+    state = make_state('red', [buoy('red', 52.0, 71.0), buoy('green', *green)], boat=(50.0, 71.0),
+                       yaw=math.pi)
+    state.goal.pose.position.x, state.goal.pose.position.y = 40.0, 71.0
+    SearchCircler.compute_cmd(state)
+    state.fsm.phase = 'DONE'
+    state._exit_clear = True
+    SearchCircler.compute_cmd(state)
+    via = state._exit_points[1]
+    assert len(state._exit_points) == 3 and not state._exit_via_done
+    assert state._exit_ctrl.target.x == pytest.approx(via[0]) and state._exit_ctrl.target.y == pytest.approx(via[1])
+    move(state, via[0], via[1])
+    SearchCircler.compute_cmd(state)
+    assert state._exit_via_done
+    assert (state._exit_ctrl.target.x, state._exit_ctrl.target.y) == pytest.approx((40.0, 71.0))
+
+
+def test_exit_mode_validated():
+    with pytest.raises(ValueError):
+        SearchParams(target_color='red', exit_mode='fast')
+
+
+def test_goto_exit_turns_first_when_heading_far_off():
+    # 출구(서쪽)와 직각(북쪽)을 보고 있으면 전진 없이 돈다, 45° 면 cos 만큼만
+    state = make_state('red', [buoy('red', 52.0, 71.0)], boat=(50.0, 71.0), yaw=math.pi / 2)
+    state.goal.pose.position.x, state.goal.pose.position.y = 30.0, 71.0
+    SearchCircler.compute_cmd(state)
+    state.fsm.phase = 'DONE'
+    state._exit_clear = True
+    cmd = SearchCircler.compute_cmd(state)
+    assert cmd.linear.x == 0.0 and cmd.angular.z > 0.0
+    state.odom.pose.pose.orientation.z = math.sin(3 * math.pi / 8)
+    state.odom.pose.pose.orientation.w = math.cos(3 * math.pi / 8)        # 135° — 출구에서 45° → 아직 회전만
+    assert SearchCircler.compute_cmd(state).linear.x == 0.0
+    state.odom.pose.pose.orientation.z = math.sin(7 * math.pi / 16)
+    state.odom.pose.pose.orientation.w = math.cos(7 * math.pi / 16)       # 157.5° — 22.5° 면 cos 만큼
+    cmd = SearchCircler.compute_cmd(state)
+    assert 0.0 < cmd.linear.x <= 0.8 * math.cos(math.pi / 8) + 1e-6
