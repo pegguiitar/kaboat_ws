@@ -32,7 +32,7 @@ def orbit(f, center, radius, direction, degrees, buoys=(), start_deg=0.0, now=0.
 
 # ---------- 규정 방향 ----------
 
-@pytest.mark.parametrize('color, direction', [('red', 'cw'), ('green', 'cw'), ('black', 'ccw')])
+@pytest.mark.parametrize('color, direction', [('red', 'cw'), ('green', 'cw'), ('black', 'cw')])
 def test_turn_direction_follows_rule(color, direction):
     assert SearchParams(target_color=color).direction == direction
 
@@ -118,7 +118,7 @@ def test_refine_ignores_other_colour_and_far_buoys():
 
 # ---------- 선회 각도 ----------
 
-@pytest.mark.parametrize('color, direction', [('red', 'cw'), ('black', 'ccw')])
+@pytest.mark.parametrize('color, direction', [('red', 'cw'), ('black', 'cw')])
 def test_done_after_laps_in_rule_direction(color, direction):
     f = fsm(color, laps=1.0)
     f.update([buoy(color, 51, 70)], (40, 70), 0.0)
@@ -205,7 +205,7 @@ def test_black_target_picks_unknown_buoy():
     # 부표 검출은 검정을 색으로 안 낸다 — 빨강·초록 아닌 물체는 unknown
     f = fsm('black')
     f.update([buoy('red', 52, 70), buoy('green', 51, 71), buoy('unknown', 53, 69)], (40, 70), 0.0)
-    assert f.phase == 'ORBIT' and f.center == (53.0, 69.0) and f.direction == 'ccw'
+    assert f.phase == 'ORBIT' and f.center == (53.0, 69.0) and f.direction == 'cw'
 
 
 def test_red_target_ignores_unknown_buoy():

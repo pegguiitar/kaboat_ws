@@ -365,7 +365,7 @@ test_mission dock dock_target_class:=circle
 
 `dock_weights:=<.pt 절대경로>`, `dock_device:=0`(젯슨 CUDA), `mission_params_file:=<yaml>`로 바꿉니다.
 탐색 목표 부표 색(대회 당일 공지)은 **`search_target_color:=red|green|black`** 로 넣습니다 — 안 넣으면
-탐색 미션에서 멈춥니다. 빨강·초록은 우현(시계), 검정은 좌현(반시계)으로 부표 둘레 반경 2 m 를
+탐색 미션에서 멈춥니다. 빨강·초록·검정 모두 우현(시계)으로(2026-11-15 방향 상관없음, 예전 검정 좌현) 부표 둘레 반경 2 m 를
 1.1 바퀴 돕니다. 목표 부표는 **탐색 영역 중심(`search_center`, 없으면 `search_entry` 선수 방향 7 m 앞)
 12 m 안**의 목표 색 부표 중 중심에 가장 가까운 것입니다 (주황 장애물 부표도 빨강으로 잡히므로 영역 밖은 안 봄).
 `search_end`는 선회를 마치고 빠져나갈 **출구**로만 씁니다 — 2026-11-13 처럼 탐색 부표에서 22 m

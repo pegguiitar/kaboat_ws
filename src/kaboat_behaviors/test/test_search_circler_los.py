@@ -83,10 +83,10 @@ def test_orbit_path_centered_on_target_with_rule_direction():
     assert np.allclose(radii, 2.0)
 
 
-def test_black_orbits_counter_clockwise():
+def test_black_orbits_clockwise():
     state = make_state('black', [buoy('black', 52.0, 71.0)], boat=(54.0, 71.0))
     SearchCircler.compute_cmd(state)
-    assert np.all(state.calls[0][0].curvatures > 0)  # 검정 → 반시계(좌현)
+    assert np.all(state.calls[0][0].curvatures < 0)  # 2026-11-15 검정도 시계(우현) — 방향 상관없음
 
 
 def test_far_lock_follows_tangent_entry_then_circle():

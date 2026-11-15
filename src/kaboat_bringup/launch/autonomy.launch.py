@@ -100,7 +100,7 @@ def mission_nodes(use_sim_time_value) -> dict:
             base_frame=L('dock_base_frame'),
             camera_tf_condition=IfCondition(L('publish_camera_tf'))),
         'search': [
-            # 탐색 목표 색은 대회 당일 공지 — 빨강·초록 우현(시계), 검정 좌현(반시계) 선회
+            # 탐색 목표 색은 대회 당일 공지 — 빨강·초록·검정 모두 우현(시계) 선회 (2026-11-15 방향 상관없음)
             Node(package='kaboat_behaviors', executable='search_circler',
                  name='search_circler', output='screen', parameters=[common_params, {
                      'search.target_color': ParameterValue(

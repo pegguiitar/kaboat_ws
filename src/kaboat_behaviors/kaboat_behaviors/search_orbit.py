@@ -1,7 +1,7 @@
 """search_orbit — 탐색 미션 계산 (ROS 무의존). search_circler 노드는 입출력만 맡는다.
 
 규정 5.2(6) (2026-11): 사전에 주어진 색의 부표를 중심으로 원을 그리며 선회한다.
-  빨강·초록 → 우현선회(시계, cw), 검정(노랑에서 바뀜) → 좌현선회(반시계, ccw).
+  빨강·초록·검정 모두 우현선회(시계, cw) — 2026-11-15 대회 측: 선회 방향 상관없음 (예전 검정 좌현·ccw).
   목표 색은 대회 당일 공지 → search.target_color 로 넣는다.
   검정은 buoy_lidar_detector 가 색으로 판정하지 않는다 — 빨강·초록 아닌 부표 크기 물체는 'unknown'
   으로 나오므로(소거법, BUOY_DETECTOR.md), 검정 목표는 unknown 부표에서 고른다 (MATCH_COLORS).
@@ -57,8 +57,9 @@ from dataclasses import dataclass
 from typing import List, Optional, Sequence, Tuple
 
 TARGET_COLORS = ('red', 'green', 'black')
-# 규정 5.2(6): 빨강·초록 우현(시계), 검정(구 노랑) 좌현(반시계)
-TURN_DIRECTION = {'red': 'cw', 'green': 'cw', 'black': 'ccw'}
+# 규정 5.2(6) 은 빨강·초록 우현(시계), 검정(구 노랑) 좌현(반시계)이었으나 2026-11-15 대회 측이 방향 상관없다고 해
+# 모두 우현(시계)으로 통일 — 되돌리려면 black 을 'ccw'
+TURN_DIRECTION = {'red': 'cw', 'green': 'cw', 'black': 'cw'}
 # 목표 색 → 부표맵에서 받아들일 색. 검정 = 빨강·초록 아닌 물체(unknown).
 MATCH_COLORS = {'red': ('red',), 'green': ('green',), 'black': ('unknown', 'black')}
 TWIN_RANK = 1000.0   # 쌍둥이(잘못 굳은 검정) 후보는 unknown 후보 뒤 순위
