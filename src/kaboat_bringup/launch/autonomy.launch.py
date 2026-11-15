@@ -94,6 +94,7 @@ def mission_nodes(use_sim_time_value) -> dict:
             weights=L('dock_weights'), device=L('dock_device'),
             approach_cmd=L('dock_approach_cmd'), final_cmd=L('dock_final_cmd'),
             retreat_cmd=L('dock_retreat_cmd'), seek_cmd=L('dock_seek_cmd'),
+            seek_far_cmd=L('dock_seek_far_cmd'),
             marker_order=L('dock_marker_order'),
             position_source=L('dock_position_source'), use_sim_time=use_sim_time_value,
             base_frame=L('dock_base_frame'),
@@ -276,8 +277,12 @@ def generate_launch_description():
             'dock_device', default_value='0',
             description="Ultralytics device: 젯슨 CUDA '0' (기본, YOLO venv 필요 — scripts/run_dock_mission.sh 참고) 또는 cpu"),
         DeclareLaunchArgument('dock_base_frame', default_value='base_link'),
-        DeclareLaunchArgument('dock_seek_cmd', default_value='0.07',
-                              description='목표 도형 방위로 서행 (라이다 벽이 잡힐 때까지)'),
+        DeclareLaunchArgument('dock_seek_cmd', default_value='0.10',
+                              description='목표 도형 방위로 서행 — 6 m 안이 보인 뒤 ㄷ자 잠금까지 '
+                                          '(2026-11-15 0.07 → 0.10, 되돌리기 0.07)'),
+        DeclareLaunchArgument('dock_seek_far_cmd', default_value='0.20',
+                              description='SEEK 원거리: 6 m 안에 점이 없는 동안(뒷벽 약 8 m 밖) 전진, '
+                                          '처음 보이면 제동 뒤 dock_seek_cmd (2026-11-15, 끄기 0)'),
         DeclareLaunchArgument('dock_approach_cmd', default_value='0.10',
                               description='경유점까지 LOS 직진 상한'),
         DeclareLaunchArgument('dock_final_cmd', default_value='0.05',

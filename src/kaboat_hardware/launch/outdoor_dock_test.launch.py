@@ -36,7 +36,7 @@ ARGS = [
     ('target_class', 'triangle', '목표 슬롯 도형: triangle / circle / square'),
     ('motion_enabled', 'true', 'false = 미리보기 (경로만 고정·표시, 모터 명령 안 냄)'),
     ('approach', 'false', 'true = dock_entry 까지 접근부터 (직선, 회피 없음)'),
-    ('seek_cmd', '0.07', '목표 도형 방위로 서행 — 라이다 벽이 잡힐 때까지 (0.07 ≈ 1551 µs)'),
+    ('seek_cmd', '0.10', '목표 도형 방위로 서행 — 6 m 안이 보인 뒤 ㄷ자 잠금까지 (2026-11-15 0.07 → 0.10)'),
     ('approach_cmd', '0.10', '경유점까지 LOS 직진 상한 (0.10 ≈ 1562 µs)'),
     ('final_cmd', '0.05', '정지점까지 LOS 직진 상한 (0.05 ≈ 1544 µs)'),
     ('retreat_cmd', '0.20', '후진 출력 (0.20 ≈ 1400 µs = 텔레옵 후진 2단계)'),

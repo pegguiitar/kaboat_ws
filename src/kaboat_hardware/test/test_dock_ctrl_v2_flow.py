@@ -319,6 +319,79 @@ def test_seek_moves_only_while_target_centred(node):
     assert node.sent[-1].linear.x == pytest.approx(node.seek_cmd)
 
 
+def _odom_moving(node, x, y, speed, yaw=FACING_WALL):
+    _odom(node, x, y, yaw)
+    node.odom.twist.twist.linear.x = float(speed)
+
+
+def test_seek_far_fast_until_points_within_lock_distance_then_brakes_then_creeps(node):
+    """6 m 안이 비었으면 seek_far_cmd, 처음 보이면 0.30 m/s 까지 제동 뒤 seek_cmd — 다시 멀어져도 안 빨라짐."""
+    assert node.seek_far_cmd == pytest.approx(0.20) and node.seek_cmd == pytest.approx(0.10)
+    assert node.seek_brake_speed == pytest.approx(0.35)
+    _lock_bearing(node)
+    _odom_moving(node, 0.0, 10.0, 0.0)
+    node._tick()
+    assert node.sent[-1].linear.x == pytest.approx(node.seek_cmd)        # 누적 점 없음 — 빠르게 안 감
+    node._add_cloud(200.0, _cloud((0.0, 10.0)))                          # 칸막이 끝 8.1 m — 6 m 안 빔
+    node._tick()
+    assert node.sent[-1].linear.x == pytest.approx(node.seek_far_cmd)
+    assert '(far 0.20)' in node.reports[-1]['detail']
+    _odom_moving(node, 0.0, 7.5, 0.61)
+    node._add_cloud(210.0, _cloud((0.0, 7.5)))                           # 칸막이 끝 5.6 m
+    node._tick()
+    assert node.phase == 'SEEK' and node.sent[-1].linear.x == 0.0
+    assert 'braking 0.61 m/s' in node.reports[-1]['detail']
+    _odom_moving(node, 0.0, 7.2, 0.34)
+    node._tick()
+    assert node.sent[-1].linear.x == pytest.approx(node.seek_cmd)
+    _odom_moving(node, 0.0, 7.2, 0.40)                                   # 제동 끝난 뒤 조금 빨라도 서행 유지
+    node._add_cloud(220.0, _cloud((0.0, 10.0)))                          # 다시 6 m 안이 비어도
+    node._tick()
+    assert node.sent[-1].linear.x == pytest.approx(node.seek_cmd)
+    assert 'far' not in node.reports[-1]['detail'] and 'braking' not in node.reports[-1]['detail']
+
+
+def test_seek_starting_close_never_goes_fast_and_off_switch(node):
+    """다시 SEEK 할 때 이미 6 m 안이면 처음부터 서행(제동도 없음). seek_far_cmd ≤ seek_cmd 면 예전 그대로."""
+    _lock_bearing(node, y=6.0)
+    _odom_moving(node, 0.0, 6.0, 0.4)
+    node._add_cloud(300.0, _cloud((0.0, 6.0)))
+    node._tick()
+    assert node.sent[-1].linear.x == pytest.approx(node.seek_cmd)
+    node._reset_search('SCAN')
+    node.seek_far_cmd = 0.0
+    _lock_bearing(node)
+    node._add_cloud(310.0, _cloud((0.0, 10.0)))
+    node._tick()
+    assert node.sent[-1].linear.x == pytest.approx(node.seek_cmd)
+
+
+def test_seek_far_cloud_gap_brakes_before_resuming(node):
+    """빨리 가다 누적 점이 끊기면(/scan/level 기울기 차단 등) 제동부터, 다시 6 m 안이 비면 원거리로."""
+    _lock_bearing(node)
+    _odom_moving(node, 0.0, 10.0, 0.6)
+    node._add_cloud(400.0, _cloud((0.0, 10.0)))
+    node._tick()
+    assert node.sent[-1].linear.x == pytest.approx(node.seek_far_cmd)
+    node.cloud.clear()
+    node._tick()
+    assert node.sent[-1].linear.x == 0.0 and 'braking' in node.reports[-1]['detail']
+    node._add_cloud(401.0, _cloud((0.0, 10.0)))
+    node._tick()
+    assert node.sent[-1].linear.x == pytest.approx(node.seek_far_cmd)
+
+
+@pytest.mark.parametrize('name,value', [('seek_far_cmd', -0.1), ('seek_far_cmd', 1.5),
+                                        ('seek_brake_speed_mps', 0.0)])
+def test_bad_seek_far_params_refused(name, value):
+    rclpy.init()
+    try:
+        with pytest.raises(ValueError):
+            DockCtrlV2(parameter_overrides=[Parameter(name, value=value)])
+    finally:
+        rclpy.shutdown()
+
+
 def test_seek_follows_target_sight_and_ignores_jumps(node):
     _lock_bearing(node)                                  # FACING_WALL + 1°
     _odom(node, 0.0, 9.0)

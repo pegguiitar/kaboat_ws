@@ -39,7 +39,10 @@
           멀어진다). 단일 시험·미션 모드 아님이면 그대로 멈춘다.
           화면 안/밖 판단의 반화각은 검출 상태의 image_half_fov_deg(좌우), 없으면 camera_half_fov_deg.
   SEEK    목표 도형을 선수 가운데(±seek_center_deg)에 둔 채 seek_cmd 로 서행 — 벗어나면 전진 0, 선수만
-          돌린다(선회율 제약 없음). 보이는 동안 지연 보상한 YOLO 방위로 목표 방위·방위선을 갱신하고
+          돌린다(선회율 제약 없음). 배 lock_max_distance_m(6 m) 안에 LiDAR 점이 하나도 없는 동안(뒷벽 약
+          8 m 밖)은 seek_far_cmd 로 빨리 가고, 6 m 안에 점이 처음 보이면 그 SEEK 동안은 선속이
+          seek_brake_speed_mps 이하가 될 때까지 전진 0(제동) 뒤 seek_cmd 서행.
+          보이는 동안 지연 보상한 YOLO 방위로 목표 방위·방위선을 갱신하고
           (한 번에 seek_max_update_deg 넘게 튀면 버림), 가까워져 안 보이면 마지막 방위로 간다.
           라이다 스캔면이 수면 위 ~0.14 m 라 슬롯
           벽은 약 6 m 안에서만 잡힌다(2026-11-12 bag). 최근 cloud_window_s 의 /scan/level 을 odom 에
@@ -254,7 +257,19 @@ class DockCtrlV2(Node):
                     # 탐색 선회 누적 이만큼(바퀴) 돌아도 목표가 없으면 멈추고 상태에 남긴다
                     'search_max_turns': 2.0,
                     # SEEK: 방위 따라 서행, 라이다 벽 고정
-                    'seek_cmd': 0.07, 'seek_max_travel_m': 10.0,
+                    # seek_cmd: 6 m 안이 보인 뒤 잠금까지 서행 (REPOSITION 우회 전진 상한도 이것). 0.07(0.24 m/s) →
+                    # 0.10 (2026-11-15): TO_VIA approach_cmd 와 같아 잠금 순간 속도가 이어지고, 젯슨이 느려 샘플이 2 s
+                    # 걸려도 잠금 뒷벽 약 5.3 m — BACKOFF 기준 3.94 m 까지 1.4 m 남음(run3 추력 곡선·τ 3.6 s 계산).
+                    'seek_cmd': 0.10, 'seek_max_travel_m': 10.0,
+                    # SEEK 원거리: 배 lock_max_distance_m(6 m) 안에 LiDAR 점이 하나도 없는 동안(뒷벽 약 8 m 밖 —
+                    # 칸막이 끝이 뒷벽보다 1.94 m 앞)은 seek_far_cmd 로 다가간다. 6 m 안에 점이 처음 보이면(방향
+                    # 무관 — 장애물도 같다) 그 SEEK 동안은 다시 빨라지지 않고, 선속이 seek_brake_speed_mps 이하가
+                    # 될 때까지 전진 0(제동) 뒤 seek_cmd. 2026-11-15 run3: 뒷벽 11.3 → 8 m 를 0.07(0.24 m/s)로
+                    # 18.8 s. run3 전 미션 실측 추력 곡선 v ≈ 2.10·cmd^0.77(0.20 → avoid 직진 0.72 m/s), 직진 감속
+                    # τ 3.6 s 로 계산하면 0.20 은 제동 1.35 m 뒤 뒷벽 6 m 를 0.27 m/s 로 지나(잠금 조건 그대로)
+                    # SEEK 약 10 s 단축. 제동 목표 0.35 m/s 는 seek_cmd 0.10 의 정상 선속(0.36). seek_far_cmd ≤
+                    # seek_cmd 면 끔(예전처럼 처음부터 seek_cmd).
+                    'seek_far_cmd': 0.20, 'seek_brake_speed_mps': 0.35,
                     'seek_center_deg': 8.0, 'seek_max_update_deg': 10.0,
                     'front_stop_m': 2.0, 'front_half_angle_deg': 25.0,
                     'scan_topic': '/scan',
@@ -382,6 +397,8 @@ class DockCtrlV2(Node):
         self.camera_half_fov = float(p('camera_half_fov_deg'))
         self.search_max_turns = float(p('search_max_turns'))
         self.seek_cmd = float(p('seek_cmd'))
+        self.seek_far_cmd = float(p('seek_far_cmd'))
+        self.seek_brake_speed = float(p('seek_brake_speed_mps'))
         self.seek_max_travel = float(p('seek_max_travel_m'))
         self.seek_center = math.radians(float(p('seek_center_deg')))
         self.seek_max_update = math.radians(float(p('seek_max_update_deg')))
@@ -463,6 +480,9 @@ class DockCtrlV2(Node):
                 or self.stable_samples < 2 or self.bearing_n < 2 \
                 or not 0 <= self.lock_min_span < self.lock_window:
             raise ValueError('invalid docking controller limits')
+        if not (math.isfinite(self.seek_far_cmd) and 0.0 <= self.seek_far_cmd <= 1.0
+                and math.isfinite(self.seek_brake_speed) and self.seek_brake_speed > 0.0):
+            raise ValueError('seek_far_cmd must be in [0, 1] and seek_brake_speed_mps > 0')
         if not self.mission_mode and self.stage_ll[0] == -999 and self.sim_stage[0] == -999:
             self.get_logger().warn('No staging waypoint: set stage_latitude/longitude before start')
         self.geo = None
@@ -505,6 +525,7 @@ class DockCtrlV2(Node):
         self.locked_bearing = None
         self.seek_start = self.seek_start_odom = self.seek_plan = None
         self.seek_line_point = None                 # 목표 방위선이 지나는 점 (odom, 마지막 시선)
+        self._reset_seek_speed()
         self.lock = None
         self.backoff_start = self.backoff_heading = None
         self.blocked_since = None                   # SEEK 앞 막힘 시작 (monotonic)
@@ -734,7 +755,9 @@ class DockCtrlV2(Node):
             return
         self.detected_version = self.cloud_version
         points, boat = self._cloud_points(), self._odom_xy()
-        if not self._near_dock(points, boat):
+        near = self._near_dock(points, boat)
+        self.near_cache = (self.cloud_version, near)  # SEEK 속도도 이 판정을 쓴다 (계산 한 번)
+        if not near:
             self.slot_last = (None, f'nothing within {self.lock_max_distance:.1f}m — U slot search off')
             self.line_fail_since, self.line_fail_count = None, 0      # 찾을 게 없다 — 실패 아님
             return
@@ -1604,12 +1627,44 @@ class DockCtrlV2(Node):
             self.give_up_sent = True
         self._report(f'{self.abort_reason} — gave up, asked mission manager to skip dock')
 
+    def _reset_seek_speed(self):
+        self.seek_near_seen = False                 # 이번 SEEK 에서 6 m 안 점을 봤다 (다시 안 빨라짐)
+        self.near_cache = (-1, False)               # (누적 점 판, 6 m 안 점 있음) — _line_search 가 채움
+        self.seek_fast_used = False                 # 원거리 명령을 한 번이라도 냈다 → 제동 필요
+        self.seek_brake_done = False
+
+    def _seek_linear(self):
+        """SEEK 전진 명령과 상태 글 꼬리: 원거리(6 m 안 빔) seek_far_cmd → 제동(전진 0) → seek_cmd.
+
+        6 m 판정은 같은 tick 의 _detect_slot(_line_search)이 지금 누적 점으로 한 것을 그대로 쓴다 — tick 계산은
+        늘지 않는다(2026-11-14 run1: tick 이 길어져 cmd_mux 300 ms 워치독 정지). 그 판정이 지금 누적 점 것이
+        아니거나 누적 점이 없으면(SEEK 시작 직후, /scan/level 기울기 차단 등) 원거리로 보지 않는다 — 다시
+        SEEK 할 때 도크가 이미 가까워도 한 tick 도 빨리 나가지 않게. 빨리 가다 끊겨도 제동부터 한다.
+        """
+        if self.seek_far_cmd <= self.seek_cmd:
+            return self.seek_cmd, ''
+        version, near = self.near_cache
+        fresh = bool(self.cloud) and version == self.cloud_version
+        if fresh and near:
+            self.seek_near_seen = True
+        if fresh and not self.seek_near_seen:
+            self.seek_fast_used, self.seek_brake_done = True, False   # 빨리 갔으면 매번 다시 제동부터
+            return self.seek_far_cmd, f' (far {self.seek_far_cmd:.2f})'
+        if self.seek_fast_used and not self.seek_brake_done:
+            tw = self.odom.twist.twist.linear if self.odom is not None else None
+            speed = math.hypot(tw.x, tw.y) if tw is not None else 0.0
+            if speed > self.seek_brake_speed:
+                return 0.0, f' (braking {speed:.2f} m/s)'
+            self.seek_brake_done = True
+        return self.seek_cmd, ''
+
     def _start_seek(self, bearing):
         self.phase = 'SEEK'
         self.locked_bearing = bearing
         self.seek_start = self._position()
         self.seek_start_odom = self._odom_xy()
         self.seek_line_point = self.seek_start_odom.copy()
+        self._reset_seek_speed()
         self.cloud.clear()
         self.slot_samples.clear()
         self._new_slot_search()
@@ -1980,10 +2035,11 @@ class DockCtrlV2(Node):
             sight_why = self._seek_sight()
             error = wrap(self.locked_bearing - yaw)
             centred = abs(error) <= self.seek_center
-            self._command(self.seek_cmd if centred else 0.0, self._scan_turn(self.locked_bearing, yaw))
+            linear, speed_why = self._seek_linear()
+            self._command(linear if centred else 0.0, self._scan_turn(self.locked_bearing, yaw))
             self._report(f'seeking {math.degrees(self.locked_bearing):.1f} deg '
                          f'({"centred" if centred else f"centring {math.degrees(error):+.1f} deg"}), '
-                         f'{travelled:.1f}m; {sight_why}; {wall_why}')
+                         f'{travelled:.1f}m{speed_why}; {sight_why}; {wall_why}')
             return
         if self.phase == 'REPOSITION':
             self._reposition_tick(xy, yaw)

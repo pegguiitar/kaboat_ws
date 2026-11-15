@@ -83,7 +83,8 @@ def default_weights():
 
 
 def docking_nodes(*, target_class, motion_enabled, weights, device='0',
-                  approach_cmd=0.10, final_cmd=0.05, retreat_cmd=0.20, seek_cmd=0.07,
+                  approach_cmd=0.10, final_cmd=0.05, retreat_cmd=0.20, seek_cmd=0.10,
+                  seek_far_cmd=0.20,
                   marker_order='', position_source='odom', use_sim_time=False,
                   base_frame='base_link', camera_tf=True, camera_tf_condition=None,
                   debug_image=True, detector_env=None):
@@ -146,6 +147,8 @@ def docking_nodes(*, target_class, motion_enabled, weights, device='0',
                  'retreat_cmd': ParameterValue(retreat_cmd, value_type=float),
                  # 목표 도형 방위로 서행 — 라이다 벽(약 6 m 안)이 잡힐 때까지
                  'seek_cmd': ParameterValue(seek_cmd, value_type=float),
+                 # 6 m 안에 LiDAR 점이 하나도 없는 동안(뒷벽 약 8 m 밖) 빨리 — 0 이면 끔 (2026-11-15 run3)
+                 'seek_far_cmd': ParameterValue(seek_far_cmd, value_type=float),
                  'marker_order': ParameterValue(marker_order, value_type=str),
                  'position_source': ParameterValue(position_source, value_type=str),
                  'gps_timeout_s': 2.0,
