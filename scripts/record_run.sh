@@ -55,7 +55,7 @@ topics=(
     /camera/camera_info
     /cmd_vel /occupancy_grid
     /mission/state /mission/goal
-    /detections/buoys /dock/lidar/status
+    /detections/buoys /detections/buoys/color_frac /dock/lidar/status
     /geo/origin /geo/status /waypoint/status
     /mission/complete /mission/entry_goal
     # 노드 로그 — 회피 ESCAPE 진입 이유처럼 토픽으로는 안 나오는 판단이 여기에만 남는다
