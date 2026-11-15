@@ -338,3 +338,18 @@ def test_color_frac_from_pixels_and_votes():
     assert t.color == 'red' and t.color_frac == pytest.approx(0.75)       # 픽셀 적으면 표 비율
     t = EvTrack(id=4, x=0.0, y=0.0, L=3.0, last_seen=0.0)
     assert t.color == 'unseen' and t.color_frac == 0.0
+
+
+def test_small_window_frames_not_accumulated():
+    # 2026-11-15: 픽셀 60 미만 창 프레임은 색 누적에서 뺀다 (표는 센다) — 햇빛 센 날 검정 창 작은 프레임에 빨강이 섞임
+    from types import SimpleNamespace
+    from kaboat_perception.buoy_evidence import EvTrack, EvidenceTracker
+    t = EvTrack(id=1, x=0.0, y=0.0, L=3.0, last_seen=0.0)
+    small = SimpleNamespace(usable=True, red=15, green=0, visible=18, color='red')
+    big = SimpleNamespace(usable=True, red=1, green=0, visible=500, color='unknown')
+    EvidenceTracker._add_color(t, small, 60)
+    EvidenceTracker._add_color(t, big, 60)
+    assert (t.px_red, t.px_visible) == (1, 500) and t.color_votes == {'red': 1, 'unknown': 1}
+    t2 = EvTrack(id=2, x=0.0, y=0.0, L=3.0, last_seen=0.0)
+    EvidenceTracker._add_color(t2, small)                 # 기본 0 — 예전 동작
+    assert (t2.px_red, t2.px_visible) == (15, 18)

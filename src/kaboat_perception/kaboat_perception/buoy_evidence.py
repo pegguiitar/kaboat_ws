@@ -83,6 +83,10 @@ class EvidenceParams:
     px_min_frac: float = 0.15       # 빨강 또는 초록이 보이는 픽셀의 이 비율 이상이어야 그 색
     px_dominance: float = 2.0       # 다른 색 픽셀의 이 배 이상이어야 그 색
     px_min_visible: int = 150       # 누적 보이는 픽셀이 이보다 적으면 표 규칙으로 (그것도 없으면 unseen)
+    px_min_frame: int = 60          # 한 프레임 창에 보이는 픽셀이 이보다 적으면 그 프레임 픽셀은 색 누적에서 뺀다 (표는 그대로).
+                                    # 2026-11-15: 햇빛 센 11-12 bag 에서 18–49 픽셀 작은 창 몇 장에 빨강이 27–83 % 섞여 검정 누적
+                                    # 빨강이 0.11(기준 0.15)까지 → 빼면 0.029. 5개 bag 진짜 빨강·초록 69 트랙 판정·시각 그대로.
+                                    # 기준 0.20 은 검정 여유는 같고 11-13 게이트 초록 하나가 끝까지 unknown 이 돼서 안 씀
 
 
 @dataclass
@@ -247,7 +251,7 @@ class EvidenceTracker:
             t.hits += 1
             t.last_seen = now
             t.last_evidence = 'hit'
-            self._add_color(t, detections[i][2])
+            self._add_color(t, detections[i][2], p.px_min_frame)
         existing = [(t.x, t.y) for t in self.tracks]
         for i, (_x, _y, color, can_spawn, _pts) in enumerate(detections):
             if i in used_det or not can_spawn:
@@ -260,7 +264,7 @@ class EvidenceTracker:
             self.last_assoc[i] = t.id
             self._add_blob(t, bx, by, w)
             t.px_params = (p.px_min_frac, p.px_dominance, p.px_min_visible)
-            self._add_color(t, color)
+            self._add_color(t, color, p.px_min_frame)
             self._next_id += 1
             self.tracks.append(t)
             used_trk.add(t.id)
@@ -294,8 +298,9 @@ class EvidenceTracker:
         return self.confirmed()
 
     @staticmethod
-    def _add_color(t: EvTrack, color):
-        """색 표 — 문자열('red'|'green'|'unknown') 또는 픽셀 수(red/green/visible/usable 속성)."""
+    def _add_color(t: EvTrack, color, min_frame: int = 0):
+        """색 표 — 문자열('red'|'green'|'unknown') 또는 픽셀 수(red/green/visible/usable 속성).
+        보이는 픽셀이 min_frame 미만인 프레임은 픽셀 누적에서 빼고 표만 센다 (px_min_frame)."""
         if color is None:
             return
         if isinstance(color, str):
@@ -303,9 +308,10 @@ class EvidenceTracker:
             return
         if not getattr(color, 'usable', False):
             return
-        t.px_red += int(color.red)
-        t.px_green += int(color.green)
-        t.px_visible += int(color.visible)
+        if int(color.visible) >= min_frame:
+            t.px_red += int(color.red)
+            t.px_green += int(color.green)
+            t.px_visible += int(color.visible)
         if color.color is not None:
             t.color_votes[color.color] = t.color_votes.get(color.color, 0) + 1
 

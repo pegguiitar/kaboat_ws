@@ -66,6 +66,7 @@ class PointMapParams:
     px_min_frac: float = 0.15
     px_dominance: float = 2.0
     px_min_visible: int = 150
+    px_min_frame: int = 60          # 이보다 적은 픽셀 창 프레임은 색 누적에서 뺌 (buoy_evidence.EvidenceParams 참고)
 
 
 class PointMapTracker:
@@ -181,7 +182,7 @@ class PointMapTracker:
             w = detections[i][4]
             if t is not None:
                 self.last_assoc[i] = t.id
-                EvidenceTracker._add_color(t, v)
+                EvidenceTracker._add_color(t, v, self.p.px_min_frame)
                 if w is not None and len(w) >= 2:
                     b = np.asarray(w, dtype=float).reshape(-1, 2)
                     half = 0.5 * float(np.sqrt(np.max(np.sum((b[:, None] - b[None]) ** 2, axis=2))))
