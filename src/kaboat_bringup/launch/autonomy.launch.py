@@ -113,6 +113,7 @@ def mission_nodes(use_sim_time_value) -> dict:
             name='obstacle_planner', output='screen', parameters=[common_params, {
                 'avoid.yaw_kd': ParameterValue(L('avoid_yaw_kd'), value_type=float),
                 'fsm.measured_speed': ParameterValue(L('avoid_measured_speed'), value_type=bool),
+                'avoid.predict_latency': ParameterValue(L('avoid_predict_latency'), value_type=bool),
             }])],
     }
 
@@ -251,6 +252,10 @@ def generate_launch_description():
             'avoid_measured_speed', default_value='true',
             description='회피 경로 추종 속도→전진 명령을 실물 추력 곡선으로 (2026-11-15, 굽은 구간 기어가기 해소, '
                         '상한 0.2·회전은 그대로). 되돌리기 false = Gazebo 곡선'),
+        DeclareLaunchArgument(
+            'avoid_predict_latency', default_value='true',
+            description='회피 노드가 묵은 /odom 을 지금 시각까지 앞당겨 씀 (2026-11-15 run3 지연 0.74 s → 선수각 '
+                        '넘침·지그재그). 최대 1 s. 되돌리기 false'),
         DeclareLaunchArgument(
             'mission_timeouts', default_value='true',
             description='true = 이어 도는 실행에서 미션별 제한 시간(15 분 배분, mission_params.yaml '

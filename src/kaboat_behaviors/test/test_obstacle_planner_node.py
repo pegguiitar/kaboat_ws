@@ -1,5 +1,7 @@
 """obstacle_planner 노드: /odom 최신만(큐 깊이 1)·회피 전용 D 게인 (2026-11-14)·실물 추력 곡선 (2026-11-15)."""
 
+import math
+
 import pytest
 import rclpy
 from rclpy.parameter import Parameter
@@ -84,6 +86,29 @@ def test_bad_yaw_kd_is_rejected(ros):
             op.ObstaclePlanner()
     finally:
         Node.__init__ = orig
+
+
+def test_latency_age_clamps_and_rejects_clock_mismatch():
+    assert op.latency_age(100.74, 100.0, 1.0) == pytest.approx(0.74)
+    assert op.latency_age(101.5, 100.0, 1.0) == pytest.approx(1.0)       # 최대 1 s
+    assert op.latency_age(99.95, 100.0, 1.0) == 0.0                      # 살짝 미래 = 0
+    assert op.latency_age(100.0, 0.0, 1.0) == 0.0                        # 스탬프 0 등 시계 어긋남 = 보정 안 함
+    assert op.latency_age(98.0, 100.0, 1.0) == 0.0
+
+
+def test_predict_pose_extrapolates_position_and_heading():
+    x, y, yaw = op.predict_pose(1.0, 2.0, math.radians(170.0), (0.5, -0.2), math.radians(40.0), 0.5)
+    assert (x, y) == pytest.approx((1.25, 1.9))
+    assert math.degrees(yaw) == pytest.approx(-170.0)                    # 170 + 20 → −170 (wrap)
+    assert op.predict_pose(1.0, 2.0, 0.3, (9.0, 9.0), 9.0, 0.0) == (1.0, 2.0, 0.3)
+
+
+def test_avoid_latency_prediction_default_on(ros):
+    node = op.ObstaclePlanner()
+    try:
+        assert node.predict_latency is True and node.predict_max_s == 1.0
+    finally:
+        node.destroy_node()
 
 
 def test_avoid_uses_measured_speed_curve_by_default(ros):

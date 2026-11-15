@@ -137,6 +137,7 @@ def test_avoid_output_uses_los_thrust_ratio_not_waypoint_scale(monkeypatch):
     state.dri_params = None
     state.thrust_ratio = FsmParams().cmd_full
     state.turn_ratio = 0.35
+    state.predict_latency = False         # 지연 보정 (2026-11-15) — 이 시험은 출력 상한만 본다
     state.fsm = SimpleNamespace(step=lambda *a: StepOut(0.25, -0.8, 'FOLLOW', None))
     state.distance_to_goal = lambda: 10.0
     state._publish_debug = lambda *a: None
@@ -167,6 +168,7 @@ def test_escape_entry_then_recovery_logs_without_raising(monkeypatch):
         state.dri_params = None
         state.thrust_ratio = FsmParams().cmd_full
         state.turn_ratio = 0.35
+        state.predict_latency = False
         state.distance_to_goal = lambda: 10.0
         state._publish_debug = lambda *a: None
         state.fsm = SimpleNamespace(escape_detail='막힘')

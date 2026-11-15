@@ -37,6 +37,33 @@ AVOID_YAW_KD = 0.6
 # 되돌리기: run_autonomy avoid_measured_speed:=false
 AVOID_MEASURED_SPEED = True
 
+# 지연 보정 (2026-11-15 run3): 젯슨에서 이 노드는 중앙 0.74 s(상위 10 % 1.03 s) 묵은 /odom 으로 조종했다
+# (/avoid/plan 헤더 = 쓴 /odom 시각, /odom 자체는 14 ms 만에 도착). 제자리 회전(40–50°/s) 중 노드가 본 선수각이
+# 실제와 중앙 22° 달라 회전을 늦게 멈추고 반대로 넘쳤다 — 후반 지그재그·제자리 회전 47 s·바 접촉 3 회.
+# tick 마다 (지금 − /odom 측정 시각) 만큼 같은 /odom 의 world 속도·요레이트로 위치·선수각을 앞당겨 쓴다.
+# run3 데이터: 노드가 쓴 값과 실제의 차 선수각 중앙 16.5° → 4.8°(p90 35 → 18.5°), 위치 0.36 → 0.07 m.
+# 지연이 작으면 보정도 작다(0.05 s 면 각속도 × 0.05 s). 최대 AVOID_PREDICT_MAX_S 까지만, 시계가 어긋나
+# 보이면(−0.2 s 미만·AVOID_PREDICT_SANE_S 초과) 보정 안 함. 되돌리기: run_autonomy avoid_predict_latency:=false
+AVOID_PREDICT_LATENCY = True
+AVOID_PREDICT_MAX_S = 1.0
+AVOID_PREDICT_SANE_S = 2.0
+
+
+def latency_age(now_s: float, stamp_s: float, max_s: float) -> float:
+    """/odom 나이 [s] — [0, max_s] 로 자름. 시계가 어긋나 보이면 0 (보정 안 함)."""
+    raw = now_s - stamp_s
+    if not math.isfinite(raw) or raw < -0.2 or raw > AVOID_PREDICT_SANE_S:
+        return 0.0
+    return min(max(raw, 0.0), max_s)
+
+
+def predict_pose(x: float, y: float, yaw: float, vel_xy, yaw_rate: float, age: float):
+    """묵은 자세를 age [s] 만큼 앞당김 — world 속도·요레이트 등속 외삽. (x, y, yaw)."""
+    if age <= 0.0:
+        return x, y, yaw
+    yaw2 = math.atan2(math.sin(yaw + yaw_rate * age), math.cos(yaw + yaw_rate * age))
+    return x + vel_xy[0] * age, y + vel_xy[1] * age, yaw2
+
 
 class ObstaclePlanner(BehaviorBase):
     STATE_NAME = 'avoid'
@@ -70,6 +97,13 @@ class ObstaclePlanner(BehaviorBase):
             raise ValueError('avoid.yaw_kd must be in [0, 2]')
         self.thrust_ratio = ratio
         self.turn_ratio = turn
+        # 지연 보정 (AVOID_PREDICT_LATENCY 주석)
+        self.declare_parameter('avoid.predict_latency', AVOID_PREDICT_LATENCY)
+        self.declare_parameter('avoid.predict_max_s', AVOID_PREDICT_MAX_S)
+        self.predict_latency = bool(self.get_parameter('avoid.predict_latency').value)
+        self.predict_max_s = float(self.get_parameter('avoid.predict_max_s').value)
+        if not (math.isfinite(self.predict_max_s) and 0.0 <= self.predict_max_s <= AVOID_PREDICT_SANE_S):
+            raise ValueError(f'avoid.predict_max_s must be in [0, {AVOID_PREDICT_SANE_S}]')
         self.fsm = AvoidFsm(self.planner_params, self.fsm_params,
                             yaw_kp=BSPLINE_TRACK_YAW_KP,
                             yaw_kd=yaw_kd)
@@ -131,11 +165,23 @@ class ObstaclePlanner(BehaviorBase):
         # 드리프트 실측), TF·센서가 전부 이 시간축을 탄다. 벽시계를 쓰면
         # ① viz 가 "No transform"(RViz 실측) ② FSM 주기(t_backstop 등)가
         # 물리 시간과 어긋남. 실물에선 odom 스탬프 = 벽시계라 동작 동일.
-        now_t = (self.odom.header.stamp.sec
-                 + self.odom.header.stamp.nanosec * 1e-9)
+        stamp_t = (self.odom.header.stamp.sec
+                   + self.odom.header.stamp.nanosec * 1e-9)
+        # 지연 보정: 묵은 /odom 을 지금 시각까지 앞당긴다 (AVOID_PREDICT_LATENCY 주석). now_t 도 지금으로.
+        age = 0.0
+        if self.predict_latency:
+            age = latency_age(self.get_clock().now().nanoseconds * 1e-9, stamp_t, self.predict_max_s)
+            self.get_logger().info(f'/odom 앞당김 {age * 1e3:.0f} ms', throttle_duration_sec=5.0)
+        bx, by, byaw = predict_pose(pos.x, pos.y, yaw, vel, tw.angular.z, age)
+        if age > 0.0:
+            # body 속도는 그대로 두고 앞당긴 선수각으로 world 속도를 다시 돌린다
+            cb, sb = math.cos(byaw), math.sin(byaw)
+            vel = (cb * tw.linear.x - sb * tw.linear.y,
+                   sb * tw.linear.x + cb * tw.linear.y)
+        now_t = stamp_t + age
 
-        dri = build_dri(self.occupancy_grid, (pos.x, pos.y), yaw, self.dri_params)
-        out = self.fsm.step(dri, (pos.x, pos.y), yaw, vel, tw.angular.z,
+        dri = build_dri(self.occupancy_grid, (bx, by), byaw, self.dri_params)
+        out = self.fsm.step(dri, (bx, by), byaw, vel, tw.angular.z,
                             wp, now_t)
         if out.state != getattr(self, '_last_fsm_state', 'FOLLOW'):
             # 상태 전환(ESCAPE 진입·복귀)은 거르지 않고 이유와 함께 — 1 s throttle 에 묻혀

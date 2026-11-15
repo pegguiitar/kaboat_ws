@@ -120,6 +120,12 @@ def test_avoid_gets_measured_speed(mod):
     assert _avoid_params(mod, avoid_measured_speed='false')['fsm.measured_speed'] is False
 
 
+def test_avoid_gets_latency_prediction(mod):
+    # 2026-11-15: 회피 지연 보정 (되돌리기 avoid_predict_latency:=false)
+    assert _avoid_params(mod)['avoid.predict_latency'] is True
+    assert _avoid_params(mod, avoid_predict_latency='false')['avoid.predict_latency'] is False
+
+
 def _search_params(mod, **args):
     context = _context(mod, **args)
     node = next(n for n in mod._stack(context) if getattr(n, 'node_executable', '') == 'search_circler')
